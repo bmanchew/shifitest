@@ -5,6 +5,8 @@ import {
   applicationProgress, ApplicationProgress, InsertApplicationProgress,
   logs, Log, InsertLog
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -40,334 +42,287 @@ export interface IStorage {
   getLogsByUserId(userId: number): Promise<Log[]>;
 }
 
-export class MemStorage implements IStorage {
-  private usersMap: Map<number, User>;
-  private merchantsMap: Map<number, Merchant>;
-  private contractsMap: Map<number, Contract>;
-  private applicationProgressMap: Map<number, ApplicationProgress>;
-  private logsMap: Map<number, Log>;
-  
-  private userId: number;
-  private merchantId: number;
-  private contractId: number;
-  private applicationProgressId: number;
-  private logId: number;
-  
-  constructor() {
-    this.usersMap = new Map();
-    this.merchantsMap = new Map();
-    this.contractsMap = new Map();
-    this.applicationProgressMap = new Map();
-    this.logsMap = new Map();
-    
-    this.userId = 1;
-    this.merchantId = 1;
-    this.contractId = 1;
-    this.applicationProgressId = 1;
-    this.logId = 1;
-    
-    // Seed some initial data
-    this.initialize();
-  }
-  
-  private async initialize() {
-    try {
-      await this.seedInitialData();
-    } catch (error) {
-      console.error("Error initializing database:", error);
-    }
-  }
-  
-  private async seedInitialData() {
-    // Create admin user
-    const adminUser: InsertUser = {
-      email: "admin@shifi.com",
-      password: "admin123", // In a real app, this would be hashed
-      name: "Admin User",
-      role: "admin",
-      phone: "123-456-7890"
-    };
-    await this.createUser(adminUser);
-    
-    // Create a merchant user
-    const merchantUser: InsertUser = {
-      email: "merchant@techsolutions.com",
-      password: "merchant123", // In a real app, this would be hashed
-      name: "Merchant User",
-      role: "merchant",
-      phone: "987-654-3210"
-    };
-    const createdMerchantUser = await this.createUser(merchantUser);
-    
-    // Create merchant
-    const merchant: InsertMerchant = {
-      name: "TechSolutions Inc.",
-      contactName: "Merchant User",
-      email: "contact@techsolutions.com",
-      phone: "987-654-3210",
-      address: "123 Tech Ave, San Francisco, CA",
-      active: true,
-      userId: createdMerchantUser.id
-    };
-    this.createMerchant(merchant);
-    
-    // Create some customer users
-    const customers = [
-      {
-        email: "sarah.johnson@example.com",
-        password: "password123",
-        name: "Sarah Johnson",
-        role: "customer" as const,
-        phone: "555-123-4567"
-      },
-      {
-        email: "michael.brown@example.com",
-        password: "password123",
-        name: "Michael Brown",
-        role: "customer" as const,
-        phone: "555-987-6543"
-      },
-      {
-        email: "jennifer.smith@example.com",
-        password: "password123",
-        name: "Jennifer Smith",
-        role: "customer" as const,
-        phone: "555-456-7890"
-      }
-    ];
-    
-    const createdCustomers = customers.map(customer => this.createUser(customer));
-    
-    // Create some contracts
-    const contracts = [
-      {
-        contractNumber: "SHI-0023",
-        merchantId: 1,
-        customerId: 2,
-        amount: 4500,
-        downPayment: 675, // 15%
-        financedAmount: 3825,
-        termMonths: 24,
-        interestRate: 0,
-        monthlyPayment: 159.38,
-        status: "active" as const,
-        currentStep: "completed" as const
-      },
-      {
-        contractNumber: "SHI-0022",
-        merchantId: 1,
-        customerId: 3,
-        amount: 2750,
-        downPayment: 412.5, // 15%
-        financedAmount: 2337.5,
-        termMonths: 24,
-        interestRate: 0,
-        monthlyPayment: 97.40,
-        status: "pending" as const,
-        currentStep: "terms" as const
-      },
-      {
-        contractNumber: "SHI-0021",
-        merchantId: 1,
-        customerId: 4,
-        amount: 3200,
-        downPayment: 480, // 15%
-        financedAmount: 2720,
-        termMonths: 24,
-        interestRate: 0,
-        monthlyPayment: 113.33,
-        status: "declined" as const,
-        currentStep: "kyc" as const
-      }
-    ];
-    
-    contracts.forEach(contract => this.createContract(contract));
-  }
-  
+export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    return this.usersMap.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
   
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.usersMap.values()).find(user => user.email === email);
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
   }
   
   async createUser(user: InsertUser): Promise<User> {
-    const id = this.userId++;
-    const createdAt = new Date();
-    // Ensure required fields are present
-    const newUser: User = { 
-      ...user, 
-      id, 
-      createdAt,
-      role: user.role || "customer", 
-      phone: user.phone || null
-    };
-    this.usersMap.set(id, newUser);
+    const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
   }
   
   // Merchant methods
   async getMerchant(id: number): Promise<Merchant | undefined> {
-    return this.merchantsMap.get(id);
+    const [merchant] = await db.select().from(merchants).where(eq(merchants.id, id));
+    return merchant || undefined;
   }
   
   async getMerchantByUserId(userId: number): Promise<Merchant | undefined> {
-    return Array.from(this.merchantsMap.values()).find(merchant => merchant.userId === userId);
+    const [merchant] = await db.select().from(merchants).where(eq(merchants.userId, userId));
+    return merchant || undefined;
   }
   
   async getAllMerchants(): Promise<Merchant[]> {
-    return Array.from(this.merchantsMap.values());
+    return await db.select().from(merchants);
   }
   
   async createMerchant(merchant: InsertMerchant): Promise<Merchant> {
-    const id = this.merchantId++;
-    const createdAt = new Date();
-    const newMerchant: Merchant = { 
-      ...merchant, 
-      id, 
-      createdAt,
-      address: merchant.address || null,
-      active: merchant.active || null,
-      userId: merchant.userId || null
-    };
-    this.merchantsMap.set(id, newMerchant);
+    const [newMerchant] = await db.insert(merchants).values(merchant).returning();
     return newMerchant;
   }
   
   // Contract methods
   async getContract(id: number): Promise<Contract | undefined> {
-    return this.contractsMap.get(id);
+    const [contract] = await db.select().from(contracts).where(eq(contracts.id, id));
+    return contract || undefined;
   }
   
   async getContractByNumber(contractNumber: string): Promise<Contract | undefined> {
-    return Array.from(this.contractsMap.values()).find(contract => contract.contractNumber === contractNumber);
+    const [contract] = await db.select().from(contracts).where(eq(contracts.contractNumber, contractNumber));
+    return contract || undefined;
   }
   
   async getAllContracts(): Promise<Contract[]> {
-    return Array.from(this.contractsMap.values());
+    return await db.select().from(contracts);
   }
   
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
-    return Array.from(this.contractsMap.values()).filter(contract => contract.merchantId === merchantId);
+    return await db.select().from(contracts).where(eq(contracts.merchantId, merchantId));
   }
   
   async getContractsByCustomerId(customerId: number): Promise<Contract[]> {
-    return Array.from(this.contractsMap.values()).filter(contract => contract.customerId === customerId);
+    return await db.select().from(contracts).where(eq(contracts.customerId, customerId));
   }
   
   async createContract(contract: InsertContract): Promise<Contract> {
-    const id = this.contractId++;
-    const createdAt = new Date();
-    const newContract: Contract = { 
-      ...contract, 
-      id, 
-      createdAt, 
-      completedAt: null,
-      status: contract.status || "pending",
-      currentStep: contract.currentStep || "terms",
-      customerId: contract.customerId || null,
-      termMonths: contract.termMonths || 24,
-      interestRate: contract.interestRate || 0
-    };
-    this.contractsMap.set(id, newContract);
+    const [newContract] = await db.insert(contracts).values(contract).returning();
     return newContract;
   }
   
   async updateContractStatus(id: number, status: string): Promise<Contract | undefined> {
-    const contract = this.contractsMap.get(id);
-    if (!contract) return undefined;
+    // Check if contract exists
+    const existingContract = await this.getContract(id);
+    if (!existingContract) return undefined;
     
-    const updatedContract: Contract = { 
-      ...contract, 
-      status: status as any,
-      completedAt: status === 'completed' ? new Date() : contract.completedAt
-    };
-    this.contractsMap.set(id, updatedContract);
+    // Determine if completedAt should be set
+    const completedAt = status === 'completed' ? new Date() : existingContract.completedAt;
+    
+    // Update the contract
+    const [updatedContract] = await db
+      .update(contracts)
+      .set({ 
+        status: status as any,
+        completedAt
+      })
+      .where(eq(contracts.id, id))
+      .returning();
+    
     return updatedContract;
   }
   
   async updateContractStep(id: number, step: string): Promise<Contract | undefined> {
-    const contract = this.contractsMap.get(id);
-    if (!contract) return undefined;
+    // Check if contract exists
+    const existingContract = await this.getContract(id);
+    if (!existingContract) return undefined;
     
-    const updatedContract: Contract = { ...contract, currentStep: step as any };
-    this.contractsMap.set(id, updatedContract);
+    // Update the contract step
+    const [updatedContract] = await db
+      .update(contracts)
+      .set({ currentStep: step as any })
+      .where(eq(contracts.id, id))
+      .returning();
+    
     return updatedContract;
   }
   
   // Application Progress methods
   async getApplicationProgress(id: number): Promise<ApplicationProgress | undefined> {
-    return this.applicationProgressMap.get(id);
+    const [progress] = await db.select().from(applicationProgress).where(eq(applicationProgress.id, id));
+    return progress || undefined;
   }
   
   async getApplicationProgressByContractId(contractId: number): Promise<ApplicationProgress[]> {
-    return Array.from(this.applicationProgressMap.values()).filter(progress => progress.contractId === contractId);
+    return await db.select().from(applicationProgress).where(eq(applicationProgress.contractId, contractId));
   }
   
   async createApplicationProgress(progress: InsertApplicationProgress): Promise<ApplicationProgress> {
-    const id = this.applicationProgressId++;
-    const createdAt = new Date();
-    const newProgress: ApplicationProgress = { 
-      ...progress, 
-      id, 
-      createdAt, 
-      completedAt: null,
-      data: progress.data || null,
-      completed: progress.completed || null
-    };
-    this.applicationProgressMap.set(id, newProgress);
+    const [newProgress] = await db.insert(applicationProgress).values(progress).returning();
     return newProgress;
   }
   
   async updateApplicationProgressCompletion(id: number, completed: boolean, data?: string): Promise<ApplicationProgress | undefined> {
-    const progress = this.applicationProgressMap.get(id);
-    if (!progress) return undefined;
+    // Check if progress exists
+    const existingProgress = await this.getApplicationProgress(id);
+    if (!existingProgress) return undefined;
     
-    const updatedProgress: ApplicationProgress = { 
-      ...progress, 
+    // Prepare update data
+    const updateData: any = { 
       completed,
-      data: data || progress.data,
       completedAt: completed ? new Date() : null
     };
-    this.applicationProgressMap.set(id, updatedProgress);
+    
+    // Include data if provided
+    if (data !== undefined) {
+      updateData.data = data;
+    }
+    
+    // Update the progress
+    const [updatedProgress] = await db
+      .update(applicationProgress)
+      .set(updateData)
+      .where(eq(applicationProgress.id, id))
+      .returning();
+    
     return updatedProgress;
   }
   
   // Log methods
   async createLog(log: InsertLog): Promise<Log> {
-    const id = this.logId++;
-    const timestamp = new Date();
-    const newLog: Log = { 
-      ...log, 
-      id, 
-      timestamp,
-      userId: log.userId || null,
-      source: log.source || "internal",
-      metadata: log.metadata || null,
-      level: log.level || "info",
-      category: log.category || "system",
-      correlationId: log.correlationId || null,
-      requestId: log.requestId || null,
-      ipAddress: log.ipAddress || null,
-      userAgent: log.userAgent || null,
-      tags: log.tags || null,
-      duration: log.duration || null,
-      statusCode: log.statusCode || null,
-      retentionDays: log.retentionDays || null
-    };
-    this.logsMap.set(id, newLog);
+    const [newLog] = await db.insert(logs).values(log).returning();
     return newLog;
   }
   
   async getLogs(): Promise<Log[]> {
-    return Array.from(this.logsMap.values());
+    return await db.select().from(logs).orderBy(logs.timestamp);
   }
   
   async getLogsByUserId(userId: number): Promise<Log[]> {
-    return Array.from(this.logsMap.values()).filter(log => log.userId === userId);
+    return await db.select().from(logs).where(eq(logs.userId, userId)).orderBy(logs.timestamp);
+  }
+  
+  async seedInitialData() {
+    try {
+      // Check if data already exists to avoid duplicates
+      const existingUsers = await this.getAllUsers();
+      if (existingUsers.length > 0) {
+        console.log("Database already has data. Skipping seed.");
+        return;
+      }
+      
+      // Create admin user
+      const adminUser: InsertUser = {
+        email: "admin@shifi.com",
+        password: "admin123", // In a real app, this would be hashed
+        name: "Admin User",
+        role: "admin",
+        phone: "123-456-7890"
+      };
+      const createdAdminUser = await this.createUser(adminUser);
+      
+      // Create a merchant user
+      const merchantUser: InsertUser = {
+        email: "merchant@techsolutions.com",
+        password: "merchant123", // In a real app, this would be hashed
+        name: "Merchant User",
+        role: "merchant",
+        phone: "987-654-3210"
+      };
+      const createdMerchantUser = await this.createUser(merchantUser);
+      
+      // Create merchant
+      const merchant: InsertMerchant = {
+        name: "TechSolutions Inc.",
+        contactName: "Merchant User",
+        email: "contact@techsolutions.com",
+        phone: "987-654-3210",
+        address: "123 Tech Ave, San Francisco, CA",
+        active: true,
+        userId: createdMerchantUser.id
+      };
+      await this.createMerchant(merchant);
+      
+      // Create some customer users
+      const customersData = [
+        {
+          email: "sarah.johnson@example.com",
+          password: "password123",
+          name: "Sarah Johnson",
+          role: "customer" as const,
+          phone: "555-123-4567"
+        },
+        {
+          email: "michael.brown@example.com",
+          password: "password123",
+          name: "Michael Brown",
+          role: "customer" as const,
+          phone: "555-987-6543"
+        },
+        {
+          email: "jennifer.smith@example.com",
+          password: "password123",
+          name: "Jennifer Smith",
+          role: "customer" as const,
+          phone: "555-456-7890"
+        }
+      ];
+      
+      const createdCustomers = await Promise.all(customersData.map(customer => this.createUser(customer)));
+      
+      // Create some contracts
+      const contractsData = [
+        {
+          contractNumber: "SHI-0023",
+          merchantId: 1,
+          customerId: 2,
+          amount: 4500,
+          downPayment: 675, // 15%
+          financedAmount: 3825,
+          termMonths: 24,
+          interestRate: 0,
+          monthlyPayment: 159.38,
+          status: "active" as const,
+          currentStep: "completed" as const
+        },
+        {
+          contractNumber: "SHI-0022",
+          merchantId: 1,
+          customerId: 3,
+          amount: 2750,
+          downPayment: 412.5, // 15%
+          financedAmount: 2337.5,
+          termMonths: 24,
+          interestRate: 0,
+          monthlyPayment: 97.40,
+          status: "pending" as const,
+          currentStep: "terms" as const
+        },
+        {
+          contractNumber: "SHI-0021",
+          merchantId: 1,
+          customerId: 4,
+          amount: 3200,
+          downPayment: 480, // 15%
+          financedAmount: 2720,
+          termMonths: 24,
+          interestRate: 0,
+          monthlyPayment: 113.33,
+          status: "declined" as const,
+          currentStep: "kyc" as const
+        }
+      ];
+      
+      await Promise.all(contractsData.map(contract => this.createContract(contract)));
+      
+      console.log("Database seeded successfully");
+    } catch (error) {
+      console.error("Error seeding database:", error);
+      throw error;
+    }
+  }
+  
+  // Helper method to check if data already exists
+  private async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
   }
 }
 
-export const storage = new MemStorage();
+// Initialize with DatabaseStorage instead of MemStorage
+export const storage = new DatabaseStorage();
