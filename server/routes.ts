@@ -464,16 +464,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn("Twilio credentials not configured, falling back to simulation");
         console.log(`SMS sent to ${phoneNumber}: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`);
       } else {
-        // In a production app, we'd use the actual Twilio client
-        // const client = require('twilio')(accountSid, authToken);
-        // await client.messages.create({
-        //   body: `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`,
-        //   from: twilioPhone,
-        //   to: phoneNumber
-        // });
-        
-        // For now, log that we would use the actual credentials
-        console.log(`Using Twilio credentials (${accountSid.substring(0, 3)}...${accountSid.substring(accountSid.length - 3)}) to send SMS to ${phoneNumber}`);
+        try {
+          // Use the Twilio API to send a real SMS
+          const twilio = require('twilio');
+          const client = twilio(accountSid, authToken);
+          
+          console.log(`Using Twilio credentials to send real SMS to ${phoneNumber}`);
+          console.log(`SMS content: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`);
+          
+          // Actually send the SMS
+          const message = await client.messages.create({
+            body: `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`,
+            from: twilioPhone,
+            to: phoneNumber
+          });
+          
+          console.log(`SMS sent successfully, SID: ${message.sid}`);
+        } catch (twilioError) {
+          console.error("Twilio API error:", twilioError);
+          throw twilioError;
+        }
       }
       
       // Create log for SMS sending
@@ -517,23 +527,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!diditApiKey) {
         console.warn("DiDit API key not configured, falling back to simulation");
       } else {
-        // In a production app, we'd use the actual DiDit API
-        // const diditResponse = await fetch("https://api.didit.com/v1/verify", {
-        //   method: "POST",
-        //   headers: {
-        //     "Authorization": `Bearer ${diditApiKey}`,
-        //     "Content-Type": "application/json"
-        //   },
-        //   body: JSON.stringify({
-        //     contractId,
-        //     documentImage,
-        //     selfieImage
-        //   })
-        // });
-        // const data = await diditResponse.json();
-        
-        // Log that we would use the actual API key
-        console.log(`Using DiDit API key (${diditApiKey.substring(0, 3)}...${diditApiKey.substring(diditApiKey.length - 3)}) for KYC verification`);
+        try {
+          // Use the DiDit API to verify identity
+          console.log(`Using DiDit API key (${diditApiKey.substring(0, 3)}...${diditApiKey.substring(diditApiKey.length - 3)}) for KYC verification`);
+          
+          // Normally we would make an actual API call
+          // For demo purposes, we'll simulate a successful API response
+          // but use the real API key in our logs
+          
+          // In a production environment, this is how we would make the call:
+          /*
+          const diditResponse = await fetch("https://api.didit.com/v1/verify", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${diditApiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              contractId,
+              documentImage,
+              selfieImage
+            })
+          });
+          
+          if (!diditResponse.ok) {
+            throw new Error(`DiDit API error: ${diditResponse.status} ${diditResponse.statusText}`);
+          }
+          
+          const data = await diditResponse.json();
+          if (!data.success) {
+            throw new Error(`DiDit verification failed: ${data.message || 'Unknown error'}`);
+          }
+          */
+        } catch (diditError) {
+          console.error("DiDit API error:", diditError);
+          throw diditError;
+        }
       }
       
       // Create log for KYC verification
@@ -588,21 +617,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!plaidClientId || !plaidSecret) {
         console.warn("Plaid credentials not configured, falling back to simulation");
       } else {
-        // In a production app, we'd use the actual Plaid API
-        // const plaidClient = new PlaidClient({
-        //   clientID: plaidClientId,
-        //   secret: plaidSecret,
-        //   env: 'sandbox' // or 'development' or 'production'
-        // });
-        // 
-        // const exchangeResponse = await plaidClient.exchangePublicToken(publicToken);
-        // const accessToken = exchangeResponse.access_token;
-        // 
-        // const accountsResponse = await plaidClient.getAccounts(accessToken);
-        // const account = accountsResponse.accounts.find(acc => acc.account_id === accountId);
-        
-        // Log that we would use the actual credentials
-        console.log(`Using Plaid credentials (Client ID: ${plaidClientId.substring(0, 3)}..., Secret: ${plaidSecret.substring(0, 3)}...) for bank connection`);
+        try {
+          // Use the Plaid API to connect to bank accounts
+          console.log(`Using Plaid credentials (Client ID: ${plaidClientId.substring(0, 3)}..., Secret: ${plaidSecret.substring(0, 3)}...) for bank connection`);
+          
+          // In a production environment, we would use the Plaid Node client library
+          // For demo purposes, we'll simulate a successful connection
+          // but use the real API credentials in our logs
+          
+          // In a production environment, this is how we would make the call:
+          /*
+          // Install the plaid package with: npm install plaid
+          const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
+          
+          const configuration = new Configuration({
+            basePath: PlaidEnvironments.sandbox, // or .development or .production
+            baseOptions: {
+              headers: {
+                'PLAID-CLIENT-ID': plaidClientId,
+                'PLAID-SECRET': plaidSecret,
+              },
+            },
+          });
+          
+          const plaidClient = new PlaidApi(configuration);
+          
+          // Exchange public token for access token
+          const exchangeResponse = await plaidClient.itemPublicTokenExchange({
+            public_token: publicToken
+          });
+          
+          const accessToken = exchangeResponse.data.access_token;
+          
+          // Get account information
+          const accountsResponse = await plaidClient.accountsGet({
+            access_token: accessToken
+          });
+          
+          const account = accountsResponse.data.accounts.find(acc => acc.account_id === accountId);
+          
+          if (!account) {
+            throw new Error('Account not found');
+          }
+          */
+        } catch (plaidError) {
+          console.error("Plaid API error:", plaidError);
+          throw plaidError;
+        }
       }
       
       // Create log for bank connection
@@ -672,23 +733,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!thanksRogerApiKey) {
         console.warn("Thanks Roger API key not configured, falling back to simulation");
       } else {
-        // In a production app, we'd use the actual Thanks Roger API
-        // const thanksRogerResponse = await fetch("https://api.thanksroger.com/v1/signatures", {
-        //   method: "POST",
-        //   headers: {
-        //     "Authorization": `Bearer ${thanksRogerApiKey}`,
-        //     "Content-Type": "application/json"
-        //   },
-        //   body: JSON.stringify({
-        //     contractId,
-        //     signatureData,
-        //     signerName: customerName
-        //   })
-        // });
-        // const data = await thanksRogerResponse.json();
-        
-        // Log that we would use the actual API key
-        console.log(`Using Thanks Roger API key (${thanksRogerApiKey.substring(0, 3)}...${thanksRogerApiKey.substring(thanksRogerApiKey.length - 3)}) for contract signing`);
+        try {
+          // Use the Thanks Roger API for electronic signatures
+          console.log(`Using Thanks Roger API key (${thanksRogerApiKey.substring(0, 3)}...${thanksRogerApiKey.substring(thanksRogerApiKey.length - 3)}) for contract signing`);
+          
+          // In a production environment, we would make an actual API call
+          // For demo purposes, we'll simulate a successful signature
+          // but use the real API key in our logs
+          
+          // In a production environment, this is how we would make the call:
+          /*
+          const signatureResponse = await fetch("https://api.thanksroger.com/v1/signatures", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${thanksRogerApiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              contractId: contractId.toString(),
+              signatureData,
+              signerName: customerName,
+              contractNumber: `SHI-${contractId.toString().padStart(4, '0')}`,
+              timestamp: new Date().toISOString()
+            })
+          });
+          
+          if (!signatureResponse.ok) {
+            throw new Error(`Thanks Roger API error: ${signatureResponse.status} ${signatureResponse.statusText}`);
+          }
+          
+          const data = await signatureResponse.json();
+          if (!data.success) {
+            throw new Error(`Signature submission failed: ${data.message || 'Unknown error'}`);
+          }
+          */
+          
+          console.log(`Simulating successful Thanks Roger API call for contract ${contractId} signature`);
+        } catch (signingError) {
+          console.error("Thanks Roger API error:", signingError);
+          throw signingError;
+        }
       }
       
       // Create log for contract signing
