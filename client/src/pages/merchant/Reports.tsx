@@ -595,7 +595,7 @@ export default function Reports() {
                           </tr>
                         ) : (
                           filteredContracts
-                            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                            .sort((a, b) => new Date(b.createdAt || new Date()).getTime() - new Date(a.createdAt || new Date()).getTime())
                             .slice(0, 5)
                             .map((contract) => (
                               <tr key={contract.id}>

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -313,7 +313,7 @@ export default function ContractSigning({
           </div>
           <div className="border border-gray-300 rounded-lg bg-white p-1">
             <canvas 
-              ref={handleCanvasRef}
+              ref={canvasRef}
               className="w-full touch-none cursor-crosshair"
               style={{ height: "150px" }}
             />
