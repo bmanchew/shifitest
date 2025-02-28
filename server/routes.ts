@@ -6,6 +6,11 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertUserSchema, insertMerchantSchema, insertContractSchema, insertApplicationProgressSchema, insertLogSchema } from "@shared/schema";
 
+// Helper function to get the domain for callbacks and webhooks
+function getAppDomain(): string {
+  return process.env.REPLIT_DOMAINS?.split(',')[0] || 'shifi.com';
+}
+
 function generateContractNumber(): string {
   return `SHI-${Math.floor(1000 + Math.random() * 9000)}`;
 }
@@ -484,9 +489,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authToken = process.env.TWILIO_AUTH_TOKEN;
       const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
       
+      // Get the application base URL from Replit
+      const replitDomain = process.env.REPLIT_DOMAINS?.split(',')[0] || 'shifi.com';
+      const applicationUrl = `https://${replitDomain}/apply/123`;
+      
       if (!accountSid || !authToken || !twilioPhone) {
         console.warn("Twilio credentials not configured, falling back to simulation");
-        console.log(`SMS sent to ${phoneNumber}: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`);
+        console.log(`SMS sent to ${phoneNumber}: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`);
       } else {
         try {
           // In a production environment with ESM modules, we'd import Twilio at the top:
@@ -494,7 +503,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // For now, we'll simulate the API call but log the credentials
           console.log(`Using Twilio credentials to send SMS to ${phoneNumber}`);
-          console.log(`SMS content: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`);
+          console.log(`SMS content: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`);
           
           // Simulating successful SMS sending
           const messageId = "SM" + Math.random().toString(36).substring(2, 15).toUpperCase();
@@ -636,7 +645,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
-              callback_url: "https://shifi.com/api/kyc/webhook",
+              callback_url: `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'shifi.com'}/api/kyc/webhook`,
               vendor_data: contractId.toString(),
               allowed_document_types: ["passport", "driving_license", "id_card"],
               allowed_checks: ["ocr", "face", "document_liveness"],
@@ -679,7 +688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           session_number: Math.floor(10000 + Math.random() * 90000),
           session_url: `https://verify.didit.me/session/${sessionId}`,
           vendor_data: contractId.toString(),
-          callback: "https://shifi.com/api/kyc/webhook",
+          callback: `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'shifi.com'}/api/kyc/webhook`,
           features: "OCR + FACE + AML",
           created_at: new Date().toISOString(),
           status: "created",
