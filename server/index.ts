@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { logger, requestLogger } from "./services/logger";
+import { storage } from "./storage";
 
 const app = express();
 app.use(express.json());
@@ -42,6 +43,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Seed the database with initial data if needed
+  try {
+    // Check if database needs seeding and seed it
+    if ('seedInitialData' in storage) {
+      await (storage as any).seedInitialData();
+    }
+  } catch (error) {
+    console.error("Error seeding database:", error);
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
