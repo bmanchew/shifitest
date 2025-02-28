@@ -1,5 +1,5 @@
-import { StepConnector } from "@/components/ui/step-connector";
-import { Check, Clock, Lock } from "lucide-react";
+import { FC } from "react";
+import { Check, CircleDashed } from "lucide-react";
 
 export interface Step {
   id: string;
@@ -19,76 +19,64 @@ export default function ApplicationSteps({
   completedSteps,
 }: ApplicationStepsProps) {
   return (
-    <div className="space-y-8 py-2">
-      {steps.map((step, index) => {
-        const isCompleted = completedSteps.includes(step.id);
-        const isCurrent = step.id === currentStep;
-        const isPending = !isCompleted && !isCurrent;
-        const isLocked = isPending && !completedSteps.includes(steps[index - 1]?.id);
-        
-        // Calculate status color
-        let statusColor = "bg-gray-100 text-gray-400";
-        let statusIcon = <span className="text-sm font-medium">{index + 1}</span>;
-        
-        if (isCompleted) {
-          statusColor = "bg-green-600 text-white";
-          statusIcon = <Check className="h-5 w-5" />;
-        } else if (isCurrent) {
-          statusColor = "bg-blue-50 text-blue-600 ring-2 ring-blue-500";
-          statusIcon = <Clock className="h-5 w-5" />;
-        } else if (isLocked) {
-          statusColor = "bg-gray-100 text-gray-400";
-          statusIcon = <Lock className="h-4 w-4" />;
-        }
-        
-        return (
-          <div key={step.id} className="relative">
-            <div className="flex items-center">
-              {/* Step connector */}
-              {index < steps.length - 1 && (
-                <StepConnector 
-                  completed={isCompleted} 
-                  className={`${isCompleted ? "bg-green-500" : "bg-gray-200"}`}
-                />
-              )}
-              
-              {/* Step indicator */}
+    <div className="w-full">
+      <div className="hidden sm:flex items-center justify-between">
+        {steps.map((step, index) => (
+          <div key={step.id} className="flex items-center relative flex-1">
+            <div className="flex items-center justify-center">
               <div
-                className={`relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full 
-                  ${statusColor} shadow-sm transition-all duration-200`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  completedSteps.includes(step.id)
+                    ? "bg-green-500"
+                    : currentStep === step.id
+                    ? "bg-primary-600 text-white"
+                    : "bg-gray-200 text-gray-500"
+                }`}
               >
-                {statusIcon}
-              </div>
-              
-              {/* Step content */}
-              <div className="ml-4 flex-1">
-                <h4 className={`text-base font-semibold transition-colors duration-200
-                  ${isCurrent ? "text-blue-700" : isCompleted ? "text-gray-900" : "text-gray-500"}`}>
-                  {step.title}
-                </h4>
-                <p className={`text-sm ${isCurrent ? "text-blue-600" : "text-gray-500"}`}>
-                  {step.description}
-                </p>
-              </div>
-              
-              {/* Step status */}
-              <div className="hidden md:block ml-4">
-                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium
-                  ${isCompleted ? "bg-green-100 text-green-800" : 
-                     isCurrent ? "bg-blue-100 text-blue-800" : 
-                     "bg-gray-100 text-gray-600"}`}>
-                  {isCompleted ? "Completed" : isCurrent ? "In Progress" : "Pending"}
-                </span>
+                {completedSteps.includes(step.id) ? (
+                  <Check className="h-5 w-5 text-white" />
+                ) : (
+                  <span className="text-sm font-medium">{index + 1}</span>
+                )}
               </div>
             </div>
             
-            {/* Animation for current step */}
-            {isCurrent && (
-              <div className="absolute -inset-x-4 -inset-y-2 z-0 rounded-md bg-blue-50/50 md:block hidden" />
+            {index < steps.length - 1 && (
+              <div 
+                className={`h-0.5 absolute top-4 left-8 right-0 -mr-4 ${
+                  completedSteps.includes(step.id) ? "bg-green-500" : "bg-gray-200"
+                }`}
+              />
             )}
+            
+            <div className="ml-3 absolute -bottom-7 w-max">
+              <p className={`text-xs ${
+                currentStep === step.id
+                  ? "font-semibold text-gray-900"
+                  : completedSteps.includes(step.id)
+                  ? "text-green-600"
+                  : "text-gray-500"
+              }`}>
+                {step.title}
+              </p>
+            </div>
           </div>
-        );
-      })}
+        ))}
+      </div>
+      
+      <div className="sm:hidden mt-1">
+        <p className="text-sm font-medium text-gray-900">
+          Step {steps.findIndex(s => s.id === currentStep) + 1} of {steps.length}: {steps.find(s => s.id === currentStep)?.title}
+        </p>
+        <div className="flex w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-2">
+          <div
+            className="bg-primary-600"
+            style={{
+              width: `${((steps.findIndex(s => s.id === currentStep) + 1) / steps.length) * 100}%`,
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }
