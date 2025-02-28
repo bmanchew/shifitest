@@ -531,7 +531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // DiDit KYC verification endpoint
+  // DiDit KYC verification endpoint - following DiDit API documentation
   apiRouter.post("/mock/didit-kyc", async (req: Request, res: Response) => {
     try {
       // Check if this is a test request from the admin panel
@@ -548,12 +548,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata: JSON.stringify(req.body)
         });
         
-        // Return success for test
+        // Return success for test with DiDit-like response format
+        const sessionId = "session_" + Math.random().toString(36).substring(2, 15);
         return res.json({
-          success: true,
-          message: "Test KYC verification successful",
-          verificationId: "TEST-KYC-" + Math.floor(10000000 + Math.random() * 90000000),
-          verifiedAt: new Date().toISOString(),
+          status: "completed",
+          session_id: sessionId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          decision: {
+            status: "approved",
+            verification_result: "pass",
+            reason: "All verification checks passed successfully",
+            score: 0.95,
+            verification_id: "vid_" + Math.floor(10000000 + Math.random() * 90000000)
+          },
+          customer_details: {
+            first_name: req.body.firstName,
+            last_name: req.body.lastName,
+            email: req.body.email,
+            dob: req.body.dob || "1990-01-01",
+            address: {
+              line1: "123 Main St",
+              city: "New York",
+              state: "NY",
+              postal_code: "10001",
+              country: "US"
+            }
+          }
         });
       }
       
@@ -561,7 +582,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { contractId, documentImage, selfieImage } = req.body;
       
       if (!contractId || !documentImage || !selfieImage) {
-        return res.status(400).json({ message: "Contract ID, document image, and selfie image are required" });
+        return res.status(400).json({ 
+          status: "error",
+          error_code: "missing_required_fields",
+          error_message: "Contract ID, document image, and selfie image are required",
+          request_id: "req_" + Math.random().toString(36).substring(2, 15)
+        });
       }
       
       // Check if DiDit API key is available
@@ -644,7 +670,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Plaid bank connection endpoint
+  // Plaid bank connection endpoint - following Plaid API documentation
   apiRouter.post("/mock/plaid-link", async (req: Request, res: Response) => {
     try {
       // Check if this is a test request from the admin panel
@@ -661,16 +687,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata: JSON.stringify(req.body)
         });
         
-        // Return success for test
+        // Generate random account numbers for testing
+        const accountNumbers = {
+          account_id: req.body.accountId,
+          account: "1234567890",
+          routing: "021000021",
+          wire_routing: "021000021",
+          iban: "GB29NWBK60161331926819",
+          bic: "NWBKGB2L"
+        };
+
+        // Return success for test with Plaid-like response format
         return res.json({
-          success: true,
-          message: "Test Plaid link successful",
-          accountId: "test-" + req.body.accountId,
-          accessToken: "test-sandbox-" + Math.random().toString(36).substring(2, 10),
-          institution: {
-            name: "Test Bank",
-            institutionId: "test-inst-" + Math.floor(1 + Math.random() * 9)
-          }
+          accounts: [
+            {
+              account_id: "test_" + req.body.accountId,
+              balances: {
+                available: 5000.25,
+                current: 5100.25,
+                limit: null,
+                iso_currency_code: "USD",
+                unofficial_currency_code: null
+              },
+              mask: "1234",
+              name: "Checking Account",
+              official_name: "Premium Checking Account",
+              type: "depository",
+              subtype: "checking",
+              verification_status: "automatically_verified"
+            }
+          ],
+          numbers: {
+            ach: [accountNumbers],
+            eft: [],
+            international: [],
+            bacs: []
+          },
+          item: {
+            item_id: "item_" + Math.random().toString(36).substring(2, 12),
+            institution_id: "ins_" + Math.floor(1 + Math.random() * 9),
+            webhook: "https://shifi.com/api/plaid-webhook"
+          },
+          request_id: "req_" + Math.random().toString(36).substring(2, 15)
         });
       }
       
@@ -678,7 +736,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { contractId, bankId } = req.body;
       
       if (!contractId || !bankId) {
-        return res.status(400).json({ message: "Contract ID and bank ID are required" });
+        return res.status(400).json({ 
+          error_type: "INVALID_REQUEST",
+          error_code: "MISSING_FIELDS",
+          error_message: "Contract ID and bank ID are required",
+          display_message: "Please provide all required information to connect your bank account",
+          request_id: "req_" + Math.random().toString(36).substring(2, 15)
+        });
       }
       
       // Check if Plaid credentials are available
@@ -757,18 +821,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         case "pnc": bankName = "PNC"; break;
       }
       
-      // Simulate successful API response
+      // Simulate successful API response with Plaid-like format
       setTimeout(() => {
+        // Generate random account numbers
+        const accountNumbers = {
+          account_id: "acc_" + Math.random().toString(36).substring(2, 10),
+          account: Math.floor(10000000000 + Math.random() * 90000000000).toString(),
+          routing: "021000021",
+          wire_routing: "021000021"
+        };
+
+        // Generate random account mask
+        const accountMask = Math.floor(1000 + Math.random() * 9000).toString();
+        
         const response = {
-          success: true,
-          accountId: "acc_" + Math.random().toString(36).substring(2, 10),
-          accountName: "Checking Account",
-          accountMask: Math.floor(1000 + Math.random() * 9000).toString(),
-          accessToken: "access-sandbox-" + Math.random().toString(36).substring(2, 15),
-          institution: {
-            name: bankName,
-            institutionId: "ins_" + Math.floor(1 + Math.random() * 9)
-          }
+          accounts: [
+            {
+              account_id: accountNumbers.account_id,
+              balances: {
+                available: 10000.00,
+                current: 10200.00,
+                limit: null,
+                iso_currency_code: "USD",
+                unofficial_currency_code: null
+              },
+              mask: accountMask,
+              name: "Checking Account",
+              official_name: bankName + " Checking Account",
+              type: "depository",
+              subtype: "checking",
+              verification_status: "automatically_verified"
+            }
+          ],
+          numbers: {
+            ach: [accountNumbers],
+            eft: [],
+            international: [],
+            bacs: []
+          },
+          item: {
+            item_id: "item_" + Math.random().toString(36).substring(2, 12),
+            institution_id: "ins_" + Math.floor(1 + Math.random() * 9),
+            webhook: "https://shifi.com/api/plaid-webhook"
+          },
+          request_id: "req_" + Math.random().toString(36).substring(2, 15)
         };
         
         res.json(response);
