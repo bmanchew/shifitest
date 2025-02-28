@@ -1653,10 +1653,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Extract the contract ID from the vendor_data field
           let contractId: number | null = null;
           try {
-            if (sessionData.vendor_data) {
+            // Check if we have contractId from the webhook event processing
+            if (eventProcessResult.contractId) {
+              contractId = Number(eventProcessResult.contractId);
+            } 
+            // Fall back to trying to parse vendor_data manually if needed
+            else if (sessionData.vendor_data) {
               const vendorData = JSON.parse(sessionData.vendor_data);
               contractId = vendorData.contractId ? Number(vendorData.contractId) : null;
             }
+            
+            logger.info({
+              message: `Extracted contract ID from DiDit webhook: ${contractId}`,
+              category: "api",
+              source: "didit",
+              metadata: { 
+                session_id,
+                processedContractId: eventProcessResult.contractId,
+                vendorData: sessionData.vendor_data 
+              }
+            });
           } catch (error) {
             const parseError = error as Error;
             logger.error({
@@ -1762,10 +1778,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Try to extract contract ID from vendor_data field if present
             let contractId: number | null = null;
             try {
-              if (req.body.vendor_data) {
+              // Check if we have contractId from the webhook event processing
+              if (eventProcessResult.contractId) {
+                contractId = Number(eventProcessResult.contractId);
+              } 
+              // Fall back to trying to parse vendor_data manually if needed
+              else if (req.body.vendor_data) {
                 const vendorData = JSON.parse(req.body.vendor_data);
                 contractId = vendorData.contractId ? Number(vendorData.contractId) : null;
               }
+              
+              logger.info({
+                message: `Extracted contract ID from DiDit webhook payload: ${contractId}`,
+                category: "api",
+                source: "didit",
+                metadata: { 
+                  session_id,
+                  processedContractId: eventProcessResult.contractId,
+                  vendorData: req.body.vendor_data 
+                }
+              });
             } catch (error) {
               const parseError = error as Error;
               logger.error({

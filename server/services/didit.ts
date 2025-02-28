@@ -285,7 +285,7 @@ class DiditService {
       // According to the latest documentation, we need to use these specific fields
       const requestBody = {
         callback: callbackUrl, // Using 'callback' instead of 'callback_url'
-        vendor_data: contractId.toString(),
+        vendor_data: JSON.stringify({ contractId }),
         features: "OCR + FACE", // Features string format as specified in docs
         ...customFields
       };
@@ -374,7 +374,7 @@ class DiditService {
       session_id: sessionId,
       session_number: sessionNumber,
       session_url: mockUrl,
-      vendor_data: contractId.toString(),
+      vendor_data: JSON.stringify({ contractId }),
       callback: callbackUrl,
       features: 'OCR + FACE + AML',
       created_at: new Date().toISOString(),
@@ -463,14 +463,14 @@ class DiditService {
    * Generate a mock session decision for testing
    */
   private getMockSessionDecision(sessionId: string): DiditSessionDecision {
-    const vendorData = crypto.randomUUID(); // In a real scenario, this would be the contract ID
+    const mockContractId = 123; // For testing purposes
     
     return {
       session_id: sessionId,
       session_number: Math.floor(Math.random() * 100000),
       session_url: `${this.serverBaseUrl}/mock/didit-kyc?sessionId=${sessionId}`,
       status: 'Approved',
-      vendor_data: vendorData,
+      vendor_data: JSON.stringify({ contractId: mockContractId }),
       callback: `${this.serverBaseUrl}/api/kyc/webhook`,
       features: 'OCR + FACE',
       kyc: {
@@ -595,12 +595,28 @@ class DiditService {
         }
       });
 
+      // Extract contractId from vendor_data
+      let contractId = undefined;
+      try {
+        if (vendor_data) {
+          const parsedVendorData = JSON.parse(vendor_data);
+          contractId = parsedVendorData.contractId?.toString();
+        }
+      } catch (err) {
+        logger.warn({
+          message: `Failed to parse vendor_data as JSON: ${vendor_data}`,
+          category: 'api',
+          source: 'didit',
+          metadata: { error: err instanceof Error ? err.message : String(err) }
+        });
+      }
+
       return {
         status: 'success',
         isVerified,
         isCompleted,
         isApproved,
-        contractId: vendor_data,
+        contractId,
         sessionId: session_id,
         eventType: event_type
       };
