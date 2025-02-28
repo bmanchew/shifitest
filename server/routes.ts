@@ -834,7 +834,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
 
-      // Check Twilio credentials
+      // Check Twilio credentials with actual API call
       const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
       const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
       const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
@@ -842,69 +842,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (twilioAccountSid && twilioAuthToken && twilioPhone) {
         results.twilio.configured = true;
         
-        // Verify Twilio credentials format
-        if (
-          twilioAccountSid.startsWith('AC') && 
-          twilioAccountSid.length >= 32 && 
-          twilioAuthToken.length >= 32 &&
-          /^\+\d{10,15}$/.test(twilioPhone)
-        ) {
-          results.twilio.valid = true;
-          results.twilio.message = "Twilio credentials appear valid";
-        } else {
-          results.twilio.message = "Twilio credentials are in an invalid format";
+        try {
+          // Make an actual API call to Twilio to validate credentials
+          const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}.json`, {
+            method: 'GET',
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64')
+            }
+          });
+          
+          if (twilioResponse.ok) {
+            results.twilio.valid = true;
+            results.twilio.message = "Twilio credentials validated successfully";
+          } else {
+            results.twilio.message = `Twilio credentials invalid: ${twilioResponse.status} ${twilioResponse.statusText}`;
+          }
+        } catch (twilioError) {
+          console.error("Twilio API verification error:", twilioError);
+          results.twilio.message = `Twilio API error: ${twilioError instanceof Error ? twilioError.message : String(twilioError)}`;
         }
       } else {
         results.twilio.message = "Twilio credentials not configured";
       }
 
-      // Check DiDit API key
+      // Check DiDit API key with actual API call
       const diditApiKey = process.env.DIDIT_API_KEY;
       
       if (diditApiKey) {
         results.didit.configured = true;
         
-        // Verify DiDit API key format (typically a string of at least 32 chars)
-        if (diditApiKey.length >= 32) {
-          results.didit.valid = true;
-          results.didit.message = "DiDit API key appears valid";
-        } else {
-          results.didit.message = "DiDit API key is too short to be valid";
+        try {
+          // Make an actual API call to DiDit to validate API key
+          // Note: This is a placeholder URL, you'd need to replace with the actual DiDit API endpoint
+          const diditResponse = await fetch("https://api.didit.com/v1/status", {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${diditApiKey}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (diditResponse.ok) {
+            results.didit.valid = true;
+            results.didit.message = "DiDit API key validated successfully";
+          } else {
+            results.didit.message = `DiDit API key invalid: ${diditResponse.status} ${diditResponse.statusText}`;
+          }
+        } catch (diditError) {
+          console.error("DiDit API verification error:", diditError);
+          results.didit.message = `DiDit API error: ${diditError instanceof Error ? diditError.message : String(diditError)}`;
         }
       } else {
         results.didit.message = "DiDit API key not configured";
       }
 
-      // Check Plaid credentials
+      // Check Plaid credentials with actual API call
       const plaidClientId = process.env.PLAID_CLIENT_ID;
       const plaidSecret = process.env.PLAID_SECRET;
       
       if (plaidClientId && plaidSecret) {
         results.plaid.configured = true;
         
-        // Verify Plaid credentials format
-        if (plaidClientId.length >= 24 && plaidSecret.length >= 30) {
-          results.plaid.valid = true;
-          results.plaid.message = "Plaid credentials appear valid";
-        } else {
-          results.plaid.message = "Plaid credentials are in an invalid format";
+        try {
+          // Make an actual API call to Plaid to validate credentials
+          const plaidResponse = await fetch("https://sandbox.plaid.com/institutions/get", {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              client_id: plaidClientId,
+              secret: plaidSecret,
+              count: 1,
+              offset: 0,
+              country_codes: ['US']
+            })
+          });
+          
+          if (plaidResponse.ok) {
+            results.plaid.valid = true;
+            results.plaid.message = "Plaid credentials validated successfully";
+          } else {
+            results.plaid.message = `Plaid credentials invalid: ${plaidResponse.status} ${plaidResponse.statusText}`;
+          }
+        } catch (plaidError) {
+          console.error("Plaid API verification error:", plaidError);
+          results.plaid.message = `Plaid API error: ${plaidError instanceof Error ? plaidError.message : String(plaidError)}`;
         }
       } else {
         results.plaid.message = "Plaid credentials not configured";
       }
 
-      // Check Thanks Roger API key
+      // Check Thanks Roger API key with actual API call
       const thanksRogerApiKey = process.env.THANKSROGER_API_KEY;
       
       if (thanksRogerApiKey) {
         results.thanksroger.configured = true;
         
-        // Verify Thanks Roger API key format
-        if (thanksRogerApiKey.length >= 32) {
-          results.thanksroger.valid = true;
-          results.thanksroger.message = "Thanks Roger API key appears valid";
-        } else {
-          results.thanksroger.message = "Thanks Roger API key is too short to be valid";
+        try {
+          // Make an actual API call to Thanks Roger to validate API key
+          // Note: This is a placeholder URL, you'd need to replace with the actual Thanks Roger API endpoint
+          const thanksRogerResponse = await fetch("https://api.thanksroger.com/v1/status", {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${thanksRogerApiKey}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (thanksRogerResponse.ok) {
+            results.thanksroger.valid = true;
+            results.thanksroger.message = "Thanks Roger API key validated successfully";
+          } else {
+            results.thanksroger.message = `Thanks Roger API key invalid: ${thanksRogerResponse.status} ${thanksRogerResponse.statusText}`;
+          }
+        } catch (thanksRogerError) {
+          console.error("Thanks Roger API verification error:", thanksRogerError);
+          results.thanksroger.message = `Thanks Roger API error: ${thanksRogerError instanceof Error ? thanksRogerError.message : String(thanksRogerError)}`;
         }
       } else {
         results.thanksroger.message = "Thanks Roger API key not configured";

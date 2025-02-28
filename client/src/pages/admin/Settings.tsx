@@ -113,86 +113,92 @@ export default function Settings() {
             
             {/* Integration Settings */}
             <TabsContent value="integration">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Integration Settings</CardTitle>
-                  <CardDescription>
-                    Configure third-party service integrations
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">DiDit KYC Integration</h3>
-                    <div className="space-y-2">
-                      <Label htmlFor="diditApiKey">DiDit API Key</Label>
-                      <Input id="diditApiKey" type="password" defaultValue="••••••••••••••••" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="diditEnvironment">Environment</Label>
-                      <Select defaultValue="sandbox">
-                        <SelectTrigger id="diditEnvironment">
-                          <SelectValue placeholder="Select environment" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sandbox">Sandbox</SelectItem>
-                          <SelectItem value="production">Production</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <h3 className="text-lg font-medium pt-4">Plaid Integration</h3>
-                    <div className="space-y-2">
-                      <Label htmlFor="plaidClientId">Plaid Client ID</Label>
-                      <Input id="plaidClientId" defaultValue="client_id_12345" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="plaidSecret">Plaid Secret</Label>
-                      <Input id="plaidSecret" type="password" defaultValue="••••••••••••••••" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="plaidEnvironment">Environment</Label>
-                      <Select defaultValue="sandbox">
-                        <SelectTrigger id="plaidEnvironment">
-                          <SelectValue placeholder="Select environment" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sandbox">Sandbox</SelectItem>
-                          <SelectItem value="development">Development</SelectItem>
-                          <SelectItem value="production">Production</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <h3 className="text-lg font-medium pt-4">Thanks Roger E-Signature</h3>
-                    <div className="space-y-2">
-                      <Label htmlFor="thanksRogerApiKey">Thanks Roger API Key</Label>
-                      <Input id="thanksRogerApiKey" type="password" defaultValue="••••••••••••••••" />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="testMode">Test Mode</Label>
-                        <p className="text-sm text-gray-500">Send test signatures that don't count as legal documents</p>
+              <div className="grid gap-6">
+                {/* API Key Status Card */}
+                <ApiKeyStatus />
+                
+                {/* Integration Settings Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Integration Settings</CardTitle>
+                    <CardDescription>
+                      Configure third-party service integrations
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium">DiDit KYC Integration</h3>
+                      <div className="space-y-2">
+                        <Label htmlFor="diditApiKey">DiDit API Key</Label>
+                        <Input id="diditApiKey" type="password" defaultValue="••••••••••••••••" />
                       </div>
-                      <Switch id="testMode" defaultChecked />
+                      <div className="space-y-2">
+                        <Label htmlFor="diditEnvironment">Environment</Label>
+                        <Select defaultValue="sandbox">
+                          <SelectTrigger id="diditEnvironment">
+                            <SelectValue placeholder="Select environment" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sandbox">Sandbox</SelectItem>
+                            <SelectItem value="production">Production</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <h3 className="text-lg font-medium pt-4">Plaid Integration</h3>
+                      <div className="space-y-2">
+                        <Label htmlFor="plaidClientId">Plaid Client ID</Label>
+                        <Input id="plaidClientId" defaultValue="client_id_12345" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="plaidSecret">Plaid Secret</Label>
+                        <Input id="plaidSecret" type="password" defaultValue="••••••••••••••••" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="plaidEnvironment">Environment</Label>
+                        <Select defaultValue="sandbox">
+                          <SelectTrigger id="plaidEnvironment">
+                            <SelectValue placeholder="Select environment" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sandbox">Sandbox</SelectItem>
+                            <SelectItem value="development">Development</SelectItem>
+                            <SelectItem value="production">Production</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <h3 className="text-lg font-medium pt-4">Thanks Roger E-Signature</h3>
+                      <div className="space-y-2">
+                        <Label htmlFor="thanksRogerApiKey">Thanks Roger API Key</Label>
+                        <Input id="thanksRogerApiKey" type="password" defaultValue="••••••••••••••••" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="testMode">Test Mode</Label>
+                          <p className="text-sm text-gray-500">Send test signatures that don't count as legal documents</p>
+                        </div>
+                        <Switch id="testMode" defaultChecked />
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button onClick={() => handleSave("Integration")} disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Save Changes
-                      </>
-                    )}
-                  </Button>
-                </CardFooter>
-              </Card>
+                  </CardContent>
+                  <CardFooter>
+                    <Button onClick={() => handleSave("Integration")} disabled={isLoading}>
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Save Changes
+                        </>
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </div>
             </TabsContent>
             
             {/* Notification Settings */}
