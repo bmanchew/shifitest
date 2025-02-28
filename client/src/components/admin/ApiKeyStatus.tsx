@@ -66,12 +66,9 @@ export default function ApiKeyStatus() {
 
   const testTwilioApiMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest<Response>('/api/send-sms', {
-        method: 'POST',
-        body: JSON.stringify({
-          to: '+11234567890', // Test number
-          message: 'This is a test message from ShiFi finance platform',
-        }),
+      return await apiRequest<Response>('POST', '/api/send-sms', {
+        to: '+11234567890', // Test number
+        message: 'This is a test message from ShiFi finance platform',
       });
     },
     onSuccess: () => {
@@ -94,15 +91,12 @@ export default function ApiKeyStatus() {
 
   const testDiditApiMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/mock/didit-kyc', {
-        method: 'POST',
-        body: JSON.stringify({
-          firstName: 'Test',
-          lastName: 'User',
-          email: 'test@example.com',
-          ssn: '123-45-6789',
-          dob: '1990-01-01',
-        }),
+      return await apiRequest<Response>('POST', '/api/mock/didit-kyc', {
+        firstName: 'Test',
+        lastName: 'User',
+        email: 'test@example.com',
+        ssn: '123-45-6789',
+        dob: '1990-01-01',
       });
     },
     onSuccess: () => {
@@ -125,11 +119,8 @@ export default function ApiKeyStatus() {
 
   const testPlaidApiMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/mock/plaid-link', {
-        method: 'POST',
-        body: JSON.stringify({
-          accountId: 'test-account',
-        }),
+      return await apiRequest<Response>('POST', '/api/mock/plaid-link', {
+        accountId: 'test-account',
       });
     },
     onSuccess: () => {
@@ -152,13 +143,10 @@ export default function ApiKeyStatus() {
 
   const testThanksRogerApiMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/mock/thanks-roger-signing', {
-        method: 'POST',
-        body: JSON.stringify({
-          documentId: 'test-document',
-          signerName: 'Test Signer',
-          signerEmail: 'test@example.com',
-        }),
+      return await apiRequest<Response>('POST', '/api/mock/thanks-roger-signing', {
+        documentId: 'test-document',
+        signerName: 'Test Signer',
+        signerEmail: 'test@example.com',
       });
     },
     onSuccess: () => {
