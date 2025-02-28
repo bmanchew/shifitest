@@ -9,6 +9,19 @@ import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
 import { logger } from "./services/logger";
 
+// Helper function to ensure metadata is a proper object, not a JSON string
+function objectMetadata<T>(data: T): Record<string, any> {
+  if (!data) return {};
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      return { stringValue: data };
+    }
+  }
+  return data as Record<string, any>;
+}
+
 // Helper function to get the domain for callbacks and webhooks
 function getAppDomain(): string {
   return process.env.REPLIT_DOMAINS?.split(',')[0] || 'shifi.com';
@@ -1508,11 +1521,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 message: `Processing KYC verification result for contract ${contractId}`,
                 category: "api",
                 source: "didit",
-                metadata: JSON.stringify({ 
+                metadata: { 
                   contractId, 
                   verificationStatus, 
                   kycStatus: sessionData.kyc?.status 
-                })
+                }
               });
               
               // Find the KYC step in the application progress
@@ -1540,7 +1553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   logger.info({
                     message: `KYC verification completed successfully for contract ${contractId}`,
                     category: "contract",
-                    metadata: JSON.stringify({ contractId, kycStepId: kycStep.id })
+                    metadata: { contractId, kycStepId: kycStep.id }
                   });
                 } else {
                   // Mark verification as failed but don't complete the step
@@ -1558,7 +1571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   logger.warn({
                     message: `KYC verification failed for contract ${contractId}`,
                     category: "contract",
-                    metadata: JSON.stringify({ 
+                    metadata: objectMetadata({ 
                       contractId, 
                       kycStepId: kycStep.id,
                       status: verificationStatus || sessionData.kyc?.status || decision?.status 
@@ -1569,7 +1582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 logger.error({
                   message: `Could not find KYC step for contract ${contractId}`,
                   category: "contract",
-                  metadata: JSON.stringify({ contractId, applicationProgress })
+                  metadata: objectMetadata({ contractId, applicationProgress })
                 });
               }
             } else {
@@ -1577,7 +1590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 message: `No contract ID found in vendor_data for session ${session_id}`,
                 category: "api",
                 source: "didit",
-                metadata: JSON.stringify({ session_id, vendor_data: sessionData.vendor_data })
+                metadata: objectMetadata({ session_id, vendor_data: sessionData.vendor_data })
               });
             }
           } catch (apiError) {
@@ -1609,7 +1622,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 message: `Failed to parse vendor_data from webhook: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
                 category: "api",
                 source: "didit",
-                metadata: JSON.stringify({ session_id, vendor_data: req.body.vendor_data })
+                metadata: objectMetadata({ session_id, vendor_data: req.body.vendor_data })
               });
             }
             
@@ -1618,7 +1631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 message: `Processing KYC verification webhook for contract ${contractId}`,
                 category: "api",
                 source: "didit",
-                metadata: JSON.stringify({ contractId, status, decision: decision?.status })
+                metadata: objectMetadata({ contractId, status, decision: decision?.status })
               });
               
               // Find the KYC step in the application progress
@@ -1642,7 +1655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   logger.info({
                     message: `KYC verification completed successfully for contract ${contractId} (webhook)`,
                     category: "contract",
-                    metadata: JSON.stringify({ contractId, kycStepId: kycStep.id })
+                    metadata: objectMetadata({ contractId, kycStepId: kycStep.id })
                   });
                   
                   console.log(`Verification approved for session ${session_id}, updated contract ${contractId}`);
@@ -1663,7 +1676,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   logger.warn({
                     message: `KYC verification failed for contract ${contractId} (webhook)`,
                     category: "contract",
-                    metadata: JSON.stringify({ contractId, kycStepId: kycStep.id, status: decision?.status })
+                    metadata: objectMetadata({ contractId, kycStepId: kycStep.id, status: decision?.status })
                   });
                   
                   console.log(`Verification rejected for session ${session_id}, updated contract ${contractId}`);
@@ -1672,7 +1685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 logger.error({
                   message: `Could not find KYC step for contract ${contractId} (webhook)`,
                   category: "contract",
-                  metadata: JSON.stringify({ contractId, applicationProgress })
+                  metadata: objectMetadata({ contractId, applicationProgress })
                 });
               }
             } else {
@@ -1864,7 +1877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: "system",
         source: "internal",
         message: "API key verification check performed",
-        metadata: JSON.stringify({
+        metadata: objectMetadata({
           twilioConfigured: results.twilio.configured,
           twilioValid: results.twilio.valid,
           diditConfigured: results.didit.configured,
@@ -1886,7 +1899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: "system",
         source: "internal",
         message: `Failed API key verification: ${error instanceof Error ? error.message : String(error)}`,
-        metadata: JSON.stringify({ error: error instanceof Error ? error.stack : null })
+        metadata: objectMetadata({ error: error instanceof Error ? error.stack : null })
       });
       
       res.status(500).json({ message: "Internal server error" });
