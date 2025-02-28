@@ -386,7 +386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get KYC progress step specifically
+  // Get KYC progress step specifically - creates KYC progress if it doesn't exist
   apiRouter.get("/application-progress/kyc/:contractId", async (req: Request, res: Response) => {
     try {
       const contractId = parseInt(req.params.contractId);
@@ -394,11 +394,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid contract ID format" });
       }
       
-      const progress = await storage.getApplicationProgressByContractId(contractId);
-      const kycProgress = progress.find(step => step.step === "kyc");
+      // Verify that the contract exists first
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
       
+      // Look for existing KYC progress
+      const progress = await storage.getApplicationProgressByContractId(contractId);
+      let kycProgress = progress.find(step => step.step === "kyc");
+      
+      // If KYC progress doesn't exist, create it
       if (!kycProgress) {
-        return res.status(404).json({ message: "KYC progress not found for this contract" });
+        // Log this creation
+        console.log(`Creating new KYC progress for contract ${contractId}`);
+        await storage.createLog({
+          level: "info",
+          message: `Creating missing KYC progress for contract ${contract.contractNumber}`,
+          metadata: JSON.stringify({ contractId }),
+          category: "user",
+          source: "internal"
+        });
+        
+        // Create the KYC progress entry
+        kycProgress = await storage.createApplicationProgress({
+          contractId,
+          step: "kyc",
+          completed: false,
+          data: null
+        });
       }
       
       res.json(kycProgress);
