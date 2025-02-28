@@ -739,6 +739,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).send("Missing required parameters");
       }
       
+      // Get the application URL for messaging back to the parent window
+      const appUrl = `https://${getAppDomain()}`;
+      
       // Log access to the mock verification page
       logger.info({
         message: `Accessing mock DiDit verification page`,
@@ -746,7 +749,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         source: "didit",
         metadata: { 
           sessionId: String(sessionId),
-          contractId: String(contractId)
+          contractId: String(contractId),
+          appUrl
         }
       });
       

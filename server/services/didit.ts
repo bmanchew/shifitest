@@ -114,7 +114,7 @@ class DiditService {
   private cachedToken: string | null = null;
   private tokenExpiry: number = 0;
   private initialized = false;
-  private useMockMode = true; // Enable mock mode when real API fails
+  private useMockMode = false; // Set to false to use the real DiDit API
   // Use a dynamic base URL that works in any environment
   private serverBaseUrl = process.env.PUBLIC_URL || 'https://66bc6305-d313-418d-8499-11a803af5b4a-00-368ksgk8kmfni.kirk.replit.dev';
 
@@ -355,8 +355,20 @@ class DiditService {
       }
     });
     
-    // Use the server base URL instead of window.location.origin
-    const mockUrl = `${this.serverBaseUrl}/mock/didit-kyc?sessionId=${sessionId}&contractId=${contractId}`;
+    // Get current origin from environment
+    const originUrl = process.env.PUBLIC_URL || this.serverBaseUrl;
+    
+    // Make sure we're using the proper scheme (https://)
+    const baseUrl = originUrl.startsWith('http') ? originUrl : `https://${originUrl}`;
+    
+    // Construct the mock verification URL
+    const mockUrl = `${baseUrl}/mock/didit-kyc?sessionId=${sessionId}&contractId=${contractId}`;
+    
+    logger.info({
+      message: `Created mock DiDit verification URL: ${mockUrl}`,
+      category: 'api',
+      source: 'didit'
+    });
     
     return {
       session_id: sessionId,
