@@ -18,11 +18,11 @@ const getStatusBadgeVariant = (status: string) => {
     case "pending":
       return "warning";
     case "completed":
-      return "info";
+      return "secondary";
     case "declined":
-      return "danger";
+      return "destructive";
     case "cancelled":
-      return "danger";
+      return "outline";
     default:
       return "default";
   }

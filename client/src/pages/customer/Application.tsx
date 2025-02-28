@@ -20,7 +20,7 @@ export default function Application() {
   // Mock data for demo purposes when no valid contractId is provided
   const mockContractData = {
     id: 999,
-    contractNumber: "FIN-DEMO",
+    contractNumber: "SHI-DEMO",
     merchantId: 1,
     customerId: null,
     amount: 2800,
@@ -304,19 +304,52 @@ export default function Application() {
               </div>
               <h3 className="text-2xl font-semibold text-gray-900 mb-2">Application Complete!</h3>
               <p className="text-gray-600 mb-6">
-                Your financing has been approved and your contract is now active.
-                You'll receive a confirmation email with all the details.
+                Your ShiFi financing has been approved and your contract is now active.
               </p>
-              <Button 
-                onClick={() => {
-                  toast({
-                    title: "Success",
-                    description: "Your contract details have been emailed to you.",
-                  });
-                }}
-              >
-                Return to Merchant
-              </Button>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+                <h4 className="font-medium text-blue-800 mb-2">Contract Summary</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="text-gray-600">Contract Number:</div>
+                  <div className="font-medium text-gray-900">{contractData.contractNumber}</div>
+                  
+                  <div className="text-gray-600">Amount Financed:</div>
+                  <div className="font-medium text-gray-900">${contractData.financedAmount.toFixed(2)}</div>
+                  
+                  <div className="text-gray-600">Down Payment:</div>
+                  <div className="font-medium text-gray-900">${contractData.downPayment.toFixed(2)}</div>
+                  
+                  <div className="text-gray-600">Term:</div>
+                  <div className="font-medium text-gray-900">{contractData.termMonths} months</div>
+                  
+                  <div className="text-gray-600">Monthly Payment:</div>
+                  <div className="font-medium text-gray-900">${contractData.monthlyPayment.toFixed(2)}</div>
+                </div>
+              </div>
+              <p className="text-gray-600 mb-6">
+                You'll receive a confirmation email with all the details and a copy of your signed contract.
+              </p>
+              <div className="flex flex-col sm:flex-row justify-center gap-4">
+                <Button 
+                  onClick={() => {
+                    toast({
+                      title: "Success",
+                      description: "Your contract details have been emailed to you.",
+                    });
+                  }}
+                >
+                  Download Contract
+                </Button>
+                <Button variant="outline"
+                  onClick={() => {
+                    toast({
+                      title: "Redirecting",
+                      description: "Returning to merchant website...",
+                    });
+                  }}
+                >
+                  Return to Merchant
+                </Button>
+              </div>
             </div>
           </div>
         );

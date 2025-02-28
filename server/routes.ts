@@ -457,7 +457,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // In a real app, we would send an actual SMS here
       // For now, we'll just simulate it
-      console.log(`SMS sent to ${phoneNumber}: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://finpay.com/apply/123`);
+      console.log(`SMS sent to ${phoneNumber}: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`);
       
       // Create log for SMS sending
       await storage.createLog({
