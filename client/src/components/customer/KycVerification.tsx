@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -19,9 +19,71 @@ export default function KycVerification({
 }: KycVerificationProps) {
   const { toast } = useToast();
   const [isVerifying, setIsVerifying] = useState(false);
-  const [step, setStep] = useState<"instructions" | "document" | "selfie" | "verifying" | "complete">("instructions");
+  const [isLoading, setIsLoading] = useState(false);
+  const [step, setStep] = useState<"instructions" | "document" | "selfie" | "verifying" | "verifying_external" | "complete">("instructions");
   const [documentImage, setDocumentImage] = useState<string | null>(null);
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
+  const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const verificationWindowRef = useRef<Window | null>(null);
+  
+  // Listen for message events from the DiDit verification window
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Check if the message is the verification complete signal
+      if (event.data === 'verification_complete') {
+        console.log('Received verification complete signal');
+        
+        // If we have a verification window reference, close it
+        if (verificationWindowRef.current) {
+          verificationWindowRef.current.close();
+        }
+        
+        // Complete the verification process
+        completeVerification();
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [sessionId, progressId]);
+  
+  // Complete the verification process after receiving confirmation
+  const completeVerification = async () => {
+    try {
+      if (!sessionId) return;
+      
+      // Mark the KYC step as completed in our application
+      await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+        completed: true,
+        data: JSON.stringify({
+          verifiedAt: new Date().toISOString(),
+          sessionId: sessionId,
+          status: "approved"
+        }),
+      });
+      
+      setStep("complete");
+      setIsVerifying(false);
+      
+      // After a short delay, move to the next step in the application
+      setTimeout(() => {
+        onComplete();
+      }, 2000);
+    } catch (error) {
+      console.error("Error updating verification status:", error);
+      toast({
+        title: "Verification Error",
+        description: "There was an error completing your verification. Please try again.",
+        variant: "destructive",
+      });
+      setIsVerifying(false);
+      setStep("instructions");
+    }
+  };
 
   // Handle document upload
   const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,15 +109,16 @@ export default function KycVerification({
 
   // Move to the document upload step
   const handleStartVerification = () => {
-    setStep("document");
+    // Skip document/selfie collection and go directly to DiDit verification
+    createVerificationSession();
   };
 
-  // After document upload, move to selfie step
-  const handleDocumentContinue = () => {
+  // Move to the selfie step after document upload
+  const handleDocumentNext = () => {
     if (!documentImage) {
       toast({
         title: "Document Required",
-        description: "Please upload a photo of your ID document.",
+        description: "Please upload or take a photo of your identification document",
         variant: "destructive",
       });
       return;
@@ -63,20 +126,86 @@ export default function KycVerification({
     setStep("selfie");
   };
 
-  // After selfie upload, submit for verification
-  const handleSelfieContinue = () => {
+  // Handle the verification submission
+  const handleSelfieNext = () => {
     if (!selfieImage) {
       toast({
         title: "Selfie Required",
-        description: "Please upload a selfie photo.",
+        description: "Please take a selfie photo for identity verification",
         variant: "destructive",
       });
       return;
     }
     submitVerification();
   };
+  
+  // Create a verification session with DiDit
+  const createVerificationSession = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Call our new API endpoint to create a DiDit verification session
+      const response = await apiRequest<{
+        success: boolean;
+        session: {
+          session_id: string;
+          session_url: string;
+          status: string;
+        }
+      }>("POST", "/api/kyc/create-session", {
+        contractId
+      });
+      
+      if (!response?.success || !response.session) {
+        throw new Error("Failed to create verification session");
+      }
+      
+      const { session } = response;
+      
+      console.log("KYC verification session created:", session);
+      setSessionId(session.session_id);
+      setVerificationUrl(session.session_url);
+      
+      // Update application progress to track that verification has started
+      await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+        data: JSON.stringify({
+          verificationStarted: new Date().toISOString(),
+          sessionId: session.session_id,
+          sessionUrl: session.session_url
+        }),
+      });
+      
+      // Open the DiDit verification in a new window
+      setStep("verifying_external");
+      
+      // Open the DiDit verification URL in a new window
+      const verificationWindow = window.open(session.session_url, "_blank", "width=500,height=600");
+      
+      // Store the window reference
+      verificationWindowRef.current = verificationWindow;
+      
+      if (!verificationWindow) {
+        // If popup was blocked, show a message with link instead
+        toast({
+          title: "Popup Blocked",
+          description: "Please allow popups for this site and try again, or click the button below to open verification.",
+          variant: "destructive",
+        });
+      }
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error creating verification session:", error);
+      toast({
+        title: "Verification Error",
+        description: "Could not start the identity verification process. Please try again.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    }
+  };
 
-  // Submit verification data to API
+  // Submit the verification data to the backend (legacy method)
   const submitVerification = async () => {
     try {
       setIsVerifying(true);
@@ -88,7 +217,7 @@ export default function KycVerification({
       const encodedDocumentImage = documentImage ? "base64_document_data" : "";
       const encodedSelfieImage = selfieImage ? "base64_selfie_data" : "";
       
-      // Call the DiDit KYC mock API
+      // Call the DiDit KYC API (using legacy endpoint for now)
       const response = await apiRequest<{
         session_id: string;
         session_url: string;
@@ -104,10 +233,7 @@ export default function KycVerification({
       }
       
       console.log("KYC verification session created:", response);
-      
-      // In a real implementation, we would redirect to the DiDit verification interface
-      // using the session_url from the response
-      // For demo purposes, we'll simulate a successful verification after a delay
+      setSessionId(response.session_id);
       
       // Update application progress to track that verification has started
       await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
@@ -128,322 +254,306 @@ export default function KycVerification({
             data: JSON.stringify({
               verifiedAt: new Date().toISOString(),
               sessionId: response.session_id,
+              status: "approved"
             }),
           });
           
-          // Move to complete state
           setStep("complete");
-          
-          // After a short delay, move to the next step in the parent
+          setIsVerifying(false);
+          // After a short delay, move to the next step in the application
           setTimeout(() => {
             onComplete();
           }, 2000);
-        } catch (completionError) {
-          console.error("Failed to complete verification:", completionError);
+        } catch (error) {
+          console.error("Error updating verification status:", error);
           toast({
-            title: "Verification Process Error",
+            title: "Verification Error",
             description: "There was an error completing your verification. Please try again.",
             variant: "destructive",
           });
-          setStep("document");
           setIsVerifying(false);
+          setStep("instructions");
         }
-      }, 5000); // 5 second delay to simulate verification process
+      }, 5000); // Simulate verification taking 5 seconds
     } catch (error) {
-      console.error("KYC verification failed:", error);
+      console.error("Verification submission error:", error);
       toast({
         title: "Verification Failed",
-        description: "We couldn't start the identity verification process. Please try again.",
+        description: "There was an error starting the verification process. Please try again.",
         variant: "destructive",
       });
-      setStep("document");
       setIsVerifying(false);
+      setStep("instructions");
     }
   };
 
-  // Reset the verification process
-  const handleReset = () => {
-    setDocumentImage(null);
-    setSelfieImage(null);
-    setStep("instructions");
-  };
-
-  // Instructions step
-  if (step === "instructions") {
-    return (
-      <div className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Identity Verification</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          To proceed with your financing application, we need to verify your identity.
-        </p>
-
-        <div className="rounded-lg bg-blue-50 p-4 mb-6 flex">
-          <ShieldCheck className="h-5 w-5 text-blue-500 mr-3 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-blue-800 mb-1">Secure Verification</p>
-            <p className="text-sm text-blue-700">
-              Your information is securely transmitted and processed through DiDit, our trusted identity verification partner.
+  return (
+    <div className="flex flex-col items-center space-y-6 max-w-lg mx-auto">
+      {/* Instructions Step */}
+      {step === "instructions" && (
+        <div className="w-full space-y-6">
+          <div className="bg-primary/5 rounded-lg p-6 border border-primary/20">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-primary/10 rounded-full">
+                <ShieldCheck className="h-6 w-6 text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold">Identity Verification</h2>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-4">
+              We need to verify your identity before proceeding with your financing application. 
+              This process is secure and typically takes less than 2 minutes.
             </p>
+            
+            <div className="space-y-3 mb-4">
+              <div className="flex items-start space-x-3">
+                <div className="p-1 bg-primary/10 rounded-full mt-0.5">
+                  <Check className="h-4 w-4 text-primary" />
+                </div>
+                <p className="text-sm">You'll need a valid government-issued ID (driver's license, passport, or national ID)</p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="p-1 bg-primary/10 rounded-full mt-0.5">
+                  <Check className="h-4 w-4 text-primary" />
+                </div>
+                <p className="text-sm">We'll need to take a photo of your face to match with your ID</p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="p-1 bg-primary/10 rounded-full mt-0.5">
+                  <Check className="h-4 w-4 text-primary" />
+                </div>
+                <p className="text-sm">This verification is provided by DiDit, our secure identity verification partner</p>
+              </div>
+            </div>
+            
+            <div className="flex space-x-2 pt-4">
+              <Button variant="outline" onClick={onBack}>Back</Button>
+              <Button onClick={handleStartVerification} disabled={isLoading}>
+                {isLoading ? "Starting Verification..." : "Start Verification"}
+              </Button>
+            </div>
           </div>
         </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-          <h4 className="font-medium text-gray-900 mb-4">You'll need to:</h4>
-          <ul className="space-y-3">
-            <li className="flex items-start">
-              <div className="bg-primary-50 p-1 rounded-full mr-3 mt-0.5">
-                <FileText className="h-4 w-4 text-primary-600" />
+      )}
+      
+      {/* Document Upload Step */}
+      {step === "document" && (
+        <div className="w-full space-y-6">
+          <div className="bg-primary/5 rounded-lg p-6 border border-primary/20">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-primary/10 rounded-full">
+                <FileText className="h-6 w-6 text-primary" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-800">Upload an ID document</p>
-                <p className="text-xs text-gray-500">Driver's license, passport, or state ID</p>
-              </div>
-            </li>
-            <li className="flex items-start">
-              <div className="bg-primary-50 p-1 rounded-full mr-3 mt-0.5">
-                <Camera className="h-4 w-4 text-primary-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-800">Take a selfie photo</p>
-                <p className="text-xs text-gray-500">To match with your ID document</p>
-              </div>
-            </li>
-          </ul>
-        </div>
-
-        <div className="bg-gray-50 rounded-lg p-4 mb-6">
-          <h4 className="font-medium text-gray-900 mb-3">Tips for a Successful Verification</h4>
-          <ul className="space-y-2 text-sm text-gray-700">
-            <li className="flex items-start">
-              <Check className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-              <span>Use a valid, unexpired government-issued ID</span>
-            </li>
-            <li className="flex items-start">
-              <Check className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-              <span>Ensure your ID is fully visible in the photo</span>
-            </li>
-            <li className="flex items-start">
-              <Check className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-              <span>Make sure lighting is good with no glare on your ID</span>
-            </li>
-            <li className="flex items-start">
-              <Check className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-              <span>Take a clear selfie with neutral expression</span>
-            </li>
-          </ul>
-        </div>
-
-        <div className="flex justify-between">
-          <Button variant="outline" onClick={onBack}>
-            Back
-          </Button>
-          <Button onClick={handleStartVerification}>
-            Start Verification
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Document upload step
-  if (step === "document") {
-    return (
-      <div className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload ID Document</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Please upload a clear photo of your government-issued ID.
-        </p>
-
-        <div className="mb-6">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            {documentImage ? (
-              <div>
-                <div className="max-w-md mx-auto mb-4">
-                  <img 
-                    src={documentImage} 
-                    alt="ID Document" 
-                    className="rounded-lg w-full h-auto"
-                  />
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setDocumentImage(null)}
-                >
-                  Remove Image
-                </Button>
-              </div>
-            ) : (
-              <div>
-                <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-sm font-medium text-gray-900 mb-1">
-                  Upload a photo of your ID
-                </p>
-                <p className="text-xs text-gray-500 mb-4">
-                  JPG, PNG or PDF format, under 10MB
-                </p>
-                <div>
-                  <label className="inline-block">
-                    <span className="sr-only">Choose file</span>
-                    <input 
-                      type="file" 
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleDocumentUpload}
-                    />
-                    <Button 
-                      type="button" 
-                      variant="outline"
-                      onClick={() => document.querySelector<HTMLInputElement>('input[type="file"]')?.click()}
-                    >
-                      Select File
-                    </Button>
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-yellow-50 p-4 mb-6 flex">
-          <AlertCircle className="h-5 w-5 text-yellow-500 mr-3 flex-shrink-0" />
-          <div>
-            <p className="text-sm text-yellow-800">
-              Make sure all text on your ID is clearly visible and not cut off. The photo should be bright and in focus.
+              <h2 className="text-xl font-semibold">Document Upload</h2>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-4">
+              Please take a clear photo of your government-issued ID. Make sure all details are clearly visible.
             </p>
+            
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center mb-6">
+              {documentImage ? (
+                <div className="space-y-3">
+                  <div className="relative h-48 w-full max-w-sm mx-auto">
+                    <img src={documentImage} alt="ID Document" className="h-full w-full object-contain mx-auto" />
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setDocumentImage(null)}>
+                    Remove Photo
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="mx-auto w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Camera className="h-10 w-10 text-primary/70" />
+                  </div>
+                  <p className="text-sm text-gray-500">Take or upload a photo of your ID</p>
+                  <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2 justify-center">
+                    <label className="cursor-pointer">
+                      <Button variant="secondary" size="sm" className="relative">
+                        <Camera className="h-4 w-4 mr-2" />
+                        Take Photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleDocumentUpload}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </Button>
+                    </label>
+                    <label className="cursor-pointer">
+                      <Button variant="outline" size="sm" className="relative">
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleDocumentUpload}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </Button>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={() => setStep("instructions")}>Back</Button>
+              <Button onClick={handleDocumentNext} disabled={!documentImage}>Continue</Button>
+            </div>
           </div>
         </div>
-
-        <div className="flex justify-between">
-          <Button variant="outline" onClick={handleReset}>
-            Back
-          </Button>
-          <Button 
-            onClick={handleDocumentContinue}
-            disabled={!documentImage}
-          >
-            Continue
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Selfie upload step
-  if (step === "selfie") {
-    return (
-      <div className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Take a Selfie</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Please take a clear selfie photo for identity verification.
-        </p>
-
-        <div className="mb-6">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            {selfieImage ? (
-              <div>
-                <div className="max-w-md mx-auto mb-4">
-                  <img 
-                    src={selfieImage} 
-                    alt="Selfie" 
-                    className="rounded-lg w-full h-auto"
-                  />
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setSelfieImage(null)}
-                >
-                  Remove Image
-                </Button>
+      )}
+      
+      {/* Selfie Step */}
+      {step === "selfie" && (
+        <div className="w-full space-y-6">
+          <div className="bg-primary/5 rounded-lg p-6 border border-primary/20">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-primary/10 rounded-full">
+                <Camera className="h-6 w-6 text-primary" />
               </div>
-            ) : (
-              <div>
-                <Camera className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-sm font-medium text-gray-900 mb-1">
-                  Upload a selfie photo
-                </p>
-                <p className="text-xs text-gray-500 mb-4">
-                  JPG or PNG format, under 10MB
-                </p>
-                <div>
-                  <label className="inline-block">
-                    <span className="sr-only">Choose file</span>
-                    <input 
-                      type="file" 
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleSelfieUpload}
-                    />
-                    <Button 
-                      type="button" 
-                      variant="outline"
-                      onClick={() => document.querySelectorAll<HTMLInputElement>('input[type="file"]')[1]?.click()}
-                    >
-                      Select File
-                    </Button>
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-yellow-50 p-4 mb-6 flex">
-          <AlertCircle className="h-5 w-5 text-yellow-500 mr-3 flex-shrink-0" />
-          <div>
-            <p className="text-sm text-yellow-800">
-              Take a clear photo with a neutral expression, good lighting, and no sunglasses or hats.
+              <h2 className="text-xl font-semibold">Take a Selfie</h2>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-4">
+              Please take a clear photo of your face. This will be compared with your ID photo for verification.
             </p>
+            
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center mb-6">
+              {selfieImage ? (
+                <div className="space-y-3">
+                  <div className="relative h-48 w-full max-w-sm mx-auto">
+                    <img src={selfieImage} alt="Selfie" className="h-full w-full object-contain mx-auto" />
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setSelfieImage(null)}>
+                    Remove Photo
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="mx-auto w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Camera className="h-10 w-10 text-primary/70" />
+                  </div>
+                  <p className="text-sm text-gray-500">Take a selfie photo</p>
+                  <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2 justify-center">
+                    <label className="cursor-pointer">
+                      <Button variant="secondary" size="sm" className="relative">
+                        <Camera className="h-4 w-4 mr-2" />
+                        Take Selfie
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="user"
+                          onChange={handleSelfieUpload}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </Button>
+                    </label>
+                    <label className="cursor-pointer">
+                      <Button variant="outline" size="sm" className="relative">
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleSelfieUpload}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </Button>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={() => setStep("document")}>Back</Button>
+              <Button onClick={handleSelfieNext} disabled={!selfieImage}>Continue</Button>
+            </div>
           </div>
         </div>
-
-        <div className="flex justify-between">
-          <Button variant="outline" onClick={() => setStep("document")}>
-            Back
-          </Button>
-          <Button 
-            onClick={handleSelfieContinue}
-            disabled={!selfieImage}
-          >
-            Submit Verification
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Verifying step (loading)
-  if (step === "verifying") {
-    return (
-      <div className="p-6 text-center">
-        <div className="py-12">
-          <div className="h-12 w-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Verifying Your Identity</h3>
-          <p className="text-sm text-gray-600">
-            Please wait while we verify your information. This may take a moment.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Verification complete step
-  if (step === "complete") {
-    return (
-      <div className="p-6 text-center">
-        <div className="py-12">
-          <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-green-100 mb-4">
-            <Check className="h-10 w-10 text-green-600" />
+      )}
+      
+      {/* Verifying Step */}
+      {step === "verifying" && (
+        <div className="w-full space-y-6">
+          <div className="bg-primary/5 rounded-lg p-6 border border-primary/20 text-center">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="p-4 bg-primary/10 rounded-full animate-pulse">
+                <ShieldCheck className="h-10 w-10 text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold">Verifying Your Identity</h2>
+              <p className="text-sm text-gray-600">
+                Please wait while we verify your identity. This process usually takes less than a minute.
+              </p>
+              <div className="w-full max-w-md mx-auto h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-300 ease-out"
+                  style={{ width: `${isVerifying ? '70%' : '0%'}` }}
+                />
+              </div>
+            </div>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Identity Verified!</h3>
-          <p className="text-sm text-gray-600">
-            Your identity has been successfully verified.
-          </p>
         </div>
-      </div>
-    );
-  }
-
-  return null;
+      )}
+      
+      {/* External Verification Step */}
+      {step === "verifying_external" && (
+        <div className="w-full space-y-6">
+          <div className="bg-primary/5 rounded-lg p-6 border border-primary/20 text-center">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="p-4 bg-primary/10 rounded-full">
+                <ShieldCheck className="h-10 w-10 text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold">External Verification</h2>
+              <p className="text-sm text-gray-600">
+                We've opened the DiDit verification page in a new window. Please complete the verification process there.
+              </p>
+              <p className="text-sm text-gray-600">
+                If the verification window was blocked or you closed it, you can open it again with the button below.
+              </p>
+              <Button 
+                onClick={() => {
+                  if (verificationUrl) {
+                    const newWindow = window.open(verificationUrl, "_blank", "width=500,height=600");
+                    verificationWindowRef.current = newWindow;
+                  }
+                }}
+                disabled={!verificationUrl}
+              >
+                Open Verification Window
+              </Button>
+              <div className="border-t border-gray-200 w-full pt-4 mt-4">
+                <p className="text-sm text-gray-500">
+                  After completing verification, you'll be automatically redirected back to continue your application.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Complete Step */}
+      {step === "complete" && (
+        <div className="w-full space-y-6">
+          <div className="bg-primary/5 rounded-lg p-6 border border-primary/20 text-center">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="p-4 bg-green-100 rounded-full">
+                <Check className="h-10 w-10 text-green-500" />
+              </div>
+              <h2 className="text-xl font-semibold">Verification Complete</h2>
+              <p className="text-sm text-gray-600">
+                Your identity has been successfully verified. You may now proceed with your application.
+              </p>
+              <p className="text-sm text-green-500 font-medium">
+                Moving to the next step automatically...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

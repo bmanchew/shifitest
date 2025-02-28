@@ -1,0 +1,182 @@
+import axios from 'axios';
+import { logger } from '../lib/logger';
+
+class DiditService {
+  private apiKey: string;
+  private baseUrl: string;
+  private accessToken: string | null = null;
+  private tokenExpiry: number = 0;
+
+  constructor() {
+    this.apiKey = process.env.DIDIT_API_KEY || '';
+    this.baseUrl = process.env.DIDIT_API_URL || 'https://apx.didit.me';
+
+    if (!this.apiKey) {
+      logger.warn('DIDIT_API_KEY is not set. Didit verification will not work properly.');
+    }
+  }
+
+  /**
+   * Gets an access token for the Didit API
+   */
+  private async getAccessToken() {
+    const now = Date.now();
+
+    // Return existing token if it's still valid (with a 5-minute buffer)
+    if (this.accessToken && now < this.tokenExpiry - 300000) {
+      return this.accessToken;
+    }
+
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/auth/v2/token/`,
+        {
+          client_id: this.apiKey
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.data && response.data.access_token) {
+        this.accessToken = response.data.access_token;
+        // Set expiry based on expires_in (in seconds) or default to 1 hour
+        this.tokenExpiry = now + ((response.data.expires_in || 3600) * 1000);
+        return this.accessToken;
+      } else {
+        throw new Error('Invalid token response');
+      }
+    } catch (error) {
+      logger.error('[Didit] Error getting access token:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Creates a new verification session
+   */
+  async createSession(userId: number, redirectUrl: string) {
+    try {
+      // Legacy endpoint - keep for backward compatibility if still used
+      const response = await axios.post(
+        `${this.baseUrl}/v1/verification/sessions`,
+        {
+          userId: userId.toString(),
+          redirectUrl,
+          identityVerification: {
+            requireId: true,
+            requireSelfie: true,
+            idType: 'drivers_license'
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      logger.error('[Didit] Error creating session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Gets verification session details using the new API format
+   */
+  async getSession(sessionId: string) {
+    try {
+      const token = await this.getAccessToken();
+
+      const response = await axios.get(
+        `${this.baseUrl}/auth/v2/session/${sessionId}/decision/`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Extract and transform the license data from the user_data
+      const userData = response.data.user_data || {};
+
+      // Format the response to match existing code expectations
+      return {
+        session_id: response.data.session_id,
+        status: response.data.status,
+        documentData: this.extractLicenseData(userData),
+        userData: userData
+      };
+    } catch (error) {
+      logger.error(`[Didit] Error getting session ${sessionId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Extract license data from user_data
+   */
+  private extractLicenseData(userData: any) {
+    if (!userData) return null;
+
+    // Extract document information if available
+    const documentData: any = {};
+
+    // Extract name information
+    if (userData.names) {
+      documentData.firstName = userData.names.first_name;
+      documentData.lastName = userData.names.family_name;
+      documentData.fullName = userData.names.full_name;
+    }
+
+    // Extract address if available
+    if (userData.address) {
+      documentData.address = userData.address;
+    }
+
+    // Extract ID information if available
+    if (userData.id_document) {
+      documentData.licenseNumber = userData.id_document.document_number;
+      documentData.issuingState = userData.id_document.issuing_state;
+      documentData.expirationDate = userData.id_document.expiration_date;
+      documentData.issueDate = userData.id_document.issue_date;
+      documentData.documentType = userData.id_document.document_type;
+    }
+
+    // Extract birth date if available
+    if (userData.birth_date) {
+      documentData.birthDate = userData.birth_date;
+    }
+
+    return Object.keys(documentData).length > 0 ? documentData : null;
+  }
+
+  /**
+   * Retrieves document data from a verification session
+   */
+  async getDocumentData(sessionId: string) {
+    try {
+      const session = await this.getSession(sessionId);
+
+      if (session.status.toLowerCase() !== 'confirmed' && 
+          session.status.toLowerCase() !== 'verified' && 
+          session.status.toLowerCase() !== 'approved') {
+        logger.warn(`[Didit] Cannot get document data for unverified session ${sessionId} with status ${session.status}`);
+        return null;
+      }
+
+      return session.documentData || null;
+    } catch (error) {
+      logger.error(`[Didit] Error getting document data for session ${sessionId}:`, error);
+      throw error;
+    }
+  }
+}
+
+export const diditService = new DiditService();

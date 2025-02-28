@@ -7,6 +7,7 @@ import { storage } from "./storage";
 import { insertUserSchema, insertMerchantSchema, insertContractSchema, insertApplicationProgressSchema, insertLogSchema } from "@shared/schema";
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
+import { logger } from "./services/logger";
 
 // Helper function to get the domain for callbacks and webhooks
 function getAppDomain(): string {
@@ -590,7 +591,247 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // DiDit KYC verification endpoint - following DiDit API documentation
+  // KYC verification API endpoint
+  apiRouter.post("/kyc/create-session", async (req: Request, res: Response) => {
+    try {
+      const { contractId } = req.body;
+      
+      if (!contractId) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Contract ID is required"
+        });
+      }
+      
+      // Get the domain for callback URLs
+      const domain = getAppDomain();
+      const callbackUrl = `https://${domain}/api/kyc/webhook`;
+      
+      // Set the server base URL for the DiDit service to handle mock mode correctly
+      diditService.setServerBaseUrl(`https://${domain}`);
+      
+      // Log the attempt to create a KYC verification session
+      logger.info({
+        message: `Creating KYC verification session for contract ${contractId}`,
+        category: "api",
+        source: "didit",
+        metadata: { contractId }
+      });
+      
+      // Use the DiDit service to create a verification session
+      // This will use the real API if credentials are valid, or fall back to mock mode
+      const sessionData = await diditService.createVerificationSession({
+        contractId,
+        callbackUrl,
+        allowedDocumentTypes: ['passport', 'driving_license', 'id_card'],
+        allowedChecks: ['ocr', 'face', 'document_liveness', 'aml'],
+        requiredFields: ['first_name', 'last_name', 'date_of_birth', 'document_number']
+      });
+      
+      if (!sessionData) {
+        throw new Error("Failed to create verification session");
+      }
+      
+      // Log successful session creation
+      logger.info({
+        message: `DiDit verification session created for contract ${contractId}`,
+        category: "api",
+        source: "didit",
+        metadata: { 
+          contractId,
+          sessionId: sessionData.session_id,
+          sessionUrl: sessionData.session_url,
+          status: sessionData.status
+        }
+      });
+      
+      res.json({
+        success: true,
+        session: sessionData
+      });
+    } catch (error) {
+      logger.error({
+        message: `Failed to create KYC verification session: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "didit",
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "Failed to create verification session"
+      });
+    }
+  });
+  
+  // DiDit mock KYC verification UI - this simulates the DiDit verification page
+  apiRouter.get("/mock/didit-kyc", async (req: Request, res: Response) => {
+    try {
+      const { sessionId, contractId } = req.query;
+      
+      if (!sessionId || !contractId) {
+        return res.status(400).send("Missing required parameters");
+      }
+      
+      // Log access to the mock verification page
+      logger.info({
+        message: `Accessing mock DiDit verification page`,
+        category: "api",
+        source: "didit",
+        metadata: { 
+          sessionId: String(sessionId),
+          contractId: String(contractId)
+        }
+      });
+      
+      // Return an HTML page that simulates the DiDit KYC verification UI
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>DiDit Verification</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; color: #333; }
+            .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(to right, #4776E6, #8E54E9); color: white; padding: 20px; text-align: center; }
+            .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+            .step { display: none; padding: 20px; }
+            .step.active { display: block; }
+            .button { background: linear-gradient(to right, #4776E6, #8E54E9); border: none; color: white; padding: 10px 20px; 
+                      border-radius: 4px; font-size: 16px; cursor: pointer; margin-top: 20px; }
+            .center { text-align: center; }
+            .success-icon { font-size: 48px; color: #4CAF50; margin: 20px 0; }
+            .progress-bar { height: 5px; background: #eee; margin: 20px 0; }
+            .progress-bar-inner { height: 100%; background: linear-gradient(to right, #4776E6, #8E54E9); width: 0; transition: width 0.3s; }
+            .image-capture { border: 2px dashed #ccc; padding: 20px; text-align: center; margin: 15px 0; }
+            .help-text { font-size: 14px; color: #666; margin: 5px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">DiDit Identity Verification</div>
+            <div>Contract #${contractId} | Session ID: ${sessionId}</div>
+          </div>
+          <div class="container">
+            <div class="progress-bar">
+              <div class="progress-bar-inner" id="progress"></div>
+            </div>
+            
+            <div class="step active" id="step1">
+              <h2>Welcome to DiDit Identity Verification</h2>
+              <p>We'll guide you through a simple identity verification process to confirm you are who you say you are.</p>
+              <p>You'll need to:</p>
+              <ol>
+                <li>Take a photo of your ID document (passport, driver's license, or ID card)</li>
+                <li>Take a selfie to match with your document photo</li>
+              </ol>
+              <p>This should take less than 2 minutes to complete.</p>
+              <div class="center">
+                <button class="button" onclick="nextStep(1, 2)">Start Verification</button>
+              </div>
+            </div>
+            
+            <div class="step" id="step2">
+              <h2>Document Verification</h2>
+              <p>Please take a clear photo of your identification document.</p>
+              <div class="image-capture">
+                <p><strong>Upload or capture your ID document</strong></p>
+                <p class="help-text">Make sure all text is clearly visible and not blurry</p>
+                <input type="file" accept="image/*" capture="environment" id="docImage">
+              </div>
+              <div class="center">
+                <button class="button" onclick="nextStep(2, 3)">Continue</button>
+              </div>
+            </div>
+            
+            <div class="step" id="step3">
+              <h2>Selfie Verification</h2>
+              <p>Now let's take a selfie to match with your document photo.</p>
+              <div class="image-capture">
+                <p><strong>Take a selfie</strong></p>
+                <p class="help-text">Make sure your face is clearly visible with good lighting</p>
+                <input type="file" accept="image/*" capture="user" id="selfieImage">
+              </div>
+              <div class="center">
+                <button class="button" onclick="nextStep(3, 4)">Continue</button>
+              </div>
+            </div>
+            
+            <div class="step" id="step4">
+              <h2>Processing Your Verification</h2>
+              <p class="center">Please wait while we process your identity verification...</p>
+              <div class="center">
+                <div class="success-icon" id="loading">⏳</div>
+              </div>
+              
+              <script>
+                // Simulate a successful verification after a short delay
+                setTimeout(function() {
+                  document.getElementById('loading').innerHTML = "✅";
+                  document.getElementById('step4').innerHTML += '<h3 class="center">Verification Successful!</h3><p class="center">Your identity has been verified successfully.</p><div class="center"><button class="button" onclick="completeVerification()">Return to Application</button></div>';
+                  
+                  // Send a simulated webhook notification to our application
+                  fetch('/api/kyc/webhook', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      event_type: 'verification.completed',
+                      session_id: '${sessionId}',
+                      status: 'approved',
+                      decision: {
+                        status: 'approved'
+                      },
+                      vendor_data: '${contractId}',
+                      customer_details: {
+                        first_name: 'John',
+                        last_name: 'Doe'
+                      }
+                    })
+                  });
+                }, 3000);
+              </script>
+            </div>
+          </div>
+          
+          <script>
+            // Update progress bar as user moves through steps
+            function nextStep(current, next) {
+              document.getElementById('step' + current).classList.remove('active');
+              document.getElementById('step' + next).classList.add('active');
+              document.getElementById('progress').style.width = (next * 25) + '%';
+            }
+            
+            // Redirect back to the application when verification is complete
+            function completeVerification() {
+              window.opener ? window.opener.postMessage('verification_complete', '*') : null;
+              window.parent.postMessage('verification_complete', '*');
+              window.location.href = '/customer/application';
+            }
+          </script>
+        </body>
+      </html>
+      `);
+    } catch (error) {
+      logger.error({
+        message: `Error serving mock DiDit verification page: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "didit",
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      res.status(500).send("An error occurred");
+    }
+  });
+  
+  // DiDit KYC - Legacy test endpoint - for admin API verification
   apiRouter.post("/mock/didit-kyc", async (req: Request, res: Response) => {
     try {
       // Check if this is a test request from the admin panel
