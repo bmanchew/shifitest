@@ -463,12 +463,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata: JSON.stringify(req.body)
         });
         
-        // Return success for test
+        // Send a real test message via Twilio service
+        const testResult = await twilioService.sendSMS({
+          to: req.body.phone,
+          body: "This is a test message from ShiFi. Your API verification was successful."
+        });
+        
+        // Return appropriate response
         return res.json({
           success: true,
-          message: `Test SMS would be sent to ${req.body.phone}`,
-          messageId: "SM" + Math.random().toString(36).substring(2, 15).toUpperCase(),
-          status: "delivered"
+          message: testResult.isSimulated 
+            ? `Test SMS would be sent to ${req.body.phone}` 
+            : `Test SMS sent to ${req.body.phone}`,
+          messageId: testResult.messageId || "SM" + Math.random().toString(36).substring(2, 15).toUpperCase(),
+          status: testResult.isSimulated ? "simulated" : "delivered"
         });
       }
       
@@ -532,25 +540,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const replitDomain = getAppDomain();
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
       
-      if (!accountSid || !authToken || !twilioPhone) {
-        console.warn("Twilio credentials not configured, falling back to simulation");
-        console.log(`SMS sent to ${phoneNumber}: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`);
-      } else {
-        try {
-          // In a production environment with ESM modules, we'd import Twilio at the top:
-          // import twilio from 'twilio';
-          
-          // For now, we'll simulate the API call but log the credentials
-          console.log(`Using Twilio credentials to send SMS to ${phoneNumber}`);
-          console.log(`SMS content: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`);
-          
-          // Simulating successful SMS sending
-          const messageId = "SM" + Math.random().toString(36).substring(2, 15).toUpperCase();
-          console.log(`SMS would be sent successfully, simulated SID: ${messageId}`);
-        } catch (twilioError) {
-          console.error("Twilio API error:", twilioError);
-          throw twilioError;
+      // Prepare the SMS message
+      const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
+      
+      try {
+        // Send SMS using our Twilio service
+        const result = await twilioService.sendSMS({
+          to: phoneNumber,
+          body: messageText
+        });
+        
+        if (result.isSimulated) {
+          console.log(`Simulated SMS to ${phoneNumber}: ${messageText}`);
+        } else if (result.success) {
+          console.log(`Successfully sent SMS to ${phoneNumber}, Message ID: ${result.messageId}`);
+        } else {
+          console.error(`Failed to send SMS: ${result.error}`);
+          throw new Error(result.error);
         }
+      } catch (twilioError) {
+        console.error("Twilio service error:", twilioError);
+        throw twilioError;
       }
       
       // Create log for SMS sending
@@ -1356,28 +1366,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       };
 
-      // Check Twilio credentials with actual API call
-      const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
-      const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
-
-      if (twilioAccountSid && twilioAuthToken && twilioPhone) {
-        results.twilio.configured = true;
-        
+      // Check Twilio credentials using our Twilio service
+      results.twilio.configured = twilioService.isInitialized();
+      
+      if (results.twilio.configured) {
         try {
-          // Make an actual API call to Twilio to validate credentials
-          const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}.json`, {
-            method: 'GET',
-            headers: {
-              'Authorization': 'Basic ' + Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64')
-            }
-          });
+          // Use our service to validate credentials
+          results.twilio.valid = await twilioService.validateCredentials();
           
-          if (twilioResponse.ok) {
-            results.twilio.valid = true;
+          if (results.twilio.valid) {
             results.twilio.message = "Twilio credentials validated successfully";
           } else {
-            results.twilio.message = `Twilio credentials invalid: ${twilioResponse.status} ${twilioResponse.statusText}`;
+            results.twilio.message = "Twilio credentials invalid - authentication failed";
           }
         } catch (twilioError) {
           console.error("Twilio API verification error:", twilioError);
