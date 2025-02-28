@@ -6,6 +6,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertUserSchema, insertMerchantSchema, insertContractSchema, insertApplicationProgressSchema, insertLogSchema } from "@shared/schema";
 import { twilioService } from "./services/twilio";
+import { diditService } from "./services/didit";
 
 // Helper function to get the domain for callbacks and webhooks
 function getAppDomain(): string {
