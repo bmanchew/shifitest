@@ -1485,23 +1485,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Here you would flag any warnings in your system
             }
             
-            // In a real application, update the corresponding verification status in your database
-            // and trigger any necessary business logic based on the verification result
+            // Extract the contract ID from the vendor_data field which should have been set when creating the session
+            // The vendor_data field should contain a JSON string with the contract ID
+            let contractId: number | null = null;
+            try {
+              if (sessionData.vendor_data) {
+                const vendorData = JSON.parse(sessionData.vendor_data);
+                contractId = vendorData.contractId ? Number(vendorData.contractId) : null;
+              }
+            } catch (parseError) {
+              logger.error({
+                message: `Failed to parse vendor_data from DiDit session: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+                category: "api",
+                source: "didit",
+                metadata: { session_id, vendor_data: sessionData.vendor_data }
+              });
+            }
             
-            // For example, update application progress based on verification status
-            if (verificationStatus === "Approved") {
-              console.log(`Verification approved for session ${session_id}`);
+            // Only proceed with application updates if we have a valid contract ID
+            if (contractId) {
+              logger.info({
+                message: `Processing KYC verification result for contract ${contractId}`,
+                category: "api",
+                source: "didit",
+                metadata: JSON.stringify({ 
+                  contractId, 
+                  verificationStatus, 
+                  kycStatus: sessionData.kyc?.status 
+                })
+              });
               
-              // Here you would update your application flow
-              // For example, marking a contract step as completed
-            } else if (verificationStatus === "Declined") {
-              console.log(`Verification declined for session ${session_id}`);
+              // Find the KYC step in the application progress
+              const applicationProgress = await storage.getApplicationProgressByContractId(contractId);
+              const kycStep = applicationProgress.find(step => step.step === "kyc");
               
-              // Handle rejected verification
+              if (kycStep) {
+                if (verificationStatus === "Approved" || 
+                   (sessionData.kyc && sessionData.kyc.status === "Approved") ||
+                   (decision && decision.status === "approved")) {
+                  // Mark the KYC step as completed
+                  await storage.updateApplicationProgressCompletion(
+                    kycStep.id, 
+                    true, 
+                    JSON.stringify({
+                      verified: true,
+                      session_id: session_id,
+                      first_name: sessionData.kyc?.first_name,
+                      last_name: sessionData.kyc?.last_name,
+                      document_type: sessionData.kyc?.document_type,
+                      document_number: sessionData.kyc?.document_number,
+                      verification_time: new Date().toISOString()
+                    })
+                  );
+                  logger.info({
+                    message: `KYC verification completed successfully for contract ${contractId}`,
+                    category: "contract",
+                    metadata: JSON.stringify({ contractId, kycStepId: kycStep.id })
+                  });
+                } else {
+                  // Mark verification as failed but don't complete the step
+                  await storage.updateApplicationProgressCompletion(
+                    kycStep.id, 
+                    false, 
+                    JSON.stringify({
+                      verified: false,
+                      session_id: session_id,
+                      status: verificationStatus || sessionData.kyc?.status || decision?.status,
+                      verification_time: new Date().toISOString(),
+                      reason: "Verification declined or incomplete"
+                    })
+                  );
+                  logger.warn({
+                    message: `KYC verification failed for contract ${contractId}`,
+                    category: "contract",
+                    metadata: JSON.stringify({ 
+                      contractId, 
+                      kycStepId: kycStep.id,
+                      status: verificationStatus || sessionData.kyc?.status || decision?.status 
+                    })
+                  });
+                }
+              } else {
+                logger.error({
+                  message: `Could not find KYC step for contract ${contractId}`,
+                  category: "contract",
+                  metadata: JSON.stringify({ contractId, applicationProgress })
+                });
+              }
             } else {
-              console.log(`Verification in review for session ${session_id}`);
-              
-              // Handle pending verification
+              logger.warn({
+                message: `No contract ID found in vendor_data for session ${session_id}`,
+                category: "api",
+                source: "didit",
+                metadata: JSON.stringify({ session_id, vendor_data: sessionData.vendor_data })
+              });
             }
           } catch (apiError) {
             console.error("Error fetching DiDit session details:", apiError);
@@ -1520,15 +1597,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Process webhook data directly without retrieving full session details
           if (status === "completed") {
-            if (decision && decision.status === "approved") {
-              console.log(`Verification approved for session ${session_id} based on webhook data`);
+            // Try to extract contract ID from vendor_data field if present
+            let contractId: number | null = null;
+            try {
+              if (req.body.vendor_data) {
+                const vendorData = JSON.parse(req.body.vendor_data);
+                contractId = vendorData.contractId ? Number(vendorData.contractId) : null;
+              }
+            } catch (parseError) {
+              logger.error({
+                message: `Failed to parse vendor_data from webhook: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+                category: "api",
+                source: "didit",
+                metadata: JSON.stringify({ session_id, vendor_data: req.body.vendor_data })
+              });
+            }
+            
+            if (contractId) {
+              logger.info({
+                message: `Processing KYC verification webhook for contract ${contractId}`,
+                category: "api",
+                source: "didit",
+                metadata: JSON.stringify({ contractId, status, decision: decision?.status })
+              });
               
-              // Here you would update your application flow
-              // For example, marking a contract step as completed
+              // Find the KYC step in the application progress
+              const applicationProgress = await storage.getApplicationProgressByContractId(contractId);
+              const kycStep = applicationProgress.find(step => step.step === "kyc");
+              
+              if (kycStep) {
+                if (decision && decision.status === "approved") {
+                  // Mark the KYC step as completed
+                  await storage.updateApplicationProgressCompletion(
+                    kycStep.id, 
+                    true, 
+                    JSON.stringify({
+                      verified: true,
+                      session_id: session_id,
+                      customer_details: customer_details || {},
+                      verification_time: new Date().toISOString()
+                    })
+                  );
+                  
+                  logger.info({
+                    message: `KYC verification completed successfully for contract ${contractId} (webhook)`,
+                    category: "contract",
+                    metadata: JSON.stringify({ contractId, kycStepId: kycStep.id })
+                  });
+                  
+                  console.log(`Verification approved for session ${session_id}, updated contract ${contractId}`);
+                } else {
+                  // Mark verification as failed but don't complete the step
+                  await storage.updateApplicationProgressCompletion(
+                    kycStep.id, 
+                    false, 
+                    JSON.stringify({
+                      verified: false,
+                      session_id: session_id,
+                      status: decision?.status || "declined",
+                      verification_time: new Date().toISOString(),
+                      reason: "Verification declined or incomplete"
+                    })
+                  );
+                  
+                  logger.warn({
+                    message: `KYC verification failed for contract ${contractId} (webhook)`,
+                    category: "contract",
+                    metadata: JSON.stringify({ contractId, kycStepId: kycStep.id, status: decision?.status })
+                  });
+                  
+                  console.log(`Verification rejected for session ${session_id}, updated contract ${contractId}`);
+                }
+              } else {
+                logger.error({
+                  message: `Could not find KYC step for contract ${contractId} (webhook)`,
+                  category: "contract",
+                  metadata: JSON.stringify({ contractId, applicationProgress })
+                });
+              }
             } else {
-              console.log(`Verification rejected for session ${session_id} based on webhook data`);
-              
-              // Handle rejected verification
+              console.log(`No contract ID found in webhook data for session ${session_id}`);
             }
           }
         }
