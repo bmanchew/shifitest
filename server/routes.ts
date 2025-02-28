@@ -1100,6 +1100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // DiDit KYC Webhook endpoint - for receiving status updates from DiDit
+  // Now using the updated DiDit service for improved robustness
   apiRouter.post("/kyc/webhook", async (req: Request, res: Response) => {
     try {
       console.log("Received DiDit webhook:", JSON.stringify(req.body, null, 2));
@@ -1388,58 +1389,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         results.twilio.message = "Twilio credentials not configured";
       }
 
-      // Check DiDit credentials with actual API call
-      const diditClientId = process.env.DIDIT_CLIENT_ID;
-      const diditClientSecret = process.env.DIDIT_CLIENT_SECRET;
-      const diditWebhookSecretKey = process.env.DIDIT_WEBHOOK_SECRET_KEY;
+      // Check DiDit credentials using our DiDit service
+      results.didit.configured = diditService.isInitialized();
       
-      if (diditClientId && diditClientSecret) {
-        results.didit.configured = true;
-        
+      if (results.didit.configured) {
         try {
-          // Make an actual API call to DiDit to validate credentials
-          // First, get an access token using OAuth2 client credentials flow
-          const tokenResponse = await fetch("https://auth.didit.me/oauth2/token", {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              client_id: diditClientId,
-              client_secret: diditClientSecret,
-              grant_type: 'client_credentials',
-              audience: 'https://verification.didit.me'
-            })
-          });
+          // Use our service to validate credentials
+          results.didit.valid = await diditService.validateCredentials();
           
-          if (!tokenResponse.ok) {
-            results.didit.message = `DiDit authentication failed: ${tokenResponse.status} ${tokenResponse.statusText}`;
-          } else {
-            const tokenData = await tokenResponse.json();
-            const accessToken = tokenData.access_token;
+          if (results.didit.valid) {
+            results.didit.message = "DiDit credentials validated successfully";
             
-            // Now check if the token is valid by making a simple API call
-            const verificationResponse = await fetch("https://verification.didit.me/v1/status", {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            if (verificationResponse.ok) {
-              results.didit.valid = true;
-              results.didit.message = "DiDit credentials validated successfully";
-              
-              // Also check webhook secret if available
-              if (diditWebhookSecretKey) {
-                results.didit.message += " (webhook secret configured)";
-              } else {
-                results.didit.message += " (webhook secret not configured)";
-              }
+            // Check if webhook secret is configured
+            if (process.env.DIDIT_WEBHOOK_SECRET_KEY) {
+              results.didit.message += " (webhook secret configured)";
             } else {
-              results.didit.message = `DiDit verification API unavailable: ${verificationResponse.status} ${verificationResponse.statusText}`;
+              results.didit.message += " (webhook secret not configured)";
             }
+          } else {
+            results.didit.message = "DiDit credentials invalid - authentication failed";
           }
         } catch (diditError) {
           console.error("DiDit API verification error:", diditError);

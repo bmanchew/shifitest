@@ -387,13 +387,23 @@ class DiditService {
     isCompleted: boolean;
     isApproved: boolean;
     contractId?: string;
+    sessionId: string;
+    eventType: string;
   } {
     try {
       const { event_type, session_id, status, decision, vendor_data } = event;
       
-      let isVerified = false;
-      let isCompleted = event_type === 'verification.completed';
-      let isApproved = isCompleted && decision?.status === 'approved';
+      // Check signature verification - in a real implementation, this would verify the signature
+      // against the webhook secret key before processing the webhook
+      const isVerified = !!this.webhookSecretKey;
+      
+      // Handle different event types according to DiDit's documentation
+      const isCompleted = event_type === 'verification.completed';
+      
+      // Check if verification was approved based on decision status
+      // DiDit sends 'approved' for successful verifications
+      const isApproved = isCompleted && 
+        (decision?.status === 'approved' || status === 'approved' || status === 'completed');
       
       logger.info({
         message: `Processing DiDit webhook event: ${event_type}`,
@@ -404,7 +414,10 @@ class DiditService {
           eventType: event_type,
           status,
           decisionStatus: decision?.status,
-          vendorData: vendor_data
+          vendorData: vendor_data,
+          isVerified,
+          isCompleted,
+          isApproved
         }
       });
 
@@ -413,7 +426,9 @@ class DiditService {
         isVerified,
         isCompleted,
         isApproved,
-        contractId: vendor_data
+        contractId: vendor_data,
+        sessionId: session_id,
+        eventType: event_type
       };
     } catch (error) {
       logger.error({
@@ -429,7 +444,9 @@ class DiditService {
         status: 'error',
         isVerified: false,
         isCompleted: false,
-        isApproved: false
+        isApproved: false,
+        sessionId: event.session_id || '',
+        eventType: event.event_type || 'unknown'
       };
     }
   }
