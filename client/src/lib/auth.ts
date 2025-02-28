@@ -11,12 +11,10 @@ export interface AuthResult {
 
 export async function loginUser(email: string, password: string): Promise<AuthResult> {
   try {
-    const response = await apiRequest("POST", "/api/auth/login", {
+    const data = await apiRequest<AuthResult>("POST", "/api/auth/login", {
       email,
       password,
     });
-    
-    const data = await response.json();
     
     if (!data.user) {
       throw new Error("Invalid response from server");
