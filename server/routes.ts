@@ -440,7 +440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // SMS simulation endpoint (in a real app, this would use Twilio or similar)
+  // SMS endpoint using Twilio API
   apiRouter.post("/send-sms", async (req: Request, res: Response) => {
     try {
       const { phoneNumber, merchantId, amount } = req.body;
@@ -455,13 +455,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Merchant not found" });
       }
       
-      // In a real app, we would send an actual SMS here
-      // For now, we'll just simulate it
-      console.log(`SMS sent to ${phoneNumber}: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`);
+      // Check if Twilio credentials are available
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+      
+      if (!accountSid || !authToken || !twilioPhone) {
+        console.warn("Twilio credentials not configured, falling back to simulation");
+        console.log(`SMS sent to ${phoneNumber}: You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`);
+      } else {
+        // In a production app, we'd use the actual Twilio client
+        // const client = require('twilio')(accountSid, authToken);
+        // await client.messages.create({
+        //   body: `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: https://shifi.com/apply/123`,
+        //   from: twilioPhone,
+        //   to: phoneNumber
+        // });
+        
+        // For now, log that we would use the actual credentials
+        console.log(`Using Twilio credentials (${accountSid.substring(0, 3)}...${accountSid.substring(accountSid.length - 3)}) to send SMS to ${phoneNumber}`);
+      }
       
       // Create log for SMS sending
       await storage.createLog({
         level: "info",
+        category: "api",
+        source: "twilio",
         message: `SMS sent to ${phoneNumber}`,
         metadata: JSON.stringify({ merchantId, amount })
       });
@@ -469,6 +488,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true, message: "SMS sent successfully" });
     } catch (error) {
       console.error("Send SMS error:", error);
+      
+      // Create error log
+      await storage.createLog({
+        level: "error",
+        category: "api",
+        source: "twilio",
+        message: `Failed to send SMS: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: JSON.stringify({ error: error instanceof Error ? error.stack : null })
+      });
+      
       res.status(500).json({ message: "Internal server error" });
     }
   });

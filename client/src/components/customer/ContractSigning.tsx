@@ -196,13 +196,13 @@ export default function ContractSigning({
     }
   };
 
-  // When canvas ref is available, initialize it
-  const handleCanvasRef = (canvas: HTMLCanvasElement | null) => {
-    if (canvas) {
-      canvasRef.current = canvas;
-      initializeCanvas(canvas);
+  // Use the useEffect pattern for canvas initialization
+  useEffect(() => {
+    const canvasElement = canvasRef.current;
+    if (canvasElement) {
+      initializeCanvas(canvasElement);
     }
-  };
+  }, [step]);
 
   // Render the review contract step
   if (step === "review") {
