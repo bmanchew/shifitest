@@ -1,0 +1,355 @@
+import { useState, useEffect } from "react";
+import { useParams } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import CustomerLayout from "@/components/layout/CustomerLayout";
+import ContractTerms from "@/components/customer/ContractTerms";
+import KycVerification from "@/components/customer/KycVerification";
+import BankConnection from "@/components/customer/BankConnection";
+import PaymentSchedule from "@/components/customer/PaymentSchedule";
+import ContractSigning from "@/components/customer/ContractSigning";
+import ApplicationSteps, { Step } from "@/components/customer/ApplicationSteps";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+
+export default function Application() {
+  const { contractId: contractIdParam } = useParams();
+  const contractId = parseInt(contractIdParam || "0");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  // Mock data for demo purposes when no valid contractId is provided
+  const mockContractData = {
+    id: 999,
+    contractNumber: "FIN-DEMO",
+    merchantId: 1,
+    customerId: null,
+    amount: 2800,
+    downPayment: 420,
+    financedAmount: 2380,
+    termMonths: 24,
+    interestRate: 0,
+    monthlyPayment: 99.17,
+    status: "pending",
+    currentStep: "terms",
+    merchantName: "TechSolutions Inc.",
+    customerName: "Demo Customer",
+  };
+  
+  const [currentStep, setCurrentStep] = useState("");
+  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
+  const [contractData, setContractData] = useState<any>(null);
+  const [applicationProgress, setApplicationProgress] = useState<any[]>([]);
+  const [progressMap, setProgressMap] = useState<Record<string, any>>({});
+  
+  // If contractId is valid, fetch real data
+  const { data: contractResponse, isLoading: isLoadingContract } = useQuery({
+    queryKey: ["/api/contracts", contractId],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`/api/contracts/${contractId}`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          throw new Error("Failed to fetch contract");
+        }
+        return res.json();
+      } catch (error) {
+        console.error("Error fetching contract:", error);
+        return null;
+      }
+    },
+    enabled: !!contractId && contractId > 0,
+  });
+
+  // When contract data loads, set up the application state
+  useEffect(() => {
+    if (contractResponse) {
+      // Real contract data
+      const { contract, progress } = contractResponse;
+      
+      // Get merchant name (in a real app would be fetched from API)
+      let merchantName = "TechSolutions Inc.";
+      // Get customer name (in a real app would be fetched from API)
+      let customerName = "Customer";
+      
+      setContractData({
+        ...contract,
+        merchantName,
+        customerName
+      });
+      
+      setApplicationProgress(progress);
+      
+      // Create a map for easier access to progress items
+      const progressMapObj: Record<string, any> = {};
+      progress.forEach((item: any) => {
+        progressMapObj[item.step] = item;
+      });
+      setProgressMap(progressMapObj);
+      
+      // Set current step from contract
+      setCurrentStep(contract.currentStep);
+      
+      // Set completed steps
+      const completed = progress
+        .filter((item: any) => item.completed)
+        .map((item: any) => item.step);
+      setCompletedSteps(completed);
+      
+    } else if (!isLoadingContract) {
+      // Use mock data if no contract found and not still loading
+      setContractData(mockContractData);
+      
+      // Create mock progress items
+      const mockProgress = [
+        { id: 1001, step: "terms", completed: false },
+        { id: 1002, step: "kyc", completed: false },
+        { id: 1003, step: "bank", completed: false },
+        { id: 1004, step: "payment", completed: false },
+        { id: 1005, step: "signing", completed: false },
+      ];
+      
+      setApplicationProgress(mockProgress);
+      
+      // Create a progress map
+      const progressMapObj: Record<string, any> = {};
+      mockProgress.forEach(item => {
+        progressMapObj[item.step] = item;
+      });
+      setProgressMap(progressMapObj);
+      
+      setCurrentStep("terms");
+      setCompletedSteps([]);
+    }
+  }, [contractResponse, isLoadingContract]);
+
+  // All application steps
+  const steps: Step[] = [
+    { 
+      id: "terms", 
+      title: "Review Contract Terms", 
+      description: "Review and accept financing terms"
+    },
+    { 
+      id: "kyc", 
+      title: "Identity Verification", 
+      description: "Complete KYC with DiDit"
+    },
+    { 
+      id: "bank", 
+      title: "Bank Connection", 
+      description: "Connect your bank account via Plaid"
+    },
+    { 
+      id: "payment", 
+      title: "Payment Schedule", 
+      description: "Confirm your payment schedule"
+    },
+    { 
+      id: "signing", 
+      title: "Contract Signing", 
+      description: "Sign your retail installment contract"
+    },
+  ];
+  
+  // Calculate the next step after completing the current one
+  const getNextStep = (currentStep: string): string => {
+    const stepIndex = steps.findIndex(step => step.id === currentStep);
+    if (stepIndex < steps.length - 1) {
+      return steps[stepIndex + 1].id;
+    }
+    return "completed";
+  };
+  
+  // Calculate the progress percentage
+  const calculateProgress = (): number => {
+    if (!contractData) return 0;
+    
+    const totalSteps = steps.length;
+    const completedCount = completedSteps.length;
+    
+    if (currentStep === "completed" || completedCount === totalSteps) {
+      return 100;
+    }
+    
+    return Math.round((completedCount / totalSteps) * 100);
+  };
+  
+  // Calculate the current step number (1-based)
+  const getCurrentStepNumber = (): number => {
+    if (!contractData) return 1;
+    
+    if (currentStep === "completed") {
+      return steps.length;
+    }
+    
+    const stepIndex = steps.findIndex(step => step.id === currentStep);
+    return stepIndex >= 0 ? stepIndex + 1 : 1;
+  };
+  
+  // Handle completion of a step
+  const handleCompleteStep = () => {
+    if (!contractData) return;
+    
+    // Add current step to completed steps
+    if (!completedSteps.includes(currentStep)) {
+      setCompletedSteps([...completedSteps, currentStep]);
+    }
+    
+    // Move to the next step
+    const nextStep = getNextStep(currentStep);
+    setCurrentStep(nextStep);
+    
+    // In a real app, you would update the contract step on the server
+    if (contractId > 0) {
+      // This would make an API call to update the contract step
+      // For demo purposes, we'll just update the UI
+    }
+  };
+  
+  // Handle going back to the previous step
+  const handleGoBack = () => {
+    if (!contractData) return;
+    
+    const currentIndex = steps.findIndex(step => step.id === currentStep);
+    if (currentIndex > 0) {
+      setCurrentStep(steps[currentIndex - 1].id);
+    }
+  };
+
+  // If still loading contract data, show loading state
+  if (!contractData) {
+    return (
+      <CustomerLayout>
+        <div className="p-6 flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
+            <p className="mt-4 text-sm text-gray-600">Loading application...</p>
+          </div>
+        </div>
+      </CustomerLayout>
+    );
+  }
+
+  // Render different content based on current step
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case "terms":
+        return (
+          <ContractTerms
+            contractId={contractData.id}
+            progressId={progressMap.terms?.id || 0}
+            merchantName={contractData.merchantName}
+            amount={contractData.amount}
+            downPayment={contractData.downPayment}
+            financedAmount={contractData.financedAmount}
+            termMonths={contractData.termMonths}
+            interestRate={contractData.interestRate}
+            monthlyPayment={contractData.monthlyPayment}
+            onComplete={handleCompleteStep}
+            onBack={handleGoBack}
+          />
+        );
+      case "kyc":
+        return (
+          <KycVerification
+            contractId={contractData.id}
+            progressId={progressMap.kyc?.id || 0}
+            onComplete={handleCompleteStep}
+            onBack={handleGoBack}
+          />
+        );
+      case "bank":
+        return (
+          <BankConnection
+            contractId={contractData.id}
+            progressId={progressMap.bank?.id || 0}
+            onComplete={handleCompleteStep}
+            onBack={handleGoBack}
+          />
+        );
+      case "payment":
+        return (
+          <PaymentSchedule
+            contractId={contractData.id}
+            progressId={progressMap.payment?.id || 0}
+            amount={contractData.amount}
+            downPayment={contractData.downPayment}
+            financedAmount={contractData.financedAmount}
+            termMonths={contractData.termMonths}
+            monthlyPayment={contractData.monthlyPayment}
+            onComplete={handleCompleteStep}
+            onBack={handleGoBack}
+          />
+        );
+      case "signing":
+        return (
+          <ContractSigning
+            contractId={contractData.id}
+            progressId={progressMap.signing?.id || 0}
+            contractNumber={contractData.contractNumber}
+            customerName={contractData.customerName}
+            onComplete={handleCompleteStep}
+            onBack={handleGoBack}
+          />
+        );
+      case "completed":
+        return (
+          <div className="p-6 text-center">
+            <div className="py-12">
+              <div className="inline-flex h-24 w-24 items-center justify-center rounded-full bg-green-100 mb-8">
+                <svg className="h-12 w-12 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Application Complete!</h3>
+              <p className="text-gray-600 mb-6">
+                Your financing has been approved and your contract is now active.
+                You'll receive a confirmation email with all the details.
+              </p>
+              <Button 
+                onClick={() => {
+                  toast({
+                    title: "Success",
+                    description: "Your contract details have been emailed to you.",
+                  });
+                }}
+              >
+                Return to Merchant
+              </Button>
+            </div>
+          </div>
+        );
+      default:
+        return (
+          <div className="p-6 text-center">
+            <p>Unknown application step. Please start over.</p>
+          </div>
+        );
+    }
+  };
+
+  // Show the application progress view if we're on the application flow steps
+  if (currentStep !== "completed") {
+    return (
+      <CustomerLayout 
+        currentStep={getCurrentStepNumber()} 
+        totalSteps={steps.length}
+        progress={calculateProgress()}
+      >
+        {renderStepContent()}
+      </CustomerLayout>
+    );
+  }
+  
+  // Show the completed screen
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
+      <div className="max-w-md w-full mx-auto">
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          {renderStepContent()}
+        </div>
+      </div>
+    </div>
+  );
+}
