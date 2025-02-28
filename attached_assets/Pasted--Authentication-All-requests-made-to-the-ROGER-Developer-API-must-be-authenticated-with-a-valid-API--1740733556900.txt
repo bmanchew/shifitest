@@ -1,0 +1,134 @@
+
+Authentication
+All requests made to the ROGER Developer API must be authenticated with a valid API key. The API key must be passed in the Authorization HTTP header using the Bearer scheme. Below is an example of a header specifying your API key:
+
+
+Authorization: Bearer YOUR_API_KEY
+​
+Workspace IDs
+Most of the Developer API endpoints require specifying your Workspace ID, usually provided as a parameter workspaceId in the endpoint path.
+
+You can find the ID of your workspace in the URL of your ROGER Dashboard.
+
+In the below example, your workspaceId would be wvEOhUlU8rHy5EXAwNn1:
+
+
+https://app.thanksroger.com/workspaces/wvEOhUlU8rHy5EXAwNn1/contracts
+​
+Template IDs
+Some of the Developer API endpoints require specifying a Template ID, usually provided as the value of a property templateId in the request body.
+
+You can find the ID of your workspace in the URL of the template’s edit screen.
+
+In the below example, your templateId would be E23eipzNxLKe28bYP1FI:
+
+
+https://app.thanksroger.com/workspaces/wvEOhUlU8rHy5EXAwNn1/templates/E23eipzNxLKe28bYP1FI
+​
+Creating a contract from a template
+To create a contract from a template, specify the ID of the template to use and the values of each variable the template requires (without the @ prefix). The createdBy parameter should be set to an email address of a user from a team within your workspace.
+
+
+POST https://app.thanksroger.com/api/v3/workspaces/{workspaceId}/contracts
+
+Authorization: Bearer YOUR_API_KEY
+Content-Type: application/json
+
+{
+  "templateId": "TEMPLATE_ID",
+  "templateValues": {
+    "Signer name": {
+      "type": "singletext",
+      "value": "VALUE_AS_STRING"
+    },
+    "Signer email": {
+      "type": "singletext",
+      "value": "VALUE_AS_STRING"
+    },
+    "List of services": {
+      "type": "multitext",
+      "value": "LINE_1\nLINE_2"
+    },
+    "Statement of work": {
+      "type": "richtext",
+      "value": "<ol><li>Step 1</li><li>Step 2</li></ol>"
+    }
+  },
+  "createdBy": "user@yourcompany.com",
+  "name": "NEW_CONTRACT_NAME"
+}
+This method will respond with the workspaceId, contractId, and a signingLink, which can be used to sign the contract.
+
+
+200 OK
+
+{
+  "workspaceId": "YOUR_WORKSPACE_ID",
+  "contractId": "CREATED_CONTRACT_ID",
+  "signingLink": "https://app.thanksroger.com/sign/..."
+}
+​
+Sending the created contract via email
+By default, the API method to create a contract (above) will just create the contract and return to you the signingLink, which you can choose to deliver to the contract’s signers on your own.
+
+If instead, you would like ROGER to share the signing link with the contract’s signers for you, specify the email paramter in the request.
+
+The email parameter (default false) will send the signing link to the contract’s signers if it is either true or an object specifying additional options.
+
+Here are a couple of examples:
+
+
+{
+  "templateId": "TEMPLATE_ID",
+  "templateValues": { ... },
+  "createdBy": "user@yourcompany.com",
+  "name": "NEW_CONTRACT_NAME",
+  "email": true
+}
+
+{
+  "templateId": "TEMPLATE_ID",
+  "templateValues": { ... },
+  "createdBy": "user@yourcompany.com",
+  "name": "NEW_CONTRACT_NAME",
+  "email": {
+    "logoUrl": "...",
+    "subject": "Your signature is requested",
+    "message": "Please take a moment to sign this contract"
+  }
+}
+If subject, or message are not specified, the defaults will be used. If logoUrl is not specified, the default for your workspace as configured in your workspace’s settings will be used. If your workspace has a default logo configured, but you wish to omit the logo in this email, use null for logoUrl.
+
+​
+Optimizing email deliverability
+When using ROGER to send signature request emails, the message will come from roger@thanksroger.com with the reply-to header set to the createdBy user. To maximize deliverability to the recipient’s inbox, ROGER uses minimal, email-compatible HTML that has been tested with email deliverability tools like Litmus and Unspam. Here are a few other tips to help make sure your emails land in recipient inboxes:
+
+Avoid spammy keywords in the subject or message (e.g. “100% free” or “act now”).
+Write a personalized message to help the message get marked as private/direct instead of a bulk email.
+Include the name of the signer in the contract’s configuration. In addition to just the email address of the signer, also specify the signer’s full name. It will automatically be used in the email’s to header.
+​
+Variable types
+Variables in ROGER templates are typed. When providing variable values via the contract creation API, the type of the value must be compatible with the type of the variable.
+
+Template variable values are specified in the templateValues property of the request body. It is a JSON record mapping from names of template variables to a typed value object. A typed value object is is a JSON record with a type property. Other properties of the typed value object depend on the type.
+
+​
+List of variable types
+Type	Description	Value type
+singletext	Text (single line)	singletext
+multitext	Paragraph (multiple lines)	multitext
+richtext	Rich text (HTML)	richtext
+chooseonetext	Choose one option	singletext
+​
+List of value types
+Type	Description	Example
+singletext	Text with no newlines	{ "type": "singletext", "value": "foo" }
+multitext	Text with newlines	{ "type": "multitext", "value": "foo\nbar" }
+richtext	HTML-formatted text	{ "type": "richtext", "value": "<ul><li>foo</li></ul>" }
+​
+Passing additional information to webhook events
+It can be useful to tie additional information to a contract, such as customer or deal identifiers from your CRM.
+
+For example, you may want to attach an opportunityId to a contract you’re programatically creating in response to an opportunity being created in your HubSpot. Later, when the contract.signed event is fired and any configured webhooks are notified, it is convenient to have the associated opportunityId present in the webhook event body so you can update your CRM object accordingly.
+
+To do this, create another template variable called @Opportunity ID — it’s okay if you don’t use the value of this variable to populate any information in the contract. You can create any number of arbitrary variables in your template that you can populate via the templateValues parameters of the POST request body. They will be provided in the submission.values property of the contract.signed event when the contract is signed.

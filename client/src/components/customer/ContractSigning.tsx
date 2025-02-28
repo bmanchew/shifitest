@@ -144,14 +144,18 @@ export default function ContractSigning({
     try {
       setIsSubmitting(true);
       
-      // Simulate API integration with Thanks Roger signing service
+      // Integrate with Thanks Roger signing service
+      // This will utilize our thanksRogerService on the backend
       const signingResponse = await apiRequest<{
         success: boolean;
+        contractId: string;
+        signingLink: string;
         signatureId: string;
-      }>("POST", "/api/mock/thanks-roger-signing", {
+      }>("POST", "/api/contract-signing", {
         contractId,
-        signatureData,
+        contractNumber,
         customerName,
+        signatureData,
       });
       
       if (!signingResponse.success) {
@@ -163,7 +167,9 @@ export default function ContractSigning({
         completed: true,
         data: JSON.stringify({
           signedAt: new Date().toISOString(),
-          signatureId: signingResponse.signatureId || "sig-123456",
+          signatureId: signingResponse.signatureId,
+          thankRogerContractId: signingResponse.contractId,
+          signingLink: signingResponse.signingLink
         }),
       });
       

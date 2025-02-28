@@ -482,6 +482,8 @@ class DiditService {
 
   /**
    * Verify the signature of a DiDit webhook
+   * According to DiDit documentation, the signature is in the X-DiDit-Signature header
+   * and should be verified using HMAC-SHA256 with your webhook secret key
    */
   verifyWebhookSignature(payload: any, signature: string): boolean {
     if (!this.webhookSecretKey) {
@@ -494,10 +496,27 @@ class DiditService {
     }
 
     try {
+      // DiDit expects the raw JSON string without any whitespace
+      const rawPayload = typeof payload === 'string' 
+        ? payload 
+        : JSON.stringify(payload);
+
+      // Create HMAC-SHA256 signature with the webhook secret key
       const computedSignature = crypto
         .createHmac('sha256', this.webhookSecretKey)
-        .update(JSON.stringify(payload))
+        .update(rawPayload)
         .digest('hex');
+      
+      logger.debug({
+        message: 'DiDit webhook signature verification',
+        category: 'api',
+        source: 'didit',
+        metadata: { 
+          receivedSignature: signature,
+          computedSignature: computedSignature,
+          signatureMatches: computedSignature === signature
+        }
+      });
       
       return computedSignature === signature;
     } catch (error) {
@@ -516,8 +535,11 @@ class DiditService {
 
   /**
    * Process a webhook event from DiDit
+   * 
+   * @param event The webhook event payload from DiDit
+   * @param signature Optional signature from the X-DiDit-Signature header for verification
    */
-  processWebhookEvent(event: DiditWebhookEvent): {
+  processWebhookEvent(event: DiditWebhookEvent, signature?: string): {
     status: 'success' | 'error';
     isVerified: boolean;
     isCompleted: boolean;
@@ -529,11 +551,13 @@ class DiditService {
     try {
       const { event_type, session_id, status, decision, vendor_data } = event;
       
-      // Check signature verification - in a real implementation, this would verify the signature
-      // against the webhook secret key before processing the webhook
-      const isVerified = !!this.webhookSecretKey;
+      // Verify webhook signature if provided
+      const isVerified = signature 
+        ? this.verifyWebhookSignature(event, signature) 
+        : false;
       
       // Handle different event types according to DiDit's documentation
+      // The main event we're interested in is 'verification.completed'
       const isCompleted = event_type === 'verification.completed';
       
       // Check if verification was approved based on decision status
@@ -553,7 +577,8 @@ class DiditService {
           vendorData: vendor_data,
           isVerified,
           isCompleted,
-          isApproved
+          isApproved,
+          signatureProvided: !!signature
         }
       });
 
