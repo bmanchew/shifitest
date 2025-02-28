@@ -195,7 +195,7 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 overflow-auto bg-gray-50">
+      <div className="flex-1 overflow-auto bg-white">
         {children}
       </div>
     </div>

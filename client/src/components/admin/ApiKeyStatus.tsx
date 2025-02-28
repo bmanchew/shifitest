@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, getQueryFn } from '@/lib/queryClient';
 
 interface ApiKeyStatus {
   configured: boolean;
@@ -66,7 +66,7 @@ export default function ApiKeyStatus() {
 
   const testTwilioApiMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/send-sms', {
+      return await apiRequest<Response>('/api/send-sms', {
         method: 'POST',
         body: JSON.stringify({
           to: '+11234567890', // Test number
