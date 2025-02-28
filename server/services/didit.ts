@@ -106,7 +106,7 @@ interface DiditWebhookEvent {
 
 class DiditService {
   // Base URLs according to DiDit documentation
-  private authBaseUrl = 'https://auth.didit.me';
+  private authBaseUrl = 'https://apx.didit.me';  // Updated per latest docs
   private verificationBaseUrl = 'https://verification.didit.me';
   private clientId: string | undefined;
   private clientSecret: string | undefined;
@@ -187,22 +187,23 @@ class DiditService {
         category: 'api',
         source: 'didit',
         metadata: {
-          authUrl: `${this.authBaseUrl}/oauth2/token`,
+          authUrl: `${this.authBaseUrl}/auth/v2/token/`, // Updated endpoint from docs
           clientId: this.clientId
         }
       });
 
-      // According to DiDit documentation, the request should be x-www-form-urlencoded
+      // Construct the Basic Auth header using Base64 encoded credentials
+      const encodedCredentials = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
+      
+      // Create form params for the token request
       const formData = new URLSearchParams();
-      formData.append('client_id', this.clientId);
-      formData.append('client_secret', this.clientSecret);
       formData.append('grant_type', 'client_credentials');
-      formData.append('audience', this.verificationBaseUrl);
 
-      const response = await fetch(`${this.authBaseUrl}/oauth2/token`, {
+      const response = await fetch(`${this.authBaseUrl}/auth/v2/token/`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${encodedCredentials}`
         },
         body: formData.toString()
       });
@@ -280,12 +281,11 @@ class DiditService {
         customFields = {}
       } = options;
 
+      // According to the latest documentation, we need to use these specific fields
       const requestBody = {
-        callback_url: callbackUrl,
+        callback: callbackUrl, // Using 'callback' instead of 'callback_url'
         vendor_data: contractId.toString(),
-        allowed_document_types: allowedDocumentTypes,
-        allowed_checks: allowedChecks,
-        required_fields: requiredFields,
+        features: "OCR + FACE", // Features string format as specified in docs
         ...customFields
       };
 

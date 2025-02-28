@@ -60,9 +60,12 @@ const extractRequestInfo = (req: Request): { ipAddress: string; userAgent: strin
   return { ipAddress, userAgent };
 };
 
-// Format metadata as JSON string
-const formatMetadata = (metadata: Record<string, any> | undefined): string | undefined => {
+// Format metadata as JSON string - metadata can be either an object or already stringified JSON
+const formatMetadata = (metadata: Record<string, any> | string | undefined): string | undefined => {
   if (!metadata) return undefined;
+  
+  // If it's already a string, return it directly
+  if (typeof metadata === 'string') return metadata;
   
   try {
     return JSON.stringify(metadata);

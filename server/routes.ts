@@ -9,17 +9,21 @@ import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
 import { logger } from "./services/logger";
 
-// Helper function to ensure metadata is a proper object, not a JSON string
-function objectMetadata<T>(data: T): Record<string, any> {
-  if (!data) return {};
+// Helper function to convert metadata to JSON string for storage
+function objectMetadata<T>(data: T): string {
+  if (!data) return JSON.stringify({});
   if (typeof data === 'string') {
     try {
-      return JSON.parse(data);
+      // Check if it's already a valid JSON string
+      JSON.parse(data);
+      return data;
     } catch (e) {
-      return { stringValue: data };
+      // It's a string but not valid JSON, so wrap it
+      return JSON.stringify({ stringValue: data });
     }
   }
-  return data as Record<string, any>;
+  // Convert object to JSON string
+  return JSON.stringify(data);
 }
 
 // Helper function to get the domain for callbacks and webhooks
