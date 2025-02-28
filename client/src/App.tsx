@@ -20,6 +20,8 @@ const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
 
 // Customer pages
 const CustomerApplication = lazy(() => import("@/pages/customer/Application"));
+const CustomerContractOffer = lazy(() => import("@/pages/customer/ContractOffer"));
+const CustomerDashboard = lazy(() => import("@/pages/customer/Dashboard"));
 
 function LoadingFallback() {
   return (
@@ -68,8 +70,10 @@ function App() {
             </>
           )}
 
-          {/* Public customer application route */}
+          {/* Public customer routes */}
+          <Route path="/offer/:contractId" component={CustomerContractOffer} />
           <Route path="/apply/:contractId?" component={CustomerApplication} />
+          <Route path="/dashboard/:contractId" component={CustomerDashboard} />
 
           <Route component={NotFound} />
         </Switch>
