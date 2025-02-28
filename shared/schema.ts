@@ -6,6 +6,9 @@ import { z } from "zod";
 export const userRoleEnum = pgEnum('user_role', ['admin', 'merchant', 'customer']);
 export const contractStatusEnum = pgEnum('contract_status', ['pending', 'active', 'completed', 'declined', 'cancelled']);
 export const applicationStepEnum = pgEnum('application_step', ['terms', 'kyc', 'bank', 'payment', 'signing', 'completed']);
+export const logLevelEnum = pgEnum('log_level', ['debug', 'info', 'warn', 'error', 'critical']);
+export const logCategoryEnum = pgEnum('log_category', ['system', 'user', 'api', 'payment', 'security', 'contract']);
+export const logSourceEnum = pgEnum('log_source', ['internal', 'twilio', 'didit', 'plaid', 'thanksroger']);
 
 // Users
 export const users = pgTable("users", {
@@ -85,11 +88,21 @@ export const insertApplicationProgressSchema = createInsertSchema(applicationPro
 // Logs
 export const logs = pgTable("logs", {
   id: serial("id").primaryKey(),
-  level: text("level").notNull(),
+  timestamp: timestamp("timestamp").defaultNow(),
+  level: logLevelEnum("level").notNull().default('info'),
+  category: logCategoryEnum("category").notNull().default('system'),
   message: text("message").notNull(),
   userId: integer("user_id").references(() => users.id),
+  source: logSourceEnum("source").notNull().default('internal'),
+  requestId: text("request_id"), // to group logs for a single request/operation
+  correlationId: text("correlation_id"), // to track across multiple systems
   metadata: text("metadata"), // JSON stringified additional data
-  timestamp: timestamp("timestamp").defaultNow(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  tags: text("tags").array(),
+  duration: integer("duration"), // for measuring performance (in ms)
+  statusCode: integer("status_code"), // for API responses
+  retentionDays: integer("retention_days").default(90), // log retention policy
 });
 
 export const insertLogSchema = createInsertSchema(logs).omit({
