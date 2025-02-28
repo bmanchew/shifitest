@@ -168,6 +168,7 @@ export default function KycVerification({
       
       // Update application progress to track that verification has started
       await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+        completed: false, // Not completed yet, just starting
         data: JSON.stringify({
           verificationStarted: new Date().toISOString(),
           sessionId: session.session_id,
@@ -237,6 +238,7 @@ export default function KycVerification({
       
       // Update application progress to track that verification has started
       await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+        completed: false, // Not completed yet, just starting
         data: JSON.stringify({
           verificationStarted: new Date().toISOString(),
           sessionId: response.session_id,

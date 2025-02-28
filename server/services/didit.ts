@@ -115,7 +115,8 @@ class DiditService {
   private tokenExpiry: number = 0;
   private initialized = false;
   private useMockMode = true; // Enable mock mode when real API fails
-  private serverBaseUrl = 'http://localhost:5000'; // Default base URL for mock mode
+  // Use a dynamic base URL that works in any environment
+  private serverBaseUrl = process.env.PUBLIC_URL || 'https://66bc6305-d313-418d-8499-11a803af5b4a-00-368ksgk8kmfni.kirk.replit.dev';
 
   constructor() {
     this.initialize();
