@@ -87,7 +87,7 @@ export default function ContractSigning({
     }
 
     function draw(e: MouseEvent) {
-      if (!isDrawing) return;
+      if (!isDrawing || !ctx) return;
       
       ctx.lineWidth = 2;
       ctx.lineCap = "round";
@@ -103,7 +103,7 @@ export default function ContractSigning({
 
     function handleTouchMove(e: TouchEvent) {
       e.preventDefault();
-      if (!isDrawing || e.touches.length !== 1) return;
+      if (!isDrawing || e.touches.length !== 1 || !ctx) return;
       
       const touch = e.touches[0];
       const rect = canvas.getBoundingClientRect();
@@ -145,7 +145,10 @@ export default function ContractSigning({
       setIsSubmitting(true);
       
       // Simulate API integration with Thanks Roger signing service
-      const signingResponse = await apiRequest("POST", "/api/mock/thanks-roger-signing", {
+      const signingResponse = await apiRequest<{
+        success: boolean;
+        signatureId: string;
+      }>("POST", "/api/mock/thanks-roger-signing", {
         contractId,
         signatureData,
         customerName,

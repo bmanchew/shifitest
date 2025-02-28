@@ -83,7 +83,7 @@ export default function KycVerification({
       setStep("verifying");
       
       // Simulate API integration with DiDit KYC service
-      const verificationResponse = await apiRequest("POST", "/api/mock/didit-kyc", {
+      const verificationResponse = await apiRequest<{ success: boolean; verificationId: string }>("POST", "/api/mock/didit-kyc", {
         contractId,
         documentImage: "base64_document_data", // In a real app, would encode image
         selfieImage: "base64_selfie_data", // In a real app, would encode image

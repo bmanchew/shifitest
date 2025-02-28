@@ -53,7 +53,12 @@ export default function BankConnection({
       setStep("connecting");
       
       // Simulate API integration with Plaid
-      const plaidResponse = await apiRequest("POST", "/api/mock/plaid-link", {
+      const plaidResponse = await apiRequest<{
+        success: boolean;
+        accountId: string;
+        accountMask: string;
+        accountName: string;
+      }>("POST", "/api/mock/plaid-link", {
         contractId,
         bankId: selectedBank,
       });
