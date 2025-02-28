@@ -1654,8 +1654,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let contractId: number | null = null;
           try {
             // Check if we have contractId from the webhook event processing
-            if (eventProcessResult.contractId) {
-              contractId = Number(eventProcessResult.contractId);
+            if (result.contractId) {
+              contractId = Number(result.contractId);
             } 
             // Fall back to trying to parse vendor_data manually if needed
             else if (sessionData.vendor_data) {
@@ -1669,7 +1669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               source: "didit",
               metadata: { 
                 session_id,
-                processedContractId: eventProcessResult.contractId,
+                processedContractId: result.contractId,
                 vendorData: sessionData.vendor_data 
               }
             });
@@ -1779,8 +1779,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let contractId: number | null = null;
             try {
               // Check if we have contractId from the webhook event processing
-              if (eventProcessResult.contractId) {
-                contractId = Number(eventProcessResult.contractId);
+              if (result.contractId) {
+                contractId = Number(result.contractId);
               } 
               // Fall back to trying to parse vendor_data manually if needed
               else if (req.body.vendor_data) {
@@ -1794,7 +1794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 source: "didit",
                 metadata: { 
                   session_id,
-                  processedContractId: eventProcessResult.contractId,
+                  processedContractId: result.contractId,
                   vendorData: req.body.vendor_data 
                 }
               });
