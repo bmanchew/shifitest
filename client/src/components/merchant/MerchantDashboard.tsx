@@ -41,9 +41,21 @@ export default function MerchantDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 sm:px-0">
-        <h1 className="text-2xl font-semibold text-gray-900">Merchant Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-600">{user?.name || "Your Company"}</p>
+      <div className="px-4 py-5 sm:px-0">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-6 mb-6 text-white">
+          <h1 className="text-2xl font-bold">Welcome to ShiFi Dashboard</h1>
+          <p className="mt-2 text-blue-100">Hello, {user?.name || "Merchant"}! Manage your financing contracts and help your customers get the financing they need.</p>
+          <div className="mt-4 flex space-x-3">
+            <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
+              <div className="text-sm text-blue-100">Current Date</div>
+              <div className="font-medium">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+            </div>
+            <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
+              <div className="text-sm text-blue-100">Last Login</div>
+              <div className="font-medium">Today, {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Stats */}
