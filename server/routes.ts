@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertUserSchema, insertMerchantSchema, insertContractSchema, insertApplicationProgressSchema, insertLogSchema } from "@shared/schema";
+import { twilioService } from "./services/twilio";
 
 // Helper function to get the domain for callbacks and webhooks
 function getAppDomain(): string {
@@ -483,11 +484,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!merchant) {
         return res.status(404).json({ message: "Merchant not found" });
       }
-      
-      // Check if Twilio credentials are available
-      const accountSid = process.env.TWILIO_ACCOUNT_SID;
-      const authToken = process.env.TWILIO_AUTH_TOKEN;
-      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
       
       // Create a contract for this financing request
       const contractNumber = generateContractNumber();
