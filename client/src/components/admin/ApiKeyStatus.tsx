@@ -67,8 +67,9 @@ export default function ApiKeyStatus() {
   const testTwilioApiMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest<Response>('POST', '/api/send-sms', {
-        to: '+11234567890', // Test number
+        phone: '+11234567890', // Test number
         message: 'This is a test message from ShiFi finance platform',
+        isTest: true
       });
     },
     onSuccess: () => {
