@@ -82,43 +82,81 @@ export default function KycVerification({
       setIsVerifying(true);
       setStep("verifying");
       
-      // Simulate API integration with DiDit KYC service
-      const verificationResponse = await apiRequest<{ success: boolean; verificationId: string }>("POST", "/api/mock/didit-kyc", {
+      // Create base64 representations of the images
+      // In a real app, you would properly encode the images
+      // For demo purposes, we'll use placeholders
+      const encodedDocumentImage = documentImage ? "base64_document_data" : "";
+      const encodedSelfieImage = selfieImage ? "base64_selfie_data" : "";
+      
+      // Call the DiDit KYC mock API
+      const response = await apiRequest<{
+        session_id: string;
+        session_url: string;
+        status: string;
+      }>("POST", "/api/mock/didit-kyc", {
         contractId,
-        documentImage: "base64_document_data", // In a real app, would encode image
-        selfieImage: "base64_selfie_data", // In a real app, would encode image
+        documentImage: encodedDocumentImage,
+        selfieImage: encodedSelfieImage,
       });
       
-      if (!verificationResponse.success) {
-        throw new Error("Verification failed");
+      if (!response || !response.session_id) {
+        throw new Error("Verification session creation failed");
       }
       
-      // Update application progress
+      console.log("KYC verification session created:", response);
+      
+      // In a real implementation, we would redirect to the DiDit verification interface
+      // using the session_url from the response
+      // For demo purposes, we'll simulate a successful verification after a delay
+      
+      // Update application progress to track that verification has started
       await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
-        completed: true,
         data: JSON.stringify({
-          verifiedAt: new Date().toISOString(),
-          verificationId: verificationResponse.verificationId || "ver-123456",
+          verificationStarted: new Date().toISOString(),
+          sessionId: response.session_id,
+          sessionUrl: response.session_url
         }),
       });
       
-      // Move to complete state
-      setStep("complete");
-      
-      // After a short delay, move to the next step in the parent
-      setTimeout(() => {
-        onComplete();
-      }, 2000);
-      
+      // Simulate verification completion after a delay
+      // In a real app, this would be handled by the DiDit webhook
+      setTimeout(async () => {
+        try {
+          // Mark the KYC step as completed in our application
+          await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+            completed: true,
+            data: JSON.stringify({
+              verifiedAt: new Date().toISOString(),
+              sessionId: response.session_id,
+            }),
+          });
+          
+          // Move to complete state
+          setStep("complete");
+          
+          // After a short delay, move to the next step in the parent
+          setTimeout(() => {
+            onComplete();
+          }, 2000);
+        } catch (completionError) {
+          console.error("Failed to complete verification:", completionError);
+          toast({
+            title: "Verification Process Error",
+            description: "There was an error completing your verification. Please try again.",
+            variant: "destructive",
+          });
+          setStep("document");
+          setIsVerifying(false);
+        }
+      }, 5000); // 5 second delay to simulate verification process
     } catch (error) {
       console.error("KYC verification failed:", error);
       toast({
         title: "Verification Failed",
-        description: "We couldn't verify your identity. Please try again.",
+        description: "We couldn't start the identity verification process. Please try again.",
         variant: "destructive",
       });
       setStep("document");
-    } finally {
       setIsVerifying(false);
     }
   };
