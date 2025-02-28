@@ -642,7 +642,9 @@ class DiditService {
   }
 
   /**
-   * Check if the credentials are valid by making a test API call
+   * Check if the credentials are valid by obtaining an access token
+   * If we can get a token, the credentials are considered valid
+   * regardless of whether specific API endpoints are available
    */
   async validateCredentials(): Promise<boolean> {
     if (!this.isInitialized()) {
@@ -661,53 +663,14 @@ class DiditService {
         return false;
       }
 
-      // Then, try to access a simple API endpoint to verify the token works
-      logger.debug({
-        message: 'Attempting to validate DiDit credentials by checking API availability',
+      // If we successfully got an access token, consider the credentials valid
+      logger.info({
+        message: 'DiDit credentials validated successfully (access token obtained)',
         category: 'api',
         source: 'didit'
       });
-
-      // Try to validate by making a simple request that doesn't require additional params
-      try {
-        const response = await fetch(`${this.verificationBaseUrl}/v1/status`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          logger.info({
-            message: 'DiDit credentials validated successfully',
-            category: 'api',
-            source: 'didit'
-          });
-          return true;
-        }
-
-        const errorText = await response.text();
-        logger.warn({
-          message: `DiDit API check failed: ${response.status} ${response.statusText}`,
-          category: 'api',
-          source: 'didit',
-          metadata: { errorText }
-        });
-        
-        return false;
-      } catch (apiError) {
-        // If the specific endpoint fails, we at least got a token, so credentials might still be valid
-        // Just the endpoint might be different in their API
-        logger.warn({
-          message: `DiDit API endpoint check failed, but token was obtained: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
-          category: 'api',
-          source: 'didit'
-        });
-        
-        // Return true since we at least got a token successfully
-        return true;
-      }
+      
+      return true;
     } catch (error) {
       logger.error({
         message: `Failed to validate DiDit credentials: ${error instanceof Error ? error.message : String(error)}`,
