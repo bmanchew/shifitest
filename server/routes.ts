@@ -808,6 +808,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // API Key verification endpoints
+  apiRouter.get("/verify-api-keys", async (req: Request, res: Response) => {
+    try {
+      const results = {
+        twilio: {
+          configured: false,
+          valid: false,
+          message: ""
+        },
+        didit: {
+          configured: false,
+          valid: false,
+          message: ""
+        },
+        plaid: {
+          configured: false,
+          valid: false,
+          message: ""
+        },
+        thanksroger: {
+          configured: false,
+          valid: false,
+          message: ""
+        }
+      };
+
+      // Check Twilio credentials
+      const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+      const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+
+      if (twilioAccountSid && twilioAuthToken && twilioPhone) {
+        results.twilio.configured = true;
+        
+        // Verify Twilio credentials format
+        if (
+          twilioAccountSid.startsWith('AC') && 
+          twilioAccountSid.length >= 32 && 
+          twilioAuthToken.length >= 32 &&
+          /^\+\d{10,15}$/.test(twilioPhone)
+        ) {
+          results.twilio.valid = true;
+          results.twilio.message = "Twilio credentials appear valid";
+        } else {
+          results.twilio.message = "Twilio credentials are in an invalid format";
+        }
+      } else {
+        results.twilio.message = "Twilio credentials not configured";
+      }
+
+      // Check DiDit API key
+      const diditApiKey = process.env.DIDIT_API_KEY;
+      
+      if (diditApiKey) {
+        results.didit.configured = true;
+        
+        // Verify DiDit API key format (typically a string of at least 32 chars)
+        if (diditApiKey.length >= 32) {
+          results.didit.valid = true;
+          results.didit.message = "DiDit API key appears valid";
+        } else {
+          results.didit.message = "DiDit API key is too short to be valid";
+        }
+      } else {
+        results.didit.message = "DiDit API key not configured";
+      }
+
+      // Check Plaid credentials
+      const plaidClientId = process.env.PLAID_CLIENT_ID;
+      const plaidSecret = process.env.PLAID_SECRET;
+      
+      if (plaidClientId && plaidSecret) {
+        results.plaid.configured = true;
+        
+        // Verify Plaid credentials format
+        if (plaidClientId.length >= 24 && plaidSecret.length >= 30) {
+          results.plaid.valid = true;
+          results.plaid.message = "Plaid credentials appear valid";
+        } else {
+          results.plaid.message = "Plaid credentials are in an invalid format";
+        }
+      } else {
+        results.plaid.message = "Plaid credentials not configured";
+      }
+
+      // Check Thanks Roger API key
+      const thanksRogerApiKey = process.env.THANKSROGER_API_KEY;
+      
+      if (thanksRogerApiKey) {
+        results.thanksroger.configured = true;
+        
+        // Verify Thanks Roger API key format
+        if (thanksRogerApiKey.length >= 32) {
+          results.thanksroger.valid = true;
+          results.thanksroger.message = "Thanks Roger API key appears valid";
+        } else {
+          results.thanksroger.message = "Thanks Roger API key is too short to be valid";
+        }
+      } else {
+        results.thanksroger.message = "Thanks Roger API key not configured";
+      }
+
+      // Log the verification attempt
+      await storage.createLog({
+        level: "info",
+        category: "system",
+        source: "internal",
+        message: "API key verification check performed",
+        metadata: JSON.stringify({
+          twilioConfigured: results.twilio.configured,
+          twilioValid: results.twilio.valid,
+          diditConfigured: results.didit.configured,
+          diditValid: results.didit.valid,
+          plaidConfigured: results.plaid.configured,
+          plaidValid: results.plaid.valid,
+          thanksrogerConfigured: results.thanksroger.configured,
+          thanksrogerValid: results.thanksroger.valid
+        })
+      });
+      
+      res.json(results);
+    } catch (error) {
+      console.error("API key verification error:", error);
+      
+      // Create error log
+      await storage.createLog({
+        level: "error",
+        category: "system",
+        source: "internal",
+        message: `Failed API key verification: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: JSON.stringify({ error: error instanceof Error ? error.stack : null })
+      });
+      
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  
   // Mount the API router
   app.use("/api", apiRouter);
   

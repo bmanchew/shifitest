@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Save, RefreshCw } from "lucide-react";
+import ApiKeyStatus from "@/components/admin/ApiKeyStatus";
 
 export default function Settings() {
   const { toast } = useToast();
