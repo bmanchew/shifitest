@@ -489,9 +489,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authToken = process.env.TWILIO_AUTH_TOKEN;
       const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
       
+      // Create a contract for this financing request
+      const contractNumber = generateContractNumber();
+      const termMonths = 24; // Fixed term
+      const interestRate = 0; // 0% APR
+      const downPaymentPercent = 15; // 15% down payment
+      const downPayment = amount * (downPaymentPercent / 100);
+      const financedAmount = amount - downPayment;
+      const monthlyPayment = financedAmount / termMonths;
+
+      console.log("Creating contract with:", {
+        contractNumber,
+        merchantId,
+        amount,
+        downPayment,
+        financedAmount,
+        termMonths,
+        interestRate,
+        monthlyPayment
+      });
+
+      // Create a new contract
+      const newContract = await storage.createContract({
+        contractNumber,
+        merchantId,
+        customerId: null, // Will be set when the customer completes the application
+        amount,
+        downPayment,
+        financedAmount,
+        termMonths,
+        interestRate,
+        monthlyPayment,
+        status: "pending",
+        currentStep: "terms"
+      });
+
+      // Create application progress for this contract
+      const newProgress = await storage.createApplicationProgress({
+        contractId: newContract.id,
+        step: "terms",
+        completed: false,
+        data: null
+      });
+
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
-      const applicationUrl = `https://${replitDomain}/apply/123`;
+      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
       
       if (!accountSid || !authToken || !twilioPhone) {
         console.warn("Twilio credentials not configured, falling back to simulation");
@@ -520,7 +563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: "api",
         source: "twilio",
         message: `SMS sent to ${phoneNumber}`,
-        metadata: JSON.stringify({ merchantId, amount })
+        metadata: JSON.stringify({ merchantId, amount, contractId: newContract.id })
       });
       
       res.json({ success: true, message: "SMS sent successfully" });
