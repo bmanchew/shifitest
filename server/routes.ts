@@ -1006,6 +1006,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // DiDit KYC Webhook endpoint - for receiving status updates from DiDit
+  apiRouter.post("/kyc/webhook", async (req: Request, res: Response) => {
+    try {
+      console.log("Received DiDit webhook:", JSON.stringify(req.body, null, 2));
+      
+      // Extract webhook signature from headers (for verification)
+      const webhookSignature = req.headers['x-signature'] as string;
+      const webhookSecretKey = process.env.DIDIT_API_KEY; // In production, use a separate webhook secret
+      
+      if (!webhookSignature) {
+        return res.status(401).json({
+          status: "error",
+          error_code: "invalid_signature",
+          error_message: "Missing signature in webhook request"
+        });
+      }
+      
+      // In a production environment, verify the signature using HMAC-SHA256
+      // const computedSignature = crypto.createHmac('sha256', webhookSecretKey)
+      //   .update(JSON.stringify(req.body))
+      //   .digest('hex');
+      
+      // if (computedSignature !== webhookSignature) {
+      //   return res.status(401).json({
+      //     status: "error",
+      //     error_code: "invalid_signature",
+      //     error_message: "Invalid webhook signature"
+      //   });
+      // }
+      
+      // Process the webhook based on event type
+      const { event_type, session_id, status, decision, customer_details } = req.body;
+      
+      // Create log entry for the webhook
+      await storage.createLog({
+        level: "info",
+        category: "api",
+        source: "didit",
+        message: `KYC Webhook received: ${event_type} for session ${session_id}`,
+        metadata: JSON.stringify(req.body)
+      });
+      
+      // In a real application, update the corresponding verification status in your database
+      // and trigger any necessary business logic based on the verification result
+      
+      // For example, if verification is completed:
+      if (event_type === "verification.completed" && status === "completed") {
+        // If we had a verification table, we could update the status:
+        // await db.update(verifications)
+        //   .set({ status: decision.status, score: decision.score })
+        //   .where(eq(verifications.sessionId, session_id));
+        
+        // If verification passed, we might want to proceed with the next step in the application
+        if (decision && decision.status === "approved") {
+          console.log(`Verification approved for session ${session_id}`);
+          
+          // Here you would update your application flow
+          // For example, marking a contract step as completed
+        } else {
+          console.log(`Verification rejected for session ${session_id}`);
+          
+          // Handle rejected verification
+        }
+      }
+      
+      // Always respond with 200 OK to acknowledge receipt of the webhook
+      return res.status(200).json({ status: "success" });
+    } catch (error) {
+      console.error("Error processing DiDit webhook:", error);
+      
+      // Log the error
+      await storage.createLog({
+        level: "error",
+        category: "api",
+        source: "didit",
+        message: `Webhook processing error: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: JSON.stringify({ error: error instanceof Error ? error.stack : null })
+      });
+      
+      // Always return 200 to prevent DiDit from retrying (prevents duplicate processing)
+      // In a production environment, you might want to implement a retry mechanism
+      return res.status(200).json({
+        status: "error",
+        error_message: "Error processing webhook, but acknowledged receipt"
+      });
+    }
+  });
+  
   // API Key verification endpoints
   apiRouter.get("/verify-api-keys", async (req: Request, res: Response) => {
     try {
