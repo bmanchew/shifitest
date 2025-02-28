@@ -73,7 +73,7 @@ export class MemStorage implements IStorage {
   private seedInitialData() {
     // Create admin user
     const adminUser: InsertUser = {
-      email: "admin@finpay.com",
+      email: "admin@shifi.com",
       password: "admin123", // In a real app, this would be hashed
       name: "Admin User",
       role: "admin",
@@ -133,7 +133,7 @@ export class MemStorage implements IStorage {
     // Create some contracts
     const contracts = [
       {
-        contractNumber: "FIN-0023",
+        contractNumber: "SHI-0023",
         merchantId: 1,
         customerId: 2,
         amount: 4500,
@@ -146,7 +146,7 @@ export class MemStorage implements IStorage {
         currentStep: "completed" as const
       },
       {
-        contractNumber: "FIN-0022",
+        contractNumber: "SHI-0022",
         merchantId: 1,
         customerId: 3,
         amount: 2750,
@@ -159,7 +159,7 @@ export class MemStorage implements IStorage {
         currentStep: "terms" as const
       },
       {
-        contractNumber: "FIN-0021",
+        contractNumber: "SHI-0021",
         merchantId: 1,
         customerId: 4,
         amount: 3200,

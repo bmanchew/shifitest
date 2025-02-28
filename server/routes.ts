@@ -7,7 +7,7 @@ import { storage } from "./storage";
 import { insertUserSchema, insertMerchantSchema, insertContractSchema, insertApplicationProgressSchema, insertLogSchema } from "@shared/schema";
 
 function generateContractNumber(): string {
-  return `FIN-${Math.floor(1000 + Math.random() * 9000)}`;
+  return `SHI-${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {

@@ -52,7 +52,7 @@ export function storeUserData(user: AuthUser): void {
 }
 
 export function clearUserData(): void {
-  localStorage.removeItem("finpay_user");
+  localStorage.removeItem("shifi_user");
 }
 
 export function getUserHomeRoute(user: AuthUser): string {
