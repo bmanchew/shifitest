@@ -54,7 +54,7 @@ export default function Login() {
                 />
               </svg>
             </div>
-            <span className="ml-2 text-2xl font-bold">FinPay</span>
+            <span className="ml-2 text-2xl font-bold">ShiFi</span>
           </div>
           <CardTitle className="text-2xl font-semibold text-center">Log in to your account</CardTitle>
           <CardDescription className="text-center">

@@ -36,7 +36,7 @@ export default function CustomerLayout({
                     />
                   </svg>
                 </div>
-                <h2 className="ml-2 text-xl font-bold text-white">FinPay</h2>
+                <h2 className="ml-2 text-xl font-bold text-white">ShiFi</h2>
               </div>
               <div className="text-sm text-white font-medium">
                 Step <span>{currentStep}</span> of <span>{totalSteps}</span>

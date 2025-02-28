@@ -60,7 +60,7 @@ export default function Settings() {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="companyName">Company Name</Label>
-                      <Input id="companyName" defaultValue="FinPay Inc." />
+                      <Input id="companyName" defaultValue="ShiFi Inc." />
                     </div>
                     
                     <div className="space-y-2">

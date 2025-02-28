@@ -72,7 +72,7 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
                   />
                 </svg>
               </div>
-              <span className="ml-2 text-xl font-semibold">FinPay</span>
+              <span className="ml-2 text-xl font-semibold">ShiFi</span>
             </div>
             <div>
               <button
@@ -140,7 +140,7 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
                     />
                   </svg>
                 </div>
-                <span className="ml-2 text-xl font-semibold">FinPay</span>
+                <span className="ml-2 text-xl font-semibold">ShiFi</span>
               </div>
               <nav className="hidden sm:ml-6 sm:flex sm:space-x-8">
                 {navigationItems.map((item) => (

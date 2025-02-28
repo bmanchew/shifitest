@@ -79,7 +79,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   />
                 </svg>
               </div>
-              <span className="ml-2 text-xl font-semibold">FinPay</span>
+              <span className="ml-2 text-xl font-semibold">ShiFi</span>
             </div>
           </div>
           <div className="flex-1 flex flex-col overflow-y-auto">
@@ -152,7 +152,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   />
                 </svg>
               </div>
-              <span className="ml-2 text-xl font-semibold">FinPay</span>
+              <span className="ml-2 text-xl font-semibold">ShiFi</span>
             </div>
             <div>
               <button
@@ -229,7 +229,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 />
               </svg>
             </div>
-            <span className="ml-2 text-xl font-semibold">FinPay</span>
+            <span className="ml-2 text-xl font-semibold">ShiFi</span>
           </div>
         </div>
 

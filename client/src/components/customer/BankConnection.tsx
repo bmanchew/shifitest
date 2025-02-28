@@ -132,7 +132,7 @@ export default function BankConnection({
           <div>
             <h4 className="text-sm font-medium text-yellow-800 mb-1">Important Note</h4>
             <p className="text-sm text-yellow-700">
-              By connecting your account, you authorize FinPay to debit your account for scheduled payments according to the terms of your contract.
+              By connecting your account, you authorize ShiFi to debit your account for scheduled payments according to the terms of your contract.
             </p>
           </div>
         </div>
