@@ -490,7 +490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
       
       // Get the application base URL from Replit
-      const replitDomain = process.env.REPLIT_DOMAINS?.split(',')[0] || 'shifi.com';
+      const replitDomain = getAppDomain();
       const applicationUrl = `https://${replitDomain}/apply/123`;
       
       if (!accountSid || !authToken || !twilioPhone) {
@@ -645,7 +645,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
-              callback_url: `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'shifi.com'}/api/kyc/webhook`,
+              callback_url: `https://${getAppDomain()}/api/kyc/webhook`,
               vendor_data: contractId.toString(),
               allowed_document_types: ["passport", "driving_license", "id_card"],
               allowed_checks: ["ocr", "face", "document_liveness"],
@@ -688,7 +688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           session_number: Math.floor(10000 + Math.random() * 90000),
           session_url: `https://verify.didit.me/session/${sessionId}`,
           vendor_data: contractId.toString(),
-          callback: `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'shifi.com'}/api/kyc/webhook`,
+          callback: `https://${getAppDomain()}/api/kyc/webhook`,
           features: "OCR + FACE + AML",
           created_at: new Date().toISOString(),
           status: "created",
@@ -769,7 +769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           item: {
             item_id: "item_" + Math.random().toString(36).substring(2, 12),
             institution_id: "ins_" + Math.floor(1 + Math.random() * 9),
-            webhook: "https://shifi.com/api/plaid-webhook"
+            webhook: `https://${getAppDomain()}/api/plaid-webhook`
           },
           request_id: "req_" + Math.random().toString(36).substring(2, 15)
         });
@@ -905,7 +905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           item: {
             item_id: "item_" + Math.random().toString(36).substring(2, 12),
             institution_id: "ins_" + Math.floor(1 + Math.random() * 9),
-            webhook: "https://shifi.com/api/plaid-webhook"
+            webhook: `https://${getAppDomain()}/api/plaid-webhook`
           },
           request_id: "req_" + Math.random().toString(36).substring(2, 15)
         };
