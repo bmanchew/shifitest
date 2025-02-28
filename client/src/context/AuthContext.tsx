@@ -66,6 +66,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         title: "Login Successful",
         description: `Welcome back, ${user.name}!`,
       });
+      
+      // Important - we need to set loading to false after successful login
+      setIsLoading(false);
     } catch (error) {
       console.error("Login error:", error);
       setIsLoading(false);
