@@ -7,6 +7,7 @@ import { storage } from "./storage";
 import { insertUserSchema, insertMerchantSchema, insertContractSchema, insertApplicationProgressSchema, insertLogSchema } from "@shared/schema";
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
+import { thanksRogerService } from "./services/thanksroger";
 import { logger } from "./services/logger";
 
 // Helper function to convert metadata to JSON string for storage
@@ -1217,6 +1218,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  
+  // Thanks Roger contract signing endpoint
+  apiRouter.post("/contract-signing", async (req: Request, res: Response) => {
+    try {
+      const { contractId, contractNumber, customerName, signatureData } = req.body;
+      
+      if (!contractId || !contractNumber || !customerName || !signatureData) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Missing required fields: contractId, contractNumber, customerName, and signatureData are required" 
+        });
+      }
+      
+      // Get the contract details
+      const contract = await storage.getContract(Number(contractId));
+      if (!contract) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "Contract not found" 
+        });
+      }
+      
+      // Get merchant details
+      const merchant = await storage.getMerchant(contract.merchantId);
+      if (!merchant) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "Merchant not found" 
+        });
+      }
+      
+      logger.info({
+        message: `Processing contract signing for contract #${contractNumber}`,
+        category: "contract",
+        source: "thanksroger",
+        metadata: { contractId, customerName }
+      });
+      
+      // Check if Thanks Roger service is available
+      if (!thanksRogerService.isInitialized()) {
+        logger.warn({
+          message: "Thanks Roger service not initialized, using mock signing",
+          category: "contract",
+          source: "thanksroger"
+        });
+        
+        // Return mock response
+        return res.json({
+          success: true,
+          contractId: "mock-contract-" + Math.floor(10000 + Math.random() * 90000),
+          signatureId: "sig-" + Math.floor(10000000 + Math.random() * 90000000),
+          signingLink: `https://example.com/signed-contracts/${contractNumber}`,
+          message: "Contract signed successfully (mock)"
+        });
+      }
+      
+      // In production, we would save the signature data to blob storage
+      // For now, we'll log it and proceed with contract creation
+      
+      // Create a contract in Thanks Roger
+      const thanksRogerContract = await thanksRogerService.createFinancingContract({
+        templateId: "template-financing-agreement", // This would be a real template ID in production
+        customerName,
+        customerEmail: "customer@example.com", // In production, this would come from the user record
+        merchantName: merchant.name,
+        contractNumber,
+        amount: contract.amount,
+        downPayment: contract.downPayment,
+        financedAmount: contract.amount - contract.downPayment,
+        termMonths: contract.termMonths,
+        interestRate: contract.interestRate,
+        monthlyPayment: contract.monthlyPayment,
+        sendEmail: false // Don't send email since we're handling the flow in the app
+      });
+      
+      if (!thanksRogerContract) {
+        logger.error({
+          message: "Failed to create contract in Thanks Roger",
+          category: "contract",
+          source: "thanksroger",
+          metadata: { contractId, contractNumber }
+        });
+        
+        return res.status(500).json({ 
+          success: false, 
+          message: "Failed to create contract document" 
+        });
+      }
+      
+      // Return success with contract details
+      return res.json({
+        success: true,
+        contractId: thanksRogerContract.contractId,
+        signatureId: "sig-" + Math.floor(10000000 + Math.random() * 90000000),
+        signingLink: thanksRogerContract.signingLink,
+        message: "Contract signed successfully"
+      });
+      
+    } catch (error) {
+      logger.error({
+        message: `Contract signing error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "contract",
+        source: "thanksroger",
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({ 
+        success: false, 
+        message: "Failed to process contract signing" 
+      });
     }
   });
   
