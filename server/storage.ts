@@ -67,10 +67,18 @@ export class MemStorage implements IStorage {
     this.logId = 1;
     
     // Seed some initial data
-    this.seedInitialData();
+    this.initialize();
   }
   
-  private seedInitialData() {
+  private async initialize() {
+    try {
+      await this.seedInitialData();
+    } catch (error) {
+      console.error("Error initializing database:", error);
+    }
+  }
+  
+  private async seedInitialData() {
     // Create admin user
     const adminUser: InsertUser = {
       email: "admin@shifi.com",
@@ -79,7 +87,7 @@ export class MemStorage implements IStorage {
       role: "admin",
       phone: "123-456-7890"
     };
-    this.createUser(adminUser);
+    await this.createUser(adminUser);
     
     // Create a merchant user
     const merchantUser: InsertUser = {
@@ -89,7 +97,7 @@ export class MemStorage implements IStorage {
       role: "merchant",
       phone: "987-654-3210"
     };
-    const createdMerchantUser = this.createUser(merchantUser);
+    const createdMerchantUser = await this.createUser(merchantUser);
     
     // Create merchant
     const merchant: InsertMerchant = {
@@ -188,7 +196,14 @@ export class MemStorage implements IStorage {
   async createUser(user: InsertUser): Promise<User> {
     const id = this.userId++;
     const createdAt = new Date();
-    const newUser: User = { ...user, id, createdAt };
+    // Ensure required fields are present
+    const newUser: User = { 
+      ...user, 
+      id, 
+      createdAt,
+      role: user.role || "customer", 
+      phone: user.phone || null
+    };
     this.usersMap.set(id, newUser);
     return newUser;
   }
@@ -209,7 +224,14 @@ export class MemStorage implements IStorage {
   async createMerchant(merchant: InsertMerchant): Promise<Merchant> {
     const id = this.merchantId++;
     const createdAt = new Date();
-    const newMerchant: Merchant = { ...merchant, id, createdAt };
+    const newMerchant: Merchant = { 
+      ...merchant, 
+      id, 
+      createdAt,
+      address: merchant.address || null,
+      active: merchant.active || null,
+      userId: merchant.userId || null
+    };
     this.merchantsMap.set(id, newMerchant);
     return newMerchant;
   }
@@ -238,7 +260,17 @@ export class MemStorage implements IStorage {
   async createContract(contract: InsertContract): Promise<Contract> {
     const id = this.contractId++;
     const createdAt = new Date();
-    const newContract: Contract = { ...contract, id, createdAt, completedAt: null };
+    const newContract: Contract = { 
+      ...contract, 
+      id, 
+      createdAt, 
+      completedAt: null,
+      status: contract.status || "pending",
+      currentStep: contract.currentStep || "terms",
+      customerId: contract.customerId || null,
+      termMonths: contract.termMonths || 24,
+      interestRate: contract.interestRate || 0
+    };
     this.contractsMap.set(id, newContract);
     return newContract;
   }
@@ -277,7 +309,14 @@ export class MemStorage implements IStorage {
   async createApplicationProgress(progress: InsertApplicationProgress): Promise<ApplicationProgress> {
     const id = this.applicationProgressId++;
     const createdAt = new Date();
-    const newProgress: ApplicationProgress = { ...progress, id, createdAt, completedAt: null };
+    const newProgress: ApplicationProgress = { 
+      ...progress, 
+      id, 
+      createdAt, 
+      completedAt: null,
+      data: progress.data || null,
+      completed: progress.completed || null
+    };
     this.applicationProgressMap.set(id, newProgress);
     return newProgress;
   }
@@ -300,7 +339,24 @@ export class MemStorage implements IStorage {
   async createLog(log: InsertLog): Promise<Log> {
     const id = this.logId++;
     const timestamp = new Date();
-    const newLog: Log = { ...log, id, timestamp };
+    const newLog: Log = { 
+      ...log, 
+      id, 
+      timestamp,
+      userId: log.userId || null,
+      source: log.source || "internal",
+      metadata: log.metadata || null,
+      level: log.level || "info",
+      category: log.category || "system",
+      correlationId: log.correlationId || null,
+      requestId: log.requestId || null,
+      ipAddress: log.ipAddress || null,
+      userAgent: log.userAgent || null,
+      tags: log.tags || null,
+      duration: log.duration || null,
+      statusCode: log.statusCode || null,
+      retentionDays: log.retentionDays || null
+    };
     this.logsMap.set(id, newLog);
     return newLog;
   }
