@@ -65,7 +65,7 @@ export default function Settings() {
                     
                     <div className="space-y-2">
                       <Label htmlFor="supportEmail">Support Email</Label>
-                      <Input id="supportEmail" type="email" defaultValue="support@finpay.com" />
+                      <Input id="supportEmail" type="email" defaultValue="support@shifi.com" />
                     </div>
                     
                     <div className="space-y-2">

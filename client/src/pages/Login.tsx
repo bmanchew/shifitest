@@ -93,7 +93,7 @@ export default function Login() {
             <div className="text-sm text-gray-500">
               <p>Demo accounts:</p>
               <ul className="list-disc pl-5 space-y-1 mt-1">
-                <li>Admin: admin@finpay.com / admin123</li>
+                <li>Admin: admin@shifi.com / admin123</li>
                 <li>Merchant: merchant@techsolutions.com / merchant123</li>
               </ul>
             </div>

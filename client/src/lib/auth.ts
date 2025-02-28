@@ -35,7 +35,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     // or check a JWT token, etc.
     
     // For demo purposes, we'll check local storage
-    const userData = localStorage.getItem("finpay_user");
+    const userData = localStorage.getItem("shifi_user");
     if (!userData) {
       return null;
     }
@@ -48,7 +48,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 export function storeUserData(user: AuthUser): void {
-  localStorage.setItem("finpay_user", JSON.stringify(user));
+  localStorage.setItem("shifi_user", JSON.stringify(user));
 }
 
 export function clearUserData(): void {
