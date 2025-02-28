@@ -186,7 +186,9 @@ class DiditService {
         message: `Failed to get DiDit access token: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
         source: 'didit',
-        metadata: JSON.stringify({ error: error instanceof Error ? error.stack : null })
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error)
+        }
       });
 
       return null;
@@ -254,11 +256,11 @@ class DiditService {
         message: `DiDit verification session created: ${sessionData.session_id}`,
         category: 'api',
         source: 'didit',
-        metadata: JSON.stringify({ 
+        metadata: { 
           contractId: contractId.toString(),
           sessionId: sessionData.session_id,
           status: sessionData.status
-        })
+        }
       });
 
       return sessionData;
@@ -267,10 +269,10 @@ class DiditService {
         message: `Failed to create DiDit verification session: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
         source: 'didit',
-        metadata: JSON.stringify({ 
+        metadata: { 
           contractId: options.contractId.toString(),
-          error: error instanceof Error ? error.stack : null
-        })
+          error: error instanceof Error ? error.stack : String(error)
+        }
       });
 
       return null;
@@ -319,11 +321,11 @@ class DiditService {
         message: `DiDit session decision retrieved: ${sessionId}`,
         category: 'api',
         source: 'didit',
-        metadata: JSON.stringify({ 
+        metadata: { 
           sessionId,
           status: decisionData.status,
           vendorData: decisionData.vendor_data
-        })
+        }
       });
 
       return decisionData;
@@ -332,10 +334,10 @@ class DiditService {
         message: `Failed to get DiDit session decision: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
         source: 'didit',
-        metadata: JSON.stringify({ 
+        metadata: { 
           sessionId,
-          error: error instanceof Error ? error.stack : null
-        })
+          error: error instanceof Error ? error.stack : String(error)
+        }
       });
 
       return null;
@@ -367,7 +369,9 @@ class DiditService {
         message: `Failed to verify DiDit webhook signature: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
         source: 'didit',
-        metadata: JSON.stringify({ error: error instanceof Error ? error.stack : null })
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error)
+        }
       });
       
       return false;
@@ -395,13 +399,13 @@ class DiditService {
         message: `Processing DiDit webhook event: ${event_type}`,
         category: 'api',
         source: 'didit',
-        metadata: JSON.stringify({ 
+        metadata: { 
           sessionId: session_id, 
           eventType: event_type,
           status,
           decisionStatus: decision?.status,
           vendorData: vendor_data
-        })
+        }
       });
 
       return {
@@ -416,10 +420,9 @@ class DiditService {
         message: `Failed to process DiDit webhook event: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
         source: 'didit',
-        metadata: JSON.stringify({ 
-          event,
-          error: error instanceof Error ? error.stack : null
-        })
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error)
+        }
       });
 
       return {
@@ -459,7 +462,9 @@ class DiditService {
         message: `Failed to validate DiDit credentials: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
         source: 'didit',
-        metadata: JSON.stringify({ error: error instanceof Error ? error.stack : null })
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error)
+        }
       });
       
       return false;
