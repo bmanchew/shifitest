@@ -386,6 +386,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Get KYC progress step specifically
+  apiRouter.get("/application-progress/kyc/:contractId", async (req: Request, res: Response) => {
+    try {
+      const contractId = parseInt(req.params.contractId);
+      if (isNaN(contractId)) {
+        return res.status(400).json({ message: "Invalid contract ID format" });
+      }
+      
+      const progress = await storage.getApplicationProgressByContractId(contractId);
+      const kycProgress = progress.find(step => step.step === "kyc");
+      
+      if (!kycProgress) {
+        return res.status(404).json({ message: "KYC progress not found for this contract" });
+      }
+      
+      res.json(kycProgress);
+    } catch (error) {
+      console.error("Get KYC progress error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  
   apiRouter.patch("/application-progress/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);

@@ -56,8 +56,24 @@ export default function KycVerification({
     try {
       if (!sessionId) return;
       
+      // Get the current KYC progress ID for this contract
+      const kycProgressResponse = await apiRequest<{
+        id: number;
+        contractId: number;
+        step: string;
+        completed: boolean;
+        data: string | null;
+      }>("GET", `/api/application-progress/kyc/${contractId}`);
+      
+      if (!kycProgressResponse || !kycProgressResponse.id) {
+        throw new Error("Could not find KYC progress for this contract");
+      }
+      
+      const kycProgressId = kycProgressResponse.id;
+      console.log("Found KYC progress ID for completion:", kycProgressId);
+      
       // Mark the KYC step as completed in our application
-      await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+      await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
         completed: true,
         data: JSON.stringify({
           verifiedAt: new Date().toISOString(),
@@ -144,7 +160,23 @@ export default function KycVerification({
     try {
       setIsLoading(true);
       
-      // Call our new API endpoint to create a DiDit verification session
+      // First, let's get the correct KYC progress ID for this contract
+      const kycProgressResponse = await apiRequest<{
+        id: number;
+        contractId: number;
+        step: string;
+        completed: boolean;
+        data: string | null;
+      }>("GET", `/api/application-progress/kyc/${contractId}`);
+      
+      if (!kycProgressResponse || !kycProgressResponse.id) {
+        throw new Error("Could not find KYC progress for this contract");
+      }
+      
+      const kycProgressId = kycProgressResponse.id;
+      console.log("Found KYC progress ID:", kycProgressId);
+      
+      // Call our API endpoint to create a DiDit verification session
       const response = await apiRequest<{
         success: boolean;
         session: {
@@ -167,7 +199,7 @@ export default function KycVerification({
       setVerificationUrl(session.session_url);
       
       // Update application progress to track that verification has started
-      await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+      await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
         completed: false, // Not completed yet, just starting
         data: JSON.stringify({
           verificationStarted: new Date().toISOString(),
@@ -212,6 +244,22 @@ export default function KycVerification({
       setIsVerifying(true);
       setStep("verifying");
       
+      // Get the current KYC progress ID for this contract
+      const kycProgressResponse = await apiRequest<{
+        id: number;
+        contractId: number;
+        step: string;
+        completed: boolean;
+        data: string | null;
+      }>("GET", `/api/application-progress/kyc/${contractId}`);
+      
+      if (!kycProgressResponse || !kycProgressResponse.id) {
+        throw new Error("Could not find KYC progress for this contract");
+      }
+      
+      const kycProgressId = kycProgressResponse.id;
+      console.log("Found KYC progress ID for manual verification:", kycProgressId);
+      
       // Create base64 representations of the images
       // In a real app, you would properly encode the images
       // For demo purposes, we'll use placeholders
@@ -237,7 +285,7 @@ export default function KycVerification({
       setSessionId(response.session_id);
       
       // Update application progress to track that verification has started
-      await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+      await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
         completed: false, // Not completed yet, just starting
         data: JSON.stringify({
           verificationStarted: new Date().toISOString(),
@@ -251,7 +299,7 @@ export default function KycVerification({
       setTimeout(async () => {
         try {
           // Mark the KYC step as completed in our application
-          await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+          await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
             completed: true,
             data: JSON.stringify({
               verifiedAt: new Date().toISOString(),
