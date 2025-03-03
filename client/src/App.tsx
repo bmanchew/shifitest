@@ -20,7 +20,9 @@ const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
 
 // Customer pages
 const CustomerApplication = lazy(() => import("@/pages/customer/Application"));
-const CustomerContractOffer = lazy(() => import("@/pages/customer/ContractOffer"));
+const CustomerContractOffer = lazy(
+  () => import("@/pages/customer/ContractOffer"),
+);
 const CustomerDashboard = lazy(() => import("@/pages/customer/Dashboard"));
 
 function LoadingFallback() {
@@ -36,16 +38,14 @@ function LoadingFallback() {
 
 function App() {
   const { user, isLoading } = useAuth();
-  
+
   return (
     <Suspense fallback={<LoadingFallback />}>
       {isLoading ? (
         <LoadingFallback />
       ) : (
         <Switch>
-          {!user && (
-            <Route path="/" component={Login} />
-          )}
+          {!user && <Route path="/" component={Login} />}
 
           {user && user.role === "admin" && (
             <>
@@ -73,6 +73,7 @@ function App() {
           {/* Public customer routes */}
           <Route path="/offer/:contractId" component={CustomerContractOffer} />
           <Route path="/apply/:contractId?" component={CustomerApplication} />
+          <Route path="/customer/application" component={CustomerApplication} />
           <Route path="/dashboard/:contractId" component={CustomerDashboard} />
 
           <Route component={NotFound} />
