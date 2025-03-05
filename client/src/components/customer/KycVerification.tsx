@@ -26,7 +26,7 @@ export default function KycVerification({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const verificationWindowRef = useRef<Window | null>(null);
 
-  // Check verification status periodically
+  // Check verification status periodically when waiting for external verification
   useEffect(() => {
     if (!sessionId || step !== "verifying_external") return;
 
@@ -43,7 +43,9 @@ export default function KycVerification({
 
         if (kycProgressResponse?.completed) {
           console.log("Verification completed, detected via polling");
-          completeVerification();
+          setStep("complete");
+          // Wait a moment then move to next step
+          setTimeout(onComplete, 2000);
         }
       } catch (error) {
         console.error("Error checking verification status:", error);
@@ -56,35 +58,14 @@ export default function KycVerification({
     return () => {
       clearInterval(intervalId);
     };
-  }, [sessionId, step, contractId]);
+  }, [sessionId, step, contractId, onComplete]);
 
-  // Complete the verification process
-  const completeVerification = async () => {
-    try {
-      setStep("complete");
-
-      // After a short delay, move to the next step in the application
-      setTimeout(() => {
-        onComplete();
-      }, 2000);
-    } catch (error) {
-      console.error("Error updating verification status:", error);
-      toast({
-        title: "Verification Error",
-        description:
-          "There was an error completing your verification. Please try again.",
-        variant: "destructive",
-      });
-      setStep("instructions");
-    }
-  };
-
-  // Start the verification process with DiDit
+  // Start the verification process
   const startVerification = async () => {
     try {
       setIsLoading(true);
 
-      // Get the current KYC progress ID for this contract
+      // Get the current KYC progress for this contract
       const kycProgressResponse = await apiRequest<{
         id: number;
         contractId: number;
@@ -97,6 +78,17 @@ export default function KycVerification({
         throw new Error("Could not find KYC progress for this contract");
       }
 
+      const kycProgressId = kycProgressResponse.id;
+
+      // If verification is already completed, go to the next step
+      if (kycProgressResponse.completed) {
+        console.log("KYC already completed, moving to next step");
+        setStep("complete");
+        setTimeout(onComplete, 1000);
+        setIsLoading(false);
+        return;
+      }
+
       // Call our API endpoint to create a DiDit verification session
       const response = await apiRequest<{
         success: boolean;
@@ -104,7 +96,6 @@ export default function KycVerification({
           session_id: string;
           session_url?: string;
           url?: string;
-          redirect_url?: string;
           status: string;
         };
       }>("POST", "/api/kyc/create-session", {
@@ -117,34 +108,28 @@ export default function KycVerification({
 
       const { session } = response;
 
-      console.log("KYC verification session created:", session);
-
       // Get the verification URL from either url or session_url property
       const sessionUrl = session.url || session.session_url;
-      console.log("Verification URL:", sessionUrl);
 
       if (!sessionUrl) {
         throw new Error("No verification URL provided in session response");
       }
 
+      // Store the session ID and URL
       setSessionId(session.session_id);
       setVerificationUrl(sessionUrl);
 
       // Update application progress to track that verification has started
-      await apiRequest(
-        "PATCH",
-        `/api/application-progress/${kycProgressResponse.id}`,
-        {
-          completed: false,
-          data: JSON.stringify({
-            verificationStarted: new Date().toISOString(),
-            sessionId: session.session_id,
-            sessionUrl: sessionUrl,
-          }),
-        },
-      );
+      await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
+        completed: false,
+        data: JSON.stringify({
+          verificationStarted: new Date().toISOString(),
+          sessionId: session.session_id,
+          sessionUrl: sessionUrl,
+        }),
+      });
 
-      // Update UI to show verification in progress
+      // Show verification in progress
       setStep("verifying_external");
 
       // Open the verification URL in a new window
@@ -155,12 +140,12 @@ export default function KycVerification({
         "width=500,height=600",
       );
 
+      // Check if the window opened successfully
       if (
         !verificationWindow ||
         verificationWindow.closed ||
         typeof verificationWindow.closed === "undefined"
       ) {
-        // If popup was blocked, show a message with link instead
         toast({
           title: "Popup Blocked",
           description:
@@ -168,13 +153,12 @@ export default function KycVerification({
           variant: "destructive",
         });
       } else {
-        // Store the window reference
         verificationWindowRef.current = verificationWindow;
       }
 
       setIsLoading(false);
     } catch (error) {
-      console.error("Error creating verification session:", error);
+      console.error("Error starting verification:", error);
       toast({
         title: "Verification Error",
         description:
@@ -219,7 +203,7 @@ export default function KycVerification({
                   <Check className="h-4 w-4 text-primary" />
                 </div>
                 <p className="text-sm">
-                  We'll need to take a photo of your face to match with your ID
+                  You'll need to take a photo of your face to match with your ID
                 </p>
               </div>
               <div className="flex items-start space-x-3">
@@ -253,9 +237,9 @@ export default function KycVerification({
               <div className="p-4 bg-primary/10 rounded-full">
                 <ShieldCheck className="h-10 w-10 text-primary" />
               </div>
-              <h2 className="text-xl font-semibold">External Verification</h2>
+              <h2 className="text-xl font-semibold">Identity Verification</h2>
               <p className="text-sm text-gray-600">
-                We've opened the DiDit verification page in a new window. Please
+                We've opened the verification page in a new window. Please
                 complete the verification process there.
               </p>
               <p className="text-sm text-gray-600">
@@ -265,10 +249,6 @@ export default function KycVerification({
               <Button
                 onClick={() => {
                   if (verificationUrl) {
-                    console.log(
-                      "Re-opening verification URL:",
-                      verificationUrl,
-                    );
                     const newWindow = window.open(
                       verificationUrl,
                       "_blank",

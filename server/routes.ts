@@ -13,8 +13,10 @@ import {
 } from "@shared/schema";
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
+import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { logger } from "./services/logger";
+import crypto from "crypto";
 
 // Helper function to convert metadata to JSON string for storage
 function objectMetadata<T>(data: T): string {
@@ -630,11 +632,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { phoneNumber, merchantId, amount } = req.body;
 
       if (!phoneNumber || !merchantId || !amount) {
-        return res
-          .status(400)
-          .json({
-            message: "Phone number, merchant ID, and amount are required",
-          });
+        return res.status(400).json({
+          message: "Phone number, merchant ID, and amount are required",
+        });
       }
 
       // Get merchant
@@ -765,7 +765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Separate URLs for webhook notifications and user redirection
       const webhookUrl = `https://${domain}/api/kyc/webhook`;
-      const redirectUrl = `https://${domain}/customer/application?verify=success&contractId=${contractId}`;
+      const redirectUrl = `https://${domain}/apply/${contractId}`;
 
       // Set the server base URL for the DiDit service to handle mock mode correctly
       diditService.setServerBaseUrl(`https://${domain}`);
@@ -1183,242 +1183,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Plaid bank connection endpoint - following Plaid API documentation
-  apiRouter.post("/mock/plaid-link", async (req: Request, res: Response) => {
-    try {
-      // Check if this is a test request from the admin panel
-      if (req.body.accountId) {
-        // This is a test request from the admin API verification
-        console.log("Processing test Plaid link request");
-
-        // Create test log entry
-        await storage.createLog({
-          level: "info",
-          category: "api",
-          source: "plaid",
-          message: `Test Plaid link for account ${req.body.accountId}`,
-          metadata: JSON.stringify(req.body),
-        });
-
-        // Generate random account numbers for testing
-        const accountNumbers = {
-          account_id: req.body.accountId,
-          account: "1234567890",
-          routing: "021000021",
-          wire_routing: "021000021",
-          iban: "GB29NWBK60161331926819",
-          bic: "NWBKGB2L",
-        };
-
-        // Return success for test with Plaid-like response format
-        return res.json({
-          accounts: [
-            {
-              account_id: "test_" + req.body.accountId,
-              balances: {
-                available: 5000.25,
-                current: 5100.25,
-                limit: null,
-                iso_currency_code: "USD",
-                unofficial_currency_code: null,
-              },
-              mask: "1234",
-              name: "Checking Account",
-              official_name: "Premium Checking Account",
-              type: "depository",
-              subtype: "checking",
-              verification_status: "automatically_verified",
-            },
-          ],
-          numbers: {
-            ach: [accountNumbers],
-            eft: [],
-            international: [],
-            bacs: [],
-          },
-          item: {
-            item_id: "item_" + Math.random().toString(36).substring(2, 12),
-            institution_id: "ins_" + Math.floor(1 + Math.random() * 9),
-            webhook: `https://${getAppDomain()}/api/plaid-webhook`,
-          },
-          request_id: "req_" + Math.random().toString(36).substring(2, 15),
-        });
-      }
-
-      // Regular contract flow
-      const { contractId, bankId } = req.body;
-
-      if (!contractId || !bankId) {
-        return res.status(400).json({
-          error_type: "INVALID_REQUEST",
-          error_code: "MISSING_FIELDS",
-          error_message: "Contract ID and bank ID are required",
-          display_message:
-            "Please provide all required information to connect your bank account",
-          request_id: "req_" + Math.random().toString(36).substring(2, 15),
-        });
-      }
-
-      // Check if Plaid credentials are available
-      const plaidClientId = process.env.PLAID_CLIENT_ID;
-      const plaidSecret = process.env.PLAID_SECRET;
-
-      if (!plaidClientId || !plaidSecret) {
-        console.warn(
-          "Plaid credentials not configured, falling back to simulation",
-        );
-      } else {
-        try {
-          // Use the Plaid API to connect to bank accounts
-          console.log(
-            `Using Plaid credentials (Client ID: ${plaidClientId.substring(0, 3)}..., Secret: ${plaidSecret.substring(0, 3)}...) for bank connection`,
-          );
-
-          // In a production environment, we would use the Plaid Node client library
-          // For demo purposes, we'll simulate a successful connection
-          // but use the real API credentials in our logs
-
-          // In a production environment, this is how we would make the call:
-          /*
-          // Install the plaid package with: npm install plaid
-          // In ESM, we would use: import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
-          
-          const configuration = new Configuration({
-            basePath: PlaidEnvironments.sandbox, // or .development or .production
-            baseOptions: {
-              headers: {
-                'PLAID-CLIENT-ID': plaidClientId,
-                'PLAID-SECRET': plaidSecret,
-              },
-            },
-          });
-          
-          const plaidClient = new PlaidApi(configuration);
-          
-          // Exchange public token for access token
-          const exchangeResponse = await plaidClient.itemPublicTokenExchange({
-            public_token: publicToken
-          });
-          
-          const accessToken = exchangeResponse.data.access_token;
-          
-          // Get account information
-          const accountsResponse = await plaidClient.accountsGet({
-            access_token: accessToken
-          });
-          
-          const account = accountsResponse.data.accounts.find(acc => acc.account_id === accountId);
-          
-          if (!account) {
-            throw new Error('Account not found');
-          }
-          */
-        } catch (plaidError) {
-          console.error("Plaid API error:", plaidError);
-          throw plaidError;
-        }
-      }
-
-      // Create log for bank connection
-      await storage.createLog({
-        level: "info",
-        category: "api",
-        source: "plaid",
-        message: `Bank account connected for contract ${contractId}`,
-        metadata: JSON.stringify({ contractId, bankId }),
-      });
-
-      // Get bank name based on ID
-      let bankName = "Unknown Bank";
-      switch (bankId) {
-        case "chase":
-          bankName = "Chase";
-          break;
-        case "bankofamerica":
-          bankName = "Bank of America";
-          break;
-        case "wellsfargo":
-          bankName = "Wells Fargo";
-          break;
-        case "citibank":
-          bankName = "Citibank";
-          break;
-        case "usbank":
-          bankName = "US Bank";
-          break;
-        case "pnc":
-          bankName = "PNC";
-          break;
-      }
-
-      // Simulate successful API response with Plaid-like format
-      setTimeout(() => {
-        // Generate random account numbers
-        const accountNumbers = {
-          account_id: "acc_" + Math.random().toString(36).substring(2, 10),
-          account: Math.floor(
-            10000000000 + Math.random() * 90000000000,
-          ).toString(),
-          routing: "021000021",
-          wire_routing: "021000021",
-        };
-
-        // Generate random account mask
-        const accountMask = Math.floor(1000 + Math.random() * 9000).toString();
-
-        const response = {
-          accounts: [
-            {
-              account_id: accountNumbers.account_id,
-              balances: {
-                available: 10000.0,
-                current: 10200.0,
-                limit: null,
-                iso_currency_code: "USD",
-                unofficial_currency_code: null,
-              },
-              mask: accountMask,
-              name: "Checking Account",
-              official_name: bankName + " Checking Account",
-              type: "depository",
-              subtype: "checking",
-              verification_status: "automatically_verified",
-            },
-          ],
-          numbers: {
-            ach: [accountNumbers],
-            eft: [],
-            international: [],
-            bacs: [],
-          },
-          item: {
-            item_id: "item_" + Math.random().toString(36).substring(2, 12),
-            institution_id: "ins_" + Math.floor(1 + Math.random() * 9),
-            webhook: `https://${getAppDomain()}/api/plaid-webhook`,
-          },
-          request_id: "req_" + Math.random().toString(36).substring(2, 15),
-        };
-
-        res.json(response);
-      }, 1000); // Simulate API delay
-    } catch (error) {
-      console.error("Bank connection error:", error);
-
-      // Create error log
-      await storage.createLog({
-        level: "error",
-        category: "api",
-        source: "plaid",
-        message: `Failed bank connection: ${error instanceof Error ? error.message : String(error)}`,
-        metadata: JSON.stringify({
-          error: error instanceof Error ? error.stack : null,
-        }),
-      });
-
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
   // Thanks Roger contract signing endpoint
   apiRouter.post("/contract-signing", async (req: Request, res: Response) => {
     try {
@@ -1575,12 +1339,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { contractId, signatureData, customerName } = req.body;
 
         if (!contractId || !signatureData || !customerName) {
-          return res
-            .status(400)
-            .json({
-              message:
-                "Contract ID, signature data, and customer name are required",
-            });
+          return res.status(400).json({
+            message:
+              "Contract ID, signature data, and customer name are required",
+          });
         }
 
         // Check if Thanks Roger API key is available
@@ -1681,459 +1443,269 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // DiDit KYC Webhook endpoint - for receiving status updates from DiDit
   // Webhook endpoint for DiDit KYC verification process
+  // DiDit KYC Webhook endpoint - for receiving status updates from DiDit
   apiRouter.post("/kyc/webhook", async (req: Request, res: Response) => {
     try {
-      // Extract webhook signature from headers (for verification)
-      // DiDit sends the signature in the X-DiDit-Signature header based on docs
-      const webhookSignature = req.headers["x-didit-signature"] as string;
+      // Extract webhook signature from headers for verification
+      const webhookSignature = req.headers["x-signature"] as string;
+      const webhookTimestamp = req.headers["x-timestamp"] as string;
 
-      // Log the receipt of webhook (with redaction of potentially sensitive data)
+      // Get the webhook secret from environment variables
+      const webhookSecret = process.env.DIDIT_WEBHOOK_SECRET_KEY;
+
+      // Log the receipt of webhook
       logger.info({
         message: `Received DiDit webhook event`,
         category: "api",
         source: "didit",
         metadata: {
-          eventType: req.body.event_type,
+          eventType: req.body.event_type || req.body.status,
           sessionId: req.body.session_id,
-          headers: {
-            ...req.headers,
-            // Redact any sensitive headers if needed
-            authorization: req.headers.authorization
-              ? "***redacted***"
-              : undefined,
-          },
+          body: req.body,
         },
       });
 
-      // Process the webhook using our improved DiDit service
-      const result = diditService.processWebhookEvent(
-        req.body,
-        webhookSignature,
-      );
+      // Verify the webhook signature if we have the secret
+      let isVerified = false;
 
-      if (result.status === "error") {
-        logger.error({
-          message: `Failed to process DiDit webhook`,
-          category: "api",
-          source: "didit",
-          metadata: {
-            eventType: req.body.event_type,
-            sessionId: req.body.session_id,
-          },
-        });
+      if (webhookSecret && webhookSignature && req.body) {
+        try {
+          // Store the raw body for signature verification
+          const rawBody = JSON.stringify(req.body);
 
-        return res.status(400).json({
-          status: "error",
-          error_message: "Invalid webhook payload",
-        });
+          // Create HMAC signature using the webhook secret
+          const hmac = crypto.createHmac("sha256", webhookSecret);
+          const expectedSignature = hmac.update(rawBody).digest("hex");
+
+          // Verify the signature
+          isVerified = expectedSignature === webhookSignature;
+
+          logger.info({
+            message: `DiDit webhook signature verification: ${isVerified ? "success" : "failed"}`,
+            category: "api",
+            source: "didit",
+            metadata: {
+              expectedSignature,
+              receivedSignature: webhookSignature,
+            },
+          });
+
+          // Verify the timestamp is recent (within 5 minutes)
+          if (isVerified && webhookTimestamp) {
+            const currentTime = Math.floor(Date.now() / 1000);
+            const incomingTime = parseInt(webhookTimestamp, 10);
+            if (Math.abs(currentTime - incomingTime) > 300) {
+              logger.warn({
+                message: "DiDit webhook timestamp is stale",
+                category: "api",
+                source: "didit",
+                metadata: {
+                  currentTime,
+                  incomingTime,
+                  difference: Math.abs(currentTime - incomingTime),
+                },
+              });
+              isVerified = false;
+            }
+          }
+        } catch (verifyError) {
+          logger.error({
+            message: `Error verifying DiDit webhook signature: ${verifyError instanceof Error ? verifyError.message : String(verifyError)}`,
+            category: "api",
+            source: "didit",
+            metadata: {
+              error: verifyError instanceof Error ? verifyError.stack : null,
+            },
+          });
+          isVerified = false;
+        }
       }
 
       // Extract key information from the webhook
-      const { event_type, session_id, status, decision, customer_details } =
+      const { event_type, session_id, status, decision, vendor_data } =
         req.body;
 
-      // Log the webhook event details
-      await storage.createLog({
-        level: "info",
+      // Parse vendor_data to extract contractId
+      let contractId = null;
+      try {
+        if (vendor_data) {
+          const parsedData = JSON.parse(vendor_data);
+          contractId = parsedData.contractId;
+        }
+      } catch (error) {
+        logger.warn({
+          message: `Failed to parse vendor_data in DiDit webhook: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "didit",
+          metadata: { vendor_data },
+        });
+      }
+
+      logger.info({
+        message: `Processing DiDit webhook for contract ${contractId}, session ${session_id}`,
         category: "api",
         source: "didit",
-        message: `KYC Webhook processed: ${event_type} for session ${session_id}`,
-        metadata: JSON.stringify({
-          eventType: event_type,
+        metadata: {
+          contractId,
           sessionId: session_id,
-          status,
-          verified: result.isVerified,
-          approved: result.isApproved,
-        }),
+          status: status || event_type,
+          isVerified,
+        },
       });
 
-      // Handle different event types
-      if (event_type === "verification.completed") {
-        console.log(`Verification completed for session ${session_id}`);
+      if (!contractId) {
+        logger.warn({
+          message: "Missing contractId in DiDit webhook vendor_data",
+          category: "api",
+          source: "didit",
+          metadata: { vendor_data },
+        });
+        return res.status(200).json({
+          status: "success",
+          message: "Webhook received but no contractId found",
+        });
+      }
+
+      // Handle verification.completed event
+      if (
+        event_type === "verification.completed" ||
+        status === "Approved" ||
+        status === "Declined"
+      ) {
+        logger.info({
+          message: `DiDit verification completed for session ${session_id}, contract ${contractId}`,
+          category: "api",
+          source: "didit",
+          metadata: {
+            sessionId: session_id,
+            contractId,
+            status,
+            decisionStatus: decision?.status,
+          },
+        });
+
+        // Check if verification was approved
+        const isApproved =
+          decision?.status === "approved" ||
+          status === "Approved" ||
+          status === "approved" ||
+          status === "completed";
 
         try {
-          // Use our improved DiDit service to get session details
-          const accessToken = await diditService.getAccessToken();
-
-          if (!accessToken) {
-            throw new Error("Failed to get DiDit access token");
-          }
-
-          // Now retrieve the full session details
-          const sessionResponse = await fetch(
-            `https://verification.didit.me/v1/session/${session_id}/decision/`,
-            {
-              method: "GET",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${accessToken}`,
-              },
-            },
+          // Find the KYC step in the application progress
+          const applicationProgress =
+            await storage.getApplicationProgressByContractId(
+              parseInt(contractId),
+            );
+          const kycStep = applicationProgress.find(
+            (step) => step.step === "kyc",
           );
 
-          if (!sessionResponse.ok) {
-            throw new Error(
-              `Failed to get DiDit session details: ${sessionResponse.status} ${sessionResponse.statusText}`,
-            );
-          }
+          if (kycStep) {
+            if (isApproved) {
+              // Get any customer details from the verification if available
+              const customerDetails = decision?.kyc || {};
 
-          const sessionData = await sessionResponse.json();
+              // Mark the KYC step as completed
+              await storage.updateApplicationProgressCompletion(
+                kycStep.id,
+                true, // Completed
+                JSON.stringify({
+                  verified: true,
+                  sessionId: session_id,
+                  verifiedAt: new Date().toISOString(),
+                  firstName: customerDetails.first_name,
+                  lastName: customerDetails.last_name,
+                  documentType: customerDetails.document_type,
+                  documentNumber: customerDetails.document_number,
+                  dateOfBirth: customerDetails.date_of_birth,
+                  completedVia: "webhook",
+                }),
+              );
 
-          // Log the full verification details
-          await storage.createLog({
-            level: "info",
-            category: "api",
-            source: "didit",
-            message: `Retrieved full verification details for session ${session_id}`,
-            metadata: JSON.stringify(sessionData),
-          });
-
-          // Process verification results
-          const verificationStatus = sessionData.status;
-
-          // Process KYC results if available
-          if (sessionData.kyc) {
-            const kycStatus = sessionData.kyc.status;
-            console.log(`KYC status for session ${session_id}: ${kycStatus}`);
-
-            // Extract identity information
-            const {
-              document_type,
-              document_number,
-              first_name,
-              last_name,
-              date_of_birth,
-              address,
-              formatted_address,
-            } = sessionData.kyc;
-
-            // Here you would update your database with the verified identity information
-            console.log(
-              `Verified identity: ${first_name} ${last_name}, DOB: ${date_of_birth}, Document: ${document_type} ${document_number}`,
-            );
-          }
-
-          // Process AML results if available
-          if (sessionData.aml) {
-            const amlStatus = sessionData.aml.status;
-            const amlScore = sessionData.aml.score;
-            const totalHits = sessionData.aml.total_hits;
-
-            console.log(
-              `AML status for session ${session_id}: ${amlStatus}, Score: ${amlScore}, Hits: ${totalHits}`,
-            );
-          }
-
-          // Process facial recognition results if available
-          if (sessionData.face) {
-            const faceStatus = sessionData.face.status;
-            const faceMatchSimilarity = sessionData.face.face_match_similarity;
-            const livenessConfidence = sessionData.face.liveness_confidence;
-
-            console.log(
-              `Face verification for session ${session_id}: ${faceStatus}, Match: ${faceMatchSimilarity}%, Liveness: ${livenessConfidence}%`,
-            );
-          }
-
-          // Process any warnings
-          if (sessionData.warnings && sessionData.warnings.length > 0) {
-            console.log(
-              `Verification warnings for session ${session_id}:`,
-              sessionData.warnings,
-            );
-          }
-
-          // Extract the contract ID from the vendor_data field
-          let contractId: number | null = null;
-          try {
-            // Check if we have contractId from the webhook event processing
-            if (result.contractId) {
-              contractId = Number(result.contractId);
-            }
-            // Fall back to trying to parse vendor_data manually if needed
-            else if (sessionData.vendor_data) {
-              const vendorData = JSON.parse(sessionData.vendor_data);
-              contractId = vendorData.contractId
-                ? Number(vendorData.contractId)
-                : null;
-            }
-
-            logger.info({
-              message: `Extracted contract ID from DiDit webhook: ${contractId}`,
-              category: "api",
-              source: "didit",
-              metadata: {
-                session_id,
-                processedContractId: result.contractId,
-                vendorData: sessionData.vendor_data,
-              },
-            });
-          } catch (error) {
-            const parseError = error as Error;
-            logger.error({
-              message: `Failed to parse vendor_data from DiDit session: ${parseError.message}`,
-              category: "api",
-              source: "didit",
-              metadata: { session_id, vendor_data: sessionData.vendor_data },
-            });
-          }
-
-          // Only proceed with application updates if we have a valid contract ID
-          if (contractId !== null) {
-            logger.info({
-              message: `Processing KYC verification result for contract ${contractId}`,
-              category: "api",
-              source: "didit",
-              metadata: {
-                contractId,
-                verificationStatus,
-                kycStatus: sessionData.kyc?.status,
-              },
-            });
-
-            // Find the KYC step in the application progress
-            const applicationProgress =
-              await storage.getApplicationProgressByContractId(contractId);
-            const kycStep = applicationProgress.find(
-              (step) => step.step === "kyc",
-            );
-
-            if (kycStep) {
-              if (
-                verificationStatus === "Approved" ||
-                (sessionData.kyc && sessionData.kyc.status === "Approved") ||
-                (decision && decision.status === "approved")
-              ) {
-                // Mark the KYC step as completed
-                await storage.updateApplicationProgressCompletion(
-                  kycStep.id,
-                  true,
-                  JSON.stringify({
-                    verified: true,
-                    session_id: session_id,
-                    first_name: sessionData.kyc?.first_name,
-                    last_name: sessionData.kyc?.last_name,
-                    document_type: sessionData.kyc?.document_type,
-                    document_number: sessionData.kyc?.document_number,
-                    verification_time: new Date().toISOString(),
-                  }),
-                );
-                logger.info({
-                  message: `KYC verification completed successfully for contract ${contractId}`,
-                  category: "contract",
-                  metadata: { contractId, kycStepId: kycStep.id },
-                });
-              } else {
-                // Mark verification as failed but don't complete the step
-                await storage.updateApplicationProgressCompletion(
-                  kycStep.id,
-                  false,
-                  JSON.stringify({
-                    verified: false,
-                    session_id: session_id,
-                    status:
-                      verificationStatus ||
-                      sessionData.kyc?.status ||
-                      decision?.status,
-                    verification_time: new Date().toISOString(),
-                    reason: "Verification declined or incomplete",
-                  }),
-                );
-                logger.warn({
-                  message: `KYC verification failed for contract ${contractId}`,
-                  category: "contract",
-                  metadata: {
-                    contractId,
-                    kycStepId: kycStep.id,
-                    status:
-                      verificationStatus ||
-                      sessionData.kyc?.status ||
-                      decision?.status,
-                  },
-                });
+              // Move the contract to the next step
+              const contract = await storage.getContract(parseInt(contractId));
+              if (contract && contract.currentStep === "kyc") {
+                await storage.updateContractStep(parseInt(contractId), "bank");
               }
-            } else {
-              logger.error({
-                message: `Could not find KYC step for contract ${contractId}`,
+
+              logger.info({
+                message: `KYC verification approved for contract ${contractId}`,
                 category: "contract",
-                metadata: { contractId, applicationProgress },
+                metadata: { contractId, kycStepId: kycStep.id },
+              });
+            } else {
+              // Mark verification as failed but don't complete the step
+              await storage.updateApplicationProgressCompletion(
+                kycStep.id,
+                false, // Not completed
+                JSON.stringify({
+                  verified: false,
+                  sessionId: session_id,
+                  status: decision?.status || status,
+                  timestamp: new Date().toISOString(),
+                  reason: "Verification declined or incomplete",
+                }),
+              );
+
+              logger.warn({
+                message: `KYC verification failed for contract ${contractId}`,
+                category: "contract",
+                metadata: {
+                  contractId,
+                  kycStepId: kycStep.id,
+                  status: decision?.status || status,
+                },
               });
             }
           } else {
-            logger.warn({
-              message: `No contract ID found in vendor_data for session ${session_id}`,
-              category: "api",
-              source: "didit",
-              metadata: { session_id, vendor_data: sessionData.vendor_data },
+            logger.error({
+              message: `Could not find KYC step for contract ${contractId}`,
+              category: "contract",
+              metadata: { contractId, applicationProgress },
             });
           }
-        } catch (apiError) {
-          console.error("Error fetching DiDit session details:", apiError);
-
-          // Log the error but continue processing
-          await storage.createLog({
-            level: "error",
+        } catch (storageError) {
+          logger.error({
+            message: `Error updating application progress for contract ${contractId}: ${storageError instanceof Error ? storageError.message : String(storageError)}`,
             category: "api",
             source: "didit",
-            message: `Failed to retrieve session details: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
-            metadata: JSON.stringify({
-              error: apiError instanceof Error ? apiError.stack : null,
-            }),
+            metadata: {
+              contractId,
+              sessionId: session_id,
+              error: storageError instanceof Error ? storageError.stack : null,
+            },
           });
-
-          // Process webhook data directly without detailed session info
-          if (status === "completed") {
-            // Try to extract contract ID from vendor_data field if present
-            let contractId: number | null = null;
-            try {
-              // Check if we have contractId from the webhook event processing
-              if (result.contractId) {
-                contractId = Number(result.contractId);
-              }
-              // Fall back to trying to parse vendor_data manually if needed
-              else if (req.body.vendor_data) {
-                const vendorData = JSON.parse(req.body.vendor_data);
-                contractId = vendorData.contractId
-                  ? Number(vendorData.contractId)
-                  : null;
-              }
-
-              logger.info({
-                message: `Extracted contract ID from DiDit webhook payload: ${contractId}`,
-                category: "api",
-                source: "didit",
-                metadata: {
-                  session_id,
-                  processedContractId: result.contractId,
-                  vendorData: req.body.vendor_data,
-                },
-              });
-            } catch (error) {
-              const parseError = error as Error;
-              logger.error({
-                message: `Failed to parse vendor_data from webhook: ${parseError.message}`,
-                category: "api",
-                source: "didit",
-                metadata: { session_id, vendor_data: req.body.vendor_data },
-              });
-            }
-
-            if (contractId !== null) {
-              logger.info({
-                message: `Processing KYC verification webhook for contract ${contractId}`,
-                category: "api",
-                source: "didit",
-                metadata: {
-                  contractId,
-                  status,
-                  decisionStatus: decision?.status,
-                },
-              });
-
-              // Find the KYC step in the application progress
-              const applicationProgress =
-                await storage.getApplicationProgressByContractId(contractId);
-              const kycStep = applicationProgress.find(
-                (step) => step.step === "kyc",
-              );
-
-              if (kycStep) {
-                if (decision && decision.status === "approved") {
-                  // Mark the KYC step as completed
-                  await storage.updateApplicationProgressCompletion(
-                    kycStep.id,
-                    true,
-                    JSON.stringify({
-                      verified: true,
-                      session_id: session_id,
-                      customer_details: customer_details || {},
-                      verification_time: new Date().toISOString(),
-                    }),
-                  );
-
-                  logger.info({
-                    message: `KYC verification completed successfully for contract ${contractId} (webhook)`,
-                    category: "contract",
-                    metadata: { contractId, kycStepId: kycStep.id },
-                  });
-
-                  console.log(
-                    `Verification approved for session ${session_id}, updated contract ${contractId}`,
-                  );
-                } else {
-                  // Mark verification as failed but don't complete the step
-                  await storage.updateApplicationProgressCompletion(
-                    kycStep.id,
-                    false,
-                    JSON.stringify({
-                      verified: false,
-                      session_id: session_id,
-                      status: decision?.status || "declined",
-                      verification_time: new Date().toISOString(),
-                      reason: "Verification declined or incomplete",
-                    }),
-                  );
-
-                  logger.warn({
-                    message: `KYC verification failed for contract ${contractId} (webhook)`,
-                    category: "contract",
-                    metadata: {
-                      contractId,
-                      kycStepId: kycStep.id,
-                      status: decision?.status,
-                    },
-                  });
-
-                  console.log(
-                    `Verification rejected for session ${session_id}, updated contract ${contractId}`,
-                  );
-                }
-              } else {
-                logger.error({
-                  message: `Could not find KYC step for contract ${contractId} (webhook)`,
-                  category: "contract",
-                  metadata: { contractId, applicationProgress },
-                });
-              }
-            } else {
-              console.log(
-                `No contract ID found in webhook data for session ${session_id}`,
-              );
-            }
-          }
         }
       } else if (event_type === "verification.started") {
-        console.log(`Verification started for session ${session_id}`);
-
-        // Update your database to track that verification has started
+        logger.info({
+          message: `DiDit verification started for session ${session_id}, contract ${contractId}`,
+          category: "api",
+          source: "didit",
+          metadata: { sessionId: session_id, contractId },
+        });
       } else if (event_type === "verification.cancelled") {
-        console.log(`Verification cancelled for session ${session_id}`);
-
-        // Update your database to track that verification was cancelled
-      } else {
-        console.log(
-          `Unhandled event type ${event_type} for session ${session_id}`,
-        );
+        logger.info({
+          message: `DiDit verification cancelled for session ${session_id}, contract ${contractId}`,
+          category: "api",
+          source: "didit",
+          metadata: { sessionId: session_id, contractId },
+        });
       }
 
       // Always respond with 200 OK to acknowledge receipt of the webhook
       return res.status(200).json({ status: "success" });
     } catch (error) {
-      console.error("Error processing DiDit webhook:", error);
-
-      // Log the error
-      await storage.createLog({
-        level: "error",
+      logger.error({
+        message: `Error processing DiDit webhook: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         source: "didit",
-        message: `Webhook processing error: ${error instanceof Error ? error.message : String(error)}`,
-        metadata: JSON.stringify({
+        metadata: {
           error: error instanceof Error ? error.stack : null,
-        }),
+        },
       });
 
       // Always return 200 to prevent DiDit from retrying (prevents duplicate processing)
-      // In a production environment, you might want to implement a retry mechanism
       return res.status(200).json({
         status: "error",
         error_message: "Error processing webhook, but acknowledged receipt",
@@ -2331,6 +1903,935 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Plaid API Routes
+
+  // Create a link token - used to initialize Plaid Link
+  apiRouter.post(
+    "/plaid/create-link-token",
+    async (req: Request, res: Response) => {
+      try {
+        const { userId, userName, userEmail, products, redirectUri } = req.body;
+
+        if (!userId) {
+          return res.status(400).json({
+            success: false,
+            message: "User ID is required",
+          });
+        }
+
+        const clientUserId = userId.toString();
+
+        logger.info({
+          message: `Creating Plaid link token for user ${clientUserId}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            userId: clientUserId,
+            products,
+          },
+        });
+
+        const linkTokenResponse = await plaidService.createLinkToken({
+          userId: clientUserId,
+          clientUserId,
+          userName,
+          userEmail,
+          products, // Optional products array passed from frontend
+          redirectUri, // Optional redirect URI for OAuth flow
+        });
+
+        res.json({
+          success: true,
+          linkToken: linkTokenResponse.linkToken,
+          expiration: linkTokenResponse.expiration,
+        });
+      } catch (error) {
+        logger.error({
+          message: `Failed to create Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            error: error instanceof Error ? error.stack : null,
+          },
+        });
+
+        res.status(500).json({
+          success: false,
+          message: "Failed to create Plaid link token",
+        });
+      }
+    },
+  );
+
+  // Exchange public token for access token and store it
+  apiRouter.post(
+    "/plaid/set-access-token",
+    async (req: Request, res: Response) => {
+      try {
+        const { publicToken, userId, contractId } = req.body;
+
+        if (!publicToken) {
+          return res.status(400).json({
+            success: false,
+            message: "Public token is required",
+          });
+        }
+
+        if (!userId && !contractId) {
+          return res.status(400).json({
+            success: false,
+            message: "Either userId or contractId is required",
+          });
+        }
+
+        logger.info({
+          message: "Exchanging Plaid public token",
+          category: "api",
+          source: "plaid",
+          metadata: { userId, contractId },
+        });
+
+        // Exchange public token for access token
+        const exchangeResponse =
+          await plaidService.exchangePublicToken(publicToken);
+
+        // Get accounts and bank account details (routing, account numbers)
+        const authData = await plaidService.getAuth(
+          exchangeResponse.accessToken,
+        );
+
+        // Store the access token and item ID in your database
+        // In a real app, never return the access token to the client
+
+        // Create a record of the user's bank information
+        const bankInfo = {
+          userId: userId ? parseInt(userId) : null,
+          contractId: contractId ? parseInt(contractId) : null,
+          accessToken: exchangeResponse.accessToken, // This should be encrypted in a real app
+          itemId: exchangeResponse.itemId,
+          accounts: authData.accounts,
+          accountNumbers: authData.numbers,
+          createdAt: new Date(),
+        };
+
+        // In a real app, store this in your database
+        // For example:
+        // await db.insert(bankAccounts).values(bankInfo);
+
+        // If contract ID is provided, update the contract's bank step
+        if (contractId) {
+          // Find the bank step in the application progress
+          const applicationProgress =
+            await storage.getApplicationProgressByContractId(
+              parseInt(contractId),
+            );
+          const bankStep = applicationProgress.find(
+            (step) => step.step === "bank",
+          );
+
+          if (bankStep) {
+            // Store the selected account ID and relevant bank information
+            // For demo, we'll use the first account
+            const selectedAccount = authData.accounts[0];
+            const accountNumbers = authData.numbers.ach.find(
+              (account) => account.account_id === selectedAccount.account_id,
+            );
+
+            // Mark the bank step as completed
+            await storage.updateApplicationProgressCompletion(
+              bankStep.id,
+              true, // Completed
+              JSON.stringify({
+                verified: true,
+                completedAt: new Date().toISOString(),
+                itemId: exchangeResponse.itemId,
+                accountId: selectedAccount.account_id,
+                accountName: selectedAccount.name,
+                accountMask: selectedAccount.mask,
+                accountType: selectedAccount.type,
+                accountSubtype: selectedAccount.subtype,
+                routingNumber: accountNumbers?.routing,
+                accountNumber: accountNumbers?.account,
+              }),
+            );
+
+            // Move the contract to the next step if currently on bank step
+            const contract = await storage.getContract(parseInt(contractId));
+            if (contract && contract.currentStep === "bank") {
+              await storage.updateContractStep(parseInt(contractId), "payment");
+            }
+          }
+        }
+
+        // Create a log entry
+        await storage.createLog({
+          level: "info",
+          category: "api",
+          source: "plaid",
+          message: `Bank account linked successfully`,
+          userId: userId ? parseInt(userId) : null,
+          metadata: JSON.stringify({
+            contractId,
+            itemId: exchangeResponse.itemId,
+            accountsCount: authData.accounts.length,
+          }),
+        });
+
+        // Return success response with account information
+        // Do NOT include the access token in the response
+        res.json({
+          success: true,
+          accounts: authData.accounts,
+          itemId: exchangeResponse.itemId,
+          message: "Bank account linked successfully",
+        });
+      } catch (error) {
+        logger.error({
+          message: `Failed to exchange Plaid public token: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            error: error instanceof Error ? error.stack : null,
+          },
+        });
+
+        // Create error log
+        await storage.createLog({
+          level: "error",
+          category: "api",
+          source: "plaid",
+          message: `Failed to link bank account: ${error instanceof Error ? error.message : String(error)}`,
+          metadata: JSON.stringify({
+            error: error instanceof Error ? error.stack : null,
+          }),
+        });
+
+        res.status(500).json({
+          success: false,
+          message: "Failed to link bank account",
+        });
+      }
+    },
+  );
+
+  // Get account info for a specific user
+  apiRouter.get("/plaid/accounts", async (req: Request, res: Response) => {
+    try {
+      const { userId, contractId } = req.query;
+
+      if (!userId && !contractId) {
+        return res.status(400).json({
+          success: false,
+          message: "Either userId or contractId is required",
+        });
+      }
+
+      // In a real app, fetch the access token from your database
+      // For this example, we'll assume you stored it when exchanging the public token
+      let accessToken = "";
+
+      if (userId) {
+        // Fetch access token for this user from your database
+        // For example:
+        // const bankAccount = await db.query.bankAccounts.findFirst({
+        //   where: eq(bankAccounts.userId, parseInt(userId as string))
+        // });
+        // accessToken = bankAccount?.accessToken;
+      } else if (contractId) {
+        // Fetch access token for this contract from your database
+        // For example:
+        // const bankAccount = await db.query.bankAccounts.findFirst({
+        //   where: eq(bankAccounts.contractId, parseInt(contractId as string))
+        // });
+        // accessToken = bankAccount?.accessToken;
+
+        // For demo purposes, let's get the bank information from the application progress
+        const applicationProgress =
+          await storage.getApplicationProgressByContractId(
+            parseInt(contractId as string),
+          );
+        const bankStep = applicationProgress.find(
+          (step) => step.step === "bank",
+        );
+
+        if (bankStep && bankStep.data) {
+          try {
+            const bankData = JSON.parse(bankStep.data);
+
+            // Return the stored bank information without needing to call Plaid again
+            return res.json({
+              success: true,
+              bankInfo: {
+                accountId: bankData.accountId,
+                accountName: bankData.accountName,
+                accountMask: bankData.accountMask,
+                accountType: bankData.accountType,
+                accountSubtype: bankData.accountSubtype,
+                routingNumber: bankData.routingNumber,
+                accountNumber: bankData.accountNumber,
+              },
+            });
+          } catch (parseError) {
+            logger.error({
+              message: `Failed to parse bank data: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+              category: "api",
+              source: "plaid",
+              metadata: {
+                contractId,
+                bankData: bankStep.data,
+              },
+            });
+          }
+        }
+      }
+
+      if (!accessToken) {
+        return res.status(404).json({
+          success: false,
+          message: "No linked bank account found",
+        });
+      }
+
+      // Call Plaid to get the latest account info
+      const authData = await plaidService.getAuth(accessToken);
+
+      res.json({
+        success: true,
+        accounts: authData.accounts,
+        numbers: authData.numbers,
+      });
+    } catch (error) {
+      logger.error({
+        message: `Failed to get Plaid accounts: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      res.status(500).json({
+        success: false,
+        message: "Failed to get bank account information",
+      });
+    }
+  });
+
+  // Create a transfer (payment)
+  apiRouter.post(
+    "/plaid/create-transfer",
+    async (req: Request, res: Response) => {
+      try {
+        const { contractId, amount, description } = req.body;
+
+        if (!contractId || !amount) {
+          return res.status(400).json({
+            success: false,
+            message: "Contract ID and amount are required",
+          });
+        }
+
+        // Get contract details
+        const contract = await storage.getContract(parseInt(contractId));
+        if (!contract) {
+          return res.status(404).json({
+            success: false,
+            message: "Contract not found",
+          });
+        }
+
+        // Get customer details if available
+        let customerName = "Customer";
+        if (contract.customerId) {
+          const customer = await storage.getUser(contract.customerId);
+          if (customer) {
+            customerName = customer.name;
+          }
+        }
+
+        // Get the bank information from the application progress
+        const applicationProgress =
+          await storage.getApplicationProgressByContractId(
+            parseInt(contractId),
+          );
+        const bankStep = applicationProgress.find(
+          (step) => step.step === "bank",
+        );
+
+        if (!bankStep || !bankStep.completed || !bankStep.data) {
+          return res.status(400).json({
+            success: false,
+            message: "Bank account not linked for this contract",
+          });
+        }
+
+        // Parse bank data
+        let bankData;
+        try {
+          bankData = JSON.parse(bankStep.data);
+        } catch (parseError) {
+          logger.error({
+            message: `Failed to parse bank data: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              contractId,
+              bankData: bankStep.data,
+            },
+          });
+
+          return res.status(500).json({
+            success: false,
+            message: "Failed to process bank information",
+          });
+        }
+
+        // In a real app, fetch the access token from your database
+        // For this example, we'll simulate the transfer creation
+
+        // Log the transfer request
+        logger.info({
+          message: `Processing payment transfer for contract ${contractId}`,
+          category: "payment",
+          source: "plaid",
+          metadata: {
+            contractId,
+            amount,
+            description:
+              description ||
+              `Monthly payment for contract ${contract.contractNumber}`,
+          },
+        });
+
+        // In a real implementation, you would:
+        // 1. Retrieve the access token from your database
+        // 2. Make the actual transfer API call
+        // For now, we'll simulate a successful transfer
+
+        const transferId = "tr_" + Math.random().toString(36).substring(2, 15);
+        const status = "pending";
+
+        // Create a record of the payment
+        const paymentInfo = {
+          contractId: parseInt(contractId),
+          amount,
+          description:
+            description ||
+            `Monthly payment for contract ${contract.contractNumber}`,
+          transferId,
+          status,
+          accountId: bankData.accountId,
+          createdAt: new Date(),
+        };
+
+        // In a real app, store this in your database
+        // For example:
+        // await db.insert(payments).values(paymentInfo);
+
+        // Create a log entry
+        await storage.createLog({
+          level: "info",
+          category: "payment",
+          source: "plaid",
+          message: `Payment initiated for contract ${contractId}`,
+          metadata: JSON.stringify({
+            contractId,
+            amount,
+            transferId,
+            status,
+          }),
+        });
+
+        // Return success response
+        res.json({
+          success: true,
+          transferId,
+          status,
+          message: "Payment initiated successfully",
+        });
+      } catch (error) {
+        logger.error({
+          message: `Failed to create Plaid transfer: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            error: error instanceof Error ? error.stack : null,
+          },
+        });
+
+        // Create error log
+        await storage.createLog({
+          level: "error",
+          category: "payment",
+          source: "plaid",
+          message: `Failed to initiate payment: ${error instanceof Error ? error.message : String(error)}`,
+          metadata: JSON.stringify({
+            error: error instanceof Error ? error.stack : null,
+          }),
+        });
+
+        res.status(500).json({
+          success: false,
+          message: "Failed to initiate payment",
+        });
+      }
+    },
+  );
+
+  // Create an asset report (for income verification / underwriting)
+  apiRouter.post(
+    "/plaid/create-asset-report",
+    async (req: Request, res: Response) => {
+      try {
+        const { userId, contractId, daysRequested = 60 } = req.body;
+
+        if (!userId && !contractId) {
+          return res.status(400).json({
+            success: false,
+            message: "Either userId or contractId is required",
+          });
+        }
+
+        // In a real app, fetch the access token from your database
+        // For this example, we'll simulate the asset report creation
+
+        logger.info({
+          message: `Creating asset report`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            userId,
+            contractId,
+            daysRequested,
+          },
+        });
+
+        // Simulate creating an asset report
+        // In a real implementation, you would:
+        // 1. Retrieve the access token from your database
+        // 2. Make the actual asset report API call
+
+        const assetReportId =
+          "asset_" + Math.random().toString(36).substring(2, 15);
+        const assetReportToken =
+          "asset-token-" + Math.random().toString(36).substring(2, 15);
+
+        // Create a record of the asset report
+        const assetReportInfo = {
+          userId: userId ? parseInt(userId) : null,
+          contractId: contractId ? parseInt(contractId) : null,
+          assetReportId,
+          assetReportToken, // This should be encrypted in a real app
+          daysRequested,
+          status: "pending",
+          createdAt: new Date(),
+        };
+
+        // In a real app, store this in your database
+        // For example:
+        // await db.insert(assetReports).values(assetReportInfo);
+
+        // Create a log entry
+        await storage.createLog({
+          level: "info",
+          category: "api",
+          source: "plaid",
+          message: `Asset report created`,
+          userId: userId ? parseInt(userId) : null,
+          metadata: JSON.stringify({
+            contractId,
+            assetReportId,
+            daysRequested,
+          }),
+        });
+
+        // Return success response
+        // Do NOT include the asset report token in the response
+        res.json({
+          success: true,
+          assetReportId,
+          message: "Asset report created successfully",
+        });
+      } catch (error) {
+        logger.error({
+          message: `Failed to create Plaid asset report: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            error: error instanceof Error ? error.stack : null,
+          },
+        });
+
+        // Create error log
+        await storage.createLog({
+          level: "error",
+          category: "api",
+          source: "plaid",
+          message: `Failed to create asset report: ${error instanceof Error ? error.message : String(error)}`,
+          metadata: JSON.stringify({
+            error: error instanceof Error ? error.stack : null,
+          }),
+        });
+
+        res.status(500).json({
+          success: false,
+          message: "Failed to create asset report",
+        });
+      }
+    },
+  );
+
+  // Get an asset report
+  apiRouter.get(
+    "/plaid/asset-report/:assetReportId",
+    async (req: Request, res: Response) => {
+      try {
+        const { assetReportId } = req.params;
+
+        if (!assetReportId) {
+          return res.status(400).json({
+            success: false,
+            message: "Asset report ID is required",
+          });
+        }
+
+        // In a real app, fetch the asset report token from your database
+        // For this example, we'll simulate the asset report retrieval
+
+        logger.info({
+          message: `Retrieving asset report`,
+          category: "api",
+          source: "plaid",
+          metadata: { assetReportId },
+        });
+
+        // Simulate getting an asset report
+        // In a real implementation, you would:
+        // 1. Retrieve the asset report token from your database
+        // 2. Make the actual asset report API call
+
+        // Create some mock asset report data
+        const mockAssetReport = {
+          assetReportId,
+          createdDate: new Date().toISOString(),
+          daysRequested: 60,
+          user: {
+            firstName: "John",
+            lastName: "Doe",
+          },
+          items: [
+            {
+              institutionName: "Chase",
+              lastUpdated: new Date().toISOString(),
+              accounts: [
+                {
+                  accountId:
+                    "acc_" + Math.random().toString(36).substring(2, 10),
+                  accountName: "Chase Checking",
+                  type: "depository",
+                  subtype: "checking",
+                  currentBalance: 5280.25,
+                  availableBalance: 5200.1,
+                  transactions: [
+                    {
+                      transactionId:
+                        "tx_" + Math.random().toString(36).substring(2, 10),
+                      date: new Date(
+                        Date.now() - 3 * 24 * 60 * 60 * 1000,
+                      ).toISOString(),
+                      description: "WALMART",
+                      amount: 45.23,
+                      pending: false,
+                    },
+                    {
+                      transactionId:
+                        "tx_" + Math.random().toString(36).substring(2, 10),
+                      date: new Date(
+                        Date.now() - 5 * 24 * 60 * 60 * 1000,
+                      ).toISOString(),
+                      description: "AMAZON",
+                      amount: 67.89,
+                      pending: false,
+                    },
+                  ],
+                },
+                {
+                  accountId:
+                    "acc_" + Math.random().toString(36).substring(2, 10),
+                  accountName: "Chase Savings",
+                  type: "depository",
+                  subtype: "savings",
+                  currentBalance: 10250.75,
+                  availableBalance: 10250.75,
+                  transactions: [
+                    {
+                      transactionId:
+                        "tx_" + Math.random().toString(36).substring(2, 10),
+                      date: new Date(
+                        Date.now() - 10 * 24 * 60 * 60 * 1000,
+                      ).toISOString(),
+                      description: "TRANSFER FROM CHECKING",
+                      amount: -500.0,
+                      pending: false,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          summary: {
+            totalAccounts: 2,
+            totalTransactions: 3,
+            totalBalances: 15531.0,
+            income: {
+              estimatedMonthlyIncome: 5200,
+              estimatedAnnualIncome: 62400,
+              confidenceScore: 0.95,
+            },
+          },
+        };
+
+        // Create a log entry
+        await storage.createLog({
+          level: "info",
+          category: "api",
+          source: "plaid",
+          message: `Asset report retrieved`,
+          metadata: JSON.stringify({
+            assetReportId,
+          }),
+        });
+
+        // Return success response with the asset report data
+        res.json({
+          success: true,
+          assetReport: mockAssetReport,
+        });
+      } catch (error) {
+        logger.error({
+          message: `Failed to get Plaid asset report: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            error: error instanceof Error ? error.stack : null,
+          },
+        });
+
+        // Create error log
+        await storage.createLog({
+          level: "error",
+          category: "api",
+          source: "plaid",
+          message: `Failed to retrieve asset report: ${error instanceof Error ? error.message : String(error)}`,
+          metadata: JSON.stringify({
+            error: error instanceof Error ? error.stack : null,
+          }),
+        });
+
+        res.status(500).json({
+          success: false,
+          message: "Failed to retrieve asset report",
+        });
+      }
+    },
+  );
+
+  // Plaid webhook handler
+  apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
+    try {
+      const { webhook_type, webhook_code, item_id } = req.body;
+
+      logger.info({
+        message: `Received Plaid webhook`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          webhookType: webhook_type,
+          webhookCode: webhook_code,
+          itemId: item_id,
+        },
+      });
+
+      // Handle different webhook types
+      switch (webhook_type) {
+        case "TRANSACTIONS":
+          // Handle transaction webhooks
+          switch (webhook_code) {
+            case "INITIAL_UPDATE":
+              logger.info({
+                message: "Initial transaction update received",
+                category: "api",
+                source: "plaid",
+                metadata: { itemId: item_id },
+              });
+              break;
+            case "HISTORICAL_UPDATE":
+              logger.info({
+                message: "Historical transaction update received",
+                category: "api",
+                source: "plaid",
+                metadata: { itemId: item_id },
+              });
+              break;
+            case "DEFAULT_UPDATE":
+              logger.info({
+                message: "Default transaction update received",
+                category: "api",
+                source: "plaid",
+                metadata: { itemId: item_id },
+              });
+              break;
+            case "TRANSACTIONS_REMOVED":
+              logger.info({
+                message: "Transactions removed notification received",
+                category: "api",
+                source: "plaid",
+                metadata: { itemId: item_id },
+              });
+              break;
+          }
+          break;
+
+        case "ITEM":
+          // Handle item webhooks
+          switch (webhook_code) {
+            case "ERROR":
+              logger.warn({
+                message: "Item error received",
+                category: "api",
+                source: "plaid",
+                metadata: {
+                  itemId: item_id,
+                  error: req.body.error,
+                },
+              });
+              break;
+            case "PENDING_EXPIRATION":
+              logger.warn({
+                message: "Item pending expiration",
+                category: "api",
+                source: "plaid",
+                metadata: { itemId: item_id },
+              });
+              break;
+            case "USER_PERMISSION_REVOKED":
+              logger.warn({
+                message: "User permission revoked",
+                category: "api",
+                source: "plaid",
+                metadata: { itemId: item_id },
+              });
+              break;
+          }
+          break;
+
+        case "AUTH":
+          // Handle auth webhooks
+          logger.info({
+            message: `Auth webhook received: ${webhook_code}`,
+            category: "api",
+            source: "plaid",
+            metadata: { itemId: item_id },
+          });
+          break;
+
+        case "ASSETS":
+          // Handle assets webhooks
+          logger.info({
+            message: `Assets webhook received: ${webhook_code}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              itemId: item_id,
+              assetReportId: req.body.asset_report_id,
+            },
+          });
+          break;
+
+        case "INCOME":
+          // Handle income webhooks
+          logger.info({
+            message: `Income webhook received: ${webhook_code}`,
+            category: "api",
+            source: "plaid",
+            metadata: { itemId: item_id },
+          });
+          break;
+
+        case "TRANSFER":
+          // Handle transfer webhooks
+          switch (webhook_code) {
+            case "TRANSFER_CREATED":
+              logger.info({
+                message: "Transfer created",
+                category: "payment",
+                source: "plaid",
+                metadata: {
+                  itemId: item_id,
+                  transferId: req.body.transfer_id,
+                },
+              });
+              break;
+            case "TRANSFER_FAILED":
+              logger.warn({
+                message: "Transfer failed",
+                category: "payment",
+                source: "plaid",
+                metadata: {
+                  itemId: item_id,
+                  transferId: req.body.transfer_id,
+                  failureReason: req.body.failure_reason,
+                },
+              });
+              break;
+            case "TRANSFER_COMPLETED":
+              logger.info({
+                message: "Transfer completed",
+                category: "payment",
+                source: "plaid",
+                metadata: {
+                  itemId: item_id,
+                  transferId: req.body.transfer_id,
+                },
+              });
+              break;
+          }
+          break;
+
+        default:
+          logger.info({
+            message: `Unhandled Plaid webhook type: ${webhook_type}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              webhookType: webhook_type,
+              webhookCode: webhook_code,
+              itemId: item_id,
+            },
+          });
+      }
+
+      // Always return a 200 status to acknowledge receipt of the webhook
+      res.status(200).json({ received: true });
+    } catch (error) {
+      logger.error({
+        message: `Error processing Plaid webhook: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.stack : null,
+          body: req.body,
+        },
+      });
+
+      // Still return 200 to acknowledge receipt
+      res.status(200).json({
+        received: true,
+        error: "Error processing webhook",
+      });
     }
   });
 
