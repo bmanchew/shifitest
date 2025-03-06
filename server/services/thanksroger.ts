@@ -1,13 +1,3 @@
-/**
- * Thanks Roger service for contract generation and digital signing
- * 
- * This service integrates with the Thanks Roger API to:
- * - Create contracts from templates
- * - Generate signing links
- * - Handle email sending for contract signatures
- * - Process webhook events
- */
-
 import { logger } from './logger';
 
 interface ThanksRogerCreateContractOptions {
@@ -34,11 +24,30 @@ interface ThanksRogerCreateContractResponse {
   signingLink: string;
 }
 
+interface ThanksRogerSignContractOptions {
+  contractId: string;
+  signatureData: string;
+  signerName: string;
+  signatureDate?: string;
+}
+
+interface ThanksRogerSignContractResponse {
+  success: boolean;
+  contractId: string;
+  signatureId: string;
+  status: string;
+  signedAt: string;
+  documentUrl?: string;
+}
+
 class ThanksRogerService {
   private apiKey: string | undefined;
   private defaultWorkspaceId: string | undefined;
   private initialized = false;
   private baseUrl = 'https://app.thanksroger.com/api/v3';
+  
+  // For debugging purposes, log raw API responses
+  private debugMode: boolean = process.env.DEBUG_API === 'true';
 
   constructor() {
     this.initialize();
@@ -50,8 +59,7 @@ class ThanksRogerService {
   private initialize() {
     this.apiKey = process.env.THANKSROGER_API_KEY;
     
-    // Typically you'd want to store your workspace ID in environment variables or configuration
-    // For this implementation, we'll use a default value if not provided
+    // Get workspace ID from environment variables
     this.defaultWorkspaceId = process.env.THANKSROGER_WORKSPACE_ID || 'wvEOhUlU8rHy5EXAwNn1';
 
     this.initialized = !!this.apiKey;
@@ -64,7 +72,15 @@ class ThanksRogerService {
       });
     } else {
       logger.warn({
-        message: 'Thanks Roger service initialized without API key',
+        message: 'Thanks Roger service not initialized - THANKSROGER_API_KEY is not set',
+        category: 'system',
+        source: 'thanksroger'
+      });
+    }
+    
+    if (!this.defaultWorkspaceId) {
+      logger.warn({
+        message: 'Thanks Roger workspace ID is not set - THANKSROGER_WORKSPACE_ID is not set',
         category: 'system',
         source: 'thanksroger'
       });
@@ -87,7 +103,7 @@ class ThanksRogerService {
   async createContract(options: ThanksRogerCreateContractOptions): Promise<ThanksRogerCreateContractResponse | null> {
     if (!this.isInitialized()) {
       logger.error({
-        message: 'Cannot create contract: Thanks Roger service not initialized',
+        message: 'Cannot create contract: Thanks Roger service not initialized (missing API key)',
         category: 'api',
         source: 'thanksroger'
       });
@@ -107,23 +123,71 @@ class ThanksRogerService {
     try {
       const url = `${this.baseUrl}/workspaces/${workspaceId}/contracts`;
       
+      const requestBody = {
+        templateId: options.templateId,
+        templateValues: options.templateValues,
+        createdBy: options.createdBy,
+        name: options.name,
+        email: options.email || false // Default to false to avoid sending emails
+      };
+      
+      if (this.debugMode) {
+        logger.info({
+          message: 'ThanksRoger API request',
+          category: 'api',
+          source: 'thanksroger',
+          metadata: {
+            url,
+            method: 'POST',
+            requestBody,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey ? this.apiKey.substring(0, 5) + '...' : 'undefined'}`
+            }
+          }
+        });
+      }
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify({
-          templateId: options.templateId,
-          templateValues: options.templateValues,
-          createdBy: options.createdBy,
-          name: options.name,
-          email: options.email
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to create contract: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        
+        if (response.status === 401) {
+          logger.error({
+            message: 'Authentication failed with Thanks Roger API: Invalid API key or insufficient permissions',
+            category: 'api',
+            source: 'thanksroger',
+            metadata: {
+              statusCode: response.status,
+              responseText: errorText,
+              workspaceId
+            }
+          });
+          throw new Error('Authentication failed: Invalid API key or insufficient permissions');
+        } else if (response.status === 404) {
+          logger.error({
+            message: 'Resource not found in Thanks Roger API: Invalid workspaceId or templateId',
+            category: 'api',
+            source: 'thanksroger',
+            metadata: {
+              statusCode: response.status,
+              responseText: errorText,
+              workspaceId,
+              templateId: options.templateId
+            }
+          });
+          throw new Error('Resource not found: Invalid workspace ID or template ID');
+        }
+        
+        throw new Error(`Failed to create contract: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -154,16 +218,139 @@ class ThanksRogerService {
   }
 
   /**
+   * Sign a contract with signature data
+   */
+  async signContract(options: ThanksRogerSignContractOptions): Promise<ThanksRogerSignContractResponse | null> {
+    if (!this.isInitialized()) {
+      logger.error({
+        message: 'Cannot sign contract: Thanks Roger service not initialized',
+        category: 'api',
+        source: 'thanksroger'
+      });
+      return null;
+    }
+
+    try {
+      // Call the Thanks Roger API to apply the signature
+      const url = `${this.baseUrl}/contracts/${options.contractId}/signatures`;
+      
+      logger.info({
+        message: `Attempting to sign contract ${options.contractId}`,
+        category: 'api',
+        source: 'thanksroger',
+        metadata: {
+          contractId: options.contractId,
+          signerName: options.signerName
+        }
+      });
+      
+      const requestBody = {
+        signatureData: options.signatureData,
+        signerName: options.signerName,
+        signatureDate: options.signatureDate || new Date().toISOString()
+      };
+      
+      if (this.debugMode) {
+        logger.info({
+          message: 'ThanksRoger API signing request',
+          category: 'api',
+          source: 'thanksroger',
+          metadata: {
+            url,
+            method: 'POST',
+            requestBody: {
+              ...requestBody,
+              signatureData: options.signatureData.substring(0, 30) + '...' // Truncate for logging
+            },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey ? this.apiKey.substring(0, 5) + '...' : 'undefined'}`
+            }
+          }
+        });
+      }
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        
+        if (response.status === 401) {
+          logger.error({
+            message: 'Authentication failed with Thanks Roger API: Invalid API key or insufficient permissions',
+            category: 'api',
+            source: 'thanksroger',
+            metadata: {
+              statusCode: response.status,
+              responseText: errorText
+            }
+          });
+          throw new Error('Authentication failed: Invalid API key or insufficient permissions');
+        }
+        
+        throw new Error(`Failed to sign contract: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      logger.info({
+        message: 'Contract signed successfully',
+        category: 'api',
+        source: 'thanksroger',
+        metadata: {
+          contractId: options.contractId,
+          signatureId: data.signatureId
+        }
+      });
+      
+      return {
+        success: true,
+        contractId: options.contractId,
+        signatureId: data.signatureId,
+        status: data.status,
+        signedAt: data.signedAt,
+        documentUrl: data.documentUrl
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to sign contract: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'thanksroger',
+        metadata: { 
+          contractId: options.contractId,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      return null;
+    }
+  }
+
+  /**
    * Verify that the API key is valid by making a test request
    */
   async validateCredentials(): Promise<boolean> {
     if (!this.isInitialized()) {
       return false;
     }
+    
+    if (!this.defaultWorkspaceId) {
+      logger.error({
+        message: 'Cannot validate credentials: No workspace ID configured',
+        category: 'api',
+        source: 'thanksroger'
+      });
+      return false;
+    }
 
     try {
       // We'll use a simple GET request to check if our API key is valid
-      // The actual endpoint may vary based on Thanks Roger's API
       const workspaceId = this.defaultWorkspaceId;
       const url = `${this.baseUrl}/workspaces/${workspaceId}`;
       
@@ -173,6 +360,25 @@ class ThanksRogerService {
           'Authorization': `Bearer ${this.apiKey}`
         }
       });
+
+      if (response.status === 401) {
+        logger.error({
+          message: 'API key validation failed: Invalid API key or insufficient permissions',
+          category: 'api',
+          source: 'thanksroger'
+        });
+        return false;
+      }
+      
+      if (response.status === 404) {
+        logger.error({
+          message: 'API key validation failed: Workspace not found',
+          category: 'api',
+          source: 'thanksroger',
+          metadata: { workspaceId }
+        });
+        return false;
+      }
 
       return response.ok;
     } catch (error) {

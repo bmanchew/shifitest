@@ -26,6 +26,7 @@ export default function ContractSigning({
   const [step, setStep] = useState<"review" | "sign" | "complete">("review");
   const [signatureData, setSignatureData] = useState<string>("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [signingError, setSigningError] = useState<string | null>(null);
 
   // Handle contract review moving to signing step
   const handleReviewComplete = () => {
@@ -141,16 +142,19 @@ export default function ContractSigning({
       return;
     }
 
+    setSigningError(null);
+    setIsSubmitting(true);
+    
     try {
-      setIsSubmitting(true);
-      
-      // Integrate with Thanks Roger signing service
-      // This will utilize our thanksRogerService on the backend
+      // Call the API to sign the contract using ThanksRoger service
       const signingResponse = await apiRequest<{
         success: boolean;
         contractId: string;
         signingLink: string;
         signatureId: string;
+        signedAt: string;
+        status: string;
+        message: string;
       }>("POST", "/api/contract-signing", {
         contractId,
         contractNumber,
@@ -159,19 +163,37 @@ export default function ContractSigning({
       });
       
       if (!signingResponse.success) {
-        throw new Error("Signing service error");
+        throw new Error(signingResponse.message || "Signing service error");
       }
       
-      // Update application progress
-      await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
-        completed: true,
-        data: JSON.stringify({
-          signedAt: new Date().toISOString(),
-          signatureId: signingResponse.signatureId,
-          thankRogerContractId: signingResponse.contractId,
-          signingLink: signingResponse.signingLink
-        }),
-      });
+      // Prepare the signature data to store
+      const signatureDataToStore = {
+        signedAt: signingResponse.signedAt || new Date().toISOString(),
+        signatureId: signingResponse.signatureId,
+        thankRogerContractId: signingResponse.contractId,
+        signingLink: signingResponse.signingLink,
+        status: signingResponse.status || "signed"
+      };
+      
+      // Update or create application progress based on whether progressId exists
+      if (progressId) {
+        // Update existing progress item
+        console.log("Updating signing progress:", progressId);
+        await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+          completed: true,
+          data: JSON.stringify(signatureDataToStore),
+        });
+      } else {
+        // Create new signing progress item
+        console.log("Creating new signing progress for contract:", contractId);
+        const newProgress = await apiRequest<{ id: number }>("POST", "/api/application-progress", {
+          contractId: contractId,
+          step: "signing",
+          completed: true,
+          data: JSON.stringify(signatureDataToStore),
+        });
+        // No need to store the progress ID since we're navigating away
+      }
       
       // Update contract step to "completed"
       await apiRequest("PATCH", `/api/contracts/${contractId}/step`, {
@@ -185,6 +207,12 @@ export default function ContractSigning({
       
       setStep("complete");
       
+      toast({
+        title: "Contract Signed",
+        description: "Your contract has been successfully signed.",
+        variant: "default",
+      });
+      
       // After a short delay, move to the completed state in the parent
       setTimeout(() => {
         onComplete();
@@ -192,6 +220,9 @@ export default function ContractSigning({
       
     } catch (error) {
       console.error("Contract signing failed:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      setSigningError(errorMessage);
+      
       toast({
         title: "Signing Failed",
         description: "We couldn't process your signature. Please try again.",
@@ -204,9 +235,11 @@ export default function ContractSigning({
 
   // Use the useEffect pattern for canvas initialization
   useEffect(() => {
-    const canvasElement = canvasRef.current;
-    if (canvasElement) {
-      initializeCanvas(canvasElement);
+    if (step === "sign") {
+      const canvasElement = canvasRef.current;
+      if (canvasElement) {
+        initializeCanvas(canvasElement);
+      }
     }
   }, [step]);
 
@@ -328,6 +361,14 @@ export default function ContractSigning({
             Sign with your mouse or finger in the area above
           </p>
         </div>
+
+        {signingError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-red-800">
+              {signingError}
+            </p>
+          </div>
+        )}
 
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
           <p className="text-sm text-yellow-800">

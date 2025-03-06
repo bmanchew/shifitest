@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -30,6 +30,49 @@ export default function PaymentSchedule({
 }: PaymentScheduleProps) {
   const { toast } = useToast();
   const [isConfirming, setIsConfirming] = useState(false);
+  const [actualProgressId, setActualProgressId] = useState<number | null>(progressId > 0 ? progressId : null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load the correct progress ID when component mounts
+  useEffect(() => {
+    const fetchPaymentProgress = async () => {
+      if (actualProgressId) {
+        setIsLoading(false);
+        return; // Already have a valid ID
+      }
+      
+      try {
+        setIsLoading(true);
+        
+        // Get all application progress items for this contract
+        const progressItems = await apiRequest<any[]>(
+          "GET", 
+          `/api/application-progress?contractId=${contractId}`
+        );
+        
+        // Find the payment step
+        const paymentStep = progressItems?.find(item => item.step === "payment");
+        
+        if (paymentStep) {
+          console.log("Found existing payment step:", paymentStep.id);
+          setActualProgressId(paymentStep.id);
+        } else {
+          console.log("No payment step found, will create one on confirm");
+        }
+      } catch (error) {
+        console.error("Error fetching payment progress:", error);
+        toast({
+          title: "Error",
+          description: "Could not load payment information. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchPaymentProgress();
+  }, [contractId, actualProgressId, toast]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -50,14 +93,30 @@ export default function PaymentSchedule({
     try {
       setIsConfirming(true);
       
-      // Update application progress
-      await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
-        completed: true,
-        data: JSON.stringify({
-          schedule: paymentSchedule,
-          confirmedAt: new Date().toISOString(),
-        }),
-      });
+      const scheduleData = {
+        schedule: paymentSchedule,
+        confirmedAt: new Date().toISOString(),
+      };
+      
+      if (actualProgressId) {
+        // Update existing progress item
+        console.log("Updating payment progress:", actualProgressId);
+        await apiRequest("PATCH", `/api/application-progress/${actualProgressId}`, {
+          completed: true,
+          data: JSON.stringify(scheduleData),
+        });
+      } else {
+        // Create new payment progress item
+        console.log("Creating new payment progress for contract:", contractId);
+        // Fixed: Don't call .json() on the response since apiRequest already returns the parsed JSON
+        const newProgress = await apiRequest<{ id: number }>("POST", "/api/application-progress", {
+          contractId: contractId,
+          step: "payment",
+          completed: true,
+          data: JSON.stringify(scheduleData),
+        });
+        setActualProgressId(newProgress.id);
+      }
       
       toast({
         title: "Schedule Confirmed",
@@ -76,6 +135,17 @@ export default function PaymentSchedule({
       setIsConfirming(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 text-center">
+        <div className="py-12">
+          <div className="h-12 w-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+          <p className="text-sm text-gray-600">Loading payment schedule...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">

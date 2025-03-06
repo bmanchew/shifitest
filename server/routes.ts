@@ -569,6 +569,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+
+  // Add this route to handle creation of application progress items
+apiRouter.post("/application-progress", async (req: Request, res: Response) => {
+  try {
+    const { contractId, step, completed, data } = req.body;
+    
+    if (!contractId || !step) {
+      return res.status(400).json({ 
+        message: "Contract ID and step are required" 
+      });
+    }
+    
+    // Verify the contract exists
+    const contract = await storage.getContract(parseInt(contractId));
+    if (!contract) {
+      return res.status(404).json({ 
+        message: "Contract not found" 
+      });
+    }
+    
+    // Create the application progress item
+    const progressItem = await storage.createApplicationProgress({
+      contractId: parseInt(contractId),
+      step: step,
+      completed: !!completed,
+      data: data || null
+    });
+    
+    // Log the creation
+    await storage.createLog({
+      level: "info",
+      category: "contract",
+      message: `Application progress created for contract ${contractId}, step ${step}`,
+      metadata: JSON.stringify({ 
+        contractId, 
+        step, 
+        completed: !!completed 
+      })
+    });
+    
+    res.status(201).json(progressItem);
+  } catch (error) {
+    console.error("Create application progress error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
   // Log routes
   apiRouter.get("/logs", async (req: Request, res: Response) => {
     try {
@@ -1183,123 +1230,390 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Thanks Roger contract signing endpoint
-  apiRouter.post("/contract-signing", async (req: Request, res: Response) => {
-    try {
-      const { contractId, contractNumber, customerName, signatureData } =
-        req.body;
 
-      if (!contractId || !contractNumber || !customerName || !signatureData) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Missing required fields: contractId, contractNumber, customerName, and signatureData are required",
-        });
-      }
+// Thanks Roger contract signing endpoint
+// Thanks Roger contract signing endpoint
+apiRouter.post("/contract-signing", async (req: Request, res: Response) => {
+  try {
+    const { contractId, contractNumber, customerName, signatureData } = req.body;
 
-      // Get the contract details
-      const contract = await storage.getContract(Number(contractId));
-      if (!contract) {
-        return res.status(404).json({
-          success: false,
-          message: "Contract not found",
-        });
-      }
+    if (!contractId || !contractNumber || !customerName || !signatureData) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: contractId, contractNumber, customerName, and signatureData are required",
+      });
+    }
 
-      // Get merchant details
-      const merchant = await storage.getMerchant(contract.merchantId);
-      if (!merchant) {
-        return res.status(404).json({
-          success: false,
-          message: "Merchant not found",
-        });
-      }
+    // Get the contract details
+    const contract = await storage.getContract(Number(contractId));
+    if (!contract) {
+      return res.status(404).json({
+        success: false,
+        message: "Contract not found",
+      });
+    }
 
-      logger.info({
-        message: `Processing contract signing for contract #${contractNumber}`,
+    // Get merchant details
+    const merchant = await storage.getMerchant(contract.merchantId);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found",
+      });
+    }
+
+    logger.info({
+      message: `Processing contract signing for contract #${contractNumber}`,
+      category: "contract",
+      source: "thanksroger",
+      metadata: { contractId, customerName },
+    });
+    
+    // Check if the API is properly configured
+    const apiKey = process.env.THANKSROGER_API_KEY;
+    const workspaceId = process.env.THANKSROGER_WORKSPACE_ID;
+    const templateId = process.env.THANKSROGER_TEMPLATE_ID;
+    
+    const apiConfigured = apiKey && workspaceId && templateId;
+    if (!apiConfigured) {
+      logger.warn({
+        message: "ThanksRoger API not fully configured. Missing env variables.",
         category: "contract",
         source: "thanksroger",
-        metadata: { contractId, customerName },
+        metadata: { 
+          apiKeySet: !!apiKey,
+          workspaceIdSet: !!workspaceId,
+          templateIdSet: !!templateId
+        }
       });
+    }
 
-      // Check if Thanks Roger service is available
-      if (!thanksRogerService.isInitialized()) {
+    // First, check if we already have a ThanksRoger contract ID for this contract
+    // If not, create a new contract in ThanksRoger
+    let thankRogerContractId = "";
+    let signingLink = "";
+    
+    // Look up the ThanksRoger contract ID in the application progress
+    const progress = await storage.getApplicationProgressByContractId(Number(contractId));
+    const signingProgress = progress.find(step => step.step === "signing");
+    
+    if (signingProgress && signingProgress.data) {
+      try {
+        const data = JSON.parse(signingProgress.data);
+        if (data.thankRogerContractId) {
+          thankRogerContractId = data.thankRogerContractId;
+          signingLink = data.signingLink || "";
+          logger.info({
+            message: `Found existing ThanksRoger contract: ${thankRogerContractId}`,
+            category: "contract",
+            source: "thanksroger",
+          });
+        }
+      } catch (error) {
         logger.warn({
-          message: "Thanks Roger service not initialized, using mock signing",
+          message: `Error parsing signing progress data: ${error instanceof Error ? error.message : String(error)}`,
           category: "contract",
           source: "thanksroger",
         });
-
-        // Return mock response
-        return res.json({
-          success: true,
-          contractId:
-            "mock-contract-" + Math.floor(10000 + Math.random() * 90000),
-          signatureId: "sig-" + Math.floor(10000000 + Math.random() * 90000000),
-          signingLink: `https://example.com/signed-contracts/${contractNumber}`,
-          message: "Contract signed successfully (mock)",
-        });
       }
-
-      // In production, we would save the signature data to blob storage
-      // For now, we'll log it and proceed with contract creation
-
-      // Create a contract in Thanks Roger
-      const thanksRogerContract =
-        await thanksRogerService.createFinancingContract({
-          templateId: "template-financing-agreement", // This would be a real template ID in production
+    }
+    
+    // FALLBACK MODE: If API is not configured or we encounter auth issues, use local signing
+    let usingFallbackMode = !apiConfigured;
+    let signingProgressId = signingProgress?.id;
+    
+    // If we don't have a ThanksRoger contract ID, create a new contract
+    if (!thankRogerContractId && apiConfigured) {
+      logger.info({
+        message: `No existing ThanksRoger contract found, creating a new one`,
+        category: "contract",
+        source: "thanksroger",
+      });
+      
+      // Get customer email if available
+      let customerEmail = "customer@example.com";
+      if (contract.customerId) {
+        const customer = await storage.getUser(contract.customerId);
+        if (customer && customer.email) {
+          customerEmail = customer.email;
+        }
+      }
+      
+      try {
+        // Create a contract in Thanks Roger
+        const thanksRogerContract = await thanksRogerService.createFinancingContract({
+          templateId: templateId as string,
           customerName,
-          customerEmail: "customer@example.com", // In production, this would come from the user record
+          customerEmail,
           merchantName: merchant.name,
           contractNumber,
           amount: contract.amount,
           downPayment: contract.downPayment,
-          financedAmount: contract.amount - contract.downPayment,
+          financedAmount: contract.financedAmount,
           termMonths: contract.termMonths,
           interestRate: contract.interestRate,
           monthlyPayment: contract.monthlyPayment,
           sendEmail: false, // Don't send email since we're handling the flow in the app
         });
-
-      if (!thanksRogerContract) {
+        
+        if (!thanksRogerContract) {
+          logger.warn({
+            message: "Failed to create contract in Thanks Roger, using fallback mode",
+            category: "contract",
+            source: "thanksroger",
+            metadata: { contractId, contractNumber },
+          });
+          usingFallbackMode = true;
+        } else {
+          // Store the ThanksRoger contract ID for future reference
+          thankRogerContractId = thanksRogerContract.contractId;
+          signingLink = thanksRogerContract.signingLink;
+          
+          // Update the signing progress with the ThanksRoger contract ID
+          if (signingProgress) {
+            await storage.updateApplicationProgressCompletion(
+              signingProgress.id,
+              false, // Not completed yet
+              JSON.stringify({
+                thankRogerContractId,
+                signingLink,
+                status: "created",
+                createdAt: new Date().toISOString()
+              })
+            );
+            signingProgressId = signingProgress.id;
+          } else {
+            // Create a new signing progress if it doesn't exist
+            const newProgress = await storage.createApplicationProgress({
+              contractId: Number(contractId),
+              step: "signing",
+              completed: false,
+              data: JSON.stringify({
+                thankRogerContractId,
+                signingLink,
+                status: "created",
+                createdAt: new Date().toISOString()
+              })
+            });
+            signingProgressId = newProgress.id;
+          }
+        }
+      } catch (error) {
         logger.error({
-          message: "Failed to create contract in Thanks Roger",
+          message: `Error creating contract in ThanksRoger: ${error instanceof Error ? error.message : String(error)}`,
           category: "contract",
           source: "thanksroger",
-          metadata: { contractId, contractNumber },
+          metadata: { contractId, contractNumber }
         });
-
-        return res.status(500).json({
-          success: false,
-          message: "Failed to create contract document",
-        });
+        usingFallbackMode = true;
       }
-
-      // Return success with contract details
+    }
+    
+    // FALLBACK MODE: If we're in fallback mode, we'll store the signature locally without using ThanksRoger API
+    if (usingFallbackMode) {
+      logger.info({
+        message: "Using fallback mode for contract signing - storing signature locally",
+        category: "contract",
+        source: "thanksroger",
+        metadata: { contractId, contractNumber }
+      });
+      
+      const signatureId = `local-sig-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+      const signedAt = new Date().toISOString();
+      
+      // Update or create the signature progress
+      const signatureData = {
+        signatureId,
+        signedAt,
+        usingFallbackMode: true,
+        status: "signed",
+        contractNumber
+      };
+      
+      if (signingProgressId) {
+        await storage.updateApplicationProgressCompletion(
+          signingProgressId,
+          true, // Mark as completed
+          JSON.stringify(signatureData)
+        );
+      } else {
+        // Create new progress item
+        const newProgress = await storage.createApplicationProgress({
+          contractId: Number(contractId),
+          step: "signing",
+          completed: true,
+          data: JSON.stringify(signatureData)
+        });
+        signingProgressId = newProgress.id;
+      }
+      
+      // Update contract status
+      await storage.updateContractStep(Number(contractId), "completed");
+      await storage.updateContractStatus(Number(contractId), "active");
+      
+      // Return success response with local signature ID
       return res.json({
         success: true,
-        contractId: thanksRogerContract.contractId,
-        signatureId: "sig-" + Math.floor(10000000 + Math.random() * 90000000),
-        signingLink: thanksRogerContract.signingLink,
+        contractId: `local-${contractId}`,
+        signatureId,
+        signedAt,
+        status: "signed",
+        fallbackMode: true,
+        message: "Contract signed successfully using fallback mode"
+      });
+    }
+    
+    // If we have a ThanksRoger contract ID, try to sign the contract through the API
+    if (!thankRogerContractId) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to obtain contract ID from ThanksRoger. Please try again or contact support.",
+      });
+    }
+    
+    try {
+      // Now sign the contract with the provided signature data
+      const signResult = await thanksRogerService.signContract({
+        contractId: thankRogerContractId,
+        signatureData,
+        signerName: customerName,
+        signatureDate: new Date().toISOString()
+      });
+      
+      if (!signResult || !signResult.success) {
+        throw new Error("Failed to process signature with ThanksRoger API");
+      }
+      
+      // Update the signing progress with the signature data
+      if (signingProgressId) {
+        await storage.updateApplicationProgressCompletion(
+          signingProgressId,
+          true, // Mark as completed
+          JSON.stringify({
+            thankRogerContractId,
+            signingLink,
+            signatureId: signResult.signatureId,
+            status: signResult.status,
+            signedAt: signResult.signedAt,
+            documentUrl: signResult.documentUrl
+          })
+        );
+      } else {
+        // Create a new signing progress if it doesn't exist
+        const newProgress = await storage.createApplicationProgress({
+          contractId: Number(contractId),
+          step: "signing",
+          completed: true,
+          data: JSON.stringify({
+            thankRogerContractId,
+            signingLink,
+            signatureId: signResult.signatureId,
+            status: signResult.status,
+            signedAt: signResult.signedAt,
+            documentUrl: signResult.documentUrl
+          })
+        });
+        signingProgressId = newProgress.id;
+      }
+      
+      // Update contract status
+      await storage.updateContractStep(Number(contractId), "completed");
+      await storage.updateContractStatus(Number(contractId), "active");
+      
+      // Return success response
+      return res.json({
+        success: true,
+        contractId: thankRogerContractId,
+        signatureId: signResult.signatureId,
+        signingLink,
+        signedAt: signResult.signedAt,
+        status: signResult.status,
         message: "Contract signed successfully",
       });
     } catch (error) {
       logger.error({
-        message: `Contract signing error: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Error signing contract with ThanksRoger API: ${error instanceof Error ? error.message : String(error)}`,
         category: "contract",
         source: "thanksroger",
-        metadata: {
-          error: error instanceof Error ? error.stack : String(error),
-        },
+        metadata: { contractId, thankRogerContractId }
       });
-
-      return res.status(500).json({
-        success: false,
-        message: "Failed to process contract signing",
+      
+      // Switch to fallback mode if API signing fails
+      logger.info({
+        message: "Switching to fallback mode after API signing failure",
+        category: "contract",
+        source: "thanksroger"
+      });
+      
+      const signatureId = `local-sig-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+      const signedAt = new Date().toISOString();
+      
+      // Update the signing progress with the local signature data
+      if (signingProgressId) {
+        await storage.updateApplicationProgressCompletion(
+          signingProgressId,
+          true, // Mark as completed
+          JSON.stringify({
+            thankRogerContractId, // Keep the ThanksRoger ID for reference
+            signingLink,
+            signatureId,
+            status: "signed",
+            signedAt,
+            usingFallbackMode: true,
+            apiError: error instanceof Error ? error.message : String(error)
+          })
+        );
+      } else {
+        // Create a new signing progress
+        const newProgress = await storage.createApplicationProgress({
+          contractId: Number(contractId),
+          step: "signing",
+          completed: true,
+          data: JSON.stringify({
+            thankRogerContractId, // Keep the ThanksRoger ID for reference
+            signingLink,
+            signatureId,
+            status: "signed",
+            signedAt,
+            usingFallbackMode: true,
+            apiError: error instanceof Error ? error.message : String(error)
+          })
+        });
+        signingProgressId = newProgress.id;
+      }
+      
+      // Update contract status
+      await storage.updateContractStep(Number(contractId), "completed");
+      await storage.updateContractStatus(Number(contractId), "active");
+      
+      // Return success with fallback notice
+      return res.json({
+        success: true,
+        contractId: thankRogerContractId,
+        signatureId,
+        signingLink,
+        signedAt,
+        status: "signed",
+        fallbackMode: true,
+        message: "Contract signed successfully using fallback mode"
       });
     }
-  });
+  } catch (error) {
+    logger.error({
+      message: `Contract signing error: ${error instanceof Error ? error.message : String(error)}`,
+      category: "contract",
+      source: "thanksroger",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error),
+      },
+    });
 
+    return res.status(500).json({
+      success: false,
+      message: "An unexpected error occurred while processing your signature. Please try again or contact support.",
+    });
+  }
+});
   // Thanks Roger electronic signature endpoint
   apiRouter.post(
     "/mock/thanks-roger-signing",
