@@ -3,7 +3,9 @@ import {
   merchants, Merchant, InsertMerchant,
   contracts, Contract, InsertContract,
   applicationProgress, ApplicationProgress, InsertApplicationProgress,
-  logs, Log, InsertLog
+  logs, Log, InsertLog,
+  creditProfiles, CreditProfile, InsertCreditProfile,
+  underwriting, Underwriting, InsertUnderwriting
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
@@ -35,6 +37,20 @@ export interface IStorage {
   getApplicationProgressByContractId(contractId: number): Promise<ApplicationProgress[]>;
   createApplicationProgress(progress: InsertApplicationProgress): Promise<ApplicationProgress>;
   updateApplicationProgressCompletion(id: number, completed: boolean, data?: string): Promise<ApplicationProgress | undefined>;
+  
+  // Credit Profile operations
+  getCreditProfile(id: number): Promise<CreditProfile | undefined>;
+  getCreditProfileByUserId(userId: number): Promise<CreditProfile | undefined>;
+  getCreditProfileByContractId(contractId: number): Promise<CreditProfile | undefined>;
+  createCreditProfile(profile: InsertCreditProfile): Promise<CreditProfile>;
+  updateCreditProfile(id: number, data: Partial<InsertCreditProfile>): Promise<CreditProfile | undefined>;
+  
+  // Underwriting operations
+  getUnderwriting(id: number): Promise<Underwriting | undefined>;
+  getUnderwritingByContractId(contractId: number): Promise<Underwriting | undefined>;
+  getUnderwritingByCreditProfileId(creditProfileId: number): Promise<Underwriting | undefined>;
+  createUnderwriting(underwritingData: InsertUnderwriting): Promise<Underwriting>;
+  updateUnderwriting(id: number, data: Partial<InsertUnderwriting>): Promise<Underwriting | undefined>;
   
   // Log operations
   createLog(log: InsertLog): Promise<Log>;
@@ -182,6 +198,80 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updatedProgress;
+  }
+  
+  // Credit Profile methods
+  async getCreditProfile(id: number): Promise<CreditProfile | undefined> {
+    const [profile] = await db.select().from(creditProfiles).where(eq(creditProfiles.id, id));
+    return profile || undefined;
+  }
+  
+  async getCreditProfileByUserId(userId: number): Promise<CreditProfile | undefined> {
+    const [profile] = await db.select().from(creditProfiles).where(eq(creditProfiles.userId, userId));
+    return profile || undefined;
+  }
+  
+  async getCreditProfileByContractId(contractId: number): Promise<CreditProfile | undefined> {
+    const [profile] = await db.select().from(creditProfiles).where(eq(creditProfiles.contractId, contractId));
+    return profile || undefined;
+  }
+  
+  async createCreditProfile(profile: InsertCreditProfile): Promise<CreditProfile> {
+    const [newProfile] = await db.insert(creditProfiles).values(profile).returning();
+    return newProfile;
+  }
+  
+  async updateCreditProfile(id: number, data: Partial<InsertCreditProfile>): Promise<CreditProfile | undefined> {
+    const existingProfile = await this.getCreditProfile(id);
+    if (!existingProfile) return undefined;
+    
+    const [updatedProfile] = await db
+      .update(creditProfiles)
+      .set({ 
+        ...data,
+        updatedAt: new Date()
+      })
+      .where(eq(creditProfiles.id, id))
+      .returning();
+    
+    return updatedProfile;
+  }
+  
+  // Underwriting methods
+  async getUnderwriting(id: number): Promise<Underwriting | undefined> {
+    const [result] = await db.select().from(underwriting).where(eq(underwriting.id, id));
+    return result || undefined;
+  }
+  
+  async getUnderwritingByContractId(contractId: number): Promise<Underwriting | undefined> {
+    const [result] = await db.select().from(underwriting).where(eq(underwriting.contractId, contractId));
+    return result || undefined;
+  }
+  
+  async getUnderwritingByCreditProfileId(creditProfileId: number): Promise<Underwriting | undefined> {
+    const [result] = await db.select().from(underwriting).where(eq(underwriting.creditProfileId, creditProfileId));
+    return result || undefined;
+  }
+  
+  async createUnderwriting(underwritingData: InsertUnderwriting): Promise<Underwriting> {
+    const [newUnderwriting] = await db.insert(underwriting).values(underwritingData).returning();
+    return newUnderwriting;
+  }
+  
+  async updateUnderwriting(id: number, data: Partial<InsertUnderwriting>): Promise<Underwriting | undefined> {
+    const existingUnderwriting = await this.getUnderwriting(id);
+    if (!existingUnderwriting) return undefined;
+    
+    const [updatedUnderwriting] = await db
+      .update(underwriting)
+      .set({ 
+        ...data,
+        updatedAt: new Date()
+      })
+      .where(eq(underwriting.id, id))
+      .returning();
+    
+    return updatedUnderwriting;
   }
   
   // Log methods
