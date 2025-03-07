@@ -671,14 +671,22 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Create the credit profile
+      // Get user details from the request body (provided by the front-end form)
+      const { firstName, lastName, email: requestEmail, phone: requestPhone } = req.body;
+      
+      // If we don't have first/last name explicitly, try to split the user's full name
+      const nameParts = user.name ? user.name.split(' ') : ['', ''];
+      const userFirstName = nameParts[0] || '';
+      const userLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+      
+      // Create the credit profile with explicitly provided data or fallback to user data
       const creditProfile = await storage.createCreditProfile({
         userId,
         contractId: contract.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        phone: user.phone || null,
+        firstName: firstName || userFirstName,
+        lastName: lastName || userLastName,
+        email: requestEmail || user.email,
+        phone: requestPhone || user.phone || null,
         consentIp,
         consentDate: new Date(consentDate),
         creditScore: null, // Will be populated later by PreFi
