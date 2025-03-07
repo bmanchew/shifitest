@@ -1,16 +1,9 @@
-import { Switch, Route, Router } from "wouter";
+import { Switch, Route } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 import { useAuth } from "@/hooks/use-auth";
 import { Suspense, lazy } from "react";
-
-// Fix for hash router
-const hashRouterBase = () => {
-  // Get the hash without the '#' symbol
-  const hash = window.location.hash.replace(/^#/, '') || '/';
-  return hash;
-};
 
 // Admin pages
 const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
@@ -47,12 +40,11 @@ function App() {
   const { user, isLoading } = useAuth();
 
   return (
-    <Router base={hashRouterBase}>
-      <Suspense fallback={<LoadingFallback />}>
-        {isLoading ? (
-          <LoadingFallback />
-        ) : (
-          <Switch>
+    <Suspense fallback={<LoadingFallback />}>
+      {isLoading ? (
+        <LoadingFallback />
+      ) : (
+        <Switch>
             {!user && <Route path="/" component={Login} />}
 
           {user && user.role === "admin" && (
