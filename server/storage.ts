@@ -3,7 +3,8 @@ import {
   merchants, Merchant, InsertMerchant,
   contracts, Contract, InsertContract,
   applicationProgress, ApplicationProgress, InsertApplicationProgress,
-  logs, Log, InsertLog
+  logs, Log, InsertLog,
+  underwritingData
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
@@ -13,13 +14,13 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+
   // Merchant operations
   getMerchant(id: number): Promise<Merchant | undefined>;
   getMerchantByUserId(userId: number): Promise<Merchant | undefined>;
   getAllMerchants(): Promise<Merchant[]>;
   createMerchant(merchant: InsertMerchant): Promise<Merchant>;
-  
+
   // Contract operations
   getContract(id: number): Promise<Contract | undefined>;
   getContractByNumber(contractNumber: string): Promise<Contract | undefined>;
@@ -29,17 +30,23 @@ export interface IStorage {
   createContract(contract: InsertContract): Promise<Contract>;
   updateContractStatus(id: number, status: string): Promise<Contract | undefined>;
   updateContractStep(id: number, step: string): Promise<Contract | undefined>;
-  
+
   // Application Progress operations
   getApplicationProgress(id: number): Promise<ApplicationProgress | undefined>;
   getApplicationProgressByContractId(contractId: number): Promise<ApplicationProgress[]>;
   createApplicationProgress(progress: InsertApplicationProgress): Promise<ApplicationProgress>;
   updateApplicationProgressCompletion(id: number, completed: boolean, data?: string): Promise<ApplicationProgress | undefined>;
-  
+
   // Log operations
   createLog(log: InsertLog): Promise<Log>;
   getLogs(): Promise<Log[]>;
   getLogsByUserId(userId: number): Promise<Log[]>;
+
+  // Underwriting Data operations
+  getUnderwritingDataByUserId(userId: number): Promise<any[]>;
+  getUnderwritingDataByContractId(contractId: number): Promise<any[]>;
+  createUnderwritingData(data: any): Promise<any>;
+  updateUnderwritingData(id: number, data: any): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -48,73 +55,73 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
   }
-  
+
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user || undefined;
   }
-  
+
   async createUser(user: InsertUser): Promise<User> {
     const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
   }
-  
+
   // Merchant methods
   async getMerchant(id: number): Promise<Merchant | undefined> {
     const [merchant] = await db.select().from(merchants).where(eq(merchants.id, id));
     return merchant || undefined;
   }
-  
+
   async getMerchantByUserId(userId: number): Promise<Merchant | undefined> {
     const [merchant] = await db.select().from(merchants).where(eq(merchants.userId, userId));
     return merchant || undefined;
   }
-  
+
   async getAllMerchants(): Promise<Merchant[]> {
     return await db.select().from(merchants);
   }
-  
+
   async createMerchant(merchant: InsertMerchant): Promise<Merchant> {
     const [newMerchant] = await db.insert(merchants).values(merchant).returning();
     return newMerchant;
   }
-  
+
   // Contract methods
   async getContract(id: number): Promise<Contract | undefined> {
     const [contract] = await db.select().from(contracts).where(eq(contracts.id, id));
     return contract || undefined;
   }
-  
+
   async getContractByNumber(contractNumber: string): Promise<Contract | undefined> {
     const [contract] = await db.select().from(contracts).where(eq(contracts.contractNumber, contractNumber));
     return contract || undefined;
   }
-  
+
   async getAllContracts(): Promise<Contract[]> {
     return await db.select().from(contracts);
   }
-  
+
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
     return await db.select().from(contracts).where(eq(contracts.merchantId, merchantId));
   }
-  
+
   async getContractsByCustomerId(customerId: number): Promise<Contract[]> {
     return await db.select().from(contracts).where(eq(contracts.customerId, customerId));
   }
-  
+
   async createContract(contract: InsertContract): Promise<Contract> {
     const [newContract] = await db.insert(contracts).values(contract).returning();
     return newContract;
   }
-  
+
   async updateContractStatus(id: number, status: string): Promise<Contract | undefined> {
     // Check if contract exists
     const existingContract = await this.getContract(id);
     if (!existingContract) return undefined;
-    
+
     // Determine if completedAt should be set
     const completedAt = status === 'completed' ? new Date() : existingContract.completedAt;
-    
+
     // Update the contract
     const [updatedContract] = await db
       .update(contracts)
@@ -124,80 +131,105 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(contracts.id, id))
       .returning();
-    
+
     return updatedContract;
   }
-  
+
   async updateContractStep(id: number, step: string): Promise<Contract | undefined> {
     // Check if contract exists
     const existingContract = await this.getContract(id);
     if (!existingContract) return undefined;
-    
+
     // Update the contract step
     const [updatedContract] = await db
       .update(contracts)
       .set({ currentStep: step as any })
       .where(eq(contracts.id, id))
       .returning();
-    
+
     return updatedContract;
   }
-  
+
   // Application Progress methods
   async getApplicationProgress(id: number): Promise<ApplicationProgress | undefined> {
     const [progress] = await db.select().from(applicationProgress).where(eq(applicationProgress.id, id));
     return progress || undefined;
   }
-  
+
   async getApplicationProgressByContractId(contractId: number): Promise<ApplicationProgress[]> {
     return await db.select().from(applicationProgress).where(eq(applicationProgress.contractId, contractId));
   }
-  
+
   async createApplicationProgress(progress: InsertApplicationProgress): Promise<ApplicationProgress> {
     const [newProgress] = await db.insert(applicationProgress).values(progress).returning();
     return newProgress;
   }
-  
+
   async updateApplicationProgressCompletion(id: number, completed: boolean, data?: string): Promise<ApplicationProgress | undefined> {
     // Check if progress exists
     const existingProgress = await this.getApplicationProgress(id);
     if (!existingProgress) return undefined;
-    
+
     // Prepare update data
     const updateData: any = { 
       completed,
       completedAt: completed ? new Date() : null
     };
-    
+
     // Include data if provided
     if (data !== undefined) {
       updateData.data = data;
     }
-    
+
     // Update the progress
     const [updatedProgress] = await db
       .update(applicationProgress)
       .set(updateData)
       .where(eq(applicationProgress.id, id))
       .returning();
-    
+
     return updatedProgress;
   }
-  
+
   // Log methods
-  async createLog(log: InsertLog): Promise<Log> {
+  async createLog(log: any): Promise<Log> {
     const [newLog] = await db.insert(logs).values(log).returning();
     return newLog;
   }
-  
+
   async getLogs(): Promise<Log[]> {
     return await db.select().from(logs).orderBy(logs.timestamp);
   }
-  
+
   async getLogsByUserId(userId: number): Promise<Log[]> {
     return await db.select().from(logs).where(eq(logs.userId, userId)).orderBy(logs.timestamp);
   }
-  
+
+  // Methods for working with underwriting data
+  async getUnderwritingDataByUserId(userId: number) {
+    return await db.select().from(underwritingData).where({ userId }).orderBy(underwritingData.createdAt, 'desc');
+  }
+
+  async getUnderwritingDataByContractId(contractId: number) {
+    return await db.select().from(underwritingData).where({ contractId }).orderBy(underwritingData.createdAt, 'desc');
+  }
+
+  async createUnderwritingData(data: any) {
+    const result = await db.insert(underwritingData).values(data).returning();
+    return result[0];
+  }
+
+  async updateUnderwritingData(id: number, data: any) {
+    const result = await db.update(underwritingData)
+      .set({
+        ...data,
+        updatedAt: new Date()
+      })
+      .where({ id })
+      .returning();
+    return result[0];
+  }
+
   async seedInitialData() {
     try {
       // Check if data already exists to avoid duplicates
@@ -206,7 +238,7 @@ export class DatabaseStorage implements IStorage {
         console.log("Database already has data. Skipping seed.");
         return;
       }
-      
+
       // Create admin user
       const adminUser: InsertUser = {
         email: "admin@shifi.com",
@@ -216,7 +248,7 @@ export class DatabaseStorage implements IStorage {
         phone: "123-456-7890"
       };
       const createdAdminUser = await this.createUser(adminUser);
-      
+
       // Create a merchant user
       const merchantUser: InsertUser = {
         email: "merchant@techsolutions.com",
@@ -226,7 +258,7 @@ export class DatabaseStorage implements IStorage {
         phone: "987-654-3210"
       };
       const createdMerchantUser = await this.createUser(merchantUser);
-      
+
       // Create merchant
       const merchant: InsertMerchant = {
         name: "TechSolutions Inc.",
@@ -238,7 +270,7 @@ export class DatabaseStorage implements IStorage {
         userId: createdMerchantUser.id
       };
       await this.createMerchant(merchant);
-      
+
       // Create some customer users
       const customersData = [
         {
@@ -263,9 +295,9 @@ export class DatabaseStorage implements IStorage {
           phone: "555-456-7890"
         }
       ];
-      
+
       const createdCustomers = await Promise.all(customersData.map(customer => this.createUser(customer)));
-      
+
       // Create some contracts
       const contractsData = [
         {
@@ -308,16 +340,16 @@ export class DatabaseStorage implements IStorage {
           currentStep: "kyc" as const
         }
       ];
-      
+
       await Promise.all(contractsData.map(contract => this.createContract(contract)));
-      
+
       console.log("Database seeded successfully");
     } catch (error) {
       console.error("Error seeding database:", error);
       throw error;
     }
   }
-  
+
   // Helper method to check if data already exists
   private async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);

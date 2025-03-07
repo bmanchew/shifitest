@@ -49,24 +49,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     try {
       const { user } = await loginUser(email, password);
-      
+
       // For demo purposes, handle merchant user special case
       // In a real app, the backend would return the merchantId
       if (user.role === "merchant" && !user.merchantId) {
         user.merchantId = 1; // Default to first merchant for demo
       }
-      
+
+      // Handle backward compatibility with name field during migration
+      if (!user.firstName && user.name) {
+        const nameParts = user.name.split(' ');
+        user.firstName = nameParts[0] || '';
+        user.lastName = nameParts.slice(1).join(' ') || '';
+      }
+
       setUser(user);
       storeUserData(user);
-      
+
       // Redirect based on user role
       setLocation(getUserHomeRoute(user));
-      
+
+      // Use firstName for greeting if available, otherwise fall back to name
+      const displayName = user.firstName || user.name || 'User';
       toast({
         title: "Login Successful",
-        description: `Welcome back, ${user.name}!`,
+        description: `Welcome back, ${displayName}!`,
       });
-      
+
       // Important - we need to set loading to false after successful login
       setIsLoading(false);
     } catch (error) {

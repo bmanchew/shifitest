@@ -49,8 +49,21 @@ app.use((req, res, next) => {
     if ('seedInitialData' in storage) {
       await (storage as any).seedInitialData();
     }
+    
+    // Run any pending migrations
+    const { runMigrations } = require('./migrations');
+    await runMigrations();
+    logger.info({
+      message: 'Database migrations completed during startup',
+      category: 'system',
+    });
   } catch (error) {
-    console.error("Error seeding database:", error);
+    console.error("Error initializing database:", error);
+    logger.error({
+      message: 'Error initializing database',
+      category: 'system',
+      error,
+    });
   }
 
   const server = await registerRoutes(app);

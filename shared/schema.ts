@@ -8,14 +8,17 @@ export const contractStatusEnum = pgEnum('contract_status', ['pending', 'active'
 export const applicationStepEnum = pgEnum('application_step', ['terms', 'kyc', 'bank', 'payment', 'signing', 'completed']);
 export const logLevelEnum = pgEnum('log_level', ['debug', 'info', 'warn', 'error', 'critical']);
 export const logCategoryEnum = pgEnum('log_category', ['system', 'user', 'api', 'payment', 'security', 'contract']);
-export const logSourceEnum = pgEnum('log_source', ['internal', 'twilio', 'didit', 'plaid', 'thanksroger']);
+export const logSourceEnum = pgEnum('log_source', ['internal', 'twilio', 'didit', 'plaid', 'thanksroger', 'prefi']);
+export const creditTierEnum = pgEnum('credit_tier', ['tier1', 'tier2', 'tier3', 'declined']);
 
 // Users
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  name: text("name").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  name: text("name"), // Keep for backward compatibility during migration
   role: userRoleEnum("role").notNull().default('customer'),
   phone: text("phone"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -123,5 +126,40 @@ export type InsertContract = z.infer<typeof insertContractSchema>;
 export type ApplicationProgress = typeof applicationProgress.$inferSelect;
 export type InsertApplicationProgress = z.infer<typeof insertApplicationProgressSchema>;
 
+// Underwriting data
+export const underwritingData = pgTable("underwriting_data", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  contractId: integer("contract_id").references(() => contracts.id),
+  creditTier: creditTierEnum("credit_tier").notNull(),
+  creditScore: integer("credit_score"),
+  annualIncome: doublePrecision("annual_income"),
+  annualIncomePoints: integer("annual_income_points"),
+  employmentHistoryMonths: integer("employment_history_months"),
+  employmentHistoryPoints: integer("employment_history_points"),
+  creditScorePoints: integer("credit_score_points"),
+  dtiRatio: doublePrecision("dti_ratio"),
+  dtiRatioPoints: integer("dti_ratio_points"),
+  housingStatus: text("housing_status"),
+  housingPaymentHistory: integer("housing_payment_history_months"),
+  housingStatusPoints: integer("housing_status_points"),
+  delinquencyHistory: text("delinquency_history"),
+  delinquencyPoints: integer("delinquency_points"),
+  totalPoints: integer("total_points").notNull(),
+  rawPreFiData: text("raw_prefi_data"), // JSON stringified data from Pre-Fi API
+  rawPlaidData: text("raw_plaid_data"), // JSON stringified relevant Plaid data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertUnderwritingDataSchema = createInsertSchema(underwritingData).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type Log = typeof logs.$inferSelect;
 export type InsertLog = z.infer<typeof insertLogSchema>;
+
+export type UnderwritingData = typeof underwritingData.$inferSelect;
+export type InsertUnderwritingData = z.infer<typeof insertUnderwritingDataSchema>;

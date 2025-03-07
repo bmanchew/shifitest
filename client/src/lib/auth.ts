@@ -5,6 +5,18 @@ export type AuthUser = Omit<User, "password"> & {
   merchantId?: number;
 };
 
+// Helper function to get full name from first and last name
+export function getFullName(user: AuthUser): string {
+  if (user.firstName && user.lastName) {
+    return `${user.firstName} ${user.lastName}`;
+  } else if (user.firstName) {
+    return user.firstName;
+  } else if (user.name) {
+    return user.name;
+  }
+  return '';
+}
+
 export interface AuthResult {
   user: AuthUser;
 }
