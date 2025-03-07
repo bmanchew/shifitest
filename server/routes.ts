@@ -640,6 +640,92 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     }
   });
 
+  // Credit Profile API endpoint
+  apiRouter.post("/credit-profile", async (req: Request, res: Response) => {
+    try {
+      const { contractId, consentIp, consentDate } = req.body;
+
+      if (!contractId || !consentIp || !consentDate) {
+        return res.status(400).json({ 
+          message: "Contract ID, consent IP, and consent date are required" 
+        });
+      }
+
+      // Get the contract to verify it exists
+      const contract = await storage.getContract(parseInt(contractId));
+      if (!contract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      // Get the user associated with this contract (if any)
+      const userId = contract.customerId;
+      if (!userId) {
+        return res.status(400).json({ 
+          message: "Contract must be associated with a customer before creating a credit profile" 
+        });
+      }
+
+      // Get the user to retrieve their information
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get user details from the request body (provided by the front-end form)
+      const { firstName, lastName, email: requestEmail, phone: requestPhone } = req.body;
+      
+      // If we don't have first/last name explicitly, try to split the user's full name
+      const nameParts = user.name ? user.name.split(' ') : ['', ''];
+      const userFirstName = nameParts[0] || '';
+      const userLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+      
+      // Create the credit profile with explicitly provided data or fallback to user data
+      const creditProfile = await storage.createCreditProfile({
+        userId,
+        contractId: contract.id,
+        firstName: firstName || userFirstName,
+        lastName: lastName || userLastName,
+        email: requestEmail || user.email,
+        phone: requestPhone || user.phone || null,
+        consentIp,
+        consentDate: new Date(consentDate),
+        creditScore: null, // Will be populated later by PreFi
+        preFiData: null,
+        plaidAssetsData: null
+      });
+
+      // Log the credit profile creation
+      await storage.createLog({
+        level: "info",
+        category: "contract",
+        source: "internal",
+        message: `Credit profile created for contract ${contractId}`,
+        metadata: JSON.stringify({ 
+          contractId, 
+          userId,
+          creditProfileId: creditProfile.id
+        }),
+      });
+
+      res.status(201).json(creditProfile);
+    } catch (error) {
+      console.error("Create credit profile error:", error);
+      
+      // Log the error
+      await storage.createLog({
+        level: "error",
+        category: "contract",
+        source: "internal",
+        message: `Failed to create credit profile: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: JSON.stringify({
+          error: error instanceof Error ? error.stack : null,
+        }),
+      });
+      
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // SMS endpoint using Twilio API
   apiRouter.post("/send-sms", async (req: Request, res: Response) => {
     try {

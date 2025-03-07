@@ -94,11 +94,21 @@ export default function ContractTerms({
         data: JSON.stringify(consentData),
       });
       
+      // Get user information from session storage to create credit profile
+      const firstName = sessionStorage.getItem('firstName') || 'Customer';
+      const lastName = sessionStorage.getItem('lastName') || '';
+      const email = sessionStorage.getItem('email') || '';
+      const phone = sessionStorage.getItem('phone') || '';
+
       // Create credit profile with FCRA consent details
       await apiRequest("POST", "/api/credit-profile", {
         contractId,
         consentIp: ipAddress,
         consentDate: new Date().toISOString(),
+        firstName,
+        lastName,
+        email,
+        phone
       });
       
       toast({
