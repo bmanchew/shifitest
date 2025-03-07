@@ -1,10 +1,28 @@
-import { storage } from './storage';
+import { storage } from "./storage";
+
+export enum LogCategory {
+  Security = "security",
+  Payment = "payment",
+  System = "system",
+  User = "user",
+  API = "api",
+  Contract = "contract",
+}
+
+export enum LogSource {
+  Internal = "internal",
+  Twilio = "twilio",
+  Didit = "didit",
+  Plaid = "plaid",
+  ThanksRoger = "thanksroger",
+  PreFi = "prefi",
+}
 
 interface LogParams {
   message: string;
-  category?: string;
-  source?: string;
-  metadata?: any;
+  metadata?: Record<string, any>;
+  category?: LogCategory;
+  source?: LogSource;
   userId?: number;
   level?: 'debug' | 'info' | 'warn' | 'error' | 'critical';
 }
@@ -15,8 +33,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'debug',
-        category: (params.category || 'system') as const,
-        source: (params.source || 'internal') as const,
+        category: params.category || LogCategory.System,
+        source: params.source || LogSource.Internal,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
@@ -31,8 +49,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'info',
-        category: (params.category || 'system') as const,
-        source: (params.source || 'internal') as const,
+        category: params.category || LogCategory.System,
+        source: params.source || LogSource.Internal,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
@@ -47,8 +65,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'warn',
-        category: (params.category || 'system') as const,
-        source: (params.source || 'internal') as const,
+        category: params.category || LogCategory.System,
+        source: params.source || LogSource.Internal,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
@@ -63,8 +81,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'error',
-        category: (params.category || 'system') as const,
-        source: (params.source || 'internal') as const,
+        category: params.category || LogCategory.System,
+        source: params.source || LogSource.Internal,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
@@ -79,8 +97,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'critical',
-        category: (params.category || 'system') as const,
-        source: (params.source || 'internal') as const,
+        category: params.category || LogCategory.System,
+        source: params.source || LogSource.Internal,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
