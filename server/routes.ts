@@ -17,6 +17,7 @@ import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { logger } from "./services/logger";
 import crypto from "crypto";
+import { kycRouter } from "./routes/kyc";
 
 // Helper function to convert metadata to JSON string for storage
 function objectMetadata<T>(data: T): string {
@@ -3150,6 +3151,9 @@ apiRouter.post("/contract-signing", async (req: Request, res: Response) => {
   });
 
   // Mount the API router
+  // Add KYC webhook routes
+  apiRouter.use("/kyc", kycRouter);
+  
   app.use("/api", apiRouter);
 
   // Create HTTP server
