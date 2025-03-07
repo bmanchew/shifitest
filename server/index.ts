@@ -82,36 +82,23 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // Try to serve the app on port 5000 first, but fall back to other ports if needed
-  const startServer = (port = 5000, maxAttempts = 3, attempt = 1) => {
-    const serverInstance = server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
-      log(`serving on port ${port}`);
-      logger.info({
-        message: `ShiFi server started on port ${port}`,
-        category: 'system',
-        metadata: {
-          environment: app.get('env'),
-          nodeVersion: process.version
-        },
-        tags: ['startup', 'server']
-      });
+  // ALWAYS serve the app on port 5000
+  // this serves both the API and the client
+  const port = 5000;
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  }, () => {
+    log(`serving on port ${port}`);
+    logger.info({
+      message: `ShiFi server started on port ${port}`,
+      category: 'system',
+      metadata: {
+        environment: app.get('env'),
+        nodeVersion: process.version
+      },
+      tags: ['startup', 'server']
     });
-
-    serverInstance.on('error', (err: any) => {
-      if (err.code === 'EADDRINUSE' && attempt < maxAttempts) {
-        log(`Port ${port} is already in use, trying port ${port + 1}...`);
-        serverInstance.close();
-        startServer(port + 1, maxAttempts, attempt + 1);
-      } else {
-        console.error(`Failed to start server: ${err.message}`);
-        process.exit(1);
-      }
-    });
-  };
-
-  startServer();
+  });
 })();
