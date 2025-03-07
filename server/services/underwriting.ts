@@ -1,4 +1,4 @@
-import { logger } from "../logger";
+import { logger, LogCategory, LogSource } from "../logger";
 import { type CreditProfile } from "@shared/schema";
 
 interface UnderwritingData {
