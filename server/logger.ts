@@ -15,8 +15,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'debug',
-        category: params.category || 'system',
-        source: params.source || 'internal',
+        category: (params.category || 'system') as const,
+        source: (params.source || 'internal') as const,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
@@ -31,8 +31,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'info',
-        category: params.category || 'system',
-        source: params.source || 'internal',
+        category: (params.category || 'system') as const,
+        source: (params.source || 'internal') as const,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
@@ -47,8 +47,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'warn',
-        category: params.category || 'system',
-        source: params.source || 'internal',
+        category: (params.category || 'system') as const,
+        source: (params.source || 'internal') as const,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
@@ -63,8 +63,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'error',
-        category: params.category || 'system',
-        source: params.source || 'internal',
+        category: (params.category || 'system') as const,
+        source: (params.source || 'internal') as const,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
@@ -79,8 +79,8 @@ export const logger = {
     try {
       await storage.createLog({
         level: 'critical',
-        category: params.category || 'system',
-        source: params.source || 'internal',
+        category: (params.category || 'system') as const,
+        source: (params.source || 'internal') as const,
         message: params.message,
         userId: params.userId,
         metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
