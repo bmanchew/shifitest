@@ -46,7 +46,7 @@ export const preFiService = {
       });
 
       const response = await axios.post<PreFiResponse>(
-        "https://api.prefi.com/v1/prequalify",
+        "https://pre-fi.com/api/v2/pre-qualification",
         data,
         {
           headers: {
