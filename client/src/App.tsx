@@ -45,7 +45,7 @@ function App() {
         <LoadingFallback />
       ) : (
         <Switch>
-            {!user && <Route path="/" component={Login} />}
+          {!user && <Route path="/" component={Login} />}
 
           {user && user.role === "admin" && (
             <>
@@ -80,8 +80,7 @@ function App() {
         </Switch>
       )}
       <Toaster />
-      </Suspense>
-    </Router>
+    </Suspense>
   );
 }
 
