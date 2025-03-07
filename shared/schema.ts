@@ -8,7 +8,9 @@ export const contractStatusEnum = pgEnum('contract_status', ['pending', 'active'
 export const applicationStepEnum = pgEnum('application_step', ['terms', 'kyc', 'bank', 'payment', 'signing', 'completed']);
 export const logLevelEnum = pgEnum('log_level', ['debug', 'info', 'warn', 'error', 'critical']);
 export const logCategoryEnum = pgEnum('log_category', ['system', 'user', 'api', 'payment', 'security', 'contract']);
-export const logSourceEnum = pgEnum('log_source', ['internal', 'twilio', 'didit', 'plaid', 'thanksroger']);
+export const logSourceEnum = pgEnum('log_source', ['internal', 'twilio', 'didit', 'plaid', 'thanksroger', 'prefi']);
+export const creditTierEnum = pgEnum('credit_tier', ['tier1', 'tier2', 'tier3', 'disqualified']);
+export const underwritingStatusEnum = pgEnum('underwriting_status', ['pending', 'approved', 'conditional', 'declined']);
 
 // Users
 export const users = pgTable("users", {
@@ -110,6 +112,60 @@ export const insertLogSchema = createInsertSchema(logs).omit({
   timestamp: true,
 });
 
+// Credit Profile
+export const creditProfiles = pgTable("credit_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  contractId: integer("contract_id").references(() => contracts.id),
+  creditScore: integer("credit_score"),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  consentIp: text("consent_ip").notNull(),
+  consentDate: timestamp("consent_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  preFiData: text("prefi_data"), // JSON stringified data from Pre-Fi
+  plaidAssetsData: text("plaid_assets_data"), // JSON stringified data from Plaid Assets
+});
+
+export const insertCreditProfileSchema = createInsertSchema(creditProfiles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Underwriting
+export const underwriting = pgTable("underwriting", {
+  id: serial("id").primaryKey(),
+  creditProfileId: integer("credit_profile_id").references(() => creditProfiles.id).notNull(),
+  contractId: integer("contract_id").references(() => contracts.id).notNull(),
+  creditTier: creditTierEnum("credit_tier"),
+  status: underwritingStatusEnum("status").default("pending"),
+  totalScore: integer("total_score"),
+  annualIncomePoints: integer("annual_income_points"),
+  employmentHistoryPoints: integer("employment_history_points"),
+  creditScorePoints: integer("credit_score_points"),
+  dtiRatioPoints: integer("dti_ratio_points"),
+  housingStatusPoints: integer("housing_status_points"),
+  delinquencyHistoryPoints: integer("delinquency_history_points"),
+  annualIncome: doublePrecision("annual_income"),
+  dtiRatio: doublePrecision("dti_ratio"),
+  contingencies: text("contingencies"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  data: text("data"), // JSON stringified additional data
+});
+
+export const insertUnderwritingSchema = createInsertSchema(underwriting).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+});
+
 // Type definitions
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -122,6 +178,12 @@ export type InsertContract = z.infer<typeof insertContractSchema>;
 
 export type ApplicationProgress = typeof applicationProgress.$inferSelect;
 export type InsertApplicationProgress = z.infer<typeof insertApplicationProgressSchema>;
+
+export type CreditProfile = typeof creditProfiles.$inferSelect;
+export type InsertCreditProfile = z.infer<typeof insertCreditProfileSchema>;
+
+export type Underwriting = typeof underwriting.$inferSelect;
+export type InsertUnderwriting = z.infer<typeof insertUnderwritingSchema>;
 
 export type Log = typeof logs.$inferSelect;
 export type InsertLog = z.infer<typeof insertLogSchema>;

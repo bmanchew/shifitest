@@ -1,0 +1,139 @@
+FCRA Disclaimer
+To be able to provide offers the lead must agree to the FCRA Disclaimer. The lead can agree to this disclaimer when filling out a form or verbally agreeing over the phone.
+Sample FCRA Disclaimer
+I understand by clicking 'PreQualify Me!', I am providing written instructions authorizing [Your Company Name] and affiliates to obtain my personal credit profile or other information from credit reporting agencies under the FCRA solely to conduct a credit pre-qualification. I further understand that this is a soft pull and will not harm my credit in any way whatsoever.
+Required part of FCRA Disclaimer
+I am providing written instructions authorizing [Your Company Name] and affiliates to obtain my personal credit profile or other information from credit reporting agencies under the FCRA solely to conduct a credit pre-qualification.
+Consent IP and Date/Time
+We require the IP address of the lead or agent and the date/time the consent was given.
+     1 of 7 Pre-Fi API 12/18/24 Pre-Fi Confidential Developer Documentation
+ API Connection
+● Production Base URL: https://pre-fi.com/api/v2
+Security - OAUTH Access Token
+● Add HTTP Header - “Authorization” to all api calls.
+● Ex. “Authorization: Bearer <AccessToken>”
+REST API Methods
+● ping - Test api call to help get connected to the api.
+● pre-qualification - Pre-Qualify your customer by providing customer personal information and
+receive pre-qualification results.
+Postman Collection
+● We provide a postman collection to help get you started with sample api calls.
+● Add your Access Token to the Environments -> Production -> token variable.
+● https://www.postman.com/flight-saganist-12753881/pre-fi/overview
+Ping
+     GET [Base URL]/ping
+Response
+{
+    "Status": "Success",
+    "Code": "200",
+    "Account": "Company Name",
+    "Errors": [
+        "Error Message"
+    ]
+}
+Status - Success, Failure, or Unauthorized Code - Matches HTTP Response Codes Account - Company Name
+Errors - Array of error messages
+   2 of 7 Pre-Fi API 12/18/24 Pre-Fi Confidential Developer Documentation
+
+ PreQualification
+    POST [Base URL]/pre-qualification
+{
+    "FirstName": "John",
+    "LastName": "Smith",
+    "Email": "john.smith@gmail.com",
+    "Phone": "1234567890",
+    "ConsentDate": "2024-06-26T09:50:38-0700",
+    "ConsentIP": "172.56.0.42"
+}
+FirstName - String (50) - Required - Regex [a-zA-Z \'\-]+
+LastName - String (50) - Required - Regex [a-zA-Z \'\-]+
+Phone - String - Required - US Only
+Email - String (255) - Required - Requires valid email address.
+ConsentDate - Date - Required
+- Format: (YYYY-MM-DDThh:mm:ssTZD) - Date user agreed to FCRA disclaimer.
+ConsentIP - IP - IPV4 - Required
+- Requires a valid IP address.
+- IP Address of the user when agreeing to
+FCRA disclaimer.
+Response
+{
+"Status": "Success", "Code": "200", "Offers": [
+{
+"Name": "Automatic Financing",
+"Score": "800",
+"Details": "Financing Automatically and Instantly Available", "Status": "Approved",
+"Amount": "$45,000",
+"Contingencies": ""
+},{
+"Name": "Unsecured Funding", "Score": "800",
+"Details": "",
+"Status": "If Fixed", "Amount": "$45,000", "Contingencies": "PayD-$3,000"
+} ],
+"DataPerfection": { "Emails": [
+"email@domain.com" ],
+"Phones": [ "111-222-3333"
+], "Bankruptcy": [
+"01/02/2024" ],
+"Addresses": [ {
+"Address": "111-222-3333", "City": "San Diego", "State": "CA",
+"Zip": "92101"
+}
+Status - Success, Failure, or Unauthorized Code - Matches HTTP Response Codes Offers - Array of Offers
+- Name
+- Score
+- Details
+- Status
+- Amount
+- Contingencies
+DataPerfection (Optional Service)
+- Emails - Array of emails
+- Phones - Array of phone numbers
+- Bankruptcy - Array of dates (MM/DD/YYYY) - Addresses - Array of addresses
+- Address - City
+- State
+- Zip
+- DOB - Object - Age
+- Income - Object - Estimate
+Errors - Array of error messages
+   3 of 7 Pre-Fi API 12/18/24 Pre-Fi Confidential Developer Documentation
+
+   ], "DOB": {
+"Age": "44" },
+"Income": {
+"Estimate": "$150,000"
+}, },
+"Errors": [
+"Error Message"
+], }
+    4 of 7 Pre-Fi API 12/18/24 Pre-Fi Confidential Developer Documentation
+
+ Zapier
+We have created a Zapier Integration as an alternative to connecting directly to our API.
+1) To start using the Pre-Fi Zapier Application your Zapier Admin will need to click on this link.
+https://zapier.com/developer/public-invite/207383/13f46baebfbf35d8e94367838ee09269/
+2) Add a step to your Zap and type “Pre-Fi” in the search.
+3) Connect to your Pre-Fi Account
+You will need to enter the Access Token provided by your account manager.
+           5 of 7 Pre-Fi API 12/18/24 Pre-Fi Confidential Developer Documentation
+
+ 3) Select an Event (Pre-Qualification)
+     4) Map the required inputs.
+6 of 7 Pre-Fi API 12/18/24 Pre-Fi Confidential Developer Documentation
+     
+5) Map the outputs and define your workflow.CodeOffersOffer Name 1Offer Score 1Offer Details 1Offer Status 1Offer Amount 1Offer Contingencies 1Offer Name 2Offer Score 2Offer Details 2Offer Status 2Offer Amount 2Offer Contingencies 2Data PerfectionData Perfection Emails
+200
+1 email@domain.com
+Data Perfection Phones
+1 111-222-3333
+1 01/02/2024
+Data Perfection DOB
+Age 47
+$150,000
+14 Union St. San Diego
+CA 92101
+Automatic Financing 800
+Financing Automatically and Instantly Available Approved/Declined
+$22,000
+Unsecured Financing 800
+Unsecured Revolving Credit Lines As Is/If Fixed/Declined
+$71,000 PayD-$14,000 Data Perfection Addresses
