@@ -1,0 +1,274 @@
+Below is the Pre-Fi API Developer Documentation converted into a Markdown document for use with Replit AI Developer. You can copy and paste the content into your project.
+
+---
+
+```markdown
+# Pre-Fi API Developer Documentation
+
+**Version 2.0**
+
+---
+
+## Sample Lead Form
+
+### FCRA Disclaimer
+
+To be able to provide offers the lead must agree to the FCRA Disclaimer. The lead can agree to this disclaimer when filling out a form or verbally agreeing over the phone.
+
+#### Sample FCRA Disclaimer
+> I understand by clicking 'PreQualify Me!', I am providing written instructions authorizing [Your Company Name] and affiliates to obtain my personal credit profile or other information from credit reporting agencies under the FCRA solely to conduct a credit pre-qualification. I further understand that this is a soft pull and will not harm my credit in any way whatsoever.
+
+#### Required Part of FCRA Disclaimer
+> I am providing written instructions authorizing [Your Company Name] and affiliates to obtain my personal credit profile or other information from credit reporting agencies under the FCRA solely to conduct a credit pre-qualification.
+
+#### Consent IP and Date/Time
+- The IP address of the lead or agent and the date/time the consent was given are required.
+
+---
+
+## API Connection
+
+- **Production Base URL:** `https://pre-fi.com/api/v2`
+
+### Security – OAUTH Access Token
+- **Header:** Add the HTTP header `Authorization` to all API calls.
+- **Example:**  
+  ```
+  Authorization: Bearer <AccessToken>
+  ```
+
+### REST API Methods
+- **ping:** Test API call to help get connected to the API.
+- **pre-qualification:** Pre-qualify your customer by providing personal information and receive pre-qualification results.
+
+### Postman Collection
+- A Postman collection is provided to help you get started with sample API calls.
+- **Setup:** Add your Access Token to the `Environments -> Production -> token` variable.
+- **Link:** [Pre-Fi Postman Collection](https://www.postman.com/flight-saganist-12753881/pre-fi/overview)
+
+---
+
+## Ping Endpoint
+
+### Request
+```
+GET [Base URL]/ping
+```
+
+### Sample Response
+```json
+{
+  "Status": "Success",
+  "Code": "200",
+  "Account": "Company Name",
+  "Errors": [
+    "Error Message"
+  ]
+}
+```
+
+- **Status:** Indicates Success, Failure, or Unauthorized.
+- **Code:** Matches HTTP response codes.
+- **Account:** Company Name.
+- **Errors:** Array of error messages.
+
+---
+
+## PreQualification Endpoint
+
+### Request
+```
+POST [Base URL]/pre-qualification
+```
+
+#### Sample Request Body
+```json
+{
+  "FirstName": "John",
+  "LastName": "Smith",
+  "Email": "john.smith@gmail.com",
+  "Phone": "1234567890",
+  "ConsentDate": "2024-06-26T09:50:38-0700",
+  "ConsentIP": "172.56.0.42"
+}
+```
+
+#### Field Details
+
+- **FirstName**  
+  - Type: String (max 50 characters)  
+  - Required  
+  - Regex: `[a-zA-Z '\-]+`
+
+- **LastName**  
+  - Type: String (max 50 characters)  
+  - Required  
+  - Regex: `[a-zA-Z '\-]+`
+
+- **Phone**  
+  - Type: String  
+  - Required  
+  - Note: US numbers only
+
+- **Email**  
+  - Type: String (max 255 characters)  
+  - Required  
+  - Must be a valid email address
+
+- **ConsentDate**  
+  - Type: Date  
+  - Required  
+  - Format: `YYYY-MM-DDThh:mm:ssTZD`  
+  - Represents the date the user agreed to the FCRA disclaimer
+
+- **ConsentIP**  
+  - Type: IPv4  
+  - Required  
+  - Must be a valid IP address  
+  - Represents the IP address when agreeing to the FCRA disclaimer
+
+### Sample Response
+```json
+{
+  "Status": "Success",
+  "Code": "200",
+  "Offers": [
+    {
+      "Name": "Automatic Financing",
+      "Score": "800",
+      "Details": "Financing Automatically and Instantly Available",
+      "Status": "Approved",
+      "Amount": "$45,000",
+      "Contingencies": ""
+    },
+    {
+      "Name": "Unsecured Funding",
+      "Score": "800",
+      "Details": "",
+      "Status": "If Fixed",
+      "Amount": "$45,000",
+      "Contingencies": "PayD-$3,000"
+    }
+  ],
+  "DataPerfection": {
+    "Emails": [
+      "email@domain.com"
+    ],
+    "Phones": [
+      "111-222-3333"
+    ],
+    "Bankruptcy": [
+      "01/02/2024"
+    ],
+    "Addresses": [
+      {
+        "Address": "111-222-3333",
+        "City": "San Diego",
+        "State": "CA",
+        "Zip": "92101"
+      }
+    ],
+    "DOB": {
+      "Age": "44"
+    },
+    "Income": {
+      "Estimate": "$150,000"
+    }
+  },
+  "Errors": [
+    "Error Message"
+  ]
+}
+```
+
+#### Field Details in Response
+
+- **Status:** Success, Failure, or Unauthorized.
+- **Code:** Matches HTTP response codes.
+- **Offers:** An array of offer objects including:
+  - **Name**
+  - **Score**
+  - **Details**
+  - **Status**
+  - **Amount**
+  - **Contingencies**
+- **DataPerfection (Optional Service):**  
+  Contains additional data:
+  - **Emails:** Array of email addresses.
+  - **Phones:** Array of phone numbers.
+  - **Bankruptcy:** Array of dates (format: MM/DD/YYYY).
+  - **Addresses:** Array of address objects with:
+    - **Address**
+    - **City**
+    - **State**
+    - **Zip**
+  - **DOB:** Object containing:
+    - **Age**
+  - **Income:** Object containing:
+    - **Estimate**
+- **Errors:** Array of error messages.
+
+---
+
+## Zapier Integration
+
+An alternative integration is available via Zapier.
+
+1. **Start:**  
+   Your Zapier Admin needs to click [this link](https://zapier.com/developer/public-invite/207383/13f46baebfbf35d8e94367838ee09269/) to start using the Pre-Fi Zapier Application.
+
+2. **Add Step:**  
+   Add a step to your Zap and type “Pre-Fi” in the search.
+
+3. **Connect Account:**  
+   Connect to your Pre-Fi Account by entering the Access Token provided by your account manager.
+
+4. **Select Event:**  
+   Choose the Pre-Qualification event.
+
+5. **Map Inputs:**  
+   Map the required input fields.
+
+6. **Map Outputs & Define Workflow:**  
+   Map the outputs and define your workflow accordingly.
+
+### Example Mapping for Code 200
+
+- **Offers:**
+  - **Offer Name 1:** Automatic Financing  
+  - **Offer Score 1:** 800  
+  - **Offer Details 1:** Financing Automatically and Instantly Available  
+  - **Offer Status 1:** Approved/Declined  
+  - **Offer Amount 1:** $22,000  
+  - **Offer Contingencies 1:** *(empty)*
+
+  - **Offer Name 2:** Unsecured Financing  
+  - **Offer Score 2:** 800  
+  - **Offer Details 2:** Unsecured Revolving Credit Lines  
+  - **Offer Status 2:** As Is/If Fixed/Declined  
+  - **Offer Amount 2:** $71,000  
+  - **Offer Contingencies 2:** PayD-$14,000
+
+- **Data Perfection:**
+  - **Emails:** `email@domain.com`
+  - **Phones:** `111-222-3333`
+  - **Addresses:**  
+    - **Address 1:** 14 Union St.  
+    - **City 1:** San Diego  
+    - **State 1:** CA  
+    - **Zip 1:** 92101
+  - **Bankruptcy:** `01/02/2024`
+  - **DOB:**  
+    - **Age:** 47
+  - **Income:**  
+    - **Estimate:** $150,000
+
+---
+
+*This document is intended as a guide for developers integrating with the Pre-Fi API. Adjust field values and settings as necessary for your environment and implementation.*
+
+```
+
+---
+
+This Markdown file preserves the structure and details of the original Pre-Fi API documentation while making it easy to read and navigate in Replit AI Developer.
