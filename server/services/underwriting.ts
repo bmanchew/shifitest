@@ -44,8 +44,8 @@ export const underwritingService = {
       // Log the extraction process
       logger.debug({
         message: "Extracting underwriting data from credit profile",
-        category: "contract",
-        source: "internal",
+        category: LogCategory.Contract,
+        source: LogSource.Internal,
         metadata: {
           creditProfileId: creditProfile.id,
           preFiData,
@@ -63,8 +63,8 @@ export const underwritingService = {
     } catch (error) {
       logger.error({
         message: `Error extracting underwriting data: ${error instanceof Error ? error.message : String(error)}`,
-        category: "contract",
-        source: "internal",
+        category: LogCategory.Contract,
+        source: LogSource.Internal,
         metadata: {
           creditProfileId: creditProfile.id,
           error: error instanceof Error ? error.stack : null,
@@ -118,8 +118,8 @@ export const underwritingService = {
 
       logger.info({
         message: `Completed underwriting calculation`,
-        category: "contract",
-        source: "internal",
+        category: LogCategory.Contract,
+        source: LogSource.Internal,
         metadata: {
           totalPoints,
           creditTier,
@@ -144,8 +144,8 @@ export const underwritingService = {
     } catch (error) {
       logger.error({
         message: `Error calculating underwriting: ${error instanceof Error ? error.message : String(error)}`,
-        category: "contract",
-        source: "internal",
+        category: LogCategory.Contract,
+        source: LogSource.Internal,
         metadata: {
           error: error instanceof Error ? error.stack : null,
           underwritingData: data,
