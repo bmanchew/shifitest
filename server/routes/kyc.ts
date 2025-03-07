@@ -174,15 +174,15 @@ kycRouter.post("/webhook", async (req: Request, res: Response) => {
           await storage.createUnderwriting({
             creditProfileId: creditProfile.id,
             contractId: parseInt(contractId),
-            totalScore: underwritingResult.totalScore,
+            totalScore: underwritingResult.totalPoints,
             annualIncomePoints: underwritingResult.annualIncomePoints,
             employmentHistoryPoints: underwritingResult.employmentHistoryPoints,
             creditScorePoints: underwritingResult.creditScorePoints,
             dtiRatioPoints: underwritingResult.dtiRatioPoints,
             housingStatusPoints: underwritingResult.housingStatusPoints,
             delinquencyHistoryPoints: underwritingResult.delinquencyHistoryPoints,
-            annualIncome: underwritingResult.annualIncome,
-            dtiRatio: underwritingResult.dtiRatio,
+            annualIncome: underwritingData.annualIncome,
+            dtiRatio: underwritingData.dtiRatio,
             status: underwritingResult.status.toLowerCase() as any,
             creditTier: underwritingResult.creditTier.toLowerCase() as any,
           });

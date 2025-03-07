@@ -11,6 +11,7 @@ interface PreFiRequest {
 }
 
 interface PreFiResponse {
+  // Adjust based on actual Pre-Fi API response structure
   creditStatus: string;
   creditScore: number | null;
   annualIncome: number | null;
@@ -19,6 +20,7 @@ interface PreFiResponse {
   ownHome: boolean | null;
   hasDelinquencies: boolean | null;
   reasonCodes: string[];
+  // Add any additional fields from the Pre-Fi API response
 }
 
 export const preFiService = {
