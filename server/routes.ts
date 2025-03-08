@@ -5,7 +5,7 @@ import { ZodError } from "zod";
 
 import { eq } from "drizzle-orm";
 import { db } from "./db";
-import { contracts } from "./db/schema"; // Add missing import
+import { contracts } from "@shared/schema"; // Fix import path
 
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
