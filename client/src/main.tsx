@@ -25,3 +25,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <AppWrapper />
   </React.StrictMode>
 );
+
+// Added to address the missing component identified in the build logs.
+// This is a placeholder;  the actual implementation of DashboardPage should reflect the user type routing logic.
+export const DashboardPage = () => {
+  return <div>Dashboard (Placeholder)</div>;
+};

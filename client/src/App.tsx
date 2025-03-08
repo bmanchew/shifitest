@@ -3,10 +3,30 @@ import { Route, Routes } from "react-router-dom"; // Importing react-router-dom
 import { Toaster } from "@/components/ui/toaster";
 
 // Import your page components here
-import DashboardPage from "@/pages/DashboardPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import NotFoundPage from "@/pages/not-found";
+import AdminDashboard from "@/pages/AdminDashboard"; // Added AdminDashboard
+import MerchantDashboard from "@/pages/MerchantDashboard"; // Added MerchantDashboard
+import CustomerDashboard from "@/pages/CustomerDashboard"; // Added CustomerDashboard
+
+// Creating the DashboardPage component
+const DashboardPage = () => {
+  // Logic to determine the user type and redirect to the appropriate dashboard
+  // This is a placeholder, replace with actual logic to determine user type
+  const userType = localStorage.getItem('userType') || 'customer';
+
+  switch (userType) {
+    case 'admin':
+      return <AdminDashboard />;
+    case 'merchant':
+      return <MerchantDashboard />;
+    case 'customer':
+    default:
+      return <CustomerDashboard />;
+  }
+};
+
 
 const App: React.FC = () => {
   return (
@@ -14,7 +34,7 @@ const App: React.FC = () => {
       <Toaster />
       <Routes> {/* Using Routes from react-router-dom */}
         <Route path="/" element={<LoginPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} /> {/* Route to the new DashboardPage */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="*" element={<NotFoundPage />} /> {/* Catch-all route */}
