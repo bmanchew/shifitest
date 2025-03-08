@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Routes, Route, Navigate, BrowserRouter } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
 
 // Import your pages
@@ -46,17 +46,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
 const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
 
-          <Route path="/" element={
-            <ProtectedRoute requiredRole="customer">
-              <CustomerLayout>
-                <DashboardPage />
-              </CustomerLayout>
-            </ProtectedRoute>
-          } />
+        <Route path="/" element={
+          <ProtectedRoute requiredRole="customer">
+            <CustomerLayout>
+              <DashboardPage />
+            </CustomerLayout>
+          </ProtectedRoute>
+        } />
         <Route path="/dashboard" element={
           <ProtectedRoute requiredRole="customer">
             <CustomerLayout>
@@ -90,7 +89,6 @@ const App: React.FC = () => {
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      </BrowserRouter>
     </div>
   );
 };

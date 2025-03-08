@@ -19,7 +19,7 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const [location] = useLocation();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -28,31 +28,31 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       name: "Dashboard",
       href: "/admin/dashboard",
       icon: LayoutDashboard,
-      current: location === "/admin/dashboard" || location === "/admin" || location === "/",
+      current: location.pathname === "/admin/dashboard" || location.pathname === "/admin" || location.pathname === "/",
     },
     {
       name: "Merchants",
       href: "/admin/merchants",
       icon: Users,
-      current: location === "/admin/merchants",
+      current: location.pathname === "/admin/merchants",
     },
     {
       name: "Contracts",
       href: "/admin/contracts",
       icon: FileText,
-      current: location === "/admin/contracts",
+      current: location.pathname === "/admin/contracts",
     },
     {
       name: "Logs",
       href: "/admin/logs",
       icon: ClipboardList,
-      current: location === "/admin/logs",
+      current: location.pathname === "/admin/logs",
     },
     {
       name: "Settings",
       href: "/admin/settings",
       icon: Settings,
-      current: location === "/admin/settings",
+      current: location.pathname === "/admin/settings",
     },
   ];
 
@@ -87,7 +87,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               {navigationItems.map((item) => (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  to={item.href}
                   className={`${
                     item.current
                       ? "bg-gray-100 text-gray-900"
@@ -170,7 +170,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               {navigationItems.map((item) => (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  to={item.href}
                   className={`${
                     item.current
                       ? "bg-gray-100 text-gray-900"

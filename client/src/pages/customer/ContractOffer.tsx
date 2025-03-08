@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -13,7 +13,7 @@ export default function ContractOffer() {
   const { contractId: contractIdParam } = useParams();
   const contractId = parseInt(contractIdParam || "0");
   const { toast } = useToast();
-  const [_, setLocation] = useLocation();
+  const navigate = useNavigate();
   
   // Fetch contract details
   const { data: contract, isLoading } = useQuery({
@@ -46,7 +46,7 @@ export default function ContractOffer() {
 
   const handleAcceptOffer = () => {
     // Navigate to the application flow to begin the onboarding process
-    setLocation(`/apply/${contractId}`);
+    navigate(`/apply/${contractId}`);
   };
 
   const handleDeclineOffer = () => {
@@ -81,7 +81,7 @@ export default function ContractOffer() {
               <p className="text-sm text-gray-600 mb-6">
                 The offer may have expired or the link might be incorrect.
               </p>
-              <Button onClick={() => window.location.href = "/"}>
+              <Button onClick={() => navigate("/")}>
                 Return Home
               </Button>
             </CardContent>

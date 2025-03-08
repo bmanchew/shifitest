@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import CustomerLayout from "@/components/layout/CustomerLayout";
 import ContractTerms from "@/components/customer/ContractTerms";
@@ -17,10 +17,11 @@ export default function Application() {
   const contractId = parseInt(contractIdParam || "0");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // Extract URL parameters to handle verification redirects
-  const [location, setLocation] = useLocation();
-  const urlParams = new URLSearchParams(location.split("?")[1] || "");
+  const location = useLocation();
+  const urlParams = new URLSearchParams(location.search);
   const verifySuccess = urlParams.get("verify") === "success";
   const verifyContractId = parseInt(urlParams.get("contractId") || "0");
 
@@ -89,8 +90,7 @@ export default function Application() {
           );
 
           // Clear the URL parameters to prevent infinite loops
-          const cleanPath = location.split("?")[0];
-          setLocation(cleanPath, { replace: true });
+          navigate(location.pathname, { replace: true });
 
           // Refetch the contract data to get the latest progress
           await refetch();
@@ -148,7 +148,7 @@ export default function Application() {
               
               // Add a small delay to ensure the UI updates properly
               setTimeout(() => {
-                window.location.href = `/customer/application?contract=${verifyContractId}&step=bank`;
+                navigate(`/customer/application?contract=${verifyContractId}&step=bank`);
               }, 500);
             } catch (error) {
               console.error("Error updating KYC verification status:", error);
@@ -174,11 +174,10 @@ export default function Application() {
               setCurrentStep("bank");
             }
             
-            // Show success message
-            showNotification({
+            // Show success message using toast
+            toast({
               title: "Identity Verification Complete",
-              message: "Your identity has been successfully verified",
-              type: "success"
+              description: "Your identity has been successfully verified"
             });
 
             setIsHandlingVerification(false);
@@ -191,7 +190,7 @@ export default function Application() {
 
       handleVerificationRedirect();
     }
-  }, [verifySuccess, verifyContractId, location, toast, refetch, currentStep]);
+  }, [verifySuccess, verifyContractId, location, toast, refetch, currentStep, navigate]);
 
   // When contract data loads, set up the application state
   useEffect(() => {
@@ -338,7 +337,7 @@ export default function Application() {
         });
 
         // Refresh contract data
-        queryClient.invalidateQueries(["/api/contracts", contractData.id]);
+        queryClient.invalidateQueries({ queryKey: ["/api/contracts", contractData.id] });
       }
 
       // Move to the next step

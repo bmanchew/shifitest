@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,7 @@ export default function CustomerDashboard() {
   const { contractId: contractIdParam } = useParams();
   const contractId = parseInt(contractIdParam || "0");
   const { toast } = useToast();
-  const [_, setLocation] = useLocation();
+  const navigate = useNavigate();
   
   // Fetch contract details
   const { data: contract, isLoading: isLoadingContract } = useQuery({
@@ -123,7 +123,7 @@ export default function CustomerDashboard() {
               <p className="text-sm text-gray-600 mb-6">
                 The contract may have expired or the link might be incorrect.
               </p>
-              <Button onClick={() => setLocation("/")}>
+              <Button onClick={() => navigate("/")}>
                 Return Home
               </Button>
             </CardContent>
