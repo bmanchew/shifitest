@@ -5,7 +5,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/Login';
 import DashboardPage from './pages/dashboard/Dashboard';
 import CustomerApplicationPage from './pages/customer/Application';
-import MerchantDashboardPage from './pages/merchant/MerchantDashboard';
+import MerchantDashboardPage from './pages/merchant/Dashboard';
 import AdminDashboardPage from './pages/admin/AdminDashboard';
 import NotFoundPage from './pages/error/NotFound';
 import CustomerLayout from './components/layout/CustomerLayout';
