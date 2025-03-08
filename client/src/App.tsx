@@ -92,7 +92,7 @@ export default App;
 
         {/* Admin routes */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin/contracts" element={<AdminContracts />} />
+        <Route path="/admin/contracts" element={<AdminContracts />} />} />
         <Route path="/admin/contracts/:id" element={<AdminContractDetails />} />
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/merchants" element={<AdminMerchants />} />
