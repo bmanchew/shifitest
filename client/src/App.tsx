@@ -1,7 +1,8 @@
-
 import React from 'react';
-import { Routes, Route, useNavigate, Link } from 'react-router-dom';
+import { Route, Switch, Redirect } from "wouter";
 import { Toaster } from '@/components/ui/toaster';
+import { useNavigate, Link } from 'react-router-dom'; //This import might be unnecessary after the changes.
+
 
 // Import your page components here
 // Example: import HomePage from './pages/HomePage';
@@ -9,12 +10,10 @@ import { Toaster } from '@/components/ui/toaster';
 export default function App() {
   return (
     <div className="app">
-      <Routes>
-        {/* Define your routes here */}
-        {/* Example: <Route path="/" element={<HomePage />} /> */}
-        <Route path="/" element={<div>Home Page</div>} />
-        <Route path="/admin/*" element={<AdminRoutes />} />
-      </Routes>
+      <Switch>
+        <Route path="/" component={() => <div>Home Page</div>} />
+        <Route path="/admin/*" component={AdminRoutes} />
+      </Switch>
       <Toaster />
     </div>
   );
@@ -32,12 +31,12 @@ function AdminRoutes() {
         </nav>
       </aside>
       <main className="admin-content">
-        <Routes>
-          <Route path="dashboard" element={<div>Admin Dashboard</div>} />
-          <Route path="contracts" element={<div>Contracts Management</div>} />
-          <Route path="users" element={<div>Users Management</div>} />
-          <Route path="merchants" element={<div>Merchants Management</div>} />
-        </Routes>
+        <Switch>
+          <Route path="/admin/dashboard" component={() => <div>Admin Dashboard</div>} />
+          <Route path="/admin/contracts" component={() => <div>Contracts Management</div>} />
+          <Route path="/admin/users" component={() => <div>Users Management</div>} />
+          <Route path="/admin/merchants" component={() => <div>Merchants Management</div>} />
+        </Switch>
       </main>
     </div>
   );
@@ -47,7 +46,7 @@ function AdminRoutes() {
 function AdminNavLink({ to, children }: { to: string; children: React.ReactNode }) {
   const navigate = useNavigate();
   const isActive = window.location.pathname === to;
-  
+
   return (
     <Link
       to={to}
