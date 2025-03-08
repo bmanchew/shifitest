@@ -1,6 +1,6 @@
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Routes, Route, BrowserRouter as Router } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 
 // Import your page components here
@@ -15,7 +15,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute"; // Import from co
 export default function App() {
   return (
     <div className="min-h-screen bg-background">
-      <BrowserRouter>
+      <Router>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -31,7 +31,7 @@ export default function App() {
           <Route path="/" element={<DashboardRedirector />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
-      </BrowserRouter>
+      </Router>
       <Toaster />
     </div>
   );

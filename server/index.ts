@@ -122,10 +122,13 @@ app.use((req, res, next) => {
       return;
     }
     
+    // Increase max listeners to prevent warnings
+    server.setMaxListeners(20);
+    
     server.listen({
       port: deploymentPort,
       host: "0.0.0.0", // Explicitly listen on all network interfaces
-      reusePort: true,
+      reusePort: false, // Changed to false to prevent multiple bindings
     }, () => {
       const serverAddress = server.address();
       const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : deploymentPort;
