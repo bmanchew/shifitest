@@ -1,7 +1,6 @@
 import React from 'react';
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch, Link, useLocation } from "wouter";
 import { Toaster } from '@/components/ui/toaster';
-import { useNavigate, Link } from 'react-router-dom'; //This import might be unnecessary after the changes.
 
 
 // Import your page components here
@@ -44,9 +43,9 @@ function AdminRoutes() {
 
 // Helper component to handle navigation links with active state
 function AdminNavLink({ to, children }: { to: string; children: React.ReactNode }) {
-  const navigate = useNavigate();
-  const isActive = window.location.pathname === to;
-
+  const [location] = useLocation();
+  const isActive = location === to;
+  
   return (
     <Link
       to={to}
