@@ -45,8 +45,11 @@ app.use((req, res, next) => {
 
 // Create a server startup function that avoids multiple instances
 async function startServer() {
-  // Singleton pattern - track if server has been started
-  if ((global as any).serverStarted) {
+  // Use a more robust singleton check with process-wide lock file approach
+  const lockKey = 'server_instance_running';
+  
+  // Check if another instance is already running
+  if ((global as any)[lockKey]) {
     logger.warn({
       message: "Server startup attempted but server is already running",
       category: "system",
@@ -55,7 +58,29 @@ async function startServer() {
     return;
   }
   
-  (global as any).serverStarted = true;
+  // Set global lock
+  (global as any)[lockKey] = true;
+  
+  // Set up cleanup to release lock on process termination
+  const cleanup = () => {
+    (global as any)[lockKey] = false;
+    process.exit(0);
+  };
+  
+  // Handle termination signals
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
+  process.on('uncaughtException', (err) => {
+    logger.error({
+      message: `Uncaught exception: ${err.message}`,
+      category: 'system',
+      metadata: { 
+        error: err.message,
+        stack: err.stack 
+      }
+    });
+    cleanup();
+  });
 
   try {
     // Seed the database with initial data if needed
@@ -122,60 +147,73 @@ async function startServer() {
       serveStatic(app);
     }
 
-    // Increase max listeners to prevent warnings (do this before binding to port)
+    // Increase max listeners to prevent warnings
     server.setMaxListeners(20);
 
-    // Start the server on an available port
-    const startServerOnPort = (port: number = 5000): void => {
-      // Use environment-provided port (for deployment) or start with default
-      const deploymentPort = process.env.PORT ? parseInt(process.env.PORT, 10) : port;
-      
-      // Check if the server is already listening
-      if (server.listening) {
-        logger.warn({
-          message: `Server is already listening, not starting again`,
-          category: 'system',
-          metadata: { port: deploymentPort }
-        });
-        return;
-      }
-      
-      server.listen({
-        port: deploymentPort,
-        host: "0.0.0.0", // Explicitly listen on all network interfaces
-        reusePort: false, // Prevent multiple bindings
-      }, () => {
-        const serverAddress = server.address();
-        const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : deploymentPort;
-        log(`Server listening on http://0.0.0.0:${serverPort}`);
-        logger.info({
-          message: `ShiFi server started on port ${serverPort}`,
-          category: 'system',
-          metadata: {
-            environment: app.get('env'),
-            nodeVersion: process.version,
-            address: '0.0.0.0',
-            port: serverPort
-          },
-          tags: ['startup', 'server']
-        });
-      }).on('error', (err: Error & { code?: string }) => {
-        if (err.code === 'EADDRINUSE' && !process.env.PORT) {
-          // Only try incrementing port if we're not using an environment-specified port
-          log(`Port ${deploymentPort} is in use, trying ${deploymentPort + 1}`);
-          startServerOnPort(deploymentPort + 1);
-        } else {
-          logger.error({
-            message: `Error starting server: ${err.message}`,
-            category: 'system',
-            metadata: { error: err.message }
-          });
+    // Single instance of port selection logic with better error handling
+    let currentPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
+    let maxPortAttempts = 10; // Limit port attempts to prevent infinite loops
+    
+    const startOnAvailablePort = () => {
+      return new Promise<void>((resolve, reject) => {
+        if (maxPortAttempts <= 0) {
+          return reject(new Error('Could not find an available port after multiple attempts'));
         }
+        
+        if (server.listening) {
+          logger.warn({
+            message: `Server is already listening, not starting again`,
+            category: 'system',
+            metadata: { port: currentPort }
+          });
+          return resolve();
+        }
+        
+        const httpServer = server.listen({
+          port: currentPort,
+          host: "0.0.0.0",
+          reusePort: false,
+        }, () => {
+          const serverAddress = httpServer.address();
+          const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : currentPort;
+          log(`Server listening on http://0.0.0.0:${serverPort}`);
+          logger.info({
+            message: `ShiFi server started on port ${serverPort}`,
+            category: 'system',
+            metadata: {
+              environment: app.get('env'),
+              nodeVersion: process.version,
+              address: '0.0.0.0',
+              port: serverPort
+            },
+            tags: ['startup', 'server']
+          });
+          resolve();
+        });
+        
+        httpServer.on('error', (err: Error & { code?: string }) => {
+          if (err.code === 'EADDRINUSE' && !process.env.PORT) {
+            log(`Port ${currentPort} is in use, trying ${currentPort + 1}`);
+            currentPort++;
+            maxPortAttempts--;
+            httpServer.close(() => {
+              startOnAvailablePort().then(resolve).catch(reject);
+            });
+          } else {
+            logger.error({
+              message: `Error starting server: ${err.message}`,
+              category: 'system',
+              metadata: { error: err.message }
+            });
+            reject(err);
+          }
+        });
       });
     };
     
-    // Start the server
-    startServerOnPort(5000);
+    // Start the server on an available port
+    await startOnAvailablePort();
+    
   } catch (error) {
     logger.error({
       message: `Critical error starting server: ${error instanceof Error ? error.message : String(error)}`,
@@ -185,9 +223,12 @@ async function startServer() {
         stack: error instanceof Error ? error.stack : undefined 
       }
     });
-    (global as any).serverStarted = false; // Reset flag to allow retry
+    // Release lock to allow for restart attempts
+    (global as any)[lockKey] = false;
   }
 }
 
-// Start the server
-startServer();
+// Only call startServer once
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+});
