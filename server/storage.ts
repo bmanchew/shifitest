@@ -352,7 +352,12 @@ export class DatabaseStorage implements IStorage {
 
   // Helper method to check if data already exists
   private async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users);
+    try {
+      return await db.select().from(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      return []; // Return empty array to prevent further errors
+    }
   }
 }
 

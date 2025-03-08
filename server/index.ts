@@ -51,18 +51,30 @@ app.use((req, res, next) => {
     }
     
     // Run any pending migrations
-    const { runMigrations } = require('./migrations');
-    await runMigrations();
-    logger.info({
-      message: 'Database migrations completed during startup',
-      category: 'system',
-    });
+    try {
+      // Import runMigrations function using dynamic import
+      const { runMigrations } = await import('./migrations/index');
+      await runMigrations();
+      logger.info({
+        message: 'Database migrations completed during startup',
+        category: 'system',
+      });
+    } catch (migrationError) {
+      logger.warn({
+        message: `Could not run migrations: ${migrationError instanceof Error ? migrationError.message : String(migrationError)}`,
+        category: 'system',
+        metadata: { error: String(migrationError) }
+      });
+    }
   } catch (error) {
     console.error("Error initializing database:", error);
     logger.error({
       message: 'Error initializing database',
       category: 'system',
-      error,
+      metadata: { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined 
+      }
     });
   }
 
@@ -79,7 +91,7 @@ app.use((req, res, next) => {
       statusCode: status,
       metadata: {
         stack: err.stack,
-        error: err
+        error: err instanceof Error ? err.message : String(err)
       }
     });
 
@@ -95,23 +107,37 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client
-  const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-    logger.info({
-      message: `ShiFi server started on port ${port}`,
-      category: 'system',
-      metadata: {
-        environment: app.get('env'),
-        nodeVersion: process.version
-      },
-      tags: ['startup', 'server']
+  // Start the server on an available port
+  const startServer = (port: number = 5000): void => {
+    server.listen({
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    }, () => {
+      log(`serving on port ${port}`);
+      logger.info({
+        message: `ShiFi server started on port ${port}`,
+        category: 'system',
+        metadata: {
+          environment: app.get('env'),
+          nodeVersion: process.version
+        },
+        tags: ['startup', 'server']
+      });
+    }).on('error', (err: Error & { code?: string }) => {
+      if (err.code === 'EADDRINUSE') {
+        log(`Port ${port} is in use, trying ${port + 1}`);
+        startServer(port + 1);
+      } else {
+        logger.error({
+          message: `Error starting server: ${err.message}`,
+          category: 'system',
+          metadata: { error: err.message }
+        });
+      }
     });
-  });
+  };
+  
+  // Start the server
+  startServer(5000);
 })();
