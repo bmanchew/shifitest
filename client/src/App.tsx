@@ -3,8 +3,9 @@ import { Route, Routes } from "react-router-dom"; // Importing react-router-dom
 import { Toaster } from "@/components/ui/toaster";
 
 // Import your page components here
-import LoginPage from "@/pages/LoginPage";
-import RegisterPage from "@/pages/RegisterPage";
+import LoginPage from "@/pages/Login";
+// Commented out until RegisterPage is available
+// import RegisterPage from "@/pages/RegisterPage";
 import NotFoundPage from "@/pages/not-found";
 import AdminDashboard from "@/pages/AdminDashboard"; // Added AdminDashboard
 import MerchantDashboard from "@/pages/MerchantDashboard"; // Added MerchantDashboard
@@ -36,7 +37,8 @@ const App: React.FC = () => {
         <Route path="/" element={<LoginPage />} />
         <Route path="/dashboard" element={<DashboardPage />} /> {/* Route to the new DashboardPage */}
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        {/* Uncomment when RegisterPage is available */}
+        {/* <Route path="/register" element={<RegisterPage />} /> */}
         <Route path="*" element={<NotFoundPage />} /> {/* Catch-all route */}
       </Routes>
     </div>
