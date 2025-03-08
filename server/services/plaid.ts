@@ -474,40 +474,95 @@ class PlaidService {
       // Get the asset report with insights for more detailed transaction data
       const { report } = await this.getAssetReport(assetReportToken, true);
       
-      // Initialize analysis result
+      // Process the report data to extract relevant information
+      const accounts = report.items.flatMap((item: any) => item.accounts);
+      const transactions = accounts.flatMap((account: any) => account.transactions || []);
+      
+      // Calculate monthly income based on recurring deposits
+      const depositAmounts = transactions
+        .filter((tx: any) => tx.amount > 0 && tx.type === 'deposit')
+        .map((tx: any) => tx.amount);
+      const estimatedMonthlyIncome = depositAmounts.length > 0 
+        ? (depositAmounts.reduce((a: number, b: number) => a + b, 0) / depositAmounts.length) 
+        : 0;
+      
+      // Identify employment duration from transaction patterns
+      const employmentMonths = Math.floor(transactions.length / 30); // Rough estimate based on transaction history
+      
+      // Calculate debt payments and DTI ratio
+      const monthlyDebtPayments = transactions
+        .filter((tx: any) => 
+          tx.amount < 0 && 
+          (tx.category || []).some((cat: string) => 
+            ['loan', 'credit', 'debt'].includes(cat.toLowerCase())
+          )
+        )
+        .reduce((total: number, tx: any) => total + Math.abs(tx.amount), 0) / (transactions.length / 30);
+      
+      const dtiRatio = monthlyDebtPayments > 0 ? (monthlyDebtPayments / estimatedMonthlyIncome) : 0;
+      
+      // Housing payment analysis
+      const housingTransactions = transactions.filter((tx: any) => 
+        (tx.category || []).some((cat: string) => 
+          ['rent', 'mortgage'].includes(cat.toLowerCase())
+        )
+      );
+      
+      const housingStatus = housingTransactions.length > 0 ? 'stable' : 'unknown';
+      const paymentHistoryMonths = Math.floor(housingTransactions.length);
+      
+      // Initialize analysis result with calculated values
       const analysis: UnderwritingAnalysis = {
         income: {
-          annualIncome: 0,
-          incomeStreams: [],
-          confidenceScore: 0,
+          annualIncome: estimatedMonthlyIncome * 12,
+          incomeStreams: Array.from(new Set(depositAmounts.map((amount: number) => amount.toFixed(2)))),
+          confidenceScore: Math.min(depositAmounts.length / 6, 1), // Higher confidence with more data points
         },
         employment: {
-          employmentMonths: 0,
-          employers: [],
-          confidenceScore: 0,
+          employmentMonths,
+          employers: Array.from(new Set(transactions
+            .filter((tx: any) => tx.amount > 0 && tx.type === 'deposit')
+            .map((tx: any) => tx.name)
+          )),
+          confidenceScore: Math.min(employmentMonths / 12, 1),
         },
         debt: {
-          monthlyDebtPayments: 0,
-          identifiedDebts: [],
-          dtiRatio: 0,
+          monthlyDebtPayments,
+          identifiedDebts: Array.from(new Set(transactions
+            .filter((tx: any) => tx.amount < 0 && (tx.category || []).some((cat: string) => ['loan', 'credit', 'debt'].includes(cat.toLowerCase())))
+            .map((tx: any) => tx.name)
+          )),
+          dtiRatio,
         },
         housing: {
-          housingStatus: 'unknown',
-          monthlyPayment: 0,
-          paymentHistoryMonths: 0,
-          consistencyScore: 0,
+          housingStatus,
+          monthlyPayment: housingTransactions.length > 0 
+            ? Math.abs(housingTransactions[0].amount) 
+            : 0,
+          paymentHistoryMonths,
+          consistencyScore: housingTransactions.length > 0 
+            ? housingTransactions.filter((tx: any) => tx.amount < 0).length / housingTransactions.length 
+            : 0,
         },
         delinquency: {
-          overdraftCount: 0,
-          insufficientFundsCount: 0,
-          lateFeeCount: 0,
-          lastDelinquencyDate: null,
+          overdraftCount: transactions.filter((tx: any) => 
+            tx.amount < 0 && tx.type === 'overdraft'
+          ).length,
+          insufficientFundsCount: transactions.filter((tx: any) => 
+            (tx.category || []).includes('insufficient_funds')
+          ).length,
+          lateFeeCount: transactions.filter((tx: any) => 
+            (tx.category || []).includes('late_fee')
+          ).length,
+          lastDelinquencyDate: null, // Would need additional data to determine this
         },
         summary: {
-          numberOfAccounts: 0,
-          totalBalance: 0,
-          accountTypes: [],
-          oldestAccountMonths: 0,
+          numberOfAccounts: accounts.length,
+          totalBalance: accounts.reduce((total: number, account: any) => total + (account.balances.current || 0), 0),
+          accountTypes: Array.from(new Set(accounts.map((account: any) => account.type))),
+          oldestAccountMonths: Math.max(...accounts.map((account: any) => 
+            account.daysAvailable ? Math.floor(account.daysAvailable / 30) : 0
+          )),
         },
       };
 
