@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { Routes, Route, Navigate } from 'react-router-dom';
 // Import your components/pages here
-import LoginPage from './pages/auth/Login';
+import LoginPage from './pages/Login';
 import DashboardPage from './pages/dashboard/Dashboard';
 import CustomerApplicationPage from './pages/customer/CustomerApplication';
 import MerchantDashboardPage from './pages/merchant/MerchantDashboard';
