@@ -1,3 +1,4 @@
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -42,123 +43,151 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  // Seed the database with initial data if needed
+// Create a server startup function that avoids multiple instances
+async function startServer() {
+  // Singleton pattern - track if server has been started
+  if ((global as any).serverStarted) {
+    logger.warn({
+      message: "Server startup attempted but server is already running",
+      category: "system",
+      metadata: { alreadyRunning: true }
+    });
+    return;
+  }
+  
+  (global as any).serverStarted = true;
+
   try {
-    // Check if database needs seeding and seed it
-    if ('seedInitialData' in storage) {
-      await (storage as any).seedInitialData();
-    }
-    
-    // Run any pending migrations
+    // Seed the database with initial data if needed
     try {
-      // Import runMigrations function using dynamic import
-      const { runMigrations } = await import('./migrations/index');
-      await runMigrations();
-      logger.info({
-        message: 'Database migrations completed during startup',
+      // Check if database needs seeding and seed it
+      if ('seedInitialData' in storage) {
+        await (storage as any).seedInitialData();
+      }
+      
+      // Run any pending migrations
+      try {
+        // Import runMigrations function using dynamic import
+        const { runMigrations } = await import('./migrations/index');
+        await runMigrations();
+        logger.info({
+          message: 'Database migrations completed during startup',
+          category: 'system',
+        });
+      } catch (migrationError) {
+        logger.warn({
+          message: `Could not run migrations: ${migrationError instanceof Error ? migrationError.message : String(migrationError)}`,
+          category: 'system',
+          metadata: { error: String(migrationError) }
+        });
+      }
+    } catch (error) {
+      console.error("Error initializing database:", error);
+      logger.error({
+        message: 'Error initializing database',
         category: 'system',
-      });
-    } catch (migrationError) {
-      logger.warn({
-        message: `Could not run migrations: ${migrationError instanceof Error ? migrationError.message : String(migrationError)}`,
-        category: 'system',
-        metadata: { error: String(migrationError) }
+        metadata: { 
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined 
+        }
       });
     }
+
+    const server = await registerRoutes(app);
+
+    app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
+
+      // Log the error with our enhanced logger
+      logger.error({
+        message: `Error: ${message}`,
+        req,
+        statusCode: status,
+        metadata: {
+          stack: err.stack,
+          error: err instanceof Error ? err.message : String(err)
+        }
+      });
+
+      res.status(status).json({ message });
+    });
+
+    // importantly only setup vite in development and after
+    // setting up all the other routes so the catch-all route
+    // doesn't interfere with the other routes
+    if (app.get("env") === "development") {
+      await setupVite(app, server);
+    } else {
+      serveStatic(app);
+    }
+
+    // Increase max listeners to prevent warnings (do this before binding to port)
+    server.setMaxListeners(20);
+
+    // Start the server on an available port
+    const startServerOnPort = (port: number = 5000): void => {
+      // Use environment-provided port (for deployment) or start with default
+      const deploymentPort = process.env.PORT ? parseInt(process.env.PORT, 10) : port;
+      
+      // Check if the server is already listening
+      if (server.listening) {
+        logger.warn({
+          message: `Server is already listening, not starting again`,
+          category: 'system',
+          metadata: { port: deploymentPort }
+        });
+        return;
+      }
+      
+      server.listen({
+        port: deploymentPort,
+        host: "0.0.0.0", // Explicitly listen on all network interfaces
+        reusePort: false, // Prevent multiple bindings
+      }, () => {
+        const serverAddress = server.address();
+        const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : deploymentPort;
+        log(`Server listening on http://0.0.0.0:${serverPort}`);
+        logger.info({
+          message: `ShiFi server started on port ${serverPort}`,
+          category: 'system',
+          metadata: {
+            environment: app.get('env'),
+            nodeVersion: process.version,
+            address: '0.0.0.0',
+            port: serverPort
+          },
+          tags: ['startup', 'server']
+        });
+      }).on('error', (err: Error & { code?: string }) => {
+        if (err.code === 'EADDRINUSE' && !process.env.PORT) {
+          // Only try incrementing port if we're not using an environment-specified port
+          log(`Port ${deploymentPort} is in use, trying ${deploymentPort + 1}`);
+          startServerOnPort(deploymentPort + 1);
+        } else {
+          logger.error({
+            message: `Error starting server: ${err.message}`,
+            category: 'system',
+            metadata: { error: err.message }
+          });
+        }
+      });
+    };
+    
+    // Start the server
+    startServerOnPort(5000);
   } catch (error) {
-    console.error("Error initializing database:", error);
     logger.error({
-      message: 'Error initializing database',
+      message: `Critical error starting server: ${error instanceof Error ? error.message : String(error)}`,
       category: 'system',
       metadata: { 
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined 
       }
     });
+    (global as any).serverStarted = false; // Reset flag to allow retry
   }
+}
 
-  const server = await registerRoutes(app);
-
-  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    // Log the error with our enhanced logger
-    logger.error({
-      message: `Error: ${message}`,
-      req,
-      statusCode: status,
-      metadata: {
-        stack: err.stack,
-        error: err instanceof Error ? err.message : String(err)
-      }
-    });
-
-    res.status(status).json({ message });
-  });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
-
-  // Start the server on an available port
-  const startServer = (port: number = 5000): void => {
-    // Use environment-provided port (for deployment) or start with default
-    const deploymentPort = process.env.PORT ? parseInt(process.env.PORT, 10) : port;
-    
-    // Check if the server is already listening
-    if (server.listening) {
-      logger.warn({
-        message: `Server is already listening, not starting again`,
-        category: 'system',
-        metadata: { port: deploymentPort }
-      });
-      return;
-    }
-    
-    // Increase max listeners to prevent warnings
-    server.setMaxListeners(20);
-    
-    server.listen({
-      port: deploymentPort,
-      host: "0.0.0.0", // Explicitly listen on all network interfaces
-      reusePort: false, // Changed to false to prevent multiple bindings
-    }, () => {
-      const serverAddress = server.address();
-      const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : deploymentPort;
-      log(`Server listening on http://0.0.0.0:${serverPort}`);
-      logger.info({
-        message: `ShiFi server started on port ${serverPort}`,
-        category: 'system',
-        metadata: {
-          environment: app.get('env'),
-          nodeVersion: process.version,
-          address: '0.0.0.0',
-          port: serverPort
-        },
-        tags: ['startup', 'server']
-      });
-    }).on('error', (err: Error & { code?: string }) => {
-      if (err.code === 'EADDRINUSE' && !process.env.PORT) {
-        // Only try incrementing port if we're not using an environment-specified port
-        log(`Port ${deploymentPort} is in use, trying ${deploymentPort + 1}`);
-        startServer(deploymentPort + 1);
-      } else {
-        logger.error({
-          message: `Error starting server: ${err.message}`,
-          category: 'system',
-          metadata: { error: err.message }
-        });
-      }
-    });
-  };
-  
-  // Start the server
-  startServer(5000);
-})();
+// Start the server
+startServer();

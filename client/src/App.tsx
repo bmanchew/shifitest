@@ -1,63 +1,42 @@
-import React from "react";
-import { Toaster } from "@/components/ui/toaster";
-import { Routes, Route, BrowserRouter as Router } from "react-router-dom";
-import { useAuth } from "@/hooks/use-auth";
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Suspense, lazy } from 'react';
+import { AuthProvider } from './context/AuthContext';
 
-// Import your page components here
-import LoginPage from "@/pages/Login";
-import RegisterPage from "@/pages/Register";
-import NotFoundPage from "@/pages/not-found";
-import AdminDashboard from "@/pages/admin/Dashboard"; // Import from correct path
-import MerchantDashboard from "@/pages/merchant/Dashboard"; // Added MerchantDashboard
-import MerchantReports from "@/pages/merchant/Reports"; // Added MerchantReports
-import ProtectedRoute from "@/components/auth/ProtectedRoute"; // Import from correct path
+// Create a client
+const queryClient = new QueryClient();
 
-export default function App() {
+// Lazy load components
+const Login = lazy(() => import('./pages/auth/Login'));
+const Register = lazy(() => import('./pages/auth/Register'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+function AppWrapper() {
   return (
-    <div className="min-h-screen bg-background">
-      <Router>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/admin/dashboard" element={
-            <ProtectedRoute role="admin" component={AdminDashboard} />
-          } />
-          <Route path="/merchant/dashboard" element={
-            <ProtectedRoute role="merchant" component={MerchantDashboard} />
-          } />
-          <Route path="/merchant/reports" element={
-            <ProtectedRoute role="merchant" component={MerchantReports} />
-          } />
-          <Route path="/" element={<DashboardRedirector />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </Router>
-      <Toaster />
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 
-// Redirector component based on user role
-function DashboardRedirector() {
-  const { user } = useAuth();
-
-  React.useEffect(() => {
-    // This will redirect after render based on role
-    const redirectTo = user?.role === "admin" 
-      ? "/admin/dashboard" 
-      : user?.role === "merchant" 
-        ? "/merchant/dashboard" 
-        : "/login";
-
-    window.location.href = redirectTo;
-  }, [user]);
-
+function App() {
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Redirecting to your dashboard...</p>
+    <Router>
+      <div className="min-h-screen bg-background">
+        <Suspense fallback={<div>Loading...</div>}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </div>
-    </div>
+    </Router>
   );
 }
+
+export default AppWrapper;
