@@ -18,6 +18,81 @@ import AdminLayout from './components/layout/AdminLayout';
 
 // ProtectedRoute component
 interface ProtectedRouteProps {
+  element: React.ReactNode;
+  requiredRole?: 'admin' | 'merchant' | 'customer';
+}
+
+const ProtectedRoute = ({ element, requiredRole }: ProtectedRouteProps) => {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  
+  // Show loading state
+  if (isLoading) {
+    return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  }
+  
+
+// Main App component
+export default function App() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<LoginPage />} />
+        
+        {/* Customer routes */}
+        <Route path="/customer" element={
+          <ProtectedRoute 
+            element={<CustomerLayout />} 
+            requiredRole="customer"
+          />
+        }>
+          <Route index element={<Navigate to="application" replace />} />
+          <Route path="application" element={<CustomerApplicationPage />} />
+        </Route>
+        
+        {/* Merchant routes */}
+        <Route path="/merchant" element={
+          <ProtectedRoute 
+            element={<MerchantLayout />} 
+            requiredRole="merchant"
+          />
+        }>
+          <Route index element={<MerchantDashboardPage />} />
+        </Route>
+        
+        {/* Admin routes */}
+        <Route path="/admin" element={
+          <ProtectedRoute 
+            element={<AdminLayout />} 
+            requiredRole="admin"
+          />
+        }>
+          <Route index element={<AdminDashboardPage />} />
+        </Route>
+        
+        {/* Default route redirect to login */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        
+        {/* Catch-all route for 404 */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </div>
+  );
+}
+
+  // Check authentication
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Check role if required
+  if (requiredRole && user?.role !== requiredRole) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+  
+  return <>{element}</>;
+};
+interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: string;
 }
