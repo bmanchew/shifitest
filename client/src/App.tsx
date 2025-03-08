@@ -6,7 +6,7 @@ import LoginPage from './pages/Login';
 import DashboardPage from './pages/dashboard/Dashboard';
 import CustomerApplicationPage from './pages/customer/Application';
 import MerchantDashboardPage from './pages/merchant/Dashboard';
-import AdminDashboardPage from './pages/admin/AdminDashboard';
+import AdminDashboardPage from './pages/admin/Dashboard';
 import NotFoundPage from './pages/error/NotFound';
 import CustomerLayout from './components/layout/CustomerLayout';
 import MerchantLayout from './components/layout/MerchantLayout';
