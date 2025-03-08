@@ -10,7 +10,7 @@ import NotFoundPage from "@/pages/not-found";
 import AdminDashboard from "@/pages/admin/Dashboard"; // Import from correct path
 import MerchantDashboard from "@/pages/merchant/Dashboard"; // Added MerchantDashboard
 import MerchantReports from "@/pages/merchant/Reports"; // Added MerchantReports
-import ProtectedRoute from "@/components/ProtectedRoute"; // Added ProtectedRoute component
+import ProtectedRoute from "@/components/auth/ProtectedRoute"; // Import from correct path
 
 export default function App() {
   return (

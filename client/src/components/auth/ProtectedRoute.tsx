@@ -1,4 +1,6 @@
-import { Redirect } from "wouter";
+
+import React from "react";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 
 interface ProtectedRouteProps {
@@ -10,11 +12,11 @@ export default function ProtectedRoute({ role, component: Component }: Protected
   const { isAuthenticated, user } = useAuth();
 
   if (!isAuthenticated) {
-    return <Redirect to="/login" />;
+    return <Navigate to="/login" />;
   }
 
   if (user?.role !== role) {
-    return <Redirect to="/not-found" />;
+    return <Navigate to="/not-found" />;
   }
 
   return <Component />;
