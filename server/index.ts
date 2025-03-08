@@ -171,23 +171,26 @@ async function startServer() {
       return new Promise((resolve, reject) => {
         let attempts = 0;
         const checkPort = (port: number) => {
-          const tester = require('net').createServer()
-            .once('error', (err: Error & { code?: string }) => {
-              if (err.code === 'EADDRINUSE') {
-                if (attempts >= maxPortAttempts) {
-                  return reject(new Error('Could not find an available port after multiple attempts'));
+          // Use dynamic import instead of require for ESM compatibility
+          import('net').then(netModule => {
+            const tester = netModule.createServer()
+              .once('error', (err: Error & { code?: string }) => {
+                if (err.code === 'EADDRINUSE') {
+                  if (attempts >= maxPortAttempts) {
+                    return reject(new Error('Could not find an available port after multiple attempts'));
+                  }
+                  attempts++;
+                  log(`Port ${port} is in use, trying ${port + 1}`);
+                  tester.close(() => checkPort(port + 1));
+                } else {
+                  reject(err);
                 }
-                attempts++;
-                log(`Port ${port} is in use, trying ${port + 1}`);
-                tester.close(() => checkPort(port + 1));
-              } else {
-                reject(err);
-              }
-            })
-            .once('listening', () => {
-              tester.close(() => resolve(port));
-            })
-            .listen(port, '0.0.0.0');
+              })
+              .once('listening', () => {
+                tester.close(() => resolve(port));
+              })
+              .listen(port, '0.0.0.0');
+          }).catch(err => reject(err));
         };
         
         checkPort(currentPort);
