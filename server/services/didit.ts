@@ -306,7 +306,7 @@ class DiditService {
       // According to DiDit documentation, "callback" is the URL where users are redirected after verification
       const requestBody = {
         callback: callbackUrl, // This is the redirect URL for users after verification
-        vendor_data: JSON.stringify({ contractId }),
+        vendor_data: JSON.stringify({ contractId: contractId.toString() }),
         features: "OCR + FACE", // Features string format as specified in docs
         ...customFields,
       };

@@ -976,7 +976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           <title>DiDit Verification</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; color: #333; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sansserif; margin: 0; padding: 0; color: #333; }
             .container { max-width: 800px; margin: 0 auto; padding: 20px; }
             .header { background: linear-gradient(to right, #4776E6, #8E54E9); color: white; padding: 20px; text-align: center; }
             .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
@@ -1885,7 +1885,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             category: "api",
             source: "didit",
             metadata: {
-              error: verifyError instanceof Error ? verifyError.stack : null,
+                            error: verifyError instanceof Error ? verifyError.stack : null,
             },
           });
           isVerified = false;
@@ -1896,19 +1896,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { event_type, session_id, status, decision, vendor_data } =
         req.body;
 
-      // Parse vendor_data to extract contractId
+      // Extract vendor_data to extract contractId
       let contractId = null;
       try {
         if (vendor_data) {
           // Attempt to parse as JSON first
           try {
-            const parsedData = JSON.parse(vendor_data);
+            // Handle both string JSON and direct JSON object formats
+            const parsedData = typeof vendor_data === 'string' 
+              ? JSON.parse(vendor_data) 
+              : vendor_data;
+
             contractId = parsedData.contractId;
+
+            // If contractId is still null, check if vendor_data itself is the contractId (legacy format)
+            if (!contractId && typeof vendor_data === 'string' && /^\d+$/.test(vendor_data)) {
+              contractId = vendor_data;
+            }
           } catch (jsonError) {
             // If JSON parsing fails, try direct property access
-            // This handles cases where vendor_data might be an object directly
             if (typeof vendor_data === 'object' && vendor_data.contractId) {
               contractId = vendor_data.contractId;
+            } else if (typeof vendor_data === 'string' && /^\d+$/.test(vendor_data)) {
+              // If vendor_data is just a string with a number, it might be the contractId directly
+              contractId = vendor_data;
             }
           }
         }
@@ -2537,7 +2548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (step) => step.step === "bank",
         );
 
-        if (bankStep && bankStep.data) {
+        if (bankStep && bankStep.completed && bankStep.data) {
           try {
             const bankData = JSON.parse(bankStep.data);
 

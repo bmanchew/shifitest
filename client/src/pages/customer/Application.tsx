@@ -110,8 +110,8 @@ export default function Application() {
             data: string | null;
           }>("GET", `/api/application-progress/kyc/${verifyContractId}`);
 
-          if (kycProgressResponse && !kycProgressResponse.completed) {
-            // If not already marked as completed, mark it complete
+          if (kycProgressResponse) {
+            // Always mark as completed when redirected from verification
             console.log("Marking KYC as completed from redirect handler");
             await apiRequest(
               "PATCH",
@@ -119,11 +119,21 @@ export default function Application() {
               {
                 completed: true,
                 data: JSON.stringify({
+                  verified: true,
                   verifiedAt: new Date().toISOString(),
                   status: "approved",
                   completedVia: "redirect",
                 }),
               },
+            );
+
+            // Also update the contract step to move to "bank"
+            await apiRequest(
+              "PATCH",
+              `/api/contracts/${verifyContractId}/step`,
+              {
+                step: "bank"
+              }
             );
 
             // Refresh contract data
@@ -144,6 +154,13 @@ export default function Application() {
             if (currentStep === "kyc") {
               setCurrentStep("bank");
             }
+            
+            // Show success message
+            showNotification({
+              title: "Identity Verification Complete",
+              message: "Your identity has been successfully verified",
+              type: "success"
+            });
 
             setIsHandlingVerification(false);
           }, 500);
