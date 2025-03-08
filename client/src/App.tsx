@@ -1,7 +1,7 @@
+
 import React from 'react';
 import { Route, Switch, Link, useLocation } from "wouter";
 import { Toaster } from '@/components/ui/toaster';
-
 
 // Import your page components here
 // Example: import HomePage from './pages/HomePage';
@@ -12,6 +12,13 @@ export default function App() {
       <Switch>
         <Route path="/" component={() => <div>Home Page</div>} />
         <Route path="/admin/*" component={AdminRoutes} />
+        <Route path="/merchant/*" component={() => <div>Merchant Dashboard</div>} />
+        <Route path="/customer/dashboard" component={() => <div>Customer Dashboard</div>} />
+        <Route path="/customer/contracts" component={() => <div>Customer Contracts</div>} />
+        <Route path="/apply/:contractId" component={() => <div>Application Flow</div>} />
+        <Route path="/login" component={() => <div>Login Page</div>} />
+        <Route path="/register" component={() => <div>Register Page</div>} />
+        <Route path="*" component={() => <div>404 Not Found</div>} />
       </Switch>
       <Toaster />
     </div>
@@ -35,6 +42,7 @@ function AdminRoutes() {
           <Route path="/admin/contracts" component={() => <div>Contracts Management</div>} />
           <Route path="/admin/users" component={() => <div>Users Management</div>} />
           <Route path="/admin/merchants" component={() => <div>Merchants Management</div>} />
+          <Route path="/admin/*" component={() => <div>Admin Page Not Found</div>} />
         </Switch>
       </main>
     </div>
