@@ -1,0 +1,171 @@
+Integrating Plaid's Assets API into your underwriting system can enhance your evaluation process by providing real-time, comprehensive financial data directly from applicants' bank accounts. This integration facilitates accurate assessments of income, employment history, debt-to-income (DTI) ratio, housing payments, and delinquency history. Below is a detailed guide tailored to your underwriting criteria, focusing on capturing necessary data using Plaid's Assets API.
+
+---
+
+## Table of Contents
+
+1. [Overview of Plaid Assets API](#1-overview-of-plaid-assets-api)
+2. [Data Capture for Underwriting Criteria](#2-data-capture-for-underwriting-criteria)
+   - a. [Annual Income Verification](#a-annual-income-verification)
+   - b. [Employment History Verification](#b-employment-history-verification)
+   - c. [Debt-to-Income (DTI) Ratio Calculation](#c-debt-to-income-dti-ratio-calculation)
+   - d. [Housing Payment Analysis](#d-housing-payment-analysis)
+   - e. [Delinquency and Adverse History Assessment](#e-delinquency-and-adverse-history-assessment)
+3. [Implementation Steps](#3-implementation-steps)
+   - a. [Create an Asset Report](#a-create-an-asset-report)
+   - b. [Retrieve and Parse the Asset Report](#b-retrieve-and-parse-the-asset-report)
+4. [Ensuring Fair Lending Compliance](#4-ensuring-fair-lending-compliance)
+5. [Additional Resources](#5-additional-resources)
+
+---
+
+## 1. Overview of Plaid Assets API
+
+Plaid's Assets API allows you to access detailed information about a user's financial assets, including account balances, transaction histories, and personal information. This data is crucial for assessing an applicant's financial stability during the underwriting process. citeturn0search1
+
+---
+
+## 2. Data Capture for Underwriting Criteria
+
+Aligning with your 30-point underwriting system, Plaid's Assets API can capture the following data:
+
+### a. Annual Income Verification
+
+**Objective:** Accurately verify the applicant's annual income.
+
+**Method:**
+
+- **Income Analysis:** Identify and aggregate income-related transactions (e.g., direct deposits) over a specified period to calculate annual income.
+
+**Implementation:**
+
+- Use transaction data from the Asset Report to identify regular income deposits.
+- Calculate the total income over the analysis period and extrapolate to annual income if necessary.
+
+### b. Employment History Verification
+
+**Objective:** Verify the applicant's employment status and history.
+
+**Method:**
+
+- **Direct Deposit Analysis:** Identify consistent direct deposits from employers to determine employment duration and stability.
+
+**Implementation:**
+
+- Analyze transaction descriptions to identify employer names and deposit frequencies.
+- Determine the length of employment based on the duration of consistent deposits.
+
+### c. Debt-to-Income (DTI) Ratio Calculation
+
+**Objective:** Calculate the applicant's DTI ratio to assess financial obligations relative to income.
+
+**Method:**
+
+- **Debt Identification:** Identify recurring debt payments (e.g., loans, credit cards) from transaction data.
+- **Income Verification:** Use verified income data as described above.
+
+**Implementation:**
+
+- Sum all identified debt payments to determine total monthly debt.
+- Calculate the DTI ratio by dividing total monthly debt by gross monthly income.
+
+### d. Housing Payment Analysis
+
+**Objective:** Assess the applicant's housing payment consistency and amount.
+
+**Method:**
+
+- **Transaction Filtering:** Identify transactions related to housing payments (e.g., rent, mortgage) occurring within regular intervals.
+
+**Implementation:**
+
+- Filter transactions using keywords associated with housing payments.
+- Verify the regularity and timeliness of these payments to assess reliability.
+
+### e. Delinquency and Adverse History Assessment
+
+**Objective:** Evaluate the applicant's financial responsibility by identifying any delinquent or adverse financial events.
+
+**Method:**
+
+- **Transaction Analysis:** Detect instances of overdrafts, insufficient funds, or late payment fees.
+
+**Implementation:**
+
+- Analyze transaction histories for fees or penalties indicative of financial mismanagement.
+- Assess the frequency and recency of such events to determine their impact on the applicant's financial profile.
+
+---
+
+## 3. Implementation Steps
+
+### a. Create an Asset Report
+
+Initiate the creation of an Asset Report to gather the applicant's financial data.
+
+**Request Example:**
+
+```json
+POST /asset_report/create
+Content-Type: application/json
+
+{
+  "client_id": "YOUR_CLIENT_ID",
+  "secret": "YOUR_SECRET",
+  "access_tokens": ["user_access_token"],
+  "days_requested": 30,
+  "options": {
+    "client_report_id": "unique_report_id",
+    "webhook": "https://yourapp.com/plaid-webhook",
+    "user": {
+      "client_user_id": "unique_user_id",
+      "first_name": "John",
+      "last_name": "Doe",
+      "ssn": "123-45-6789",
+      "phone_number": "+14151234567",
+      "email": "john.doe@example.com"
+    }
+  }
+}
+```
+
+**Response Example:**
+
+```json
+{
+  "asset_report_token": "generated_asset_report_token",
+  "asset_report_id": "unique_asset_report_id"
+}
+```
+
+
+*Note: Asset Reports are generated asynchronously. Plaid will send a `PRODUCT_READY` webhook upon completion.*
+
+### b. Retrieve and Parse the Asset Report
+
+Once the Asset Report is ready, retrieve it in JSON format for programmatic analysis.
+
+**Request Example:**
+
+```json
+POST /asset_report/get
+Content-Type: application/json
+
+{
+  "client_id": "YOUR_CLIENT_ID",
+  "secret": "YOUR_SECRET",
+  "asset_report_token": "generated_asset_report_token"
+}
+```
+
+**Response Example:**
+
+```json
+{
+  "report": {
+    "items": [
+      {
+        "accounts": [
+          {
+            "account_id": "account_id",
+            
