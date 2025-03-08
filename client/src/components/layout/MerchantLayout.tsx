@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -18,7 +18,7 @@ interface MerchantLayoutProps {
 }
 
 export default function MerchantLayout({ children }: MerchantLayoutProps) {
-  const [location] = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -27,25 +27,25 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
       name: "Dashboard",
       href: "/merchant/dashboard",
       icon: LayoutDashboard,
-      current: location === "/merchant/dashboard" || location === "/merchant" || location === "/",
+      current: navigate === "/merchant/dashboard" || navigate === "/merchant" || navigate === "/",
     },
     {
       name: "Contracts",
       href: "/merchant/contracts",
       icon: FileText,
-      current: location === "/merchant/contracts",
+      current: navigate === "/merchant/contracts",
     },
     {
       name: "Reports",
       href: "/merchant/reports",
       icon: BarChart2,
-      current: location === "/merchant/reports",
+      current: navigate === "/merchant/reports",
     },
     {
       name: "Settings",
       href: "/merchant/settings",
       icon: Settings,
-      current: location === "/merchant/settings",
+      current: navigate === "/merchant/settings",
     },
   ];
 
@@ -90,7 +90,7 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
               {navigationItems.map((item) => (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  to={item.href}
                   className={`${
                     item.current
                       ? "bg-gray-100 text-gray-900"
@@ -146,7 +146,7 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
                 {navigationItems.map((item) => (
                   <Link
                     key={item.name}
-                    href={item.href}
+                    to={item.href}
                     className={`${
                       item.current
                         ? "border-primary-500 text-gray-900"

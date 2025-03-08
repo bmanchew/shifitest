@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, ReactNode } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { 
   AuthUser, 
   loginUser, 
@@ -26,7 +26,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [_, setLocation] = useLocation();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   // Check for existing auth on load
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       storeUserData(user);
 
       // Redirect based on user role
-      setLocation(getUserHomeRoute(user));
+      navigate(getUserHomeRoute(user));
 
       // Use firstName for greeting if available, otherwise fall back to name
       const displayName = user.firstName || user.name || 'User';
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = () => {
     setUser(null);
     clearUserData();
-    setLocation("/");
+    navigate("/");
     toast({
       title: "Logged Out",
       description: "You have been successfully logged out.",
