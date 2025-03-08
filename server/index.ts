@@ -109,13 +109,16 @@ app.use((req, res, next) => {
 
   // Start the server on an available port
   const startServer = (port: number = 5000): void => {
+    // Use environment-provided port (for deployment) or start with default
+    const deploymentPort = process.env.PORT ? parseInt(process.env.PORT, 10) : port;
+    
     server.listen({
-      port,
+      port: deploymentPort,
       host: "0.0.0.0", // Explicitly listen on all network interfaces
       reusePort: true,
     }, () => {
       const serverAddress = server.address();
-      const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : port;
+      const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : deploymentPort;
       log(`Server listening on http://0.0.0.0:${serverPort}`);
       logger.info({
         message: `ShiFi server started on port ${serverPort}`,
@@ -129,9 +132,10 @@ app.use((req, res, next) => {
         tags: ['startup', 'server']
       });
     }).on('error', (err: Error & { code?: string }) => {
-      if (err.code === 'EADDRINUSE') {
-        log(`Port ${port} is in use, trying ${port + 1}`);
-        startServer(port + 1);
+      if (err.code === 'EADDRINUSE' && !process.env.PORT) {
+        // Only try incrementing port if we're not using an environment-specified port
+        log(`Port ${deploymentPort} is in use, trying ${deploymentPort + 1}`);
+        startServer(deploymentPort + 1);
       } else {
         logger.error({
           message: `Error starting server: ${err.message}`,
