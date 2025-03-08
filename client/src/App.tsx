@@ -1,13 +1,17 @@
+
 import React from 'react';
-import { useAuth } from '@/hooks/use-auth';
 import { Routes, Route, Navigate } from 'react-router-dom';
-// Import your components/pages here
+import { useAuth } from '@/hooks/use-auth';
+
+// Import your pages
 import LoginPage from './pages/Login';
 import DashboardPage from './pages/dashboard/Dashboard';
 import CustomerApplicationPage from './pages/customer/Application';
 import MerchantDashboardPage from './pages/merchant/Dashboard';
 import AdminDashboardPage from './pages/admin/Dashboard';
 import NotFoundPage from './pages/error/NotFound';
+
+// Import your layouts
 import CustomerLayout from './components/layout/CustomerLayout';
 import MerchantLayout from './components/layout/MerchantLayout';
 import AdminLayout from './components/layout/AdminLayout';
@@ -89,8 +93,4 @@ const App: React.FC = () => {
   );
 };
 
-const AppWrapper: React.FC = () => {
-  return <App />;
-};
-
-export default AppWrapper;
+export default App;
