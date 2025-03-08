@@ -1,8 +1,47 @@
 
 import { Router, Request, Response } from "express";
-import { authenticateToken, isAdmin, isMerchantUser } from "../routes.ts";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
+import jwt from "jsonwebtoken";
+
+// Copy of authentication middleware from routes.ts to avoid circular dependency
+const authenticateToken = (req: Request, res: Response, next: Function) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "Authentication token is required" });
+  }
+
+  const secret = process.env.JWT_SECRET || 'default_secret_key_for_development';
+  
+  jwt.verify(token, secret, (err: any, user: any) => {
+    if (err) {
+      return res.status(403).json({ message: "Invalid or expired token" });
+    }
+    
+    (req as any).user = user;
+    next();
+  });
+};
+
+// Admin role middleware
+const isAdmin = (req: Request, res: Response, next: Function) => {
+  if ((req as any).user && (req as any).user.role === 'admin') {
+    next();
+  } else {
+    res.status(403).json({ message: "Access denied: Admin role required" });
+  }
+};
+
+// Merchant role middleware
+const isMerchantUser = (req: Request, res: Response, next: Function) => {
+  if ((req as any).user && (req as any).user.role === 'merchant') {
+    next();
+  } else {
+    res.status(403).json({ message: "Access denied: Merchant role required" });
+  }
+};
 
 // Create a service for merchant analytics if it doesn't exist
 const merchantAnalyticsService = {
