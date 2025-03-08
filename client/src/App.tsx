@@ -1,10 +1,10 @@
 
 import React from 'react';
-import { Route, Switch, Link, useLocation } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import { Toaster } from '@/components/ui/toaster';
 
-// Import your page components here
-// Example: import HomePage from './pages/HomePage';
+// Import needed components
+import AdminLayout from './components/layout/AdminLayout';
 
 export default function App() {
   return (
@@ -42,7 +42,6 @@ function AdminRoutes() {
           <Route path="/admin/contracts" component={() => <div>Contracts Management</div>} />
           <Route path="/admin/users" component={() => <div>Users Management</div>} />
           <Route path="/admin/merchants" component={() => <div>Merchants Management</div>} />
-          <Route path="/admin/*" component={() => <div>Admin Page Not Found</div>} />
         </Switch>
       </main>
     </div>
@@ -55,8 +54,8 @@ function AdminNavLink({ to, children }: { to: string; children: React.ReactNode 
   const isActive = location === to;
 
   return (
-    <Link
-      to={to}
+    <a
+      href={to}
       className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md ${
         isActive
           ? 'bg-gray-100 text-gray-900'
@@ -64,6 +63,6 @@ function AdminNavLink({ to, children }: { to: string; children: React.ReactNode 
       }`}
     >
       {children}
-    </Link>
+    </a>
   );
 }
