@@ -111,16 +111,20 @@ app.use((req, res, next) => {
   const startServer = (port: number = 5000): void => {
     server.listen({
       port,
-      host: "0.0.0.0",
+      host: "0.0.0.0", // Explicitly listen on all network interfaces
       reusePort: true,
     }, () => {
-      log(`serving on port ${port}`);
+      const serverAddress = server.address();
+      const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : port;
+      log(`Server listening on http://0.0.0.0:${serverPort}`);
       logger.info({
-        message: `ShiFi server started on port ${port}`,
+        message: `ShiFi server started on port ${serverPort}`,
         category: 'system',
         metadata: {
           environment: app.get('env'),
-          nodeVersion: process.version
+          nodeVersion: process.version,
+          address: '0.0.0.0',
+          port: serverPort
         },
         tags: ['startup', 'server']
       });
