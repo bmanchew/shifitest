@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 export interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
+  isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const value = {
     user,
     isLoading,
+    isAuthenticated: !!user,
     login,
     logout,
   };
