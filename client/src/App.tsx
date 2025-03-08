@@ -9,7 +9,7 @@ import DashboardPage from './pages/dashboard/Dashboard';
 import CustomerApplicationPage from './pages/customer/Application';
 import MerchantDashboardPage from './pages/merchant/Dashboard';
 import AdminDashboardPage from './pages/admin/Dashboard';
-import NotFoundPage from './pages/error/NotFound';
+import NotFoundPage from './pages/not-found';
 
 // Import your layouts
 import CustomerLayout from './components/layout/CustomerLayout';
