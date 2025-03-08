@@ -124,9 +124,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/underwriting/contract/:contractId', async (req, res) => {
     const { contractId } = req.params;
+    const userRole = req.query.role as string || 'customer';
 
     try {
       const data = await storage.getUnderwritingDataByContractId(parseInt(contractId));
+      
+      // For non-admin users, limit the data to just the credit tier
+      if (userRole !== 'admin') {
+        // If data exists, only return limited information
+        if (data && data.length > 0) {
+          const limitedData = data.map(item => ({
+            id: item.id,
+            contractId: item.contractId,
+            creditTier: item.creditTier,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
+          }));
+          return res.json({ success: true, data: limitedData });
+        }
+      }
+      
+      // For admins, return complete data
       res.json({ success: true, data });
     } catch (error) {
       logger.error({

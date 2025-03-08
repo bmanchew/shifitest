@@ -20,7 +20,8 @@ const UnderwritingDetails: React.FC<UnderwritingDetailsProps> = ({ contractId })
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`/api/underwriting/contract/${contractId}`);
+        // Specify role=admin to ensure we get full data
+        const response = await axios.get(`/api/underwriting/contract/${contractId}?role=admin`);
         if (response.data.data && response.data.data.length > 0) {
           setUnderwritingData(response.data.data[0]);
         }
