@@ -8,8 +8,8 @@ import { AuthProvider } from "./context/AuthContext.tsx";
 
 const queryClient = new QueryClient();
 
-const AppWrapper = () => {
-  return (
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
@@ -17,12 +17,6 @@ const AppWrapper = () => {
         </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>
-  );
-};
-
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <AppWrapper />
   </React.StrictMode>
 );
 
