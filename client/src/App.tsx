@@ -45,7 +45,7 @@ function AdminRoutes() {
 function AdminNavLink({ to, children }: { to: string; children: React.ReactNode }) {
   const [location] = useLocation();
   const isActive = location === to;
-  
+
   return (
     <Link
       to={to}
