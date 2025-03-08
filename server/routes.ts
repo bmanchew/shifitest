@@ -1900,8 +1900,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let contractId = null;
       try {
         if (vendor_data) {
-          const parsedData = JSON.parse(vendor_data);
-          contractId = parsedData.contractId;
+          // Attempt to parse as JSON first
+          try {
+            const parsedData = JSON.parse(vendor_data);
+            contractId = parsedData.contractId;
+          } catch (jsonError) {
+            // If JSON parsing fails, try direct property access
+            // This handles cases where vendor_data might be an object directly
+            if (typeof vendor_data === 'object' && vendor_data.contractId) {
+              contractId = vendor_data.contractId;
+            }
+          }
         }
       } catch (error) {
         logger.warn({

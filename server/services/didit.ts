@@ -114,7 +114,7 @@ class DiditService {
   private cachedToken: string | null = null;
   private tokenExpiry: number = 0;
   private initialized = false;
-  private useMockMode = false; // Set to false to use the real DiDit API
+  private useMockMode = false; // Never use mock mode - use real DiDit API in production
   // Use a dynamic base URL that works in any environment
   private serverBaseUrl =
     process.env.PUBLIC_URL ||
@@ -269,19 +269,23 @@ class DiditService {
       return null;
     }
 
-    // If we're in mock mode or real API access fails, use the mock implementation
+    // Never use mock mode in production
     if (this.useMockMode) {
-      return this.createMockVerificationSession(options);
+      logger.warn({
+        message: "Mock mode is disabled for production. Using real DiDit API.",
+        category: "api",
+        source: "didit",
+      });
     }
 
     const accessToken = await this.getAccessToken();
     if (!accessToken) {
-      logger.warn({
-        message: "DiDit API access failed, falling back to mock implementation",
+      logger.error({
+        message: "DiDit API access failed. Cannot create verification session without valid credentials.",
         category: "api",
         source: "didit",
       });
-      return this.createMockVerificationSession(options);
+      return null; // Don't fall back to mock in production
     }
 
     try {
@@ -328,12 +332,12 @@ class DiditService {
       });
 
       if (!response.ok) {
-        logger.warn({
-          message: `DiDit API session creation failed, falling back to mock: ${response.status} ${response.statusText}`,
+        logger.error({
+          message: `DiDit API session creation failed: ${response.status} ${response.statusText}`,
           category: "api",
           source: "didit",
         });
-        return this.createMockVerificationSession(options);
+        return null; // Don't fall back to mock in production
       }
 
       const sessionData: DiditSessionResponse = await response.json();
@@ -353,7 +357,7 @@ class DiditService {
       return sessionData;
     } catch (error) {
       logger.error({
-        message: `Failed to create DiDit verification session through API, falling back to mock: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to create DiDit verification session through API: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         source: "didit",
         metadata: {
@@ -362,7 +366,7 @@ class DiditService {
         },
       });
 
-      return this.createMockVerificationSession(options);
+      return null; // Don't fall back to mock in production
     }
   }
 
@@ -432,20 +436,23 @@ class DiditService {
       return null;
     }
 
-    // If in mock mode, return mock session decision
+    // Never use mock mode in production
     if (this.useMockMode) {
-      return this.getMockSessionDecision(sessionId);
+      logger.warn({
+        message: "Mock mode is disabled for production. Using real DiDit API.",
+        category: "api",
+        source: "didit",
+      });
     }
 
     const accessToken = await this.getAccessToken();
     if (!accessToken) {
-      logger.warn({
-        message:
-          "Cannot get DiDit session decision: Failed to acquire access token, falling back to mock",
+      logger.error({
+        message: "Cannot get DiDit session decision: Failed to acquire access token",
         category: "api",
         source: "didit",
       });
-      return this.getMockSessionDecision(sessionId);
+      return null; // Don't fall back to mock in production
     }
 
     try {
@@ -461,12 +468,12 @@ class DiditService {
       );
 
       if (!response.ok) {
-        logger.warn({
-          message: `DiDit session decision error: ${response.status} ${response.statusText}, falling back to mock`,
+        logger.error({
+          message: `DiDit session decision error: ${response.status} ${response.statusText}`,
           category: "api",
           source: "didit",
         });
-        return this.getMockSessionDecision(sessionId);
+        return null; // Don't fall back to mock in production
       }
 
       const decisionData: DiditSessionDecision = await response.json();
@@ -485,7 +492,7 @@ class DiditService {
       return decisionData;
     } catch (error) {
       logger.error({
-        message: `Failed to get DiDit session decision, using mock: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to get DiDit session decision: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         source: "didit",
         metadata: {
@@ -494,7 +501,7 @@ class DiditService {
         },
       });
 
-      return this.getMockSessionDecision(sessionId);
+      return null; // Don't fall back to mock in production
     }
   }
 
