@@ -1,6 +1,6 @@
 
 import { Router, Request, Response } from "express";
-import { authenticateToken, isAdmin, isMerchantUser } from "../routes";
+import { authenticateToken, isAdmin, isMerchantUser } from "../routes.ts";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
 
