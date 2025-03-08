@@ -4,7 +4,7 @@ import { fromZodError } from "zod-validation-error";
 import { ZodError } from "zod";
 
 import { eq } from "drizzle-orm";
-import { db, contracts } from "./db";
+import { db } from "./db";
 
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
