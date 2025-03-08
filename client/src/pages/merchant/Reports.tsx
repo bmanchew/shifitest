@@ -33,6 +33,10 @@ import {
   ResponsiveContainer 
 } from "recharts";
 
+// Placeholder -  This component needs to be implemented
+const MerchantPerformanceCard = () => <div>Merchant Performance Card (Implementation Needed)</div>;
+
+
 export default function Reports() {
   const { user } = useAuth();
   const merchantId = user?.merchantId || 1;
@@ -89,17 +93,17 @@ export default function Reports() {
     filteredContracts.reduce((sum, contract) => sum + contract.amount, 0),
     [filteredContracts]
   );
-  
+
   const totalFinanced = useMemo(() => 
     filteredContracts.reduce((sum, contract) => sum + contract.financedAmount, 0),
     [filteredContracts]
   );
-  
+
   const totalDownPayment = useMemo(() => 
     filteredContracts.reduce((sum, contract) => sum + contract.downPayment, 0),
     [filteredContracts]
   );
-  
+
   const contractsByStatus = useMemo(() => {
     const statusCounts = {
       active: 0,
@@ -108,30 +112,30 @@ export default function Reports() {
       declined: 0,
       cancelled: 0
     };
-    
+
     filteredContracts.forEach(contract => {
       if (statusCounts.hasOwnProperty(contract.status)) {
         statusCounts[contract.status as keyof typeof statusCounts]++;
       }
     });
-    
+
     return statusCounts;
   }, [filteredContracts]);
-  
+
   // Advanced analytics metrics
   const completionRate = useMemo(() => {
     const completed = contractsByStatus.completed;
     const total = filteredContracts.length;
     return total ? (completed / total) * 100 : 0;
   }, [filteredContracts, contractsByStatus]);
-  
+
   const conversionRate = useMemo(() => {
     const active = contractsByStatus.active;
     const pending = contractsByStatus.pending;
     const total = pending + active + contractsByStatus.completed + contractsByStatus.declined + contractsByStatus.cancelled;
     return total ? ((active + contractsByStatus.completed) / total) * 100 : 0;
   }, [contractsByStatus]);
-  
+
   const averageContractValue = useMemo(() => 
     filteredContracts.length ? totalAmount / filteredContracts.length : 0,
     [filteredContracts, totalAmount]
@@ -146,16 +150,16 @@ export default function Reports() {
   const generateTimeSeriesData = useMemo(() => {
     const dateStart = getDateRangeStart();
     const now = new Date();
-    
+
     let intervals = [];
-    
+
     // Use different intervals based on selected time range
     if (timeRange === "7d" || timeRange === "30d") {
       intervals = eachDayOfInterval({ start: dateStart, end: now });
     } else {
       intervals = eachMonthOfInterval({ start: dateStart, end: now });
     }
-    
+
     // Initialize the data structure
     const timeSeries = intervals.map(date => ({
       date: format(date, timeRange === "7d" || timeRange === "30d" ? "MMM dd" : "MMM yyyy"),
@@ -169,11 +173,11 @@ export default function Reports() {
       declined: 0,
       cancelled: 0
     }));
-    
+
     // Fill in the data from contracts
     filteredContracts.forEach(contract => {
       const contractDate = contract.createdAt ? new Date(contract.createdAt) : new Date();
-      
+
       const index = intervals.findIndex(date => {
         if (timeRange === "7d" || timeRange === "30d") {
           return isSameDay(date, contractDate);
@@ -181,7 +185,7 @@ export default function Reports() {
           return isSameMonth(date, contractDate);
         }
       });
-      
+
       if (index !== -1) {
         timeSeries[index].value += 1;
         timeSeries[index].amount += contract.amount;
@@ -190,7 +194,7 @@ export default function Reports() {
         timeSeries[index][contract.status as keyof typeof contractsByStatus] += 1;
       }
     });
-    
+
     return timeSeries;
   }, [filteredContracts, timeRange]);
 
@@ -247,37 +251,28 @@ export default function Reports() {
   return (
     <MerchantLayout>
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 sm:px-0">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Analytics Dashboard</h1>
-              <p className="mt-1 text-sm text-gray-600">
-                Advanced contract performance metrics and analytics
-              </p>
-            </div>
-            <div className="mt-4 sm:mt-0 flex flex-wrap gap-2">
-              <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="w-[140px]">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  <SelectValue placeholder="Time range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">Last 7 days</SelectItem>
-                  <SelectItem value="30d">Last 30 days</SelectItem>
-                  <SelectItem value="90d">Last 90 days</SelectItem>
-                  <SelectItem value="1y">Last year</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" className="flex items-center">
-                <Printer className="mr-2 h-4 w-4" />
-                Print
-              </Button>
-              <Button variant="outline" className="flex items-center">
-                <Download className="mr-2 h-4 w-4" />
-                Export CSV
-              </Button>
-            </div>
+        <div className="px-4 sm:px-0 flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Reports</h1>
+            <p className="mt-1 text-sm text-gray-600">
+              View financing metrics and performance data
+            </p>
           </div>
+          <div className="flex space-x-2">
+            <Button variant="outline" size="sm">
+              <Printer className="mr-2 h-4 w-4" />
+              Print
+            </Button>
+            <Button variant="outline" size="sm">
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+          </div>
+        </div>
+
+        {/* Merchant Performance Card */}
+        <div className="px-4 sm:px-0 mb-6">
+          <MerchantPerformanceCard />
         </div>
 
         {isLoading ? (
@@ -309,7 +304,7 @@ export default function Reports() {
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card className="border-l-4 border-l-blue-500">
                   <CardHeader className="pb-2">
                     <CardDescription>Total Financed Amount</CardDescription>
@@ -321,7 +316,7 @@ export default function Reports() {
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card className="border-l-4 border-l-green-500">
                   <CardHeader className="pb-2">
                     <CardDescription>Total Down Payments</CardDescription>
@@ -333,7 +328,7 @@ export default function Reports() {
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card className="border-l-4 border-l-yellow-500">
                   <CardHeader className="pb-2">
                     <CardDescription>Contract Status</CardDescription>
@@ -395,7 +390,7 @@ export default function Reports() {
                     Status
                   </TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="overview" className="mt-6">
                   <Card>
                     <CardHeader>
@@ -434,7 +429,7 @@ export default function Reports() {
                     </CardContent>
                   </Card>
                 </TabsContent>
-                
+
                 <TabsContent value="contracts" className="mt-6">
                   <Card>
                     <CardHeader>
@@ -492,7 +487,7 @@ export default function Reports() {
                     </CardContent>
                   </Card>
                 </TabsContent>
-                
+
                 <TabsContent value="status" className="mt-6">
                   <Card>
                     <CardHeader>

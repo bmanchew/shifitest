@@ -19,6 +19,7 @@ import { logger } from "./services/logger";
 import { underwritingService } from './services/underwriting';
 import { adminReportsRouter } from './routes/adminReports';
 import crypto from "crypto";
+import merchantAnalytics from "./routes/merchantAnalytics"; // Added import
 
 // Helper function to convert metadata to JSON string for storage
 function objectMetadata<T>(data: T): string {
@@ -129,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const data = await storage.getUnderwritingDataByContractId(parseInt(contractId));
-      
+
       // For non-admin users, limit the data to just the credit tier
       if (userRole !== 'admin') {
         // If data exists, only return limited information
@@ -144,7 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.json({ success: true, data: limitedData });
         }
       }
-      
+
       // For admins, return complete data
       res.json({ success: true, data });
     } catch (error) {
@@ -2921,7 +2922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Simulate getting an asset report
         // In a real implementation, you would:
         // 1. Retrieve the asset report token from your database
-        // 2. Make the actual asset report API call
+        // 2. Makeactual asset report API call
 
         // Create some mock asset report data
         const mockAssetReport = {
@@ -3265,9 +3266,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Mount admin reports router
   app.use("/api/admin/reports", adminReportsRouter);
-  
+
   // Mount the API router
   app.use("/api", apiRouter);
+  app.use("/api", merchantAnalytics); //Register merchant analytics routes
 
   // Create HTTP server
   const httpServer = createServer(app);

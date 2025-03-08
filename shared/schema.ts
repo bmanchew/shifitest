@@ -236,3 +236,31 @@ export type InsertPortfolioMonitoring = z.infer<typeof insertPortfolioMonitoring
 
 export type ComplaintsData = typeof complaintsData.$inferSelect;
 export type InsertComplaintsData = z.infer<typeof insertComplaintsDataSchema>;
+
+// Merchant Performance
+export const merchantPerformance = pgTable("merchant_performance", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  performanceScore: doublePrecision("performance_score").notNull(),
+  grade: text("grade").notNull(), // A+, A, A-, B+, etc.
+  defaultRate: doublePrecision("default_rate"),
+  latePaymentRate: doublePrecision("late_payment_rate"),
+  avgContractValue: doublePrecision("avg_contract_value"),
+  totalContracts: integer("total_contracts"),
+  activeContracts: integer("active_contracts"),
+  completedContracts: integer("completed_contracts"),
+  cancelledContracts: integer("cancelled_contracts"),
+  riskAdjustedReturn: doublePrecision("risk_adjusted_return"),
+  customerSatisfactionScore: doublePrecision("customer_satisfaction_score"),
+  underwritingRecommendations: text("underwriting_recommendations"), // JSON stringified AI recommendations
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertMerchantPerformanceSchema = createInsertSchema(merchantPerformance).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MerchantPerformance = typeof merchantPerformance.$inferSelect;
+export type InsertMerchantPerformance = z.infer<typeof insertMerchantPerformanceSchema>;
