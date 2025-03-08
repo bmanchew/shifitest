@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from './hooks/useAuth';
+import { useAuth } from '@/hooks/use-auth';
 import { Routes, Route, Navigate } from 'react-router-dom';
 // Import your components/pages here
 import LoginPage from './pages/auth/Login';
