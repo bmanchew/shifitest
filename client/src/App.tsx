@@ -30,6 +30,20 @@ const ProtectedRoute = ({ element, requiredRole }: ProtectedRouteProps) => {
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
   }
   
+  // Check authentication
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Check role if required
+  if (requiredRole && user?.role !== requiredRole) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+  
+  return <>{element}</>;
+  
+
+};
 
 // Main App component
 export default function App() {
@@ -80,18 +94,8 @@ export default function App() {
   );
 }
 
-  // Check authentication
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  // Check role if required
-  if (requiredRole && user?.role !== requiredRole) {
-    return <Navigate to="/unauthorized" replace />;
-  }
-  
-  return <>{element}</>;
-};
+  };
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: string;
