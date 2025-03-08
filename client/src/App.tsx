@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import LoginPage from "@/pages/Login";
 import RegisterPage from "@/pages/Register";
 import NotFoundPage from "@/pages/not-found";
-import AdminDashboard from "@/pages/AdminDashboard"; // Added AdminDashboard
+import AdminDashboard from "@/pages/admin/Dashboard"; // Import from correct path
 import MerchantDashboard from "@/pages/MerchantDashboard"; // Added MerchantDashboard
 
 export default function App() {
