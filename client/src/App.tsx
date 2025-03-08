@@ -1,6 +1,5 @@
-
 import React from "react";
-import { Route, Switch } from "wouter";
+import { Route, Routes } from "react-router-dom"; // Importing react-router-dom
 import { Toaster } from "@/components/ui/toaster";
 
 // Import your page components here
@@ -14,13 +13,13 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       <Toaster />
-      <Switch>
-        <Route path="/" component={HomePage} />
-        <Route path="/dashboard" component={DashboardPage} />
-        <Route path="/login" component={LoginPage} />
-        <Route path="/register" component={RegisterPage} />
-        <Route path="/:path*" component={NotFoundPage} />
-      </Switch>
+      <Routes> {/* Using Routes from react-router-dom */}
+        <Route path="/" element={<HomePage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="*" element={<NotFoundPage />} /> {/* Catch-all route */}
+      </Routes>
     </div>
   );
 };
