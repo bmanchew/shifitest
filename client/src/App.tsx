@@ -1,29 +1,33 @@
+
 import React from 'react';
 import { useAuth } from './hooks/useAuth';
-import { Route } from 'wouter'; // Using only wouter
+import { Routes, Route, Navigate } from 'react-router-dom';
 // Import your components/pages here
 import LoginPage from './pages/auth/Login';
 import DashboardPage from './pages/dashboard/Dashboard';
-import CustomerApplicationPage from './pages/customer/Application';
-import MerchantDashboardPage from './pages/merchant/Dashboard';
-import AdminDashboardPage from './pages/admin/Dashboard';
-import NotFoundPage from './pages/NotFoundPage';
-
-// Import layouts
+import CustomerApplicationPage from './pages/customer/CustomerApplication';
+import MerchantDashboardPage from './pages/merchant/MerchantDashboard';
+import AdminDashboardPage from './pages/admin/AdminDashboard';
+import NotFoundPage from './pages/error/NotFound';
 import CustomerLayout from './components/layout/CustomerLayout';
 import MerchantLayout from './components/layout/MerchantLayout';
 import AdminLayout from './components/layout/AdminLayout';
 
-// This wrapper ensures a user is authenticated before accessing a route
-const ProtectedRoute = ({ children, requiredRole }: { children: React.ReactNode, requiredRole?: string }) => {
-  const { user, isAuthenticated } = useAuth();
+// ProtectedRoute component
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  requiredRole?: string;
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
+  const { isAuthenticated, user } = useAuth();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
   if (requiredRole && user?.role !== requiredRole) {
-    // Redirect based on role if they don't have access
+    // Redirect to appropriate dashboard based on role
     if (user?.role === 'admin') {
       return <Navigate to="/admin/dashboard" replace />;
     } else if (user?.role === 'merchant') {
@@ -39,57 +43,56 @@ const ProtectedRoute = ({ children, requiredRole }: { children: React.ReactNode,
 const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
-      <Route path="/login" component={LoginPage} />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
 
-      <Route path="/" component={() => (
-        <ProtectedRoute requiredRole="customer">
-          <CustomerLayout>
-            <DashboardPage />
-          </CustomerLayout>
-        </ProtectedRoute>
-      )} />
-      <Route path="/dashboard" component={() => (
-        <ProtectedRoute requiredRole="customer">
-          <CustomerLayout>
-            <DashboardPage />
-          </CustomerLayout>
-        </ProtectedRoute>
-      )} />
-      <Route path="/apply/:contractId" component={() => (
-        <ProtectedRoute requiredRole="customer">
-          <CustomerLayout>
-            <CustomerApplicationPage />
-          </CustomerLayout>
-        </ProtectedRoute>
-      )} />
+        <Route path="/" element={
+          <ProtectedRoute requiredRole="customer">
+            <CustomerLayout>
+              <DashboardPage />
+            </CustomerLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/dashboard" element={
+          <ProtectedRoute requiredRole="customer">
+            <CustomerLayout>
+              <DashboardPage />
+            </CustomerLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/apply/:contractId" element={
+          <ProtectedRoute requiredRole="customer">
+            <CustomerLayout>
+              <CustomerApplicationPage />
+            </CustomerLayout>
+          </ProtectedRoute>
+        } />
 
-      <Route path="/merchant/dashboard" component={() => (
-        <ProtectedRoute requiredRole="merchant">
-          <MerchantLayout>
-            <MerchantDashboardPage />
-          </MerchantLayout>
-        </ProtectedRoute>
-      )} />
+        <Route path="/merchant/dashboard" element={
+          <ProtectedRoute requiredRole="merchant">
+            <MerchantLayout>
+              <MerchantDashboardPage />
+            </MerchantLayout>
+          </ProtectedRoute>
+        } />
 
-      <Route path="/admin/dashboard" component={() => (
-        <ProtectedRoute requiredRole="admin">
-          <AdminLayout>
-            <AdminDashboardPage />
-          </AdminLayout>
-        </ProtectedRoute>
-      )} />
+        <Route path="/admin/dashboard" element={
+          <ProtectedRoute requiredRole="admin">
+            <AdminLayout>
+              <AdminDashboardPage />
+            </AdminLayout>
+          </ProtectedRoute>
+        } />
 
-      <Route path="*" component={NotFoundPage} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
     </div>
   );
 };
 
-
 const AppWrapper: React.FC = () => {
   return (
-    <Router> {/*wouter's Router is not necessary here*/}
-      <App />
-    </Router>
+    <App />
   );
 };
 
