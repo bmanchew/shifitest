@@ -2,6 +2,10 @@ import express, { type Express, Request, Response } from "express";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { ZodError } from "zod";
+
+import { eq } from "drizzle-orm";
+import { db, contracts } from "./db";
+
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
@@ -1875,10 +1879,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // DiDit KYC Webhook endpoint - for receiving status updates from DiDit
-  // Import eq operator from drizzle-orm for database queries
-  import { eq } from "drizzle-orm";
-  import { db, contracts } from "./db";
-
   apiRouter.post("/kyc/webhook", async (req: Request, res: Response) => {
     try {
       // Extract webhook signature from headers for verification
