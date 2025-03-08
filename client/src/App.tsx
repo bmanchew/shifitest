@@ -3,7 +3,6 @@ import { Route, Routes } from "react-router-dom"; // Importing react-router-dom
 import { Toaster } from "@/components/ui/toaster";
 
 // Import your page components here
-import HomePage from "@/pages/HomePage";
 import DashboardPage from "@/pages/DashboardPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
@@ -14,7 +13,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Toaster />
       <Routes> {/* Using Routes from react-router-dom */}
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<LoginPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
