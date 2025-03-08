@@ -111,33 +111,52 @@ export default function Application() {
           }>("GET", `/api/application-progress/kyc/${verifyContractId}`);
 
           if (kycProgressResponse) {
-            // Always mark as completed when redirected from verification
-            console.log("Marking KYC as completed from redirect handler");
-            await apiRequest(
-              "PATCH",
-              `/api/application-progress/${kycProgressResponse.id}`,
-              {
-                completed: true,
-                data: JSON.stringify({
-                  verified: true,
-                  verifiedAt: new Date().toISOString(),
-                  status: "approved",
-                  completedVia: "redirect",
-                }),
-              },
-            );
+            try {
+              // Always mark as completed when redirected from verification
+              console.log("Marking KYC as completed from redirect handler", kycProgressResponse);
+              
+              // Update the progress status
+              const progressUpdateResponse = await apiRequest(
+                "PATCH",
+                `/api/application-progress/${kycProgressResponse.id}`,
+                {
+                  completed: true,
+                  data: JSON.stringify({
+                    verified: true,
+                    verifiedAt: new Date().toISOString(),
+                    status: "approved",
+                    completedVia: "redirect",
+                  }),
+                },
+              );
+              
+              console.log("Progress update response:", progressUpdateResponse);
 
-            // Also update the contract step to move to "bank"
-            await apiRequest(
-              "PATCH",
-              `/api/contracts/${verifyContractId}/step`,
-              {
-                step: "bank"
-              }
-            );
+              // Also update the contract step to move to "bank"
+              const stepUpdateResponse = await apiRequest(
+                "PATCH",
+                `/api/contracts/${verifyContractId}/step`,
+                {
+                  step: "bank"
+                }
+              );
+              
+              console.log("Contract step update response:", stepUpdateResponse);
 
-            // Refresh contract data
-            await refetch();
+              // Force refresh contract data
+              await refetch();
+              
+              // Add a small delay to ensure the UI updates properly
+              setTimeout(() => {
+                window.location.href = `/customer/application?contract=${verifyContractId}&step=bank`;
+              }, 500);
+            } catch (error) {
+              console.error("Error updating KYC verification status:", error);
+              alert("Your verification was completed, but we encountered an issue updating your application. Please refresh the page.");
+            }
+          } else {
+            console.error("Could not find KYC progress for contract", verifyContractId);
+            alert("Your verification was completed, but we couldn't find your application data. Please refresh the page.");
           }
 
           // Wait for contract data to load before updating steps

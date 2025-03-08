@@ -2098,6 +2098,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   reason: "Verification declined or incomplete",
                 }),
               );
+              
+              logger.info({
+                message: `KYC verification failed for contract ${contractId}`,
+                category: "contract",
+                metadata: { contractId, kycStepId: kycStep.id, status: decision?.status || status },
+              });
+              );
 
               logger.warn({
                 message: `KYC verification failed for contract ${contractId}`,
