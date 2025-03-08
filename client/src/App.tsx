@@ -1,42 +1,40 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Suspense, lazy } from 'react';
-import { AuthProvider } from './context/AuthContext';
 
-// Create a client
-const queryClient = new QueryClient();
+import { Routes, Route, BrowserRouter } from "react-router-dom";
+import { Suspense, lazy } from "react";
+import { Toaster } from "@/components/ui/toaster";
+import "./App.css";
 
-// Lazy load components
-const Login = lazy(() => import('./pages/auth/Login'));
-const Register = lazy(() => import('./pages/auth/Register'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const NotFound = lazy(() => import('./pages/NotFound'));
-
-function AppWrapper() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </QueryClientProvider>
-  );
-}
+// Lazy-loaded components
+const Home = lazy(() => import("@/pages/Home"));
+const Login = lazy(() => import("@/pages/Login"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const CustomerApplication = lazy(() => import("@/pages/customer/Application"));
+const CustomerDashboard = lazy(() => import("@/pages/customer/Dashboard"));
+const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
+const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
 
 function App() {
   return (
-    <Router>
-      <div className="min-h-screen bg-background">
-        <Suspense fallback={<div>Loading...</div>}>
+    <div className="min-h-screen bg-background">
+      <BrowserRouter>
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
           <Routes>
+            <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/customer/dashboard" element={<CustomerDashboard />} />
+            <Route path="/customer/application" element={<CustomerApplication />} />
+            <Route path="/apply/:contractId" element={<CustomerApplication />} />
+            <Route path="/merchant/dashboard" element={<MerchantDashboard />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
-      </div>
-    </Router>
+      </BrowserRouter>
+      <Toaster />
+    </div>
   );
 }
 
-export default AppWrapper;
+export default App;
