@@ -33,6 +33,21 @@ interface PlaidTransferParams {
   metadata?: Record<string, string>;
 }
 
+interface PlaidAssetReportParams {
+  accessToken: string;
+  daysRequested: number;
+  clientReportId?: string;
+  webhook?: string;
+  user?: {
+    clientUserId: string;
+    firstName?: string;
+    lastName?: string;
+    ssn?: string;
+    phoneNumber?: string;
+    email?: string;
+  };
+}
+
 class PlaidService {
   private client: PlaidApi | null = null;
   private initialized = false;
@@ -431,18 +446,16 @@ class PlaidService {
   }
 
   /**
-   * Create an asset report
+   * Create an asset report with enhanced options
    */
-  async createAssetReport(
-    accessToken: string,
-    daysRequested: number = 60,
-    options?: any,
-  ) {
+  async createAssetReport(params: PlaidAssetReportParams) {
     if (!this.isInitialized() || !this.client) {
       throw new Error("Plaid client not initialized");
     }
 
     try {
+      const { accessToken, daysRequested, clientReportId, webhook, user } = params;
+
       logger.info({
         message: "Creating Plaid asset report",
         category: "api",
@@ -454,8 +467,29 @@ class PlaidService {
       const request: AssetReportCreateRequest = {
         access_tokens: [accessToken],
         days_requested: daysRequested,
-        options: options || {},
+        options: {},
       };
+
+      // Add optional parameters if provided
+      if (clientReportId) {
+        request.options.client_report_id = clientReportId;
+      }
+
+      if (webhook) {
+        request.options.webhook = webhook;
+      }
+
+      if (user) {
+        request.options.user = {
+          client_user_id: user.clientUserId,
+        };
+
+        if (user.firstName) request.options.user.first_name = user.firstName;
+        if (user.lastName) request.options.user.last_name = user.lastName;
+        if (user.ssn) request.options.user.ssn = user.ssn;
+        if (user.phoneNumber) request.options.user.phone_number = user.phoneNumber;
+        if (user.email) request.options.user.email = user.email;
+      }
 
       const response = await this.client.assetReportCreate(request);
 
@@ -481,13 +515,28 @@ class PlaidService {
         category: "api",
         source: "plaid",
         metadata: {
-          daysRequested,
+          daysRequested: params.daysRequested,
           error: error instanceof Error ? error.stack : null,
         },
       });
 
       throw error;
     }
+  }
+  
+  /**
+   * Legacy method for backward compatibility
+   */
+  async createAssetReportLegacy(
+    accessToken: string,
+    daysRequested: number = 60,
+    options?: any,
+  ) {
+    return this.createAssetReport({
+      accessToken,
+      daysRequested,
+      ...options
+    });
   }
 
   /**
@@ -577,4 +626,271 @@ class PlaidService {
   }
 }
 
+  /**
+   * Analyze asset report data for underwriting purposes
+   * This extracts financial information relevant to the underwriting criteria
+   */
+  async analyzeAssetReportForUnderwriting(assetReportToken: string) {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    try {
+      // Get the asset report with insights for more detailed transaction data
+      const { report } = await this.getAssetReport(assetReportToken, true);
+      
+      // Initialize analysis result
+      const analysis = {
+        // Income analysis
+        income: {
+          annualIncome: 0,
+          incomeStreams: [],
+          confidenceScore: 0,
+        },
+        
+        // Employment analysis based on direct deposits
+        employment: {
+          employmentMonths: 0,
+          employers: [],
+          confidenceScore: 0,
+        },
+        
+        // Debt analysis
+        debt: {
+          monthlyDebtPayments: 0,
+          identifiedDebts: [],
+          dtiRatio: 0,
+        },
+        
+        // Housing payment analysis
+        housing: {
+          housingStatus: 'unknown',
+          monthlyPayment: 0,
+          paymentHistoryMonths: 0,
+          consistencyScore: 0,
+        },
+        
+        // Delinquency analysis
+        delinquency: {
+          overdraftCount: 0,
+          insufficientFundsCount: 0,
+          lateFeeCount: 0,
+          lastDelinquencyDate: null,
+        },
+        
+        // Raw data summary (not the full report)
+        summary: {
+          numberOfAccounts: 0,
+          totalBalance: 0,
+          accountTypes: [],
+          oldestAccountMonths: 0,
+        },
+      };
+
+      // Process each item (financial institution)
+      report.items.forEach(item => {
+        // Process each account
+        item.accounts.forEach(account => {
+          // Add to summary
+          analysis.summary.numberOfAccounts++;
+          analysis.summary.totalBalance += account.balances.current || 0;
+          
+          if (!analysis.summary.accountTypes.includes(account.type)) {
+            analysis.summary.accountTypes.push(account.type);
+          }
+          
+          // Calculate account age in months if available
+          if (account.days_available) {
+            const accountAgeMonths = Math.floor(account.days_available / 30);
+            if (accountAgeMonths > analysis.summary.oldestAccountMonths) {
+              analysis.summary.oldestAccountMonths = accountAgeMonths;
+            }
+          }
+          
+          // If we have transaction history, analyze it
+          if (account.transactions && account.transactions.length > 0) {
+            this.analyzeTransactionsForUnderwriting(account.transactions, analysis);
+          }
+        });
+      });
+      
+      // Calculate DTI ratio if we have both income and debt data
+      if (analysis.income.annualIncome > 0) {
+        const monthlyIncome = analysis.income.annualIncome / 12;
+        analysis.debt.dtiRatio = analysis.debt.monthlyDebtPayments / monthlyIncome;
+      }
+      
+      return analysis;
+    } catch (error) {
+      logger.error({
+        message: `Failed to analyze asset report for underwriting: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          assetReportToken,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+      
+      throw error;
+    }
+  }
+  
+  /**
+   * Helper method to analyze transactions for underwriting criteria
+   */
+  private analyzeTransactionsForUnderwriting(transactions: any[], analysis: any) {
+    // Group transactions by month for pattern recognition
+    const transactionsByMonth = {};
+    const currentDate = new Date();
+    
+    // Pattern matchers
+    const incomePatterns = [
+      /direct deposit/i,
+      /salary/i,
+      /payroll/i,
+      /income/i,
+      /deposit/i,
+    ];
+    
+    const debtPatterns = [
+      /loan payment/i,
+      /credit card payment/i,
+      /mortgage/i,
+      /student loan/i,
+      /car payment/i,
+      /auto loan/i,
+    ];
+    
+    const housingPatterns = [
+      /rent/i,
+      /mortgage/i,
+      /lease/i,
+      /housing/i,
+    ];
+    
+    const delinquencyPatterns = [
+      /overdraft/i,
+      /nsf/i,
+      /insufficient funds/i,
+      /late fee/i,
+      /return fee/i,
+      /overdrawn/i,
+    ];
+    
+    // Employer detection
+    const employerNames = new Set();
+    
+    // Process each transaction
+    transactions.forEach(transaction => {
+      const transactionDate = new Date(transaction.date);
+      const monthKey = `${transactionDate.getFullYear()}-${transactionDate.getMonth() + 1}`;
+      
+      if (!transactionsByMonth[monthKey]) {
+        transactionsByMonth[monthKey] = [];
+      }
+      
+      transactionsByMonth[monthKey].push(transaction);
+      
+      // Check for income patterns
+      if (transaction.amount > 0 && incomePatterns.some(pattern => pattern.test(transaction.name))) {
+        // Identify potential income stream
+        const potentialEmployer = transaction.name.replace(/(direct deposit|payroll|salary|income|deposit)/i, '').trim();
+        if (potentialEmployer) {
+          employerNames.add(potentialEmployer);
+        }
+        
+        // Add to annual income (we'll divide by timeframe later)
+        analysis.income.annualIncome += transaction.amount;
+      }
+      
+      // Check for debt payment patterns
+      if (transaction.amount < 0 && debtPatterns.some(pattern => pattern.test(transaction.name))) {
+        // Add to monthly debt payments
+        analysis.debt.monthlyDebtPayments += Math.abs(transaction.amount);
+        
+        // Record the debt type
+        const debtType = transaction.name.trim();
+        if (!analysis.debt.identifiedDebts.includes(debtType)) {
+          analysis.debt.identifiedDebts.push(debtType);
+        }
+      }
+      
+      // Check for housing payment patterns
+      if (transaction.amount < 0 && housingPatterns.some(pattern => pattern.test(transaction.name))) {
+        // Set housing payment type
+        if (/mortgage/i.test(transaction.name)) {
+          analysis.housing.housingStatus = 'mortgage';
+        } else if (/rent/i.test(transaction.name)) {
+          analysis.housing.housingStatus = 'rent';
+        }
+        
+        // Add to monthly housing payment
+        analysis.housing.monthlyPayment = Math.max(analysis.housing.monthlyPayment, Math.abs(transaction.amount));
+        
+        // Increment payment history months
+        analysis.housing.paymentHistoryMonths++;
+      }
+      
+      // Check for delinquency patterns
+      if (delinquencyPatterns.some(pattern => pattern.test(transaction.name))) {
+        if (/overdraft/i.test(transaction.name)) {
+          analysis.delinquency.overdraftCount++;
+        } else if (/nsf|insufficient funds/i.test(transaction.name)) {
+          analysis.delinquency.insufficientFundsCount++;
+        } else if (/late fee/i.test(transaction.name)) {
+          analysis.delinquency.lateFeeCount++;
+        }
+        
+        // Update last delinquency date
+        if (!analysis.delinquency.lastDelinquencyDate || 
+            transactionDate > new Date(analysis.delinquency.lastDelinquencyDate)) {
+          analysis.delinquency.lastDelinquencyDate = transaction.date;
+        }
+      }
+    });
+    
+    // Calculate timeframe in months
+    const monthKeys = Object.keys(transactionsByMonth);
+    const transactionMonths = monthKeys.length;
+    
+    if (transactionMonths > 0) {
+      // Adjust annual income based on available months of data
+      if (analysis.income.annualIncome > 0) {
+        analysis.income.annualIncome = (analysis.income.annualIncome / transactionMonths) * 12;
+      }
+      
+      // Adjust employment months (set to history length if > 0)
+      if (employerNames.size > 0) {
+        analysis.employment.employmentMonths = transactionMonths;
+        analysis.employment.employers = Array.from(employerNames);
+      }
+      
+      // Assess confidence scores
+      // Income confidence based on consistency of deposits
+      const consistentMonthsWithIncome = Object.values(transactionsByMonth)
+        .filter((monthTransactions: any[]) => 
+          monthTransactions.some(t => t.amount > 0 && incomePatterns.some(p => p.test(t.name))))
+        .length;
+        
+      analysis.income.confidenceScore = (consistentMonthsWithIncome / transactionMonths) * 100;
+      
+      // Employment confidence
+      analysis.employment.confidenceScore = (employerNames.size > 0) 
+        ? (consistentMonthsWithIncome / transactionMonths) * 100
+        : 0;
+        
+      // Housing payment consistency
+      const monthsWithHousingPayments = Object.values(transactionsByMonth)
+        .filter((monthTransactions: any[]) => 
+          monthTransactions.some(t => t.amount < 0 && housingPatterns.some(p => p.test(t.name))))
+        .length;
+        
+      analysis.housing.consistencyScore = (monthsWithHousingPayments / transactionMonths) * 100;
+    }
+  }
+}
+
 export const plaidService = new PlaidService();
+// Export the client too for direct access
+export const plaidClient = plaidService;

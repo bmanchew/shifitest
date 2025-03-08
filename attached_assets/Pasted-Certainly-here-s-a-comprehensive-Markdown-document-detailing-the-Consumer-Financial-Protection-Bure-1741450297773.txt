@@ -1,0 +1,83 @@
+Certainly, here's a comprehensive Markdown document detailing the Consumer Financial Protection Bureau's (CFPB) Consumer Complaint Database (CCDB) API. This document includes an overview, key features, API endpoints, parameters, and example requests to assist in integrating the API into your system.
+
+---
+
+# CFPB Consumer Complaint Database API Documentation
+
+## Overview
+
+The Consumer Complaint Database (CCDB) API provides access to a collection of consumer complaints about financial products and services. These complaints are sent to companies for response and are published after the company responds, confirming a commercial relationship with the consumer, or after 15 days, whichever comes first. The database is updated daily and offers valuable insights into consumer experiences and industry trends.
+
+## Key Features
+
+- **Comprehensive Data:** Access a wide range of complaint data across various financial products and services.
+- **Real-Time Updates:** The database is updated daily, ensuring access to the most recent complaint information.
+- **Public Accessibility:** The API is publicly accessible and does not require authentication.
+
+## API Endpoint
+
+The primary endpoint for accessing the Consumer Complaint Database is:
+
+```
+
+https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/
+```
+
+
+## HTTP Method
+
+The API utilizes the `GET` method for retrieving complaint data.
+
+## Query Parameters
+
+The API supports various query parameters to filter and retrieve specific complaint data. Below is a list of available parameters:
+
+| Parameter                 | Description                                                                                         | Example Value             |
+|---------------------------|-----------------------------------------------------------------------------------------------------|---------------------------|
+| `search_term`             | Return results containing a specific term.                                                           | `overdraft`               |
+| `field`                   | Specify which field to search when using `search_term`. Defaults to `complaint_what_happened`.       | `complaint_what_happened` |
+| `frm`                     | Return results starting from a specific index.                                                       | `0`                       |
+| `size`                    | Limit the number of results returned.                                                                | `10`                      |
+| `sort`                    | Sort results in a particular order.                                                                  | `relevance_desc`          |
+| `format`                  | Specify the format of the returned data.                                                             | `json`                    |
+| `no_aggs`                 | Include aggregations in the result or not. `true` means no aggregations will be included.            | `false`                   |
+| `no_highlight`            | Include highlight of search term in the result or not. `true` means no highlighting will be included. | `false`                   |
+| `company`                 | Filter results to only return complaints about specific companies.                                   | `Bank of America`         |
+| `company_public_response` | Filter results by the company's public response.                                                    | `Closed with explanation` |
+| `company_received_min`    | Filter results by the minimum date the company received the complaint.                               | `2024-01-01`              |
+| `company_received_max`    | Filter results by the maximum date the company received the complaint.                               | `2024-12-31`              |
+| `company_response`        | Filter results by the company's response to the complaint.                                           | `Closed with relief`      |
+| `consumer_consent_provided` | Filter results by whether the consumer consented to publish their narrative.                        | `Consent provided`        |
+| `consumer_disputed`       | Filter results by whether the consumer disputed the company's response.                              | `Yes`                     |
+| `date_received_min`       | Filter results by the minimum date the CFPB received the complaint.                                  | `2024-01-01`              |
+| `date_received_max`       | Filter results by the maximum date the CFPB received the complaint.                                  | `2024-12-31`              |
+| `has_narrative`           | Filter results by whether the complaint includes a consumer narrative.                               | `Yes`                     |
+| `issue`                   | Filter results by the issue reported in the complaint.                                               | `Incorrect information on credit report` |
+| `product`                 | Filter results by the financial product involved.                                                    | `Credit reporting`        |
+| `state`                   | Filter results by the state of the consumer.                                                         | `CA`                      |
+| `submitted_via`           | Filter results by how the complaint was submitted.                                                   | `Web`                     |
+| `tags`                    | Filter results by specific tags associated with the complaint.                                       | `Servicemember`           |
+| `timely`                  | Filter results by whether the company responded timely.                                              | `Yes`                     |
+| `zip_code`                | Filter results by the ZIP code of the consumer.                                                      | `90210`                   |
+
+## Example API Request
+
+To retrieve the first 10 complaints related to "overdraft" issues received between January 1, 2024, and December 31, 2024, you can use the following request:
+
+```bash
+curl --location 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?search_term=overdraft&date_received_min=2024-01-01&date_received_max=2024-12-31&size=10'
+```
+
+
+## Response Format
+
+The API returns data in JSON format by default. Each complaint entry includes various fields such as:
+
+- `date_received`: The date the CFPB received the complaint.
+- `product`: The financial product involved.
+- `issue`: The issue reported in the complaint.
+- `company`: The company the complaint is about.
+- `state`: The state of the consumer.
+- `zip_code`: The ZIP code of the consumer.
+- `consumer_consent_provided`: Whether the consumer consented to publish their narrative.
+- `submitted_via`:  
