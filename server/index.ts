@@ -45,26 +45,38 @@ app.use((req, res, next) => {
 
 // Create a server startup function that avoids multiple instances
 async function startServer() {
-  // Use a more robust singleton check with process-wide lock file approach
-  const lockKey = 'server_instance_running';
+  // Use a more robust singleton pattern with a static server instance
+  const serverInstanceKey = 'server_instance';
   
-  // Check if another instance is already running
-  if ((global as any)[lockKey]) {
+  // Check if we already have a server instance
+  if ((global as any)[serverInstanceKey]) {
     logger.warn({
       message: "Server startup attempted but server is already running",
       category: "system",
       metadata: { alreadyRunning: true }
     });
-    return;
+    return (global as any)[serverInstanceKey]; // Return the existing server instance
   }
   
-  // Set global lock
-  (global as any)[lockKey] = true;
-  
-  // Set up cleanup to release lock on process termination
+  // Set up cleanup to release resources on process termination
   const cleanup = () => {
-    (global as any)[lockKey] = false;
-    process.exit(0);
+    const server = (global as any)[serverInstanceKey];
+    if (server && server.listening) {
+      logger.info({
+        message: "Shutting down server gracefully",
+        category: "system"
+      });
+      server.close(() => {
+        logger.info({
+          message: "Server shutdown complete",
+          category: "system"
+        });
+        (global as any)[serverInstanceKey] = null;
+        process.exit(0);
+      });
+    } else {
+      process.exit(0);
+    }
   };
   
   // Handle termination signals
@@ -150,69 +162,86 @@ async function startServer() {
     // Increase max listeners to prevent warnings
     server.setMaxListeners(20);
 
-    // Single instance of port selection logic with better error handling
-    let currentPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
-    let maxPortAttempts = 10; // Limit port attempts to prevent infinite loops
+    // Improved port selection logic that doesn't create multiple server instances
+    const basePort = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
+    let currentPort = basePort;
+    const maxPortAttempts = 10; // Limit port attempts to prevent infinite loops
     
-    const startOnAvailablePort = () => {
-      return new Promise<void>((resolve, reject) => {
-        if (maxPortAttempts <= 0) {
-          return reject(new Error('Could not find an available port after multiple attempts'));
-        }
+    const findAvailablePort = async (): Promise<number> => {
+      return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const checkPort = (port: number) => {
+          const tester = require('net').createServer()
+            .once('error', (err: Error & { code?: string }) => {
+              if (err.code === 'EADDRINUSE') {
+                if (attempts >= maxPortAttempts) {
+                  return reject(new Error('Could not find an available port after multiple attempts'));
+                }
+                attempts++;
+                log(`Port ${port} is in use, trying ${port + 1}`);
+                tester.close(() => checkPort(port + 1));
+              } else {
+                reject(err);
+              }
+            })
+            .once('listening', () => {
+              tester.close(() => resolve(port));
+            })
+            .listen(port, '0.0.0.0');
+        };
         
-        if (server.listening) {
-          logger.warn({
-            message: `Server is already listening, not starting again`,
-            category: 'system',
-            metadata: { port: currentPort }
-          });
-          return resolve();
-        }
-        
-        const httpServer = server.listen({
-          port: currentPort,
-          host: "0.0.0.0",
-          reusePort: false,
-        }, () => {
-          const serverAddress = httpServer.address();
-          const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : currentPort;
-          log(`Server listening on http://0.0.0.0:${serverPort}`);
-          logger.info({
-            message: `ShiFi server started on port ${serverPort}`,
-            category: 'system',
-            metadata: {
-              environment: app.get('env'),
-              nodeVersion: process.version,
-              address: '0.0.0.0',
-              port: serverPort
-            },
-            tags: ['startup', 'server']
-          });
-          resolve();
-        });
-        
-        httpServer.on('error', (err: Error & { code?: string }) => {
-          if (err.code === 'EADDRINUSE' && !process.env.PORT) {
-            log(`Port ${currentPort} is in use, trying ${currentPort + 1}`);
-            currentPort++;
-            maxPortAttempts--;
-            httpServer.close(() => {
-              startOnAvailablePort().then(resolve).catch(reject);
-            });
-          } else {
-            logger.error({
-              message: `Error starting server: ${err.message}`,
-              category: 'system',
-              metadata: { error: err.message }
-            });
-            reject(err);
-          }
-        });
+        checkPort(currentPort);
       });
     };
     
     // Start the server on an available port
-    await startOnAvailablePort();
+    try {
+      // Find an available port first
+      currentPort = await findAvailablePort();
+      
+      // Start the server only once on the available port
+      const httpServer = server.listen({
+        port: currentPort,
+        host: "0.0.0.0",
+        reusePort: false,
+      }, () => {
+        const serverAddress = httpServer.address();
+        const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : currentPort;
+        log(`Server listening on http://0.0.0.0:${serverPort}`);
+        logger.info({
+          message: `ShiFi server started on port ${serverPort}`,
+          category: 'system',
+          metadata: {
+            environment: app.get('env'),
+            nodeVersion: process.version,
+            address: '0.0.0.0',
+            port: serverPort
+          },
+          tags: ['startup', 'server']
+        });
+      });
+      
+      // Store the server instance globally to prevent multiple instances
+      (global as any)['server_instance'] = httpServer;
+      
+      httpServer.on('error', (err: Error) => {
+        logger.error({
+          message: `Server error: ${err.message}`,
+          category: 'system',
+          metadata: { error: err.message, stack: err.stack }
+        });
+      });
+    } catch (error) {
+      logger.error({
+        message: `Failed to start server: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'system',
+        metadata: { 
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined 
+        }
+      });
+      throw error;
+    }
     
   } catch (error) {
     logger.error({
@@ -228,7 +257,27 @@ async function startServer() {
   }
 }
 
-// Only call startServer once
-startServer().catch(err => {
-  console.error('Failed to start server:', err);
-});
+// Only call startServer once with better error handling
+try {
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+    logger.error({
+      message: `Failed to start server: ${err.message}`,
+      category: 'system',
+      metadata: { 
+        error: err.message,
+        stack: err.stack 
+      }
+    });
+  });
+} catch (err) {
+  console.error('Error starting server:', err);
+  logger.error({
+    message: `Error starting server: ${err instanceof Error ? err.message : String(err)}`,
+    category: 'system',
+    metadata: { 
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined 
+    }
+  });
+}
