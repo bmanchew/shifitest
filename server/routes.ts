@@ -2104,7 +2104,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 category: "contract",
                 metadata: { contractId, kycStepId: kycStep.id, status: decision?.status || status },
               });
-              );
 
               logger.warn({
                 message: `KYC verification failed for contract ${contractId}`,
