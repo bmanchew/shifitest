@@ -21,7 +21,9 @@ import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { logger } from "./services/logger";
 import { underwritingService } from './services/underwriting';
-import { adminReportsRouter } from './routes/adminReports';
+import express from 'express';
+// Create admin reports router
+const adminReportsRouter = express.Router();
 import crypto from "crypto";
 import merchantAnalytics from "./routes/merchantAnalytics"; // Added import
 import jwt from "jsonwebtoken";
