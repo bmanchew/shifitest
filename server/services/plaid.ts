@@ -614,6 +614,73 @@ class PlaidService {
       throw error;
     }
   }
+
+  /**
+   * Helper method to analyze transaction data for underwriting purposes
+   * This updates the analysis object with insights from transaction data
+   */
+  private analyzeTransactionsForUnderwriting(transactions: any[], analysis: UnderwritingAnalysis) {
+    for (const transaction of transactions) {
+      // Skip pending transactions
+      if (transaction.pending) continue;
+
+      // Analyze income deposits
+      if (transaction.amount > 0 && transaction.type === 'deposit') {
+        // Add to income streams if not already present
+        const streamId = `${transaction.name}-${transaction.amount.toFixed(2)}`;
+        if (!analysis.income.incomeStreams.includes(streamId)) {
+          analysis.income.incomeStreams.push(streamId);
+        }
+
+        // Update employment information if it looks like a payroll deposit
+        if (transaction.name.toLowerCase().includes('payroll') || 
+            transaction.name.toLowerCase().includes('direct deposit')) {
+          const employer = transaction.name.replace(/(payroll|direct deposit)/i, '').trim();
+          if (!analysis.employment.employers.includes(employer)) {
+            analysis.employment.employers.push(employer);
+          }
+        }
+      }
+
+      // Analyze debt payments
+      if (transaction.amount < 0 && 
+          (transaction.category || []).some((cat: string) => 
+            ['loan', 'credit', 'debt'].includes(cat.toLowerCase()))) {
+        // Add to identified debts if not already present
+        if (!analysis.debt.identifiedDebts.includes(transaction.name)) {
+          analysis.debt.identifiedDebts.push(transaction.name);
+        }
+        analysis.debt.monthlyDebtPayments += Math.abs(transaction.amount);
+      }
+
+      // Track delinquency indicators
+      if (transaction.type === 'overdraft') {
+        analysis.delinquency.overdraftCount++;
+      }
+      if ((transaction.category || []).includes('insufficient_funds')) {
+        analysis.delinquency.insufficientFundsCount++;
+      }
+      if ((transaction.category || []).includes('late_fee')) {
+        analysis.delinquency.lateFeeCount++;
+        // Update last delinquency date if this is more recent
+        const txDate = new Date(transaction.date);
+        if (!analysis.delinquency.lastDelinquencyDate || 
+            txDate > new Date(analysis.delinquency.lastDelinquencyDate)) {
+          analysis.delinquency.lastDelinquencyDate = transaction.date;
+        }
+      }
+
+      // Analyze housing payments
+      if ((transaction.category || []).some((cat: string) => 
+          ['rent', 'mortgage'].includes(cat.toLowerCase()))) {
+        analysis.housing.housingStatus = 'stable';
+        if (!analysis.housing.monthlyPayment) {
+          analysis.housing.monthlyPayment = Math.abs(transaction.amount);
+        }
+        analysis.housing.paymentHistoryMonths++;
+      }
+    }
+  }
 }
 
 // Create and export a singleton instance
