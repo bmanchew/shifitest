@@ -463,33 +463,37 @@ class PlaidService {
         metadata: { daysRequested },
       });
 
-      // Prepare asset report request
-      const request: AssetReportCreateRequest = {
-        access_tokens: [accessToken],
-        days_requested: daysRequested,
-        options: {},
-      };
-
+      // Prepare asset report request with options
+      const options: any = {};
+      
       // Add optional parameters if provided
       if (clientReportId) {
-        request.options.client_report_id = clientReportId;
+        options.client_report_id = clientReportId;
       }
 
       if (webhook) {
-        request.options.webhook = webhook;
+        options.webhook = webhook;
       }
 
       if (user) {
-        request.options.user = {
+        const userData: any = {
           client_user_id: user.clientUserId,
         };
 
-        if (user.firstName) request.options.user.first_name = user.firstName;
-        if (user.lastName) request.options.user.last_name = user.lastName;
-        if (user.ssn) request.options.user.ssn = user.ssn;
-        if (user.phoneNumber) request.options.user.phone_number = user.phoneNumber;
-        if (user.email) request.options.user.email = user.email;
+        if (user.firstName) userData.first_name = user.firstName;
+        if (user.lastName) userData.last_name = user.lastName;
+        if (user.ssn) userData.ssn = user.ssn;
+        if (user.phoneNumber) userData.phone_number = user.phoneNumber;
+        if (user.email) userData.email = user.email;
+        
+        options.user = userData;
       }
+      
+      const request: AssetReportCreateRequest = {
+        access_tokens: [accessToken],
+        days_requested: daysRequested,
+        options: options,
+      };
 
       const response = await this.client.assetReportCreate(request);
 
@@ -624,7 +628,6 @@ class PlaidService {
       return false;
     }
   }
-}
 
   /**
    * Analyze asset report data for underwriting purposes
