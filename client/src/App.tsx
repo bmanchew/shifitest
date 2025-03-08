@@ -18,6 +18,9 @@ const MerchantContracts = lazy(() => import("@/pages/merchant/Contracts"));
 const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
 const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
 
+import Portfolio from '@/pages/admin/Portfolio';
+
+
 // Customer pages
 const CustomerApplication = lazy(() => import("@/pages/customer/Application"));
 const CustomerContractOffer = lazy(
@@ -85,3 +88,13 @@ function App() {
 }
 
 export default App;
+
+
+        {/* Admin routes */}
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/contracts" element={<AdminContracts />} />
+        <Route path="/admin/contracts/:id" element={<AdminContractDetails />} />
+        <Route path="/admin/users" element={<AdminUsers />} />
+        <Route path="/admin/merchants" element={<AdminMerchants />} />
+        <Route path="/admin/portfolio" element={<Portfolio />} />
+        <Route path="/admin/settings" element={<AdminSettings />} />

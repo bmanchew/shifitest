@@ -108,3 +108,15 @@ const ContractDetails: React.FC = () => {
 };
 
 export default ContractDetails;
+
+
+        {/* Underwriting Information Section */}
+        {contract && user && (
+          <div className="mb-6">
+            <h3 className="text-lg font-medium mb-3">Underwriting Information</h3>
+            <UnderwritingViewFactory 
+              userRole={user.role} 
+              contractId={contract.id} 
+            />
+          </div>
+        )}
