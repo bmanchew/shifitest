@@ -4,7 +4,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 // Import your components/pages here
 import LoginPage from './pages/Login';
 import DashboardPage from './pages/dashboard/Dashboard';
-import CustomerApplicationPage from './pages/customer/CustomerApplication';
+import CustomerApplicationPage from './pages/customer/Application';
 import MerchantDashboardPage from './pages/merchant/MerchantDashboard';
 import AdminDashboardPage from './pages/admin/AdminDashboard';
 import NotFoundPage from './pages/error/NotFound';
