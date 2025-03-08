@@ -8,7 +8,9 @@ import LoginPage from "@/pages/Login";
 import RegisterPage from "@/pages/Register";
 import NotFoundPage from "@/pages/not-found";
 import AdminDashboard from "@/pages/admin/Dashboard"; // Import from correct path
-import MerchantDashboard from "@/pages/MerchantDashboard"; // Added MerchantDashboard
+import MerchantDashboard from "@/pages/merchant/Dashboard"; // Added MerchantDashboard
+import MerchantReports from "@/pages/merchant/Reports"; // Added MerchantReports
+import ProtectedRoute from "@/components/ProtectedRoute"; // Added ProtectedRoute component
 
 export default function App() {
   return (
