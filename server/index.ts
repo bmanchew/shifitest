@@ -112,6 +112,16 @@ app.use((req, res, next) => {
     // Use environment-provided port (for deployment) or start with default
     const deploymentPort = process.env.PORT ? parseInt(process.env.PORT, 10) : port;
     
+    // Check if the server is already listening
+    if (server.listening) {
+      logger.warn({
+        message: `Server is already listening, not starting again`,
+        category: 'system',
+        metadata: { port: deploymentPort }
+      });
+      return;
+    }
+    
     server.listen({
       port: deploymentPort,
       host: "0.0.0.0", // Explicitly listen on all network interfaces

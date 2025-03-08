@@ -3501,7 +3501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Mount the API router
   app.use("/api", apiRouter);
-  app.use("/api", merchantAnalytics); //Register merchant analytics routes
+  // merchantAnalytics routes are already included properly in the apiRouter
 
   // Create HTTP server
   const httpServer = createServer(app);
