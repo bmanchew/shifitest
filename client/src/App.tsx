@@ -9,7 +9,7 @@ import CustomerLayout from './components/layout/CustomerLayout';
 import MerchantLayout from './components/layout/MerchantLayout';
 
 // Import pages
-import LoginPage from './pages/auth/Login';
+import LoginPage from './pages/log';
 import AdminDashboardPage from './pages/admin/Dashboard';
 import CustomerApplicationPage from './pages/customer/Application';
 import MerchantDashboardPage from './pages/merchant/Dashboard';
