@@ -59,12 +59,12 @@ export default function ContractTerms({
         completed: true,
         data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
       });
-      
+
       toast({
         title: "Terms Accepted",
         description: "You have successfully accepted the contract terms.",
       });
-      
+
       onComplete();
     } catch (error) {
       console.error("Failed to accept terms:", error);
@@ -147,7 +147,7 @@ export default function ContractTerms({
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
           >
             I agree to the <a href="#" className="text-primary-600 hover:text-primary-700">terms and conditions</a> and{" "}
-            <a href="#" className="text-primary-600 hover:text-primary-700">privacy policy</a>.
+            <a href="#" className="text-primary-600 hover:text-primary-700">privacy policy</a>. By checking this box, I agree to the terms and conditions of this financing agreement, including permission for ShiFi to obtain my credit report and other financial information. I understand this may include information from credit bureaus, income verification services, and bank account analysis. This process will not affect my credit score, and my information will be handled according to ShiFi's privacy policy.
           </label>
         </div>
       </div>
