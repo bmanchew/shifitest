@@ -2082,6 +2082,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const kycData = decision?.kyc || {};
               const customerInfo = customer_details || {};
               
+              // Log full customer details received
+              logger.info({
+                message: `DiDit customer details for contract ${contractId}`,
+                category: "api",
+                source: "didit",
+                metadata: { 
+                  customerInfo: JSON.stringify(customerInfo),
+                  kycData: JSON.stringify(kycData)
+                },
+              });
+              
               // Prepare the data to save with all possible properties
               const kycSaveData = {
                 verified: true,
@@ -2089,10 +2100,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 verifiedAt: new Date().toISOString(),
                 firstName: customerInfo.first_name || kycData.first_name,
                 lastName: customerInfo.last_name || kycData.last_name,
-                documentType: kycData.document_type,
-                documentNumber: kycData.document_number,
+                email: customerInfo.email || kycData.email,
+                phone: customerInfo.phone || kycData.phone,
+                documentType: kycData.document_type || customerInfo.document_type,
+                documentNumber: kycData.document_number || customerInfo.document_number,
                 dateOfBirth: customerInfo.date_of_birth || kycData.date_of_birth,
-                address: kycData.address,
+                address: kycData.address || customerInfo.address,
                 completedVia: "webhook",
                 rawResponse: JSON.stringify(req.body),
               };
@@ -2122,10 +2135,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 metadata: { updateResult },
               });
 
-              // Move the contract to the next step
+              // Move the contract to the next step and update customer information if available
               const contract = await storage.getContract(parseInt(contractId));
-              if (contract && contract.currentStep === "kyc") {
-                await storage.updateContractStep(parseInt(contractId), "bank");
+              if (contract) {
+                // If contract doesn't have a customer ID yet, try to find or create user
+                if (!contract.customerId && kycSaveData.firstName && kycSaveData.lastName) {
+                  try {
+                    // Try to find existing user by email
+                    let user = null;
+                    if (kycSaveData.email) {
+                      user = await storage.getUserByEmail(kycSaveData.email);
+                    }
+                    
+                    // If no user found, create a new one based on KYC data
+                    if (!user) {
+                      logger.info({
+                        message: `Creating new user from KYC data for contract ${contractId}`,
+                        category: "user",
+                        source: "didit"
+                      });
+                      
+                      // Generate a secure temporary password
+                      const tempPassword = Math.random().toString(36).slice(-10);
+                      
+                      // Create new user
+                      user = await storage.createUser({
+                        name: `${kycSaveData.firstName} ${kycSaveData.lastName}`,
+                        email: kycSaveData.email || `customer-${Date.now()}@example.com`,
+                        password: tempPassword, // In a real app, would hash and notify user
+                        role: "customer",
+                        phone: kycSaveData.phone || "",
+                        metadata: JSON.stringify({
+                          createdFromKyc: true,
+                          kycSessionId: session_id
+                        })
+                      });
+                      
+                      // Log user creation
+                      logger.info({
+                        message: `Created new user ${user.id} from KYC data`,
+                        category: "user",
+                        source: "didit",
+                        metadata: { userId: user.id, contractId }
+                      });
+                    }
+                    
+                    // Associate user with contract
+                    if (user) {
+                      await db.update(contracts)
+                        .set({ customerId: user.id })
+                        .where(eq(contracts.id, parseInt(contractId)))
+                        .execute();
+                        
+                      logger.info({
+                        message: `Associated user ${user.id} with contract ${contractId}`,
+                        category: "contract",
+                        source: "didit"
+                      });
+                    }
+                  } catch (userError) {
+                    logger.error({
+                      message: `Error creating/associating user from KYC data: ${userError instanceof Error ? userError.message : String(userError)}`,
+                      category: "user",
+                      source: "didit",
+                      metadata: { contractId, kycData: JSON.stringify(kycSaveData) }
+                    });
+                  }
+                }
+                
+                // Update contract step if currently on KYC
+                if (contract.currentStep === "kyc") {
+                  await storage.updateContractStep(parseInt(contractId), "bank");
+                }
               }
 
               logger.info({
