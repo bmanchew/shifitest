@@ -29,17 +29,16 @@ export async function loginUser(email: string, password: string): Promise<AuthUs
       password,
     });
 
-    console.log('Login response status:', response.status);
+    // apiRequest already returns parsed JSON data, not a Response object
+    console.log('Login response:', response);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Login API error:', errorData);
-      throw new Error(errorData.message || `Login failed with status ${response.status}`);
+    if (!response || !response.user) {
+      console.error('Login API error: Invalid response format');
+      throw new Error('Invalid login response format');
     }
 
-    const data = response;
-    console.log('Login successful, user role:', data.user?.role);
-    return data.user;
+    console.log('Login successful, user role:', response.user?.role);
+    return response.user;
   } catch (error) {
     console.error('Login request error:', error);
     throw error;
