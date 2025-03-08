@@ -20,6 +20,46 @@ import { underwritingService } from './services/underwriting';
 import { adminReportsRouter } from './routes/adminReports';
 import crypto from "crypto";
 import merchantAnalytics from "./routes/merchantAnalytics"; // Added import
+import jwt from "jsonwebtoken";
+
+// Authentication middleware
+export const authenticateToken = (req: Request, res: Response, next: Function) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "Authentication token is required" });
+  }
+
+  const secret = process.env.JWT_SECRET || 'default_secret_key_for_development';
+  
+  jwt.verify(token, secret, (err: any, user: any) => {
+    if (err) {
+      return res.status(403).json({ message: "Invalid or expired token" });
+    }
+    
+    (req as any).user = user;
+    next();
+  });
+};
+
+// Admin role middleware
+export const isAdmin = (req: Request, res: Response, next: Function) => {
+  if ((req as any).user && (req as any).user.role === 'admin') {
+    next();
+  } else {
+    res.status(403).json({ message: "Access denied: Admin role required" });
+  }
+};
+
+// Merchant role middleware
+export const isMerchantUser = (req: Request, res: Response, next: Function) => {
+  if ((req as any).user && (req as any).user.role === 'merchant') {
+    next();
+  } else {
+    res.status(403).json({ message: "Access denied: Merchant role required" });
+  }
+};
 
 // Helper function to convert metadata to JSON string for storage
 function objectMetadata<T>(data: T): string {

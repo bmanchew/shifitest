@@ -1,94 +1,121 @@
 
-import { Router } from "express";
-import { merchantAnalyticsService } from "../services/merchantAnalytics";
+import { Router, Request, Response } from "express";
 import { authenticateToken, isAdmin, isMerchantUser } from "../routes";
+import { storage } from "../storage";
+import { logger } from "../services/logger";
+
+// Create a service for merchant analytics if it doesn't exist
+const merchantAnalyticsService = {
+  async getContractSummary(merchantId: number) {
+    try {
+      const contracts = await storage.getContractsByMerchantId(merchantId);
+      
+      // Calculate summary statistics
+      const total = contracts.length;
+      const active = contracts.filter(c => c.status === 'active').length;
+      const pending = contracts.filter(c => c.status === 'pending').length;
+      const completed = contracts.filter(c => c.status === 'completed').length;
+      const declined = contracts.filter(c => c.status === 'declined').length;
+      
+      // Calculate total financing amount
+      const totalAmount = contracts.reduce((sum, contract) => sum + (contract.amount || 0), 0);
+      const activeAmount = contracts
+        .filter(c => c.status === 'active')
+        .reduce((sum, contract) => sum + (contract.amount || 0), 0);
+      
+      return {
+        total,
+        active,
+        pending,
+        completed,
+        declined,
+        totalAmount,
+        activeAmount
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error getting merchant analytics`,
+        error,
+        metadata: { merchantId }
+      });
+      throw error;
+    }
+  }
+};
 
 const router = Router();
 
-// Get merchant performance (merchant's own performance)
-router.get("/merchant-performance", authenticateToken, isMerchantUser, async (req, res) => {
-  try {
-    const merchantId = req.user?.merchantId;
-    
-    if (!merchantId) {
-      return res.status(400).json({ error: "Merchant ID not found" });
-    }
-    
-    const performance = await merchantAnalyticsService.getMerchantPerformance(merchantId);
-    
-    // For merchants, only return grade and basic stats
-    const merchantView = {
-      grade: performance.grade,
-      performanceScore: performance.performanceScore,
-      totalContracts: performance.totalContracts,
-      activeContracts: performance.activeContracts,
-      completedContracts: performance.completedContracts,
-      lastUpdated: performance.lastUpdated
-    };
-    
-    res.json(merchantView);
-  } catch (error) {
-    console.error("Error fetching merchant performance:", error);
-    res.status(500).json({ error: "Failed to fetch merchant performance" });
-  }
-});
-
-// Admin routes for merchant performance
-
-// Get all merchant performances
-router.get("/admin/merchant-performances", authenticateToken, isAdmin, async (req, res) => {
-  try {
-    const performances = await merchantAnalyticsService.getAllMerchantPerformances();
-    res.json(performances);
-  } catch (error) {
-    console.error("Error fetching all merchant performances:", error);
-    res.status(500).json({ error: "Failed to fetch merchant performances" });
-  }
-});
-
-// Get detailed merchant performance by ID
-router.get("/admin/merchant-performance/:merchantId", authenticateToken, isAdmin, async (req, res) => {
+// Route to get merchant analytics
+router.get('/merchant/:merchantId/analytics', authenticateToken, async (req: Request, res: Response) => {
   try {
     const merchantId = parseInt(req.params.merchantId);
     
-    if (isNaN(merchantId)) {
-      return res.status(400).json({ error: "Invalid merchant ID" });
+    // Ensure the request is coming from the merchant or an admin
+    const isRequestingOwnData = (req as any).user?.merchantId === merchantId;
+    const isAdminUser = (req as any).user?.role === 'admin';
+    
+    if (!isRequestingOwnData && !isAdminUser) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "You are not authorized to access this merchant's data" 
+      });
     }
     
-    const performance = await merchantAnalyticsService.getMerchantPerformance(merchantId);
-    res.json(performance);
+    const analytics = await merchantAnalyticsService.getContractSummary(merchantId);
+    
+    res.json({
+      success: true,
+      data: analytics
+    });
   } catch (error) {
-    console.error("Error fetching detailed merchant performance:", error);
-    res.status(500).json({ error: "Failed to fetch merchant performance details" });
+    logger.error({
+      message: 'Error fetching merchant analytics',
+      error,
+      metadata: { merchantId: req.params.merchantId }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve merchant analytics'
+    });
   }
 });
 
-// Update specific merchant performance
-router.post("/admin/update-merchant-performance/:merchantId", authenticateToken, isAdmin, async (req, res) => {
+// Route to get merchant contracts
+router.get('/merchant/:merchantId/contracts', authenticateToken, async (req: Request, res: Response) => {
   try {
     const merchantId = parseInt(req.params.merchantId);
     
-    if (isNaN(merchantId)) {
-      return res.status(400).json({ error: "Invalid merchant ID" });
+    // Ensure the request is coming from the merchant or an admin
+    const isRequestingOwnData = (req as any).user?.merchantId === merchantId;
+    const isAdminUser = (req as any).user?.role === 'admin';
+    
+    if (!isRequestingOwnData && !isAdminUser) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "You are not authorized to access this merchant's data" 
+      });
     }
     
-    await merchantAnalyticsService.updateMerchantPerformance(merchantId);
-    res.json({ success: true, message: "Merchant performance updated successfully" });
+    const contracts = await storage.getContractsByMerchantId(merchantId);
+    
+    res.json({
+      success: true,
+      data: contracts
+    });
   } catch (error) {
-    console.error("Error updating merchant performance:", error);
-    res.status(500).json({ error: "Failed to update merchant performance" });
+    logger.error({
+      message: 'Error fetching merchant contracts',
+      error,
+      metadata: { merchantId: req.params.merchantId }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve merchant contracts'
+    });
   }
 });
 
-// Update all merchant performances
-router.post("/admin/update-all-merchant-performances", authenticateToken, isAdmin, async (req, res) => {
-  try {
-    const result = await merchantAnalyticsService.updateAllMerchantPerformances();
-    res.json({ success: true, message: `Updated ${result.count} merchant performances` });
-  } catch (error) {
-    console.error("Error updating all merchant performances:", error);
-    res.status(500).json({ error: "Failed to update merchant performances" });
-  }
-});
-
+export { merchantAnalyticsService };
 export default router;
