@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 
 import { eq } from "drizzle-orm";
 import { db } from "./db";
+import { contracts } from "./db/schema"; // Add missing import
 
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -21,7 +22,6 @@ import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { logger } from "./services/logger";
 import { underwritingService } from './services/underwriting';
-import express from 'express';
 // Create admin reports router
 const adminReportsRouter = express.Router();
 import crypto from "crypto";
