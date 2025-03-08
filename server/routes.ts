@@ -1884,7 +1884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get the webhook secret from environment variables
       const webhookSecret = process.env.DIDIT_WEBHOOK_SECRET_KEY;
 
-      // Log the receipt of webhook
+      // Log the receipt of webhook with more detailed information
       logger.info({
         message: `Received DiDit webhook event`,
         category: "api",
@@ -1892,7 +1892,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           eventType: req.body.event_type || req.body.status,
           sessionId: req.body.session_id,
-          body: req.body,
+          body: JSON.stringify(req.body),
+          headers: JSON.stringify(req.headers),
         },
       });
 
@@ -1945,7 +1946,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             category: "api",
             source: "didit",
             metadata: {
-                            error: verifyError instanceof Error ? verifyError.stack : null,
+              error: verifyError instanceof Error ? verifyError.stack : null,
             },
           });
           isVerified = false;
@@ -1953,42 +1954,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Extract key information from the webhook
-      const { event_type, session_id, status, decision, vendor_data } =
-        req.body;
+      const { event_type, session_id, status, decision, vendor_data, customer_details } = req.body;
 
-      // Extract vendor_data to extract contractId
+      // Extract contractId from vendor_data with improved error handling
       let contractId = null;
       try {
         if (vendor_data) {
-          // Attempt to parse as JSON first
-          try {
-            // Handle both string JSON and direct JSON object formats
-            const parsedData = typeof vendor_data === 'string' 
-              ? JSON.parse(vendor_data) 
-              : vendor_data;
-
-            contractId = parsedData.contractId;
-
-            // If contractId is still null, check if vendor_data itself is the contractId (legacy format)
-            if (!contractId && typeof vendor_data === 'string' && /^\d+$/.test(vendor_data)) {
-              contractId = vendor_data;
+          // Handle different vendor_data formats
+          if (typeof vendor_data === 'string') {
+            // Try to parse as JSON
+            try {
+              const parsedData = JSON.parse(vendor_data);
+              contractId = parsedData.contractId?.toString();
+            } catch (jsonError) {
+              // If not valid JSON, check if the string itself is a numeric ID
+              if (/^\d+$/.test(vendor_data)) {
+                contractId = vendor_data;
+              }
             }
-          } catch (jsonError) {
-            // If JSON parsing fails, try direct property access
-            if (typeof vendor_data === 'object' && vendor_data.contractId) {
-              contractId = vendor_data.contractId;
-            } else if (typeof vendor_data === 'string' && /^\d+$/.test(vendor_data)) {
-              // If vendor_data is just a string with a number, it might be the contractId directly
-              contractId = vendor_data;
-            }
+          } else if (typeof vendor_data === 'object') {
+            // Direct object access
+            contractId = vendor_data.contractId?.toString();
           }
+        }
+
+        // Final fallback - try to find contract ID in the request body directly
+        if (!contractId && req.body.contractId) {
+          contractId = req.body.contractId.toString();
         }
       } catch (error) {
         logger.warn({
           message: `Failed to parse vendor_data in DiDit webhook: ${error instanceof Error ? error.message : String(error)}`,
           category: "api",
           source: "didit",
-          metadata: { vendor_data },
+          metadata: { 
+            vendor_data: typeof vendor_data === 'object' ? JSON.stringify(vendor_data) : vendor_data 
+          },
         });
       }
 
@@ -2000,7 +2001,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           contractId,
           sessionId: session_id,
           status: status || event_type,
+          decision: decision ? JSON.stringify(decision) : null,
           isVerified,
+          customer_details: customer_details ? JSON.stringify(customer_details) : null,
         },
       });
 
@@ -2009,7 +2012,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "Missing contractId in DiDit webhook vendor_data",
           category: "api",
           source: "didit",
-          metadata: { vendor_data },
+          metadata: { 
+            vendor_data: typeof vendor_data === 'object' ? JSON.stringify(vendor_data) : vendor_data,
+            body: JSON.stringify(req.body) 
+          },
         });
         return res.status(200).json({
           status: "success",
@@ -2021,7 +2027,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (
         event_type === "verification.completed" ||
         status === "Approved" ||
-        status === "Declined"
+        status === "Declined" ||
+        status === "approved" ||
+        status === "declined" ||
+        status === "completed"
       ) {
         logger.info({
           message: `DiDit verification completed for session ${session_id}, contract ${contractId}`,
@@ -2035,44 +2044,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
 
-        // Check if verification was approved
+        // Check if verification was approved with more comprehensive checks
         const isApproved =
-          decision?.status === "approved" ||
+          (decision?.status === "approved" || decision?.status === "Approved") ||
           status === "Approved" ||
           status === "approved" ||
-          status === "completed";
+          status === "completed" ||
+          status === "Completed";
 
         try {
           // Find the KYC step in the application progress
-          const applicationProgress =
-            await storage.getApplicationProgressByContractId(
-              parseInt(contractId),
-            );
-          const kycStep = applicationProgress.find(
-            (step) => step.step === "kyc",
-          );
+          const applicationProgress = await storage.getApplicationProgressByContractId(parseInt(contractId));
+          
+          let kycStep = applicationProgress.find((step) => step.step === "kyc");
+          
+          // If KYC step doesn't exist, create it
+          if (!kycStep) {
+            logger.info({
+              message: `Creating missing KYC step for contract ${contractId}`,
+              category: "api",
+              source: "didit",
+            });
+            
+            const newKycStep = await storage.createApplicationProgress({
+              contractId: parseInt(contractId),
+              step: "kyc",
+              completed: false,
+              data: null
+            });
+            
+            kycStep = newKycStep;
+          }
 
           if (kycStep) {
             if (isApproved) {
-              // Get any customer details from the verification if available
-              const customerDetails = decision?.kyc || {};
+              // Get customer details from different possible locations in the webhook
+              const kycData = decision?.kyc || {};
+              const customerInfo = customer_details || {};
+              
+              // Prepare the data to save with all possible properties
+              const kycSaveData = {
+                verified: true,
+                sessionId: session_id,
+                verifiedAt: new Date().toISOString(),
+                firstName: customerInfo.first_name || kycData.first_name,
+                lastName: customerInfo.last_name || kycData.last_name,
+                documentType: kycData.document_type,
+                documentNumber: kycData.document_number,
+                dateOfBirth: customerInfo.date_of_birth || kycData.date_of_birth,
+                address: kycData.address,
+                completedVia: "webhook",
+                rawResponse: JSON.stringify(req.body),
+              };
+              
+              // Log the data we're about to save
+              logger.info({
+                message: `Saving KYC data for contract ${contractId}`,
+                category: "api",
+                source: "didit",
+                metadata: { 
+                  kycStepId: kycStep.id,
+                  kycSaveData 
+                },
+              });
 
               // Mark the KYC step as completed
-              await storage.updateApplicationProgressCompletion(
+              const updateResult = await storage.updateApplicationProgressCompletion(
                 kycStep.id,
                 true, // Completed
-                JSON.stringify({
-                  verified: true,
-                  sessionId: session_id,
-                  verifiedAt: new Date().toISOString(),
-                  firstName: customerDetails.first_name,
-                  lastName: customerDetails.last_name,
-                  documentType: customerDetails.document_type,
-                  documentNumber: customerDetails.document_number,
-                  dateOfBirth: customerDetails.date_of_birth,
-                  completedVia: "webhook",
-                }),
+                JSON.stringify(kycSaveData),
               );
+              
+              logger.info({
+                message: `KYC step update result for contract ${contractId}`,
+                category: "api",
+                source: "didit",
+                metadata: { updateResult },
+              });
 
               // Move the contract to the next step
               const contract = await storage.getContract(parseInt(contractId));
@@ -2087,24 +2135,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
             } else {
               // Mark verification as failed but don't complete the step
+              const failureData = {
+                verified: false,
+                sessionId: session_id,
+                status: decision?.status || status,
+                timestamp: new Date().toISOString(),
+                reason: "Verification declined or incomplete",
+                rawResponse: JSON.stringify(req.body),
+              };
+              
               await storage.updateApplicationProgressCompletion(
                 kycStep.id,
                 false, // Not completed
-                JSON.stringify({
-                  verified: false,
-                  sessionId: session_id,
-                  status: decision?.status || status,
-                  timestamp: new Date().toISOString(),
-                  reason: "Verification declined or incomplete",
-                }),
+                JSON.stringify(failureData),
               );
               
-              logger.info({
-                message: `KYC verification failed for contract ${contractId}`,
-                category: "contract",
-                metadata: { contractId, kycStepId: kycStep.id, status: decision?.status || status },
-              });
-
               logger.warn({
                 message: `KYC verification failed for contract ${contractId}`,
                 category: "contract",
@@ -2112,14 +2157,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   contractId,
                   kycStepId: kycStep.id,
                   status: decision?.status || status,
+                  failureData,
                 },
               });
             }
           } else {
             logger.error({
-              message: `Could not find KYC step for contract ${contractId}`,
+              message: `Could not find or create KYC step for contract ${contractId}`,
               category: "contract",
-              metadata: { contractId, applicationProgress },
+              metadata: { contractId },
             });
           }
         } catch (storageError) {
@@ -2141,6 +2187,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: "didit",
           metadata: { sessionId: session_id, contractId },
         });
+        
+        // Store initial status in the KYC step
+        try {
+          const applicationProgress = await storage.getApplicationProgressByContractId(parseInt(contractId));
+          const kycStep = applicationProgress.find((step) => step.step === "kyc");
+          
+          if (kycStep) {
+            await storage.updateApplicationProgressCompletion(
+              kycStep.id,
+              false, // Not completed yet
+              JSON.stringify({
+                verified: false,
+                sessionId: session_id,
+                startedAt: new Date().toISOString(),
+                status: "in_progress",
+              })
+            );
+          }
+        } catch (error) {
+          logger.warn({
+            message: `Error updating KYC step for verification start: ${error instanceof Error ? error.message : String(error)}`,
+            category: "api",
+            source: "didit",
+            metadata: { contractId, sessionId: session_id },
+          });
+        }
       } else if (event_type === "verification.cancelled") {
         logger.info({
           message: `DiDit verification cancelled for session ${session_id}, contract ${contractId}`,
@@ -2148,6 +2220,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: "didit",
           metadata: { sessionId: session_id, contractId },
         });
+        
+        // Update KYC step as cancelled
+        try {
+          const applicationProgress = await storage.getApplicationProgressByContractId(parseInt(contractId));
+          const kycStep = applicationProgress.find((step) => step.step === "kyc");
+          
+          if (kycStep) {
+            await storage.updateApplicationProgressCompletion(
+              kycStep.id,
+              false, // Not completed
+              JSON.stringify({
+                verified: false,
+                sessionId: session_id,
+                cancelledAt: new Date().toISOString(),
+                status: "cancelled",
+              })
+            );
+          }
+        } catch (error) {
+          logger.warn({
+            message: `Error updating KYC step for verification cancellation: ${error instanceof Error ? error.message : String(error)}`,
+            category: "api",
+            source: "didit",
+            metadata: { contractId, sessionId: session_id },
+          });
+        }
       }
 
       // Always respond with 200 OK to acknowledge receipt of the webhook
@@ -2159,6 +2257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         source: "didit",
         metadata: {
           error: error instanceof Error ? error.stack : null,
+          body: req.body ? JSON.stringify(req.body) : null,
         },
       });
 
