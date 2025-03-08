@@ -252,32 +252,49 @@ async function startServer() {
         stack: error instanceof Error ? error.stack : undefined 
       }
     });
-    // Release lock to allow for restart attempts
-    (global as any)[lockKey] = false;
+    // Release startup lock to allow for restart attempts
+    (global as any)[globalStartupLock] = false;
   }
 }
 
-// Only call startServer once with better error handling
-try {
-  startServer().catch(err => {
-    console.error('Failed to start server:', err);
+// Implement a global semaphore to prevent multiple server instances
+const globalStartupLock = 'server_startup_lock';
+
+// Only proceed if we don't have a lock already
+if (!(global as any)[globalStartupLock]) {
+  // Set the lock before attempting to start
+  (global as any)[globalStartupLock] = true;
+  
+  try {
+    startServer().catch(err => {
+      console.error('Failed to start server:', err);
+      logger.error({
+        message: `Failed to start server: ${err.message}`,
+        category: 'system',
+        metadata: { 
+          error: err.message,
+          stack: err.stack 
+        }
+      });
+      // Release lock on error
+      (global as any)[globalStartupLock] = false;
+    });
+  } catch (err) {
+    console.error('Error starting server:', err);
     logger.error({
-      message: `Failed to start server: ${err.message}`,
+      message: `Error starting server: ${err instanceof Error ? err.message : String(err)}`,
       category: 'system',
       metadata: { 
-        error: err.message,
-        stack: err.stack 
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined 
       }
     });
-  });
-} catch (err) {
-  console.error('Error starting server:', err);
-  logger.error({
-    message: `Error starting server: ${err instanceof Error ? err.message : String(err)}`,
-    category: 'system',
-    metadata: { 
-      error: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined 
-    }
+    // Release lock on error
+    (global as any)[globalStartupLock] = false;
+  }
+} else {
+  logger.info({
+    message: "Server startup already in progress, skipping duplicate startup attempt",
+    category: "system"
   });
 }
