@@ -21,20 +21,27 @@ export interface AuthResult {
   user: AuthUser;
 }
 
-export async function loginUser(email: string, password: string): Promise<AuthResult> {
+export async function loginUser(email: string, password: string): Promise<AuthUser> {
   try {
-    const data = await apiRequest<AuthResult>("POST", "/api/auth/login", {
+    console.log('Sending login request to API');
+    const response = await apiRequest<AuthResult>("POST", "/api/auth/login", {
       email,
       password,
     });
-    
-    if (!data.user) {
-      throw new Error("Invalid response from server");
+
+    console.log('Login response status:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Login API error:', errorData);
+      throw new Error(errorData.message || `Login failed with status ${response.status}`);
     }
-    
-    return data;
+
+    const data = response;
+    console.log('Login successful, user role:', data.user?.role);
+    return data.user;
   } catch (error) {
-    console.error("Login error:", error);
+    console.error('Login request error:', error);
     throw error;
   }
 }
@@ -43,13 +50,13 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     // In a real application, this would make an API request to validate the session
     // or check a JWT token, etc.
-    
+
     // For demo purposes, we'll check local storage
     const userData = localStorage.getItem("shifi_user");
     if (!userData) {
       return null;
     }
-    
+
     return JSON.parse(userData);
   } catch (error) {
     console.error("Failed to get current user:", error);

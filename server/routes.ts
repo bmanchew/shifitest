@@ -38,12 +38,12 @@ export const authenticateToken = (req: Request, res: Response, next: Function) =
   }
 
   const secret = process.env.JWT_SECRET || 'default_secret_key_for_development';
-  
+
   jwt.verify(token, secret, (err: any, user: any) => {
     if (err) {
       return res.status(403).json({ message: "Invalid or expired token" });
     }
-    
+
     (req as any).user = user;
     next();
   });
@@ -96,11 +96,25 @@ function generateContractNumber(): string {
 export async function registerRoutes(app: Express): Promise<Server> {
   const apiRouter = express.Router();
 
+  // Enable CORS for all API routes
+  apiRouter.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    next();
+  });
+
   // Auth routes
   apiRouter.post("/auth/login", async (req: Request, res: Response) => {
     try {
+      console.log("Login attempt:", req.body.email);
       const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
       const user = await storage.getUserByEmail(email);
+      console.log("User found:", !!user);
 
       if (!user || user.password !== password) {
         return res.status(401).json({ message: "Invalid credentials" });
@@ -121,6 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }),
       });
 
+      console.log("Login successful for user:", user.email, "with role:", user.role);
       res.json({ user: userWithoutPassword });
     } catch (error) {
       console.error("Login error:", error);
@@ -2061,9 +2076,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Find the KYC step in the application progress
           const applicationProgress = await storage.getApplicationProgressByContractId(parseInt(contractId));
-          
+
           let kycStep = applicationProgress.find((step) => step.step === "kyc");
-          
+
           // If KYC step doesn't exist, create it
           if (!kycStep) {
             logger.info({
@@ -2071,14 +2086,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               category: "api",
               source: "didit",
             });
-            
+
             const newKycStep = await storage.createApplicationProgress({
               contractId: parseInt(contractId),
               step: "kyc",
               completed: false,
               data: null
             });
-            
+
             kycStep = newKycStep;
           }
 
@@ -2087,7 +2102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Get customer details from different possible locations in the webhook
               const kycData = decision?.kyc || {};
               const customerInfo = customer_details || {};
-              
+
               // Log full customer details received
               logger.info({
                 message: `DiDit customer details for contract ${contractId}`,
@@ -2098,7 +2113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   kycData: JSON.stringify(kycData)
                 },
               });
-              
+
               // Prepare the data to save with all possible properties
               const kycSaveData = {
                 verified: true,
@@ -2115,7 +2130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 completedVia: "webhook",
                 rawResponse: JSON.stringify(req.body),
               };
-              
+
               // Log the data we're about to save
               logger.info({
                 message: `Saving KYC data for contract ${contractId}`,
@@ -2133,7 +2148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 true, // Completed
                 JSON.stringify(kycSaveData),
               );
-              
+
               logger.info({
                 message: `KYC step update result for contract ${contractId}`,
                 category: "api",
@@ -2152,7 +2167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     if (kycSaveData.email) {
                       user = await storage.getUserByEmail(kycSaveData.email);
                     }
-                    
+
                     // If no user found, create a new one based on KYC data
                     if (!user) {
                       logger.info({
@@ -2160,10 +2175,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         category: "user",
                         source: "didit"
                       });
-                      
+
                       // Generate a secure temporary password
                       const tempPassword = Math.random().toString(36).slice(-10);
-                      
+
                       // Create new user
                       user = await storage.createUser({
                         name: `${kycSaveData.firstName} ${kycSaveData.lastName}`,
@@ -2176,7 +2191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                           kycSessionId: session_id
                         })
                       });
-                      
+
                       // Log user creation
                       logger.info({
                         message: `Created new user ${user.id} from KYC data`,
@@ -2185,14 +2200,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         metadata: { userId: user.id, contractId }
                       });
                     }
-                    
+
                     // Associate user with contract
                     if (user) {
                       await db.update(contracts)
                         .set({ customerId: user.id })
                         .where(eq(contracts.id, parseInt(contractId)))
                         .execute();
-                        
+
                       logger.info({
                         message: `Associated user ${user.id} with contract ${contractId}`,
                         category: "contract",
@@ -2208,7 +2223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     });
                   }
                 }
-                
+
                 // Update contract step if currently on KYC
                 if (contract.currentStep === "kyc") {
                   await storage.updateContractStep(parseInt(contractId), "bank");
@@ -2230,13 +2245,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 reason: "Verification declined or incomplete",
                 rawResponse: JSON.stringify(req.body),
               };
-              
+
               await storage.updateApplicationProgressCompletion(
                 kycStep.id,
                 false, // Not completed
                 JSON.stringify(failureData),
               );
-              
+
               logger.warn({
                 message: `KYC verification failed for contract ${contractId}`,
                 category: "contract",
@@ -2274,12 +2289,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: "didit",
           metadata: { sessionId: session_id, contractId },
         });
-        
+
         // Store initial status in the KYC step
         try {
           const applicationProgress = await storage.getApplicationProgressByContractId(parseInt(contractId));
           const kycStep = applicationProgress.find((step) => step.step === "kyc");
-          
+
           if (kycStep) {
             await storage.updateApplicationProgressCompletion(
               kycStep.id,
@@ -2307,12 +2322,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: "didit",
           metadata: { sessionId: session_id, contractId },
         });
-        
+
         // Update KYC step as cancelled
         try {
           const applicationProgress = await storage.getApplicationProgressByContractId(parseInt(contractId));
           const kycStep = applicationProgress.find((step) => step.step === "kyc");
-          
+
           if (kycStep) {
             await storage.updateApplicationProgressCompletion(
               kycStep.id,

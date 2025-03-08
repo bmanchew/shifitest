@@ -21,13 +21,19 @@ export default function Login() {
     setIsLoading(true);
 
     try {
+      console.log("Attempting login with:", email);
       await login(email, password);
       // User will be redirected based on role by the AuthProvider
     } catch (error) {
       console.error("Login failed:", error);
+      // Show more detailed error message if available
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Invalid email or password. Please try again.";
+      
       toast({
         title: "Login Failed",
-        description: "Invalid email or password. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
       setIsLoading(false);
