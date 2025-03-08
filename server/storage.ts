@@ -4,10 +4,13 @@ import {
   contracts, Contract, InsertContract,
   applicationProgress, ApplicationProgress, InsertApplicationProgress,
   logs, Log, InsertLog,
-  underwritingData
+  underwritingData,
+  assetReports, AssetReport, InsertAssetReport,
+  portfolioMonitoring, PortfolioMonitoring, InsertPortfolioMonitoring,
+  complaintsData, ComplaintsData, InsertComplaintsData
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -47,6 +50,17 @@ export interface IStorage {
   getUnderwritingDataByContractId(contractId: number): Promise<any[]>;
   createUnderwritingData(data: any): Promise<any>;
   updateUnderwritingData(id: number, data: any): Promise<any>;
+
+  // Portfolio Monitoring operations
+  getAllUnderwritingData(): Promise<any[]>;
+  getContractsByStatus(status: string): Promise<Contract[]>;
+  storeAssetReportToken(contractId: number, assetReportToken: string, assetReportId: string, options: any): Promise<AssetReport>;
+  getAssetReportsByContractId(contractId: number): Promise<AssetReport[]>;
+  updateAssetReportStatus(id: number, status: string, analysisData?: any): Promise<AssetReport | undefined>;
+  getLatestPortfolioMonitoring(): Promise<PortfolioMonitoring | null>;
+  updatePortfolioMonitoring(data: any): Promise<PortfolioMonitoring>;
+  saveComplaintsData(complaints: any[]): Promise<ComplaintsData[]>;
+  getComplaintsData(options?: { product?: string; company?: string; limit?: number; offset?: number }): Promise<ComplaintsData[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -211,7 +225,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnderwritingDataByContractId(contractId: number) {
-    return await db.select().from(underwritingData).where({ contractId }).orderBy(underwritingData.createdAt, 'desc');
+    return await db.select().from(underwritingData).where(eq(underwritingData.contractId, contractId));
   }
 
   async createUnderwritingData(data: any) {
@@ -228,6 +242,135 @@ export class DatabaseStorage implements IStorage {
       .where({ id })
       .returning();
     return result[0];
+  }
+
+  async getAllUnderwritingData() {
+    return await db.select().from(underwritingData).orderBy(desc(underwritingData.createdAt));
+  }
+
+  async getContractsByStatus(status: string) {
+    return await db.select().from(contracts).where(eq(contracts.status, status));
+  }
+
+  async storeAssetReportToken(contractId: number, assetReportToken: string, assetReportId: string, options: any = {}) {
+    const { userId, plaidItemId, daysRequested = 60, expiresAt } = options;
+
+    return await db.insert(assetReports).values({
+      contractId,
+      userId,
+      assetReportId,
+      assetReportToken,
+      plaidItemId,
+      daysRequested,
+      status: 'pending',
+      createdAt: new Date(),
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined
+    }).returning();
+  }
+
+  async getAssetReportsByContractId(contractId: number) {
+    return await db.select().from(assetReports).where(eq(assetReports.contractId, contractId)).orderBy(desc(assetReports.createdAt));
+  }
+
+  async updateAssetReportStatus(id: number, status: string, analysisData?: any) {
+    const updates: any = {
+      status,
+      refreshedAt: new Date()
+    };
+
+    if (analysisData) {
+      updates.analysisData = typeof analysisData === 'string' ? analysisData : JSON.stringify(analysisData);
+    }
+
+    return await db.update(assetReports).set(updates).where(eq(assetReports.id, id)).returning();
+  }
+
+  async getLatestPortfolioMonitoring() {
+    const result = await db.select().from(portfolioMonitoring).orderBy(desc(portfolioMonitoring.createdAt)).limit(1);
+    return result[0] || null;
+  }
+
+  async updatePortfolioMonitoring(data: any) {
+    const monitoring = await this.getLatestPortfolioMonitoring();
+
+    if (monitoring) {
+      // Update existing record
+      return await db.update(portfolioMonitoring)
+        .set({
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(eq(portfolioMonitoring.id, monitoring.id))
+        .returning();
+    } else {
+      // Create new record
+      return await db.insert(portfolioMonitoring)
+        .values({
+          ...data,
+          createdAt: new Date()
+        })
+        .returning();
+    }
+  }
+
+  async saveComplaintsData(complaints: any[]) {
+    if (!complaints || complaints.length === 0) return [];
+
+    const values = complaints.map(complaint => ({
+      complaintId: complaint.complaint_id,
+      product: complaint.product,
+      subProduct: complaint.sub_product,
+      issue: complaint.issue,
+      subIssue: complaint.sub_issue,
+      company: complaint.company,
+      state: complaint.state,
+      submittedVia: complaint.submitted_via,
+      dateReceived: complaint.date_received ? new Date(complaint.date_received) : undefined,
+      complaintNarrative: complaint.complaint_what_happened,
+      companyResponse: complaint.company_response,
+      timelyResponse: complaint.timely === 'Yes',
+      consumerDisputed: complaint.consumer_disputed === 'Yes',
+      tags: Array.isArray(complaint.tags) ? complaint.tags : [],
+      metadata: typeof complaint.metadata === 'string' ? complaint.metadata : JSON.stringify(complaint),
+      createdAt: new Date(),
+    }));
+
+    return await db.insert(complaintsData)
+      .values(values)
+      .onConflictDoUpdate({
+        target: complaintsData.complaintId,
+        set: {
+          updatedAt: new Date()
+        }
+      })
+      .returning();
+  }
+
+  async getComplaintsData(options: {
+    product?: string,
+    company?: string,
+    limit?: number,
+    offset?: number
+  } = {}) {
+    let query = db.select().from(complaintsData);
+
+    if (options.product) {
+      query = query.where(eq(complaintsData.product, options.product));
+    }
+
+    if (options.company) {
+      query = query.where(eq(complaintsData.company, options.company));
+    }
+
+    if (options.limit) {
+      query = query.limit(options.limit);
+    }
+
+    if (options.offset) {
+      query = query.offset(options.offset);
+    }
+
+    return await query.orderBy(desc(complaintsData.dateReceived));
   }
 
   async seedInitialData() {

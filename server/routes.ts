@@ -17,6 +17,7 @@ import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { logger } from "./services/logger";
 import { underwritingService } from './services/underwriting';
+import { adminReportsRouter } from './routes/adminReports';
 import crypto from "crypto";
 
 // Helper function to convert metadata to JSON string for storage
@@ -3262,6 +3263,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Mount admin reports router
+  app.use("/api/admin/reports", adminReportsRouter);
+  
   // Mount the API router
   app.use("/api", apiRouter);
 

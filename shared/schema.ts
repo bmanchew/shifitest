@@ -161,3 +161,78 @@ export type InsertLog = z.infer<typeof insertLogSchema>;
 
 export type UnderwritingData = typeof underwritingData.$inferSelect;
 export type InsertUnderwritingData = z.infer<typeof insertUnderwritingDataSchema>;
+
+// Asset Reports
+export const assetReports = pgTable("asset_reports", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  contractId: integer("contract_id").references(() => contracts.id),
+  assetReportId: text("asset_report_id").notNull(),
+  assetReportToken: text("asset_report_token").notNull(), // This should be encrypted in production
+  plaidItemId: text("plaid_item_id"),
+  daysRequested: integer("days_requested").default(60),
+  status: text("status").default("pending"),
+  analysisData: text("analysis_data"), // JSON stringified analysis results
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+  refreshedAt: timestamp("refreshed_at"),
+});
+
+export const portfolioMonitoring = pgTable("portfolio_monitoring", {
+  id: serial("id").primaryKey(),
+  lastCreditCheckDate: timestamp("last_credit_check_date"),
+  lastAssetVerificationDate: timestamp("last_asset_verification_date"),
+  nextCreditCheckDate: timestamp("next_credit_check_date"),
+  nextAssetVerificationDate: timestamp("next_asset_verification_date"),
+  portfolioHealthScore: doublePrecision("portfolio_health_score"),
+  riskMetrics: text("risk_metrics"), // JSON stringified risk metrics
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const complaintsData = pgTable("complaints_data", {
+  id: serial("id").primaryKey(),
+  complaintId: text("complaint_id").notNull().unique(),
+  product: text("product"),
+  subProduct: text("sub_product"),
+  issue: text("issue"),
+  subIssue: text("sub_issue"),
+  company: text("company"),
+  state: text("state"),
+  submittedVia: text("submitted_via"),
+  dateReceived: timestamp("date_received"),
+  complaintNarrative: text("complaint_narrative"),
+  companyResponse: text("company_response"),
+  timelyResponse: boolean("timely_response"),
+  consumerDisputed: boolean("consumer_disputed"),
+  tags: text("tags").array(),
+  metadata: text("metadata"), // JSON stringified additional data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertAssetReportSchema = createInsertSchema(assetReports).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPortfolioMonitoringSchema = createInsertSchema(portfolioMonitoring).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertComplaintsDataSchema = createInsertSchema(complaintsData).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AssetReport = typeof assetReports.$inferSelect;
+export type InsertAssetReport = z.infer<typeof insertAssetReportSchema>;
+
+export type PortfolioMonitoring = typeof portfolioMonitoring.$inferSelect;
+export type InsertPortfolioMonitoring = z.infer<typeof insertPortfolioMonitoringSchema>;
+
+export type ComplaintsData = typeof complaintsData.$inferSelect;
+export type InsertComplaintsData = z.infer<typeof insertComplaintsDataSchema>;
