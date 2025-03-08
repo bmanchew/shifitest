@@ -17,7 +17,7 @@ export default function CustomerLayout({
 }: CustomerLayoutProps) {
   // Determine if this is a multi-step application layout
   const isApplicationFlow = !!currentStep && !!totalSteps;
-  
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
@@ -27,7 +27,7 @@ export default function CustomerLayout({
             <Logo size={32} className="mr-2" />
             <h1 className="text-xl font-bold text-gray-900">ShiFi</h1>
           </div>
-          
+
           {isApplicationFlow && (
             <div className="text-sm text-gray-600">
               Step {currentStep} of {totalSteps}
