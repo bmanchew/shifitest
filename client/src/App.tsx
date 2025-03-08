@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 
 // Import your page components here
@@ -15,7 +15,7 @@ import MerchantReports from "@/pages/merchant/Reports";
 export default function App() {
   return (
     <div className="min-h-screen bg-background">
-      <Router>
+      <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/admin/dashboard" element={
@@ -30,7 +30,7 @@ export default function App() {
           <Route path="/" element={<DashboardRedirector />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
-      </Router>
+      </BrowserRouter>
       <Toaster />
     </div>
   );
