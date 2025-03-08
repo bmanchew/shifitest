@@ -8,7 +8,7 @@ import HomePage from "@/pages/HomePage";
 import DashboardPage from "@/pages/DashboardPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
-import NotFoundPage from "@/pages/NotFoundPage";
+import NotFoundPage from "@/pages/not-found";
 
 const App: React.FC = () => {
   return (
