@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -6,11 +5,10 @@ import { useAuth } from "@/hooks/use-auth";
 
 // Import your page components here
 import LoginPage from "@/pages/Login";
+import RegisterPage from "@/pages/Register";
 import NotFoundPage from "@/pages/not-found";
-import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import AdminDashboard from "@/pages/admin/Dashboard";
-import MerchantDashboard from "@/pages/merchant/Dashboard";
-import MerchantReports from "@/pages/merchant/Reports";
+import AdminDashboard from "@/pages/AdminDashboard"; // Added AdminDashboard
+import MerchantDashboard from "@/pages/MerchantDashboard"; // Added MerchantDashboard
 
 export default function App() {
   return (
@@ -18,6 +16,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/admin/dashboard" element={
             <ProtectedRoute role="admin" component={AdminDashboard} />
           } />
@@ -39,7 +38,7 @@ export default function App() {
 // Redirector component based on user role
 function DashboardRedirector() {
   const { user } = useAuth();
-  
+
   React.useEffect(() => {
     // This will redirect after render based on role
     const redirectTo = user?.role === "admin" 
@@ -47,7 +46,7 @@ function DashboardRedirector() {
       : user?.role === "merchant" 
         ? "/merchant/dashboard" 
         : "/login";
-        
+
     window.location.href = redirectTo;
   }, [user]);
 
