@@ -1,7 +1,7 @@
 
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { Router } from "wouter";
+import { BrowserRouter as Router } from "react-router-dom";
 import AppWrapper from "./AppWrapper";
 import "./index.css";
 
