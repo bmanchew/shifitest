@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
@@ -20,24 +21,24 @@ interface ProtectedRouteProps {
   requiredRole?: 'admin' | 'merchant' | 'customer';
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ element, requiredRole }) => {
+const ProtectedRoute = ({ element, requiredRole }: ProtectedRouteProps) => {
   const { user, isAuthenticated, isLoading } = useAuth();
-
+  
   // Show loading state
   if (isLoading) {
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
   }
-
+  
   // Check authentication
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-
+  
   // Check role if required
   if (requiredRole && user?.role !== requiredRole) {
     return <Navigate to="/unauthorized" replace />;
   }
-
+  
   return <>{element}</>;
 };
 
@@ -48,7 +49,7 @@ export default function App() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
-
+        
         {/* Customer routes */}
         <Route path="/customer" element={
           <ProtectedRoute 
@@ -59,7 +60,7 @@ export default function App() {
           <Route index element={<Navigate to="application" replace />} />
           <Route path="application" element={<CustomerApplicationPage />} />
         </Route>
-
+        
         {/* Merchant routes */}
         <Route path="/merchant" element={
           <ProtectedRoute 
@@ -69,7 +70,7 @@ export default function App() {
         }>
           <Route index element={<MerchantDashboardPage />} />
         </Route>
-
+        
         {/* Admin routes */}
         <Route path="/admin" element={
           <ProtectedRoute 
@@ -79,10 +80,10 @@ export default function App() {
         }>
           <Route index element={<AdminDashboardPage />} />
         </Route>
-
+        
         {/* Default route redirect to login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-
+        
         {/* Catch-all route for 404 */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
