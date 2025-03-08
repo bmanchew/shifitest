@@ -3,12 +3,12 @@ import { Route, Routes } from "react-router-dom"; // Importing react-router-dom
 import { Toaster } from "@/components/ui/toaster";
 
 // Import your page components here
-import LoginPage from "@/pages/Login";
+import LoginPage from "@/pages/Login.tsx";
 // Commented out until RegisterPage is available
-// import RegisterPage from "@/pages/RegisterPage";
-import NotFoundPage from "@/pages/not-found";
-import AdminDashboard from "@/pages/AdminDashboard"; // Added AdminDashboard
-import MerchantDashboard from "@/pages/MerchantDashboard"; // Added MerchantDashboard
+// import RegisterPage from "@/pages/RegisterPage.tsx";
+import NotFoundPage from "@/pages/not-found.tsx";
+import AdminDashboard from "@/pages/AdminDashboard.tsx"; // Added AdminDashboard
+import MerchantDashboard from "@/pages/MerchantDashboard.tsx"; // Added MerchantDashboard
 import CustomerDashboard from "@/pages/CustomerDashboard"; // Added CustomerDashboard
 
 // Creating the DashboardPage component
