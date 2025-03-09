@@ -1875,7 +1875,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
 
           res.json(response);
-        }, 1000); // Simulate API delay
+        }, 1000); // Simulate APIdelay
       } catch (error) {
         console.error("Contract signing error:", error);
 
@@ -2871,13 +2871,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: error instanceof Error ? error.stack : null,
         },
       });
-      
+
       res.status(500).json({
         success: false,
         message: "Failed to get account information",
       });
     }
-  });});
+  });
 
   // Create a transfer (payment)
   apiRouter.post(
