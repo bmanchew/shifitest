@@ -92,7 +92,16 @@ export default function ContractTerms({
         }
       } catch (error) {
         console.error('Error in progress update/create:', error);
-        throw error;
+        
+        // Show error toast instead of throwing
+        toast({
+          title: "Error",
+          description: `Failed to save progress: ${error instanceof Error ? error.message : String(error)}`,
+          variant: "destructive",
+        });
+        
+        setIsSubmitting(false);
+        return; // Exit the function early
       }
 
       toast({

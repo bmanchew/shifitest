@@ -3515,6 +3515,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount admin reports router
   app.use("/api/admin/reports", adminReportsRouter);
 
+  // Route for creating application progress
+  apiRouter.post("/application-progress", async (req: Request, res: Response) => {
+    try {
+      const { contractId, step, completed, data } = req.body;
+
+      if (!contractId || !step) {
+        return res.status(400).json({ 
+          message: "Contract ID and step are required" 
+        });
+      }
+
+      // Verify the contract exists
+      const contract = await storage.getContract(parseInt(contractId));
+      if (!contract) {
+        return res.status(404).json({ 
+          message: "Contract not found" 
+        });
+      }
+
+      // Create the application progress item
+      const progressItem = await storage.createApplicationProgress({
+        contractId: parseInt(contractId),
+        step: step,
+        completed: !!completed,
+        data: data || null
+      });
+
+      // Log the creation
+      await storage.createLog({
+        level: "info",
+        category: "contract",
+        message: `Application progress created for contract ${contractId}, step ${step}`,
+        metadata: JSON.stringify({ 
+          contractId, 
+          step, 
+          completed: !!completed 
+        })
+      });
+
+      res.status(201).json(progressItem);
+    } catch (error) {
+      console.error("Create application progress error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Mount the API router
   app.use("/api", apiRouter);
   // merchantAnalytics routes are already included properly in the apiRouter
