@@ -24,9 +24,10 @@ import { logger } from "./services/logger";
 import { underwritingService } from './services/underwriting';
 // Create admin reports router
 const adminReportsRouter = express.Router();
-import crypto from "crypto";
 import merchantAnalytics from "./routes/merchantAnalytics"; // Added import
-import jwt from "jsonwebtoken";
+
+// Register merchant analytics routes
+adminReportsRouter.use("/complaint-trends", merchantAnalytics);
 
 // Authentication middleware
 export const authenticateToken = (req: Request, res: Response, next: Function) => {
@@ -966,8 +967,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           contractId,
           webhookUrl,
-          redirectUrl,
-        },
+          redirectUrl,        },
       });
 
       // Use the DiDit service to create a verification session

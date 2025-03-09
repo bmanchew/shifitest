@@ -187,8 +187,7 @@ export class CFPBService {
         category: 'api',
         source: 'cfpb',
         metadata: { 
-          product: options.product || 'all',
-          aggregationsReceived: !!data._meta?.has_data?.aggregations
+          complaintsCount: data.hits?.total || 0
         }
       });
       
@@ -199,14 +198,96 @@ export class CFPBService {
         category: 'api',
         source: 'cfpb',
         metadata: {
-          error: error instanceof Error ? error.stack : null,
-          options
+          error: error instanceof Error ? error.stack : null
         }
       });
       
       throw error;
     }
   }
+
+  /**
+   * Get mock complaint trends data for demo purposes
+   * This is used when we can't connect to the real CFPB API
+   */
+  getMockComplaintTrends() {
+    // Generate random data for the charts
+    const generateMonthlyData = () => {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return months.map(month => ({
+        month,
+        complaints: Math.floor(Math.random() * 100) + 20
+      }));
+    };
+
+    const generateTopIssues = () => {
+      const issues = [
+        'Getting a loan', 
+        'Problem with interest rate', 
+        'Application denied', 
+        'Payment problems', 
+        'Credit limit changed'
+      ];
+      
+      return issues.map(issue => ({
+        issue,
+        count: Math.floor(Math.random() * 200) + 50
+      }));
+    };
+
+    const generateTopCompanies = () => {
+      const companies = [
+        'Big Bank Co.', 
+        'Finance Express', 
+        'Credit Corp', 
+        'Lending Tree', 
+        'First Capital'
+      ];
+      
+      return companies.map(company => ({
+        company,
+        count: Math.floor(Math.random() * 150) + 30
+      }));
+    };
+
+    const generateInsights = () => {
+      return [
+        'Complaints about payment problems have increased by 12% over the last quarter',
+        'Application denial issues are trending downward in most states',
+        'Interest rate complaints spike during the 3rd quarter of each year',
+        'First-time borrowers file 35% more complaints than repeat customers'
+      ];
+    };
+
+    const generateRecommendations = () => {
+      return [
+        'Consider more flexible payment terms for borrowers with seasonal income',
+        'Review interest rate increase notification practices for clarity',
+        'Application process needs better explanation of qualification criteria',
+        'Review customer communication regarding credit limits'
+      ];
+    };
+
+    return {
+      lastUpdated: new Date().toISOString(),
+      totalComplaints: 2547,
+      personalLoans: {
+        totalComplaints: 1258,
+        topIssues: generateTopIssues(),
+        topCompanies: generateTopCompanies(),
+        monthlyTrend: generateMonthlyData(),
+      },
+      creditCards: {
+        totalComplaints: 1289,
+        topIssues: generateTopIssues(),
+        topCompanies: generateTopCompanies(),
+        monthlyTrend: generateMonthlyData(),
+      },
+      insights: generateInsights(),
+      recommendedUnderwritingAdjustments: generateRecommendations(),
+    };
+  }
 }
 
+// Export a singleton instance
 export const cfpbService = new CFPBService();
