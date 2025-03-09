@@ -962,7 +962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log the attempt to create a KYC verification session
       logger.info({
         message: `Creating KYC verification session for contract ${contractId}`,
-        category: "api",
+        category: ""api",
         source: "didit",
         metadata: {
           contractId,
@@ -1875,7 +1875,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
 
           res.json(response);
-        }, 1000); // Simulate APIdelay
+        }, 1000); // Simulate API delay
       } catch (error) {
         console.error("Contract signing error:", error);
 
@@ -2864,7 +2864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       logger.error({
-        message: `Failed to get Plaid account info: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to get Plaidaccount info: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         source: "plaid",
         metadata: {
