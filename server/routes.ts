@@ -718,7 +718,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { contractId, step, completed, data } = req.body;
 
-      console.log("Creating application progress:", { contractId, step, completed, dataExists: !!data });
+      console.log("Creating application progress:", { 
+        contractId, 
+        contractIdType: typeof contractId,
+        step, 
+        completed, 
+        dataExists: !!data 
+      });
 
       if (!contractId || !step) {
         console.error("Missing required fields:", { contractId, step });
@@ -730,23 +736,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Verify the contract exists with safer parsing
       let contractIdNum: number;
       try {
-        contractIdNum = parseInt(String(contractId));
+        // Handle different input types properly
+        if (typeof contractId === 'string') {
+          contractIdNum = parseInt(contractId);
+        } else if (typeof contractId === 'number') {
+          contractIdNum = contractId;
+        } else {
+          contractIdNum = parseInt(String(contractId));
+        }
+        
         if (isNaN(contractIdNum)) {
           throw new Error(`Invalid contract ID format: ${contractId}`);
         }
+        
+        console.log(`Parsed contract ID: ${contractIdNum} (from input: ${contractId})`);
       } catch (parseError) {
         console.error("Contract ID parse error:", parseError);
         return res.status(400).json({ 
-          message: `Invalid contract ID format: ${contractId}` 
+          message: `Invalid contract ID format: ${contractId}`,
+          details: String(parseError)
         });
       }
 
       // Verify the contract exists
-      const contract = await storage.getContract(contractIdNum);
-      if (!contract) {
-        console.error(`Contract not found: ${contractIdNum}`);
-        return res.status(404).json({ 
-          message: "Contract not found" 
+      try {
+        const contract = await storage.getContract(contractIdNum);
+        if (!contract) {
+          console.error(`Contract not found: ${contractIdNum}`);
+          return res.status(404).json({ 
+            message: "Contract not found",
+            details: `No contract with ID ${contractIdNum} exists in the database`
+          });
+        }
+        console.log(`Found contract: ${contract.id}, number: ${contract.contractNumber}`);
+      } catch (dbError) {
+        console.error(`Database error when looking up contract ${contractIdNum}:`, dbError);
+        return res.status(500).json({
+          message: "Error looking up contract",
+          details: String(dbError)
         });
       }
 

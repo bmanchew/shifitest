@@ -71,13 +71,18 @@ export default function ContractTerms({
               throw new Error(`Invalid contract ID: ${contractId}`);
             }
 
+            // Ensure contract ID is a number before sending
+            const contractIdNum = Number(contractId);
+            
+            console.log('Creating application progress with contract ID:', contractIdNum);
+            
             const createResponse = await fetch('/api/application-progress', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                contractId: parseInt(contractId.toString()),
+                contractId: contractIdNum,
                 step: 'terms',
                 completed: true,
                 data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
@@ -100,6 +105,7 @@ export default function ContractTerms({
         }
       } catch (error) {
         console.error('Error in progress update/create:', error);
+        console.log('ContractId value:', contractId, 'type:', typeof contractId);
         throw error;
       }
 
