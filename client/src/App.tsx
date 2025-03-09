@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Router } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
@@ -71,12 +71,14 @@ function App() {
           )}
 
           {/* Public customer routes */}
-          <Route path="/offer/:contractId" component={CustomerContractOffer} />
-          <Route path="/apply/:contractId?" component={CustomerApplication} />
-          <Route path="/customer/application" component={CustomerApplication} />
-          <Route path="/dashboard/:contractId" component={CustomerDashboard} />
+          <Router>
+            <Route path="/offer/:contractId" component={CustomerContractOffer} />
+            <Route path="/apply/:contractId?" component={CustomerApplication} />
+            <Route path="/customer/application" component={CustomerApplication} />
+            <Route path="/dashboard/:contractId" component={CustomerDashboard} />
 
-          <Route component={NotFound} />
+            <Route component={NotFound} />
+          </Router>
         </Switch>
       )}
       <Toaster />
