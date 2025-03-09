@@ -962,7 +962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log the attempt to create a KYC verification session
       logger.info({
         message: `Creating KYC verification session for contract ${contractId}`,
-        category: ""api",
+        category: "api",
         source: "didit",
         metadata: {
           contractId,
@@ -2286,7 +2286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (event_type === "verification.started") {
         logger.info({
           message: `DiDit verification started for session ${session_id}, contract ${contractId}`,
-          category: "api",
+          category: "api", 
           source: "didit",
           metadata: { sessionId: session_id, contractId },
         });
