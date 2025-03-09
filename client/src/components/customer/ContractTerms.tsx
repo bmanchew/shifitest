@@ -49,68 +49,58 @@ export default function ContractTerms({
 
       // Direct fetch implementation to avoid response handling issues
       try {
-        console.log(`Attempting to update progress with ID: ${progressId}`);
-
-        if (progressId && progressId > 0) {
-          // Try to update existing progress
-          const updateResponse = await fetch(`/api/application-progress/${progressId}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              completed: true, 
-              data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
-            }),
-          });
-
-          if (updateResponse.ok) {
-            await updateResponse.json(); // Read and discard the response
-            console.log('Successfully updated progress item');
-            return; // Success, exit the try block
-          }
-
-          // If update fails, fall through to create
-          console.log(`Update failed with status: ${updateResponse.status}, falling back to create`);
-        } else {
-          console.log('No valid progressId provided, creating new progress item');
-        }
-
-        // Create new progress item
-        console.log('Creating new progress item...');
-        const createResponse = await fetch('/api/application-progress', {
-          method: 'POST',
+        // Try to update existing progress first
+        const updateResponse = await fetch(`/api/application-progress/${progressId}`, {
+          method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            contractId: contractId,
-            step: 'terms',
-            completed: true,
+            completed: true, 
             data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
           }),
         });
 
-        if (!createResponse.ok) {
-          const errorText = await createResponse.text();
-          console.error('Create response error:', errorText);
-          throw new Error(`Failed to create progress: ${createResponse.status}, details: ${errorText}`);
-        }
+        if (!updateResponse.ok) {
+          // If 404, create new progress item
+          if (updateResponse.status === 404) {
+            console.log('Creating new progress item...', { contractId });
 
-        const newProgress = await createResponse.json();
-        console.log('Created progress item:', newProgress);
+            // Validate contract ID before API call
+            if (!contractId || isNaN(parseInt(contractId.toString()))) {
+              throw new Error(`Invalid contract ID: ${contractId}`);
+            }
+
+            const createResponse = await fetch('/api/application-progress', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                contractId: parseInt(contractId.toString()),
+                step: 'terms',
+                completed: true,
+                data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
+              }),
+            });
+
+            if (!createResponse.ok) {
+              const errorData = await createResponse.json();
+              console.log('Create response error:', JSON.stringify(errorData));
+              throw new Error(`Failed to create progress: ${createResponse.status}, details: ${JSON.stringify(errorData)}`);
+            }
+
+            const newProgress = await createResponse.json();
+            console.log('Created progress item:', newProgress);
+          } else {
+            throw new Error(`Update failed: ${updateResponse.status}`);
+          }
+        } else {
+          await updateResponse.json(); // Read and discard the response
+        }
       } catch (error) {
         console.error('Error in progress update/create:', error);
-
-        // Show error toast instead of throwing
-        toast({
-          title: "Error",
-          description: `Failed to save progress: ${error instanceof Error ? error.message : String(error)}`,
-          variant: "destructive",
-        });
-
-        setIsSubmitting(false);
-        return; // Exit the function early
+        throw error;
       }
 
       toast({

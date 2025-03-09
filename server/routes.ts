@@ -713,20 +713,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
 
-  // Add this route to handle creation of application progress items
+  // Route to handle creation of application progress items
   apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     try {
       const { contractId, step, completed, data } = req.body;
 
+      console.log("Creating application progress:", { contractId, step, completed, dataExists: !!data });
+
       if (!contractId || !step) {
+        console.error("Missing required fields:", { contractId, step });
         return res.status(400).json({ 
           message: "Contract ID and step are required" 
         });
       }
 
+      // Verify the contract exists with safer parsing
+      let contractIdNum: number;
+      try {
+        contractIdNum = parseInt(String(contractId));
+        if (isNaN(contractIdNum)) {
+          throw new Error(`Invalid contract ID format: ${contractId}`);
+        }
+      } catch (parseError) {
+        console.error("Contract ID parse error:", parseError);
+        return res.status(400).json({ 
+          message: `Invalid contract ID format: ${contractId}` 
+        });
+      }
+
       // Verify the contract exists
-      const contract = await storage.getContract(parseInt(contractId));
+      const contract = await storage.getContract(contractIdNum);
       if (!contract) {
+        console.error(`Contract not found: ${contractIdNum}`);
         return res.status(404).json({ 
           message: "Contract not found" 
         });
@@ -734,7 +752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create the application progress item
       const progressItem = await storage.createApplicationProgress({
-        contractId: parseInt(contractId),
+        contractId: contractIdNum,
         step: step,
         completed: !!completed,
         data: data || null
@@ -744,18 +762,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createLog({
         level: "info",
         category: "contract",
-        message: `Application progress created for contract ${contractId}, step ${step}`,
+        message: `Application progress created for contract ${contractIdNum}, step ${step}`,
         metadata: JSON.stringify({ 
-          contractId, 
+          contractId: contractIdNum, 
           step, 
           completed: !!completed 
         })
       });
 
+      console.log(`Successfully created progress item for contract ${contractIdNum}, step ${step}`);
       res.status(201).json(progressItem);
     } catch (error) {
       console.error("Create application progress error:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ 
+        message: "Internal server error", 
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
