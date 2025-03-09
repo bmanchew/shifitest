@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+// import { apiRequest } from "@/lib/queryClient"; // Removed as we are using fetch directly
 import { Check } from "lucide-react";
 
 interface ContractTermsProps {
@@ -44,33 +44,55 @@ export default function ContractTerms({
   };
 
   const handleAccept = async () => {
-    if (isSubmitting) return;
-
     try {
       setIsSubmitting(true);
 
-      // Create or update the progress based on whether it exists
+      // Direct fetch implementation to avoid response handling issues
       try {
         // Try to update existing progress first
-        await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
-          completed: true, 
-          data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
-        });
-      } catch (error) {
-        // If 404, create new progress item
-        if (error.message.includes('404')) {
-          console.log('Creating new progress item...');
-          const newProgress = await apiRequest("POST", '/api/application-progress', {
-            contractId: contractId,
-            step: 'terms',
-            completed: true,
+        const updateResponse = await fetch(`/api/application-progress/${progressId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            completed: true, 
             data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
-          });
-          console.log('Created progress item:', newProgress);
+          }),
+        });
+
+        if (!updateResponse.ok) {
+          // If 404, create new progress item
+          if (updateResponse.status === 404) {
+            console.log('Creating new progress item...');
+            const createResponse = await fetch('/api/application-progress', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                contractId: contractId,
+                step: 'terms',
+                completed: true,
+                data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
+              }),
+            });
+
+            if (!createResponse.ok) {
+              throw new Error(`Failed to create progress: ${createResponse.status}`);
+            }
+
+            const newProgress = await createResponse.json();
+            console.log('Created progress item:', newProgress);
+          } else {
+            throw new Error(`Update failed: ${updateResponse.status}`);
+          }
         } else {
-          // If it's not a 404 error, rethrow
-          throw error;
+          await updateResponse.json(); // Read and discard the response
         }
+      } catch (error) {
+        console.error('Error in progress update/create:', error);
+        throw error;
       }
 
       toast({
