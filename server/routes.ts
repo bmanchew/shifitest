@@ -3902,4 +3902,3 @@ app.post("/api/application-progress", async (req, res) => {
 });
 
   // ... rest of the file remains unchanged
-}
