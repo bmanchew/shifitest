@@ -3813,7 +3813,7 @@ function calculateMonthlyPayment(principal: number, interestRate: number, termMo
   if (interestRate === 0) {
     return principal / termMonths;
   }
-  
+
   const monthlyRate = interestRate / 100 / 12;
   return (principal * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / 
          (Math.pow(1 + monthlyRate, termMonths) - 1);
@@ -3916,5 +3916,3 @@ function generateContractNumber(): string {
     });
   }
 });
-
-  // ... rest of the file remains unchanged
