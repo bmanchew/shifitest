@@ -2230,6 +2230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }
               }
 
+              // Log successful KYC verification
               logger.info({
                 message: `KYC verification approved for contract ${contractId}`,
                 category: "contract",
@@ -2860,23 +2861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true,
         accounts: authData.accounts,
         numbers: authData.numbers,
-      });
-    } catch (error) {
-      logger.error({
-        message: `Failed to get Plaid accounts: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      res.status(500).json({
-        success: false,
-        message: "Failed to get bank account information",
-      });
-    }
-  });
+      });});
 
   // Create a transfer (payment)
   apiRouter.post(
