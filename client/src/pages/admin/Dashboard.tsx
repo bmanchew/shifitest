@@ -9,8 +9,7 @@ import { Contract, Merchant, User } from "@shared/schema";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Users, FileText, AlertTriangle, Search, ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom"; // Replaced wouter with react-router-dom
-
+import { Link } from "wouter";
 
 export default function AdminDashboard() {
   const { data: merchants = [] } = useQuery<Merchant[]>({
@@ -114,7 +113,7 @@ export default function AdminDashboard() {
       cell: ({ row }) => {
         return (
           <Button variant="ghost" size="sm" asChild>
-            <Link to={`/admin/contracts/${row.original.id}`}>View</Link> {/* Changed from wouter Link */}
+            <Link href={`/admin/contracts/${row.original.id}`}>View</Link>
           </Button>
         );
       },
@@ -184,7 +183,7 @@ export default function AdminDashboard() {
             </div>
             <div className="mt-4 text-right">
               <Button variant="ghost" asChild className="text-primary-600">
-                <Link to="/admin/contracts"> {/* Changed from wouter Link */}
+                <Link href="/admin/contracts">
                   View all contracts <ArrowRight className="ml-1 h-4 w-4" />
                 </Link>
               </Button>
