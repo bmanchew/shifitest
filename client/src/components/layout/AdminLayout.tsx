@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   X,
+  BarChart,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -32,6 +33,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         location === "/admin/dashboard" ||
         location === "/admin" ||
         location === "/",
+    },
+    {
+      name: "Portfolio",
+      href: "/admin/portfolio",
+      icon: BarChart,
+      current: location === "/admin/portfolio",
     },
     {
       name: "Merchants",
