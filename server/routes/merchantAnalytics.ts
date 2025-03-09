@@ -5,6 +5,8 @@ import jwt from "jsonwebtoken";
 import express from 'express';
 import { cfpbService } from '../services/cfpbService';
 import { merchantAnalyticsService } from '../services/merchantAnalytics';
+import { isMerchantUser } from '../routes'; // Fix isMerchantUser middleware reference
+
 
 // Copy of authentication middleware from routes.ts to avoid circular dependency
 const authenticateToken = (req: Request, res: Response, next: Function) => {
@@ -37,13 +39,6 @@ const isAdmin = (req: Request, res: Response, next: Function) => {
 };
 
 // Merchant role middleware
-const isMerchantUser = (req: Request, res: Response, next: Function) => {
-  if ((req as any).user && (req as any).user.role === 'merchant') {
-    next();
-  } else {
-    res.status(403).json({ message: "Access denied: Merchant role required" });
-  }
-};
 
 const router = express.Router();
 

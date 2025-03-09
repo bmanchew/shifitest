@@ -55,10 +55,40 @@ export default function ContractTerms({
 
     try {
       setIsSubmitting(true);
-      await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
-        completed: true,
-        data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
-      });
+      // First check if the progress item exists
+      const checkResponse = await fetch(`/api/application-progress/${progressId}`);
+      
+      if (checkResponse.status === 404) {
+        // Create the progress item if it doesn't exist
+        const createResponse = await fetch('/api/application-progress', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contractId: contractId,
+            step: 'terms',
+            completed: false,
+          }),
+        });
+        
+        if (!createResponse.ok) {
+          throw new Error(`Failed to create progress: ${createResponse.status}`);
+        }
+        
+        const newProgress = await createResponse.json();
+        // Update the created progress item
+        await apiRequest("PATCH", `/api/application-progress/${newProgress.id}`, {
+          completed: true,
+          data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
+        });
+      } else {
+        // Update the existing progress item
+        await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+          completed: true,
+          data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
+        });
+      }
 
       toast({
         title: "Terms Accepted",
