@@ -1,7 +1,13 @@
-
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLocation } from "wouter";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +20,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [_, setLocation] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,18 +28,49 @@ export default function Login() {
 
     try {
       console.log("Attempting login with:", email);
+      
+      // Make the login API call directly to see the response
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Login failed with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("Login API response:", data);
+      
+      if (!data.user) {
+        throw new Error("Invalid response format - missing user data");
+      }
+      
+      // Now call the auth context login method with the user data
       await login(email, password);
-      // User will be redirected based on role by the AuthProvider
+      
+      // If we get here, login was successful
+      console.log("Login successful");
+      
+      // Redirect based on user role
+      if (data.user.role === "admin") {
+        setLocation("/admin");
+      } else if (data.user.role === "merchant") {
+        setLocation("/merchant");
+      } else if (data.user.role === "customer") {
+        setLocation("/customer");
+      } else {
+        setLocation("/");
+      }
+      
     } catch (error) {
       console.error("Login failed:", error);
-      // Show more detailed error message if available
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Invalid email or password. Please try again.";
-      
       toast({
         title: "Login Failed",
-        description: errorMessage,
+        description: error instanceof Error ? error.message : "Invalid email or password. Please try again.",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -45,7 +82,7 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-2">
-            <div className="bg-primary-500 text-white p-2 rounded-md">
+            <div className="bg-primary text-white p-2 rounded-md">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-6 w-6"
@@ -63,7 +100,9 @@ export default function Login() {
             </div>
             <span className="ml-2 text-2xl font-bold">ShiFi</span>
           </div>
-          <CardTitle className="text-2xl font-semibold text-center">Log in to your account</CardTitle>
+          <CardTitle className="text-2xl font-semibold text-center">
+            Log in to your account
+          </CardTitle>
           <CardDescription className="text-center">
             Enter your email and password to access your account
           </CardDescription>
@@ -84,7 +123,11 @@ export default function Login() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Button variant="link" size="sm" className="px-0 h-auto text-xs font-normal">
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="px-0 h-auto text-xs font-normal"
+                >
                   Forgot password?
                 </Button>
               </div>
@@ -96,7 +139,7 @@ export default function Login() {
                 required
               />
             </div>
-            
+
             <div className="text-sm text-gray-500">
               <p>Demo accounts:</p>
               <ul className="list-disc pl-5 space-y-1 mt-1">

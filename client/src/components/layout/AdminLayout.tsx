@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -19,7 +19,7 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const location = useLocation();
+  const [location] = useLocation();
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -28,31 +28,34 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       name: "Dashboard",
       href: "/admin/dashboard",
       icon: LayoutDashboard,
-      current: location.pathname === "/admin/dashboard" || location.pathname === "/admin" || location.pathname === "/",
+      current:
+        location === "/admin/dashboard" ||
+        location === "/admin" ||
+        location === "/",
     },
     {
       name: "Merchants",
       href: "/admin/merchants",
       icon: Users,
-      current: location.pathname === "/admin/merchants",
+      current: location === "/admin/merchants",
     },
     {
       name: "Contracts",
       href: "/admin/contracts",
       icon: FileText,
-      current: location.pathname === "/admin/contracts",
+      current: location === "/admin/contracts",
     },
     {
       name: "Logs",
       href: "/admin/logs",
       icon: ClipboardList,
-      current: location.pathname === "/admin/logs",
+      current: location === "/admin/logs",
     },
     {
       name: "Settings",
       href: "/admin/settings",
       icon: Settings,
-      current: location.pathname === "/admin/settings",
+      current: location === "/admin/settings",
     },
   ];
 
@@ -87,7 +90,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               {navigationItems.map((item) => (
                 <Link
                   key={item.name}
-                  to={item.href}
+                  href={item.href}
                   className={`${
                     item.current
                       ? "bg-gray-100 text-gray-900"
@@ -96,7 +99,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 >
                   <item.icon
                     className={`${
-                      item.current ? "text-gray-500" : "text-gray-400 group-hover:text-gray-500"
+                      item.current
+                        ? "text-gray-500"
+                        : "text-gray-400 group-hover:text-gray-500"
                     } mr-3 h-6 w-6`}
                   />
                   {item.name}
@@ -132,7 +137,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </div>
 
       {/* Mobile menu */}
-      <div className={`${mobileMenuOpen ? "block" : "hidden"} md:hidden absolute inset-0 z-50 bg-white`}>
+      <div
+        className={`${mobileMenuOpen ? "block" : "hidden"} md:hidden absolute inset-0 z-50 bg-white`}
+      >
         <div className="pt-5 pb-6 px-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
@@ -170,7 +177,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               {navigationItems.map((item) => (
                 <Link
                   key={item.name}
-                  to={item.href}
+                  href={item.href}
                   className={`${
                     item.current
                       ? "bg-gray-100 text-gray-900"
@@ -180,7 +187,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 >
                   <item.icon
                     className={`${
-                      item.current ? "text-gray-500" : "text-gray-400 group-hover:text-gray-500"
+                      item.current
+                        ? "text-gray-500"
+                        : "text-gray-400 group-hover:text-gray-500"
                     } flex-shrink-0 h-6 w-6 mr-3`}
                   />
                   <span className="text-base font-medium">{item.name}</span>

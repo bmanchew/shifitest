@@ -5,42 +5,24 @@ export type AuthUser = Omit<User, "password"> & {
   merchantId?: number;
 };
 
-// Helper function to get full name from first and last name
-export function getFullName(user: AuthUser): string {
-  if (user.firstName && user.lastName) {
-    return `${user.firstName} ${user.lastName}`;
-  } else if (user.firstName) {
-    return user.firstName;
-  } else if (user.name) {
-    return user.name;
-  }
-  return '';
-}
-
 export interface AuthResult {
   user: AuthUser;
 }
 
-export async function loginUser(email: string, password: string): Promise<AuthUser> {
+export async function loginUser(email: string, password: string): Promise<AuthResult> {
   try {
-    console.log('Sending login request to API');
-    const response = await apiRequest<AuthResult>("POST", "/api/auth/login", {
+    const data = await apiRequest<AuthResult>("POST", "/api/auth/login", {
       email,
       password,
     });
-
-    // apiRequest already returns parsed JSON data, not a Response object
-    console.log('Login response:', response);
-
-    if (!response || !response.user) {
-      console.error('Login API error: Invalid response format');
-      throw new Error('Invalid login response format');
+    
+    if (!data.user) {
+      throw new Error("Invalid response from server");
     }
-
-    console.log('Login successful, user role:', response.user?.role);
-    return response.user;
+    
+    return data;
   } catch (error) {
-    console.error('Login request error:', error);
+    console.error("Login error:", error);
     throw error;
   }
 }
@@ -49,13 +31,13 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     // In a real application, this would make an API request to validate the session
     // or check a JWT token, etc.
-
+    
     // For demo purposes, we'll check local storage
     const userData = localStorage.getItem("shifi_user");
     if (!userData) {
       return null;
     }
-
+    
     return JSON.parse(userData);
   } catch (error) {
     console.error("Failed to get current user:", error);

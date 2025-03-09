@@ -1,101 +1,87 @@
-import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./hooks/use-auth";
+import { Switch, Route } from "wouter";
+import { Toaster } from "@/components/ui/toaster";
+import NotFound from "@/pages/not-found";
+import Login from "@/pages/Login";
+import { useAuth } from "@/hooks/use-auth";
+import { Suspense, lazy } from "react";
 
-// Import layouts
-import AdminLayout from "./components/layout/AdminLayout";
-import CustomerLayout from "./components/layout/CustomerLayout";
-import MerchantLayout from "./components/layout/MerchantLayout";
+// Admin pages
+const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
+const AdminMerchants = lazy(() => import("@/pages/admin/Merchants"));
+const AdminContracts = lazy(() => import("@/pages/admin/Contracts"));
+const AdminLogs = lazy(() => import("@/pages/admin/Logs"));
+const AdminSettings = lazy(() => import("@/pages/admin/Settings"));
 
-// Import pages
-import LoginPage from "./pages/Login";
-import AdminDashboardPage from "./pages/admin/Dashboard";
-import CustomerApplicationPage from "./pages/customer/Application";
-import MerchantDashboardPage from "./pages/merchant/Dashboard";
-import NotFoundPage from "./pages/not-found";
+// Merchant pages
+const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
+const MerchantContracts = lazy(() => import("@/pages/merchant/Contracts"));
+const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
+const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
 
-// ProtectedRoute component
-interface ProtectedRouteProps {
-  element: React.ReactNode;
-  requiredRole?: "admin" | "merchant" | "customer";
-}
+// Customer pages
+const CustomerApplication = lazy(() => import("@/pages/customer/Application"));
+const CustomerContractOffer = lazy(
+  () => import("@/pages/customer/ContractOffer"),
+);
+const CustomerDashboard = lazy(() => import("@/pages/customer/Dashboard"));
 
-const ProtectedRoute = ({ element, requiredRole }: ProtectedRouteProps) => {
-  const { user, isAuthenticated, isLoading } = useAuth();
-
-  // Show loading state
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        Loading...
-      </div>
-    );
-  }
-
-  // Check authentication
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Check role if required
-  if (requiredRole && user?.role !== requiredRole) {
-    return <Navigate to="/unauthorized" replace />;
-  }
-
-  return <>{element}</>;
-};
-
-// Main App component
-export default function App() {
+function LoadingFallback() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<LoginPage />} />
-
-        {/* Customer routes */}
-        <Route
-          path="/customer"
-          element={
-            <ProtectedRoute
-              element={<CustomerLayout />}
-              requiredRole="customer"
-            />
-          }
-        >
-          <Route index element={<Navigate to="application" replace />} />
-          <Route path="application" element={<CustomerApplicationPage />} />
-        </Route>
-
-        {/* Merchant routes */}
-        <Route
-          path="/merchant"
-          element={
-            <ProtectedRoute
-              element={<MerchantLayout />}
-              requiredRole="merchant"
-            />
-          }
-        >
-          <Route index element={<MerchantDashboardPage />} />
-        </Route>
-
-        {/* Admin routes */}
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute element={<AdminLayout />} requiredRole="admin" />
-          }
-        >
-          <Route index element={<AdminDashboardPage />} />
-        </Route>
-
-        {/* Default route redirect to login */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Catch-all route for 404 */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+    <div className="flex h-screen w-full items-center justify-center bg-gray-50">
+      <div className="flex flex-col items-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
+        <p className="mt-4 text-lg font-medium text-gray-600">Loading...</p>
+      </div>
     </div>
   );
 }
+
+function App() {
+  const { user, isLoading } = useAuth();
+
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      {isLoading ? (
+        <LoadingFallback />
+      ) : (
+        <Switch>
+          {!user && <Route path="/" component={Login} />}
+
+          {user && user.role === "admin" && (
+            <>
+              <Route path="/" component={AdminDashboard} />
+              <Route path="/admin" component={AdminDashboard} />
+              <Route path="/admin/dashboard" component={AdminDashboard} />
+              <Route path="/admin/merchants" component={AdminMerchants} />
+              <Route path="/admin/contracts" component={AdminContracts} />
+              <Route path="/admin/logs" component={AdminLogs} />
+              <Route path="/admin/settings" component={AdminSettings} />
+            </>
+          )}
+
+          {user && user.role === "merchant" && (
+            <>
+              <Route path="/" component={MerchantDashboard} />
+              <Route path="/merchant" component={MerchantDashboard} />
+              <Route path="/merchant/dashboard" component={MerchantDashboard} />
+              <Route path="/merchant/contracts" component={MerchantContracts} />
+              <Route path="/merchant/reports" component={MerchantReports} />
+              <Route path="/merchant/settings" component={MerchantSettings} />
+            </>
+          )}
+
+          {/* Public customer routes */}
+          <Route path="/offer/:contractId" component={CustomerContractOffer} />
+          <Route path="/apply/:contractId?" component={CustomerApplication} />
+          <Route path="/customer/application" component={CustomerApplication} />
+          <Route path="/dashboard/:contractId" component={CustomerDashboard} />
+
+          <Route component={NotFound} />
+        </Switch>
+      )}
+      <Toaster />
+    </Suspense>
+  );
+}
+
+export default App;
