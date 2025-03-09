@@ -4,6 +4,7 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 import { useAuth } from "@/hooks/use-auth";
 import { Suspense, lazy } from "react";
+import Portfolio from "@/pages/admin/Portfolio"; //Import Portfolio component
 
 // Admin pages
 const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
@@ -56,6 +57,7 @@ function App() {
               <Route path="/admin/contracts" component={AdminContracts} />
               <Route path="/admin/logs" component={AdminLogs} />
               <Route path="/admin/settings" component={AdminSettings} />
+              <Route path="/admin/portfolio" component={Portfolio} /> {/* Added Portfolio route */}
             </>
           )}
 
