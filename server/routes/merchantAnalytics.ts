@@ -4,7 +4,7 @@ import { logger } from "../services/logger";
 import jwt from "jsonwebtoken";
 import express from 'express';
 import { cfpbService } from '../services/cfpbService';
-
+import { merchantAnalyticsService } from '../services/merchantAnalytics';
 
 // Copy of authentication middleware from routes.ts to avoid circular dependency
 const authenticateToken = (req: Request, res: Response, next: Function) => {
@@ -42,45 +42,6 @@ const isMerchantUser = (req: Request, res: Response, next: Function) => {
     next();
   } else {
     res.status(403).json({ message: "Access denied: Merchant role required" });
-  }
-};
-
-// Create a service for merchant analytics if it doesn't exist
-const merchantAnalyticsService = {
-  async getContractSummary(merchantId: number) {
-    try {
-      const contracts = await storage.getContractsByMerchantId(merchantId);
-
-      // Calculate summary statistics
-      const total = contracts.length;
-      const active = contracts.filter(c => c.status === 'active').length;
-      const pending = contracts.filter(c => c.status === 'pending').length;
-      const completed = contracts.filter(c => c.status === 'completed').length;
-      const declined = contracts.filter(c => c.status === 'declined').length;
-
-      // Calculate total financing amount
-      const totalAmount = contracts.reduce((sum, contract) => sum + (contract.amount || 0), 0);
-      const activeAmount = contracts
-        .filter(c => c.status === 'active')
-        .reduce((sum, contract) => sum + (contract.amount || 0), 0);
-
-      return {
-        total,
-        active,
-        pending,
-        completed,
-        declined,
-        totalAmount,
-        activeAmount
-      };
-    } catch (error) {
-      logger.error({
-        message: `Error getting merchant analytics`,
-        error,
-        metadata: { merchantId }
-      });
-      throw error;
-    }
   }
 };
 
@@ -138,7 +99,11 @@ router.get('/merchant/:merchantId/contracts', authenticateToken, async (req: Req
       });
     }
 
-    const contracts = await storage.getContractsByMerchantId(merchantId);
+    // Add your logic to fetch contracts for the merchant
+    // This is a placeholder - implement actual logic based on your database
+    const contracts = await storage.db.query.contracts.findMany({
+      where: (contracts, { eq }) => eq(contracts.merchantId, merchantId)
+    });
 
     res.json({
       success: true,
@@ -209,60 +174,5 @@ router.get('/complaint-trends', async (req, res) => {
 });
 
 // Additional merchant analytics endpoints can be added here
-
-export { merchantAnalyticsService };
-export default router;
-import { Router, Request, Response } from 'express';
-import fetch from 'node-fetch';
-import { logger } from '../services/logger';
-
-const router = Router();
-
-// CFPB Complaint Data API endpoint
-const CFPB_API_URL = 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/';
-
-// Get complaint data by keyword
-router.get('/:keyword', async (req: Request, res: Response) => {
-  try {
-    const { keyword } = req.params;
-    const searchTerm = keyword || 'credit';
-    
-    logger.info({
-      message: `Fetching CFPB complaint data for keyword: ${searchTerm}`,
-      category: 'api',
-      source: 'cfpb',
-      metadata: { keyword: searchTerm }
-    });
-
-    // Construct the API URL with appropriate parameters
-    const apiUrl = `${CFPB_API_URL}?search_term=${encodeURIComponent(searchTerm)}&size=10&sort=created_date_desc`;
-    
-    const response = await fetch(apiUrl);
-    
-    if (!response.ok) {
-      throw new Error(`CFPB API returned ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    res.json({
-      success: true,
-      keyword: searchTerm,
-      results: data
-    });
-  } catch (error) {
-    logger.error({
-      message: `Error fetching CFPB complaint data: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
-      source: 'cfpb',
-      metadata: { error: error instanceof Error ? error.stack : String(error) }
-    });
-    
-    res.status(500).json({
-      success: false,
-      message: 'Failed to load CFPB complaint data. Please try again later.'
-    });
-  }
-});
 
 export default router;
