@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
+const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"]; // Define CONTRACT_STEPS constant
+
 export default function Application() {
   const { contractId: contractIdParam } = useParams();
   const contractId = parseInt(contractIdParam || "0");
@@ -24,24 +26,6 @@ export default function Application() {
   const urlParams = new URLSearchParams(location.search);
   const verifySuccess = urlParams.get("verify") === "success";
   const verifyContractId = parseInt(urlParams.get("contractId") || "0");
-
-  // Mock data for demo purposes when no valid contractId is provided
-  const mockContractData = {
-    id: 999,
-    contractNumber: "SHI-DEMO",
-    merchantId: 1,
-    customerId: null,
-    amount: 2800,
-    downPayment: 420,
-    financedAmount: 2380,
-    termMonths: 24,
-    interestRate: 0,
-    monthlyPayment: 99.17,
-    status: "pending",
-    currentStep: "terms",
-    merchantName: "TechSolutions Inc.",
-    customerName: "Demo Customer",
-  };
 
   const [currentStep, setCurrentStep] = useState("");
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
@@ -114,7 +98,7 @@ export default function Application() {
             try {
               // Always mark as completed when redirected from verification
               console.log("Marking KYC as completed from redirect handler", kycProgressResponse);
-              
+
               // Update the progress status
               const progressUpdateResponse = await apiRequest(
                 "PATCH",
@@ -129,7 +113,7 @@ export default function Application() {
                   }),
                 },
               );
-              
+
               console.log("Progress update response:", progressUpdateResponse);
 
               // Also update the contract step to move to "bank"
@@ -140,12 +124,12 @@ export default function Application() {
                   step: "bank"
                 }
               );
-              
+
               console.log("Contract step update response:", stepUpdateResponse);
 
               // Force refresh contract data
               await refetch();
-              
+
               // Add a small delay to ensure the UI updates properly
               setTimeout(() => {
                 navigate(`/customer/application?contract=${verifyContractId}&step=bank`);
@@ -173,7 +157,7 @@ export default function Application() {
             if (currentStep === "kyc") {
               setCurrentStep("bank");
             }
-            
+
             // Show success message using toast
             toast({
               title: "Identity Verification Complete",
@@ -192,66 +176,49 @@ export default function Application() {
     }
   }, [verifySuccess, verifyContractId, location, toast, refetch, currentStep, navigate]);
 
-  // When contract data loads, set up the application state
+  // Effect to set up contract data and application progress
   useEffect(() => {
-    if (contractResponse) {
-      // Real contract data
-      const { contract, progress } = contractResponse;
+    if (contractResponse?.contract) {
+      // Valid contract found from API
+      console.log("Valid contract data received:", contractResponse.contract.id);
+      setContractData(contractResponse.contract);
 
-      // Get merchant name (in a real app would be fetched from API)
-      let merchantName = "TechSolutions Inc.";
-      // Get customer name (in a real app would be fetched from API)
-      let customerName = "Customer";
-
-      setContractData({
-        ...contract,
-        merchantName,
-        customerName,
-      });
-
-      setApplicationProgress(progress);
-
-      // Create a map for easier access to progress items
+      // Create a progress map
       const progressMapObj: Record<string, any> = {};
-      progress.forEach((item: any) => {
+      contractResponse.progress.forEach((item: any) => {
         progressMapObj[item.step] = item;
       });
       setProgressMap(progressMapObj);
+      setApplicationProgress(contractResponse.progress);
 
-      // Set current step from contract
-      setCurrentStep(contract.currentStep);
+      // Set the current step based on progress
+      if (contractResponse.progress.length === 0) {
+        setCurrentStep("terms");
+      } else {
+        // Find the first incomplete step
+        const incompleteStep = CONTRACT_STEPS.find(
+          (step) => !progressMapObj[step]?.completed
+        );
+
+        if (incompleteStep) {
+          setCurrentStep(incompleteStep);
+        } else {
+          setCurrentStep("completed");
+        }
+      }
 
       // Set completed steps
-      const completed = progress
+      const completed = contractResponse.progress
         .filter((item: any) => item.completed)
         .map((item: any) => item.step);
       setCompletedSteps(completed);
     } else if (!isLoadingContract) {
-      // Use mock data if no contract found and not still loading
-      setContractData(mockContractData);
-
-      // Create mock progress items
-      const mockProgress = [
-        { id: 1001, step: "terms", completed: false },
-        { id: 1002, step: "kyc", completed: false },
-        { id: 1003, step: "bank", completed: false },
-        { id: 1004, step: "payment", completed: false },
-        { id: 1005, step: "signing", completed: false },
-      ];
-
-      setApplicationProgress(mockProgress);
-
-      // Create a progress map
-      const progressMapObj: Record<string, any> = {};
-      mockProgress.forEach((item) => {
-        progressMapObj[item.step] = item;
-      });
-      setProgressMap(progressMapObj);
-
-      setCurrentStep("terms");
-      setCompletedSteps([]);
+      // If no contract is found and we're not still loading, redirect to contracts page
+      console.log("No contract found, redirecting to contracts page");
+      navigate("/customer/contracts");
+      return;
     }
-  }, [contractResponse, isLoadingContract]);
+  }, [contractResponse, isLoadingContract, navigate]);
 
   // All application steps
   const steps: Step[] = [
@@ -366,7 +333,7 @@ export default function Application() {
   };
 
   // If still loading contract data, show loading state
-  if (!contractData) {
+  if (isLoadingContract) {
     return (
       <CustomerLayout>
         <div className="p-6 flex items-center justify-center">

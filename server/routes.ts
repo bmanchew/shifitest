@@ -744,11 +744,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           contractIdNum = parseInt(String(contractId));
         }
-        
+
         if (isNaN(contractIdNum)) {
           throw new Error(`Invalid contract ID format: ${contractId}`);
         }
-        
+
         console.log(`Parsed contract ID: ${contractIdNum} (from input: ${contractId})`);
       } catch (parseError) {
         console.error("Contract ID parse error:", parseError);
@@ -951,7 +951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch (twilioError) {
         console.error("Twilio service error:", twilioError);
-        throw twilioError;
+        throwtwilioError;
       }
 
       // Create log for SMS sending
@@ -1868,7 +1868,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             // In a production environment, this is how we would make the call:
             /*
-          const signatureResponse = await fetch("https://api.thanksroger.com/v1/signatures", {
+          constsignatureResponse = await fetch("https://api.thanksroger.com/v1/signatures", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${thanksRogerApiKey}`,
@@ -2852,7 +2852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fetch access token for this contract from your database
         // For example:
         // const bankAccount = await db.query.bankAccounts.findFirst({
-        //   where: eq(bankAccounts.contractId, parseInt(contractId as string))
+        //   where: eq(bank`accounts.contractId, parseInt(contractId as string))
         // });
         // accessToken = bankAccount?.accessToken;
 
@@ -3664,4 +3664,242 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   return httpServer;
+}
+
+app.post("/api/merchant/send-financing-link", async (req, res) => {
+  try {
+    const { customerName, customerPhone, customerEmail, amount, merchantId, termMonths, interestRate } = req.body;
+
+    if (!customerName || !customerPhone || !amount || !merchantId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required fields" 
+      });
+    }
+
+    // Validate input data
+    const parsedAmount = Number(amount);
+    const parsedMerchantId = Number(merchantId);
+    const parsedTermMonths = Number(termMonths) || 24;
+    const parsedInterestRate = Number(interestRate) || 0;
+
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid amount value"
+      });
+    }
+
+    if (isNaN(parsedMerchantId) || parsedMerchantId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid merchant ID"
+      });
+    }
+
+    // Get merchant information to verify it exists
+    const merchant = await storage.getMerchant(parsedMerchantId);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found"
+      });
+    }
+    const merchantName = merchant.name;
+
+    // Calculate financial values
+    const downPayment = parsedAmount * 0.15; // 15% down payment by default
+    const financedAmount = parsedAmount * 0.85;
+    const monthlyPayment = calculateMonthlyPayment(
+      financedAmount, 
+      parsedInterestRate, 
+      parsedTermMonths
+    );
+
+    // Create a contract in pending status
+    const contract = await storage.createContract({
+      merchantId: parsedMerchantId,
+      customerId: null, // Will be populated when customer creates account
+      contractNumber: generateContractNumber(),
+      amount: parsedAmount,
+      downPayment: downPayment,
+      financedAmount: financedAmount,
+      termMonths: parsedTermMonths,
+      interestRate: parsedInterestRate,
+      monthlyPayment: monthlyPayment,
+      status: "pending"
+    });
+
+    // Log the created contract for debugging
+    logger.info({
+      message: `Created new contract #${contract.contractNumber} with ID ${contract.id}`,
+      category: "contract",
+      source: "merchant",
+      metadata: { 
+        contractId: contract.id,
+        merchantId: parsedMerchantId,
+        amount: parsedAmount,
+        status: "pending"
+      }
+    });
+
+    // Format the amount as USD
+    const formatter = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    });
+    const formattedAmount = formatter.format(parsedAmount);
+
+    // Send SMS notification
+    try {
+      // In a real app, integrate with an SMS provider like Twilio
+      // For now, log the message
+      logger.info({
+        message: `SMS notification would be sent to ${customerPhone}`,
+        category: "sms",
+        source: "merchant",
+        metadata: { 
+          to: customerPhone, 
+          customerName,
+          customerEmail,
+          amount: parsedAmount,
+          contractId: contract.id,
+          merchantId: parsedMerchantId
+        }
+      });
+
+      // Include the actual contract ID in the URL
+      const applicationUrl = `${req.protocol}://${req.get('host')}/customer/application/${contract.id}`;
+      const smsMessage = `${customerName}, ${merchantName} has sent you a financing offer for ${formattedAmount}. View and accept: ${applicationUrl}`;
+
+      logger.info({
+        message: `SMS Content: ${smsMessage}`,
+        category: "sms",
+        source: "merchant"
+      });
+    } catch (error) {
+      logger.error({
+        message: `Failed to send SMS notification: ${error instanceof Error ? error.message : String(error)}`,
+        category: "sms",
+        source: "merchant",
+        metadata: { customerPhone, contractId: contract.id }
+      });
+      // Continue execution even if SMS fails
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Financing link sent successfully", 
+      contractId: contract.id 
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error sending financing link: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "merchant",
+      metadata: { body: req.body }
+    });
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to send financing link" 
+    });
+  }
+});
+
+app.post("/api/application-progress", async (req, res) => {
+  try {
+    const { contractId, step, completed, data } = req.body;
+
+    // Validate required fields
+    if (!contractId || !step) {
+      return res.status(400).json({
+        message: "Missing required fields",
+        details: "contractId and step are required"
+      });
+    }
+
+    // Validate contract ID
+    const contractIdNum = Number(contractId);
+
+    if (isNaN(contractIdNum) || contractIdNum <= 0) {
+      return res.status(400).json({
+        message: "Invalid contract ID format",
+        details: `Contract ID must be a positive number, received: ${contractId}`
+      });
+    }
+
+    logger.info({
+      message: `Processing application progress for contract: ${contractIdNum}, step: ${step}`,
+      category: "api",
+      source: "application",
+      metadata: { contractId: contractIdNum, step, completed }
+    });
+
+    // Validate contract exists
+    const contract = await storage.getContract(contractIdNum);
+    if (!contract) {
+      logger.warn({
+        message: `Contract not found when creating application progress`,
+        category: "api",
+        source: "application",
+        metadata: { contractId: contractIdNum }
+      });
+
+      return res.status(404).json({ 
+        message: "Contract not found",
+        details: `No contract with ID ${contractIdNum} exists in the database`
+      });
+    }
+
+    // Check if progress for this step already exists
+    const existingProgress = await storage.getApplicationProgressByContractAndStep(contractIdNum, step);
+
+    let progress;
+    if (existingProgress) {
+      // Update existing progress
+      progress = await storage.updateApplicationProgressCompletion(
+        existingProgress.id,
+        completed === true,
+        data || existingProgress.data
+      );
+
+      logger.info({
+        message: `Updated application progress: ${existingProgress.id} for contract ${contractIdNum}`,
+        category: "api",
+        source: "application",
+        metadata: { progressId: existingProgress.id, contractId: contractIdNum, step }
+      });
+    } else {
+      // Create new progress record
+      progress = await storage.createApplicationProgress({
+        contractId: contractIdNum,
+        step,
+        completed: completed === true,
+        data: data || null
+      });
+
+      logger.info({
+        message: `Created application progress for contract ${contractIdNum}`,
+        category: "api",
+        source: "application",
+        metadata: { progressId: progress.id, contractId: contractIdNum, step }
+      });
+    }
+
+    res.status(201).json(progress);
+  } catch (error) {
+    logger.error({
+      message: `Error handling application progress: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "application",
+      metadata: { body: req.body }
+    });
+    res.status(500).json({ 
+      message: "Failed to process application progress", 
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+  // ... rest of the file remains unchanged
 }

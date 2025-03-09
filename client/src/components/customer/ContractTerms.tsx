@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-// import { apiRequest } from "@/lib/queryClient"; // Removed as we are using fetch directly
 import { Check } from "lucide-react";
 
 interface ContractTermsProps {
@@ -47,61 +46,89 @@ export default function ContractTerms({
     try {
       setIsSubmitting(true);
 
-      // Direct fetch implementation to avoid response handling issues
+      // Ensure contract ID is valid before proceeding
+      if (!contractId) {
+        throw new Error("Contract ID is missing");
+      }
+
+      // Parse contract ID to ensure it's a valid number
+      const contractIdNum = parseInt(contractId.toString());
+      if (isNaN(contractIdNum) || contractIdNum <= 0) {
+        throw new Error(`Invalid contract ID: ${contractId}`);
+      }
+
+      console.log(`Processing terms acceptance for contract ID: ${contractIdNum}`);
+
+      // Check if contract data is available
+      if (!merchantName || !amount || !termMonths) {
+        throw new Error("Contract data is incomplete, please refresh the page");
+      }
+
       try {
-        // Try to update existing progress first
-        const updateResponse = await fetch(`/api/application-progress/${progressId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            completed: true, 
-            data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
-          }),
-        });
+        // Try to update existing progress first if we have an existing progress item
+        const progressId = progressId; // Use provided progressId
 
-        if (!updateResponse.ok) {
-          // If 404, create new progress item
-          if (updateResponse.status === 404) {
-            console.log('Creating new progress item...', { contractId });
-
-            // Validate contract ID before API call
-            if (!contractId || isNaN(parseInt(contractId.toString()))) {
-              throw new Error(`Invalid contract ID: ${contractId}`);
-            }
-
-            // Ensure contract ID is a number before sending
-            const contractIdNum = Number(contractId);
-            
-            console.log('Creating application progress with contract ID:', contractIdNum);
-            
-            const createResponse = await fetch('/api/application-progress', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                contractId: contractIdNum,
-                step: 'terms',
-                completed: true,
-                data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
-              }),
-            });
-
-            if (!createResponse.ok) {
-              const errorData = await createResponse.json();
-              console.log('Create response error:', JSON.stringify(errorData));
-              throw new Error(`Failed to create progress: ${createResponse.status}, details: ${JSON.stringify(errorData)}`);
-            }
-
-            const newProgress = await createResponse.json();
-            console.log('Created progress item:', newProgress);
-          } else {
-            throw new Error(`Update failed: ${updateResponse.status}`);
+        // Prepare progress data
+        const progressData = {
+          acceptedAt: new Date().toISOString(),
+          acceptedBy: "customerName", // Placeholder - should be retrieved from context
+          // Include contract details for validation
+          contractDetails: {
+            amount,
+            termMonths,
+            merchantName
           }
+        };
+
+        let response;
+
+        if (progressId) {
+          console.log('Updating existing progress with ID:', progressId);
+
+          response = await fetch(`/api/application-progress/${progressId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              completed: true,
+              data: JSON.stringify(progressData),
+            }),
+          });
+
+          // Check if update was successful
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Update failed (${response.status}): ${errorData.message || 'Unknown error'}`);
+          }
+
+          console.log('Progress updated successfully');
         } else {
-          await updateResponse.json(); // Read and discard the response
+          // Create new progress
+          console.log(`Creating new progress for contract ID: ${contractIdNum}`);
+
+          response = await fetch('/api/application-progress', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contractId: contractIdNum,
+              step: 'terms',
+              completed: true,
+              data: JSON.stringify(progressData),
+            }),
+          });
+
+          // Check if creation was successful
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Creation failed (${response.status}): ${errorData.message || 'Unknown error'}`);
+          }
+
+          // Log the created progress
+          const newProgress = await response.json();
+          console.log('Created progress item:', newProgress);
         }
       } catch (error) {
         console.error('Error in progress update/create:', error);
@@ -119,7 +146,7 @@ export default function ContractTerms({
       console.error("Failed to accept terms:", error);
       toast({
         title: "Error",
-        description: "Failed to accept terms. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to accept terms. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -186,8 +213,8 @@ export default function ContractTerms({
 
       <div className="mb-6">
         <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="terms-agreement" 
+          <Checkbox
+            id="terms-agreement"
             checked={termsAccepted}
             onCheckedChange={(checked) => setTermsAccepted(checked === true)}
           />
