@@ -2166,6 +2166,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+      if (!contractId) {
+        logger.warn({
+          message: "Missing contractId in DiDit webhook vendor_data",
+          category: "api",
+          source: "didit",
+          metadata: { 
             vendor_data: typeof vendor_data === 'object' ? JSON.stringify(vendor_data) : vendor_data,
             body: JSON.stringify(req.body) 
           },
