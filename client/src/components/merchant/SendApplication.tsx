@@ -62,7 +62,8 @@ export default function SendApplication() {
       const contractId = response.contractId; //This line is added, assuming the API returns a contract ID.  Adjust accordingly to your API response.
       
       // Generate the correct application URL with the current window origin
-      const applicationBaseUrl = `${window.location.origin}/customer/application/`;
+      // Use the /apply/:contractId route which is the public-facing entry point for applications
+      const applicationBaseUrl = `${window.location.origin}/apply/`;
       setApplicationUrl(`${applicationBaseUrl}${contractId}`); // set the application URL
 
       toast({
