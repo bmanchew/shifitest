@@ -23,15 +23,16 @@ export async function apiRequest<T>(
     ...options,
   });
 
-  // Clone the response before checking if it's OK
-  const responseForError = res.clone();
-
   try {
+    // Clone the response before checking if it's OK
+    const responseForError = res.clone();
+    
     if (!res.ok) {
       const errorText = await responseForError.text();
       throw new Error(errorText);
     }
 
+    // Parse the JSON from the original response
     return await res.json();
   } catch (error) {
     // If JSON parsing fails or there's any other error
