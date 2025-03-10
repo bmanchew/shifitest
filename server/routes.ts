@@ -950,7 +950,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentStep: "terms",
       });
 
-      // Create application progress for this contract
+            // Create application progress for this contract
       const newProgress = await storage.createApplicationProgress({
         contractId: newContract.id,
         step: "terms",
@@ -1859,8 +1859,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Check if this is a test request from the admin panel
         if (
-          req.body.documentId &&
-          req.body.signerName &&
+          req.body.documentId &&          req.body.signerName &&
           req.body.signerEmail
         ) {
           // This is a test request from the admin API verification
@@ -2136,7 +2135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             body: JSON.stringify(req.body) 
           }
         });
-        
+
         return res.status(200).json({
           status: "success",
           message: "Webhook received but no contractId found",
@@ -2208,41 +2207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 category: "api",
                 source: "didit",
 
-  // Route to get logs for a specific contract
-  apiRouter.get("/logs/contract/:contractId", async (req: Request, res: Response) => {
-    try {
-      const { contractId } = req.params;
-      
-      if (!contractId || isNaN(parseInt(contractId))) {
-        return res.status(400).json({ message: "Valid contract ID is required" });
-      }
-      
-      // Query logs that mention this contract ID
-      const logs = await storage.getLogs();
-      const filteredLogs = logs.filter(log => {
-        // Check if the log mentions this contract ID in message or metadata
-        return (
-          log.message.includes(`contract ${contractId}`) || 
-          log.message.includes(`Contract ${contractId}`) ||
-          (log.metadata && log.metadata.includes(`contractId":${contractId}`)) ||
-          (log.metadata && log.metadata.includes(`"contractId":"${contractId}"`)) ||
-          (log.metadata && log.metadata.includes(`"contractId": ${contractId}`))
-        );
-      });
-      
-      res.json({ 
-        contractId,
-        count: filteredLogs.length,
-        logs: filteredLogs
-      });
-    } catch (error) {
-      console.error("Error retrieving contract logs:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-
-                metadata: { 
+metadata: { 
                   customerInfo: JSON.stringify(customerInfo),
                   kycData: JSON.stringify(kycData)
                 }
@@ -3740,7 +3705,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create initial application progress steps
       const steps = ["terms", "kyc", "bank", "payment", "signing"];
-      
+
       // Create each application progress step
       for (const step of steps) {
         await storage.createApplicationProgress({
