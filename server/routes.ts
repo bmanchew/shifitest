@@ -2174,7 +2174,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata: { 
             vendor_data: typeof vendor_data === 'object' ? JSON.stringify(vendor_data) : vendor_data,
             body: JSON.stringify(req.body) 
-          },
+          }
+        });
         });
         return res.status(200).json({
           status: "success",
