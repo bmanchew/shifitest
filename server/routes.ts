@@ -3679,6 +3679,20 @@ metadata: {
     }
 
     try {
+      // Format phone number to E.164 format (required by Twilio)
+      let formattedPhone = phoneNumber.replace(/[^0-9]/g, '');
+      
+      // Add +1 if it's a US number and doesn't already have it
+      if (formattedPhone.length === 10) {
+        formattedPhone = `+1${formattedPhone}`;
+      } else if (formattedPhone.length === 11 && formattedPhone.startsWith('1')) {
+        formattedPhone = `+${formattedPhone}`;
+      } else if (!formattedPhone.startsWith('+')) {
+        formattedPhone = `+${formattedPhone}`;
+      }
+      
+      console.log(`Sending SMS to formatted phone: ${formattedPhone} (original: ${phoneNumber})`);
+
       // Create a contract for this financing request
       const contractNumber = generateContractNumber();
       const termMonths = term || 24; // Use provided term or default to 24 months
@@ -3721,23 +3735,74 @@ metadata: {
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
 
       // Log the contract creation
-      console.log(`Created contract ${newContract.id} for ${customerName} (${phoneNumber})`);
+      console.log(`Created contract ${newContract.id} for ${customerName} (${formattedPhone})`);
       console.log(`Application URL: ${applicationUrl}`);
 
-      // In a production implementation, you would send an SMS with the application link
-      // For now, we'll just simulate success
+      // Actually send the SMS using twilioService
+      try {
+        // Prepare the SMS message with clearer URL formatting
+        const messageText = `You've been invited to apply for financing of $${amount}.\n\nApply here: ${applicationUrl}\n\nContract #: ${contractNumber}`;
+        
+        console.log(`Attempting to send SMS with text: ${messageText}`);
+        
+        // Send SMS using our Twilio service
+        const result = await twilioService.sendSMS({
+          to: formattedPhone,
+          body: messageText,
+        });
+
+        if (result.isSimulated) {
+          console.log(`Simulated SMS to ${formattedPhone}: ${messageText}`);
+          logger.info({
+            message: `Simulated SMS to ${formattedPhone}`,
+            category: "api",
+            source: "twilio",
+            metadata: { formattedPhone, messageText }
+          });
+        } else if (result.success) {
+          console.log(`Successfully sent SMS to ${formattedPhone}, Message ID: ${result.messageId}`);
+          logger.info({
+            message: `SMS sent successfully to ${formattedPhone}`,
+            category: "api",
+            source: "twilio",
+            metadata: { messageId: result.messageId }
+          });
+        } else {
+          console.error(`Failed to send SMS: ${result.error}`);
+          logger.error({
+            message: `Failed to send SMS to ${formattedPhone}`,
+            category: "api",
+            source: "twilio",
+            metadata: { error: result.error }
+          });
+        }
+      } catch (smsError) {
+        console.error("SMS sending error:", smsError);
+        logger.error({
+          message: `SMS sending error for ${formattedPhone}`,
+          category: "api",
+          source: "twilio",
+          metadata: { error: smsError instanceof Error ? smsError.message : String(smsError) }
+        });
+        // We won't throw the error so the API still returns successfully
+      }
 
       // Return success with the contract ID and application URL
       return res.json({ 
         success: true, 
-        message: 'SMS sent successfully',
+        message: 'Application created successfully. SMS delivery was attempted.',
         contractId: newContract.id,
         contractNumber: contractNumber,
-        phoneNumber: phoneNumber,
+        phoneNumber: formattedPhone,
         applicationUrl: applicationUrl
       });
     } catch (error) {
       console.error('Error sending application:', error);
+      logger.error({
+        message: 'Error creating application',
+        category: "api",
+        metadata: { error: error instanceof Error ? error.message : String(error) }
+      });
       return res.status(500).json({ 
         success: false, 
         message: 'Failed to send application link' 
