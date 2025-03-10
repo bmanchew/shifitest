@@ -381,6 +381,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create initial application progress steps
       const steps = ["terms", "kyc", "bank", "payment", "signing"];
+      // Verify contractId is available and valid
+      if (!newContract.id || isNaN(newContract.id)) {
+        logger.error({
+          message: "Invalid contract ID when creating application progress steps",
+          metadata: { contractId: newContract.id }
+        });
+        throw new Error("Failed to create application progress due to invalid contract ID");
+      }
+      
       for (const step of steps) {
         await storage.createApplicationProgress({
           contractId: newContract.id,
@@ -958,7 +967,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Failed to generate valid contract ID for application URL");
       }
       
-      // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
+      // Ensure we use the correct application URL with the /apply/ route as defined in Application.tsx
+      // This should match the route structure in the client app (CONTRACT_STEPS in Application.tsx)
       const applicationUrl = `https://${replitDomain}/apply/${contractId}`;
 
       // Enhanced logging for debugging URL issues
@@ -966,8 +976,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Application URL: ${applicationUrl}`);
       console.log(`Contract details:`, JSON.stringify(newContract));
 
-      // Prepare the SMS message
-      const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
+      // Prepare the SMS message with clearer URL formatting
+      const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}.\n\nApply here: ${applicationUrl}\n\nContract #: ${contractNumber}`;
 
       try {
         // Send SMS using our Twilio service

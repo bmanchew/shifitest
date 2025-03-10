@@ -78,9 +78,12 @@ export default function SendApplication() {
       const applicationUrl = `${window.location.origin}/apply/${contractId}`;
       setApplicationUrl(applicationUrl);
 
-      console.log('Contract ID:', contractId);
-      console.log('Generated application URL:', applicationUrl);
-      console.log('Phone number:', phoneNumber);
+      console.log('SendApplication - Details:', {
+        contractId,
+        applicationUrl,
+        phoneNumber,
+        contractNumber: `SHI-${Math.floor(1000 + Math.random() * 9000)}` // This is simulated - actual number is generated on server
+      });
 
       toast({
         title: "Application Sent",
