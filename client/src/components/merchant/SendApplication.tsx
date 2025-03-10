@@ -52,41 +52,33 @@ export default function SendApplication() {
       setIsSubmitting(true);
 
       // Make API call to send the application via SMS
-      const response = await apiRequest("POST", "/api/send-sms", {
+      const response = await apiRequest("POST", "/api/send-application", {
         phoneNumber: phoneNumber,
-        merchantId: user?.merchantId || 1, // Fall back to ID 1 if not available
+        customerName: "Customer", // Default customer name
         amount: parseFloat(amount),
+        merchantId: user?.merchantId || 1, // Fall back to ID 1 if not available
       });
 
-      // Get the contract ID from the response
-      const contractId = response.contractId;
+      // Check if the request was successful and contains contractId
+      if (response.success && response.contractId) {
+        // Log contract details
+        console.log('SendApplication - Details:', response);
 
-      if (!contractId) {
-        console.error("Contract ID is missing from API response:", response);
+        //Assuming response includes applicationUrl
+        setApplicationUrl(response.applicationUrl);
+
+        toast({
+          title: "Application Sent",
+          description: `ShiFi financing application sent to ${phoneNumber}. Application link: ${response.applicationUrl}`,
+        });
+      } else {
+        console.error("Contract ID is missing or API request failed:", response);
         toast({
           title: "Warning",
           description: "Application sent, but contract tracking may be unavailable.",
           variant: "warning",
         });
       }
-
-      // Generate the application URL (would normally come from server)
-      const applicationUrl = contractId 
-        ? `${window.location.origin}/apply/${contractId}`
-        : "Application link was generated";
-      setApplicationUrl(applicationUrl);
-
-      console.log('SendApplication - Details:', {
-        contractId,
-        applicationUrl,
-        phoneNumber,
-        contractNumber: `SHI-${Math.floor(1000 + Math.random() * 9000)}` // This is simulated - actual number is generated on server
-      });
-
-      toast({
-        title: "Application Sent",
-        description: `ShiFi financing application sent to ${phoneNumber}. Application link: ${applicationUrl}`,
-      });
 
       setPhoneNumber("");
       setAmount("");

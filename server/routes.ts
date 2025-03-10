@@ -3702,17 +3702,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentStep: "terms",
       });
 
+      // Create initial application progress steps
+      const steps = ["terms", "kyc", "bank", "payment", "signing"];
+      
+      // Create each application progress step
+      for (const step of steps) {
+        await storage.createApplicationProgress({
+          contractId: newContract.id,
+          step: step as any,
+          completed: false,
+          data: null
+        });
+      }
+
+      // Get the application base URL from Replit
+      const replitDomain = getAppDomain();
+      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
+
       // Log the contract creation
       console.log(`Created contract ${newContract.id} for ${customerName} (${phoneNumber})`);
+      console.log(`Application URL: ${applicationUrl}`);
 
       // In a production implementation, you would send an SMS with the application link
       // For now, we'll just simulate success
 
-      // Return success with the contract ID
+      // Return success with the contract ID and application URL
       return res.json({ 
         success: true, 
         message: 'SMS sent successfully',
-        contractId: newContract.id
+        contractId: newContract.id,
+        contractNumber: contractNumber,
+        phoneNumber: phoneNumber,
+        applicationUrl: applicationUrl
       });
     } catch (error) {
       console.error('Error sending application:', error);
