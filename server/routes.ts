@@ -389,7 +389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         throw new Error("Failed to create application progress due to invalid contract ID");
       }
-      
+
       for (const step of steps) {
         await storage.createApplicationProgress({
           contractId: newContract.id,
@@ -770,10 +770,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if the progress item already exists for this contract and step
       const existingProgressItems = await storage.getApplicationProgressByContractId(contractIdNum);
       const existingProgressItem = existingProgressItems.find(item => item.step === step);
-      
+
       if (existingProgressItem) {
         console.log(`Found existing progress for contract ${contractIdNum}, step ${step} with ID ${existingProgressItem.id}`);
-        
+
         // If the progress item exists and we're updating it, update it
         if (completed !== undefined || data !== undefined) {
           const updatedProgress = await storage.updateApplicationProgressCompletion(
@@ -781,12 +781,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             completed !== undefined ? !!completed : existingProgressItem.completed,
             data !== undefined ? data : existingProgressItem.data
           );
-          
+
           console.log(`Updated existing progress item for contract ${contractIdNum}, step ${step}`, updatedProgress);
-          
+
           return res.status(200).json(updatedProgress);
         }
-        
+
         // Otherwise, just return the existing progress item
         return res.status(200).json(existingProgressItem);
       }
@@ -944,7 +944,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         downPayment,
         financedAmount,
         termMonths,
-        interestRate,
+        interestRaterate,
         monthlyPayment,
         status: "pending",
         currentStep: "terms",
@@ -960,13 +960,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
-      
+
       // Ensure the contract ID is valid before creating the URL
       const contractId = newContract.id;
       if (!contractId) {
         throw new Error("Failed to generate valid contract ID for application URL");
       }
-      
+
       // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
       // The URL format must be /apply/${contractId} to match the React router configuration
       // This is where customers access their application after receiving the SMS
@@ -3668,3 +3668,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   return httpServer;
 }
+// Send application link via SMS
+  app.post('/api/send-application', async (req, res) => {
+    const { phoneNumber, customerName, amount, term } = req.body;
+
+    if (!phoneNumber || !customerName) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Phone number and customer name are required' 
+      });
+    }
+
+    try {
+      // Here you would create the contract in your database
+      // For now, create a mock contract ID 
+      const contractId = Date.now(); // Using timestamp as mock ID
+
+      // Log the contract creation
+      console.log(`Created contract ${contractId} for ${customerName} (${phoneNumber})`);
+
+      // In a real implementation, you would send an SMS with the application link
+      // containing the contract ID
+
+      // Return success with the contract ID
+      return res.json({ 
+        success: true, 
+        message: 'SMS sent successfully',
+        contractId: contractId
+      });
+    } catch (error) {
+      console.error('Error sending application:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to send application link' 
+      });
+    }
+  });

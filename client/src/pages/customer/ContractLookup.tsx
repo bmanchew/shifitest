@@ -30,8 +30,13 @@ export default function ContractLookup() {
 
           if (response.status === 404) {
             setError("This contract couldn't be found. It may have expired or been cancelled.");
+            console.error(`Contract ${contractId} not found (404)`);
+          } else if (contractId === "undefined" || contractId === "null" || !contractId) {
+            setError("Invalid contract link. Please check your SMS and try again with the correct link.");
+            console.error(`Invalid contract ID format: ${contractId}`);
           } else {
             setError("There was a problem loading your financing application. Please try again.");
+            console.error(`Error loading contract ${contractId}: ${response.status}`);
           }
           setLoading(false);
           return;
