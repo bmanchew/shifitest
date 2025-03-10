@@ -38,34 +38,42 @@ export default function SendApplication() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    // Added to address the "body stream already read" error, though likely needs more comprehensive solution.
-    
+
+    if (!phoneNumber || !amount) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
+      setIsSubmitting(true);
+
+      // Make API call to send the application via SMS
       const response = await apiRequest("POST", "/api/send-sms", {
-        phoneNumber,
-        merchantId: user?.merchantId || 1,
+        phoneNumber: phoneNumber,
+        merchantId: user?.merchantId || 1, // Fall back to ID 1 if not available
         amount: parseFloat(amount),
       });
 
-      // Extract contract ID from the API response
-      // The API returns the entire contract object, not just the ID
-      const contractId = response.id || (response.newContract && response.newContract.id);
+      // Get the contract ID from the response
+      const contractId = response.contractId;
 
-      //Robustly handle potential issues with contractId
       if (!contractId) {
-        console.error("Contract ID is invalid or missing from API response:", response);
+        console.error("Contract ID is missing from API response:", response);
         toast({
-          title: "Error", 
-          description: "Failed to generate application link. Please try again.",
-          variant: "destructive",
+          title: "Warning",
+          description: "Application sent, but contract tracking may be unavailable.",
+          variant: "warning",
         });
-        return;
       }
 
-
-      // Generate the correct application URL with the current window origin
-      const applicationUrl = `${window.location.origin}/apply/${contractId}`;
+      // Generate the application URL (would normally come from server)
+      const applicationUrl = contractId 
+        ? `${window.location.origin}/apply/${contractId}`
+        : "Application link was generated";
       setApplicationUrl(applicationUrl);
 
       console.log('SendApplication - Details:', {

@@ -1015,7 +1015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }),
       });
 
-      res.json({ success: true, message: "SMS sent successfully" });
+      res.json({ success: true, message: "SMS sent successfully", contractId: newContract.id });
     } catch (error) {
       console.error("Send SMS error:", error);
 
@@ -3678,21 +3678,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      // Here you would create the contract in your database
-      // For now, create a mock contract ID 
-      const contractId = Date.now(); // Using timestamp as mock ID
+      // Create a contract for this financing request
+      const contractNumber = generateContractNumber();
+      const termMonths = term || 24; // Use provided term or default to 24 months
+      const interestRate = 0; // 0% APR
+      const downPaymentPercent = 15; // 15% down payment
+      const downPayment = amount * (downPaymentPercent / 100);
+      const financedAmount = amount - downPayment;
+      const monthlyPayment = financedAmount / termMonths;
+
+      // Create a new contract
+      const newContract = await storage.createContract({
+        contractNumber,
+        merchantId: 1, // Default merchant ID
+        customerId: null, // Will be set when the customer completes the application
+        amount,
+        downPayment,
+        financedAmount,
+        termMonths,
+        interestRate,
+        monthlyPayment,
+        status: "pending",
+        currentStep: "terms",
+      });
 
       // Log the contract creation
-      console.log(`Created contract ${contractId} for ${customerName} (${phoneNumber})`);
+      console.log(`Created contract ${newContract.id} for ${customerName} (${phoneNumber})`);
 
-      // In a real implementation, you would send an SMS with the application link
-      // containing the contract ID
+      // In a production implementation, you would send an SMS with the application link
+      // For now, we'll just simulate success
 
       // Return success with the contract ID
       return res.json({ 
         success: true, 
         message: 'SMS sent successfully',
-        contractId: contractId
+        contractId: newContract.id
       });
     } catch (error) {
       console.error('Error sending application:', error);
