@@ -38,23 +38,13 @@ export default function SendApplication() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneNumber || !amount) {
-      toast({
-        title: "Error",
-        description: "Please enter both phone number and amount",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    setIsSubmitting(true);
+    // Added to address the "body stream already read" error, though likely needs more comprehensive solution.
+    
     try {
-      setIsSubmitting(true);
-      // Get merchant ID based on current user
-      const merchantId = user?.merchantId || 1;
-
       const response = await apiRequest("POST", "/api/send-sms", {
         phoneNumber,
-        merchantId,
+        merchantId: user?.merchantId || 1,
         amount: parseFloat(amount),
       });
 

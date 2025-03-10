@@ -944,7 +944,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         downPayment,
         financedAmount,
         termMonths,
-        interestRaterate,
+        interestRate,
         monthlyPayment,
         status: "pending",
         currentStep: "terms",

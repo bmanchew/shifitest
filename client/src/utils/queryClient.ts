@@ -26,7 +26,7 @@ export async function apiRequest<T>(
   try {
     // Clone the response before checking if it's OK
     const responseForError = res.clone();
-    
+
     if (!res.ok) {
       const errorText = await responseForError.text();
       throw new Error(errorText);
