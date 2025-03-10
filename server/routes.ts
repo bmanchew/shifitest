@@ -2132,6 +2132,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
           category: "api",
           source: "didit",
           metadata: { 
+
+  // Route to get logs for a specific contract
+  apiRouter.get("/logs/contract/:contractId", async (req: Request, res: Response) => {
+    try {
+      const { contractId } = req.params;
+      
+      if (!contractId || isNaN(parseInt(contractId))) {
+        return res.status(400).json({ message: "Valid contract ID is required" });
+      }
+      
+      // Query logs that mention this contract ID
+      const logs = await storage.getLogs();
+      const filteredLogs = logs.filter(log => {
+        // Check if the log mentions this contract ID in message or metadata
+        return (
+          log.message.includes(`contract ${contractId}`) || 
+          log.message.includes(`Contract ${contractId}`) ||
+          (log.metadata && log.metadata.includes(`contractId":${contractId}`)) ||
+          (log.metadata && log.metadata.includes(`"contractId":"${contractId}"`)) ||
+          (log.metadata && log.metadata.includes(`"contractId": ${contractId}`))
+        );
+      });
+      
+      res.json({ 
+        contractId,
+        count: filteredLogs.length,
+        logs: filteredLogs
+      });
+    } catch (error) {
+      console.error("Error retrieving contract logs:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
             vendor_data: typeof vendor_data === 'object' ? JSON.stringify(vendor_data) : vendor_data,
             body: JSON.stringify(req.body) 
           },
