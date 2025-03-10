@@ -758,6 +758,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Check if the progress item already exists for this contract and step
+      const existingProgressItems = await storage.getApplicationProgressByContractId(contractIdNum);
+      const existingProgressItem = existingProgressItems.find(item => item.step === step);
+      
+      if (existingProgressItem) {
+        console.log(`Found existing progress for contract ${contractIdNum}, step ${step} with ID ${existingProgressItem.id}`);
+        
+        // If the progress item exists and we're updating it, update it
+        if (completed !== undefined || data !== undefined) {
+          const updatedProgress = await storage.updateApplicationProgressCompletion(
+            existingProgressItem.id,
+            completed !== undefined ? !!completed : existingProgressItem.completed,
+            data !== undefined ? data : existingProgressItem.data
+          );
+          
+          console.log(`Updated existing progress item for contract ${contractIdNum}, step ${step}`, updatedProgress);
+          
+          return res.status(200).json(updatedProgress);
+        }
+        
+        // Otherwise, just return the existing progress item
+        return res.status(200).json(existingProgressItem);
+      }
+
       // Verify the contract exists
       try {
         const contract = await storage.getContract(contractIdNum);

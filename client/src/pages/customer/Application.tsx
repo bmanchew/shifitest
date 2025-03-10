@@ -285,32 +285,46 @@ export default function Application() {
   };
 
   // Handle completion of a step
-  const handleCompleteStep = async () => {
-    if (!contractData) return;
-
-    // Add current step to completed steps if not already there
-    if (!completedSteps.includes(currentStep)) {
-      setCompletedSteps((prev) => [...prev, currentStep]);
+  const handleCompleteStep = async (stepId: string, nextStep?: string) => {
+    if (!contractData) {
+      console.error("Cannot complete step: contractData is undefined");
+      return;
     }
 
-    // Get the next step
-    const nextStep = getNextStep(currentStep);
+    // Calculate the next step if not provided
+    const calculatedNextStep = nextStep || getNextStep(stepId);
+    console.log(`Contract ID: ${contractData.id}, Completed step: ${stepId}, moving to: ${calculatedNextStep}`);
 
     try {
-      // In a real app, update the contract step on the server
-      if (contractData.id > 0) {
-        await apiRequest("PATCH", `/api/contracts/${contractData.id}/step`, {
-          step: nextStep,
-        });
-
-        // Refresh contract data
-        queryClient.invalidateQueries({ queryKey: ["/api/contracts", contractData.id] });
+      // Update contract step in the database if we're moving to a new step
+      if (calculatedNextStep !== "completed") {
+        console.log(`Updating contract ${contractData.id} step to ${calculatedNextStep}`);
+        await apiRequest(
+          "PATCH",
+          `/api/contracts/${contractData.id}/step`,
+          { step: calculatedNextStep }
+        );
+      } else {
+        // If completing the final step, update contract status to active
+        console.log(`Setting contract ${contractData.id} status to active`);
+        await apiRequest(
+          "PATCH",
+          `/api/contracts/${contractData.id}/status`,
+          { status: "active" }
+        );
       }
 
+      // Update the list of completed steps
+      setCompletedSteps((prev) => {
+        if (prev.includes(stepId)) return prev;
+        return [...prev, stepId];
+      });
+
       // Move to the next step
-      setCurrentStep(nextStep);
+      setCurrentStep(calculatedNextStep);
+      console.log(`Successfully moved to step ${calculatedNextStep} for contract ${contractData.id}`);
     } catch (error) {
-      console.error("Error updating contract step:", error);
+      console.error(`Error updating contract ${contractData.id} step:`, error);
       toast({
         title: "Error",
         description: "There was a problem updating your application progress.",
@@ -318,7 +332,7 @@ export default function Application() {
       });
 
       // Still move to next step in UI for better user experience
-      setCurrentStep(nextStep);
+      setCurrentStep(calculatedNextStep);
     }
   };
 

@@ -36,13 +36,19 @@ export default function PaymentSchedule({
   // Load the correct progress ID when component mounts
   useEffect(() => {
     const fetchPaymentProgress = async () => {
-      if (actualProgressId) {
+      // If we already have a valid progress ID (either from props or state), no need to fetch
+      if (progressId || actualProgressId) {
+        if (progressId && !actualProgressId) {
+          console.log(`Using provided progress ID: ${progressId}`);
+          setActualProgressId(progressId);
+        }
         setIsLoading(false);
-        return; // Already have a valid ID
+        return;
       }
       
       try {
         setIsLoading(true);
+        console.log(`Fetching payment progress for contract ID: ${contractId}`);
         
         // Get all application progress items for this contract
         const progressItems = await apiRequest<any[]>(
@@ -58,6 +64,7 @@ export default function PaymentSchedule({
           setActualProgressId(paymentStep.id);
         } else {
           console.log("No payment step found, will create one on confirm");
+          // We'll create it when the user confirms the payment schedule
         }
       } catch (error) {
         console.error("Error fetching payment progress:", error);
@@ -72,7 +79,7 @@ export default function PaymentSchedule({
     };
     
     fetchPaymentProgress();
-  }, [contractId, actualProgressId, toast]);
+  }, [contractId, progressId, actualProgressId, toast]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
