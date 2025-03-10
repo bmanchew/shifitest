@@ -46,6 +46,8 @@ export default function Application() {
   const {
     data: contractResponse,
     isLoading: isLoadingContract,
+    isError: isErrorContract,
+    error: errorContract,
     refetch,
   } = useQuery({
     queryKey: ["/api/contracts", contractId || verifyContractId],
@@ -221,13 +223,21 @@ export default function Application() {
         .filter((item: any) => item.completed)
         .map((item: any) => item.step);
       setCompletedSteps(completed);
-    } else if (!isLoadingContract) {
-      // If no contract is found and we're not still loading, redirect to contracts page
-      console.log("No contract found, redirecting to contracts page");
-      navigate("/customer/contracts");
-      return;
+    } else if (isErrorContract) {
+      // Handle fetch errors
+      console.error("Error fetching contract:", errorContract);
+      // Don't return here, just continue to render the component
+      console.log(`Contract error for ID ${contractId}, but not redirecting`);
+    } else if (!isLoadingContract && !contractResponse?.contract) {
+      // Contract not found but API request completed
+      console.error(`Contract with ID ${contractId} not found in API response`);
+
+      // Log more details for debugging
+      console.log("Contract API response:", contractResponse);
+      console.log("Contract ID from URL:", contractIdParam);
+      console.log("Parsed Contract ID:", contractId);
     }
-  }, [contractResponse, isLoadingContract, navigate]);
+  }, [contractResponse, isLoadingContract, navigate, isErrorContract, contractId, contractIdParam]);
 
   // All application steps
   const steps: Step[] = [
