@@ -26,7 +26,7 @@ export default function Application() {
   const urlParams = new URLSearchParams(location.search);
   const verifySuccess = urlParams.get("verify") === "success";
   const verifyContractId = parseInt(urlParams.get("contractId") || "0");
-  
+
   // Debug log to see what's happening with IDs
   console.log("Application component loaded with:", { 
     contractIdParam, 
@@ -140,7 +140,8 @@ export default function Application() {
 
               // Add a small delay to ensure the UI updates properly
               setTimeout(() => {
-                navigate(`/customer/application?contract=${verifyContractId}&step=bank`);
+                // Correctly navigate to the application with the contractId and step
+                navigate(`/apply/${verifyContractId}?step=bank`);
               }, 500);
             } catch (error) {
               console.error("Error updating KYC verification status:", error);
