@@ -61,8 +61,8 @@ export default function SendApplication() {
       // Assuming the API response includes a contract ID
       const contractId = response.contractId; //This line is added, assuming the API returns a contract ID.  Adjust accordingly to your API response.
       
-      // Generate the correct application URL with the current window origin
-      // Use the /apply/:contractId route which is the public-facing entry point for applications
+      // Use the /apply/:contractId route which is the proper public route defined in App.tsx
+      // This ensures we use the correct entry point that's designed for non-authenticated users
       const applicationBaseUrl = `${window.location.origin}/apply/`;
       setApplicationUrl(`${applicationBaseUrl}${contractId}`); // set the application URL
 

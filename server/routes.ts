@@ -951,6 +951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
+      // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
 
       // Prepare the SMS message
