@@ -3610,55 +3610,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Ensure application-progress POST route is registered
-  apiRouter.post("/application-progress", async (req: Request, res: Response) => {
-    try {
-      const { contractId, step, completed, data } = req.body;
-
-      if (!contractId || !step) {
-        return res.status(400).json({ 
-          message: "Contract ID and step are required" 
-        });
-      }
-
-      // Verify the contract exists
-      const contract = await storage.getContract(parseInt(contractId));
-      if (!contract) {
-        return res.status(404).json({ 
-          message: "Contract not found" 
-        });
-      }
-
-      // Create the application progress item
-      const progressItem = await storage.createApplicationProgress({
-        contractId: parseInt(contractId),
-        step: step,
-        completed: !!completed,
-        data: data || null
-      });
-
-      // Log the creation
-      await storage.createLog({
-        level: "info",
-        category: "contract",
-        message: `Application progress created for contract ${contractId}, step ${step}`,
-        metadata: JSON.stringify({ 
-          contractId, 
-          step, 
-          completed: !!completed 
-        })
-      });
-
-      res.status(201).json(progressItem);
-    } catch (error) {
-      console.error("Create application progress error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
   // Mount the API router
-  // Add merchant routes
-  apiRouter.post("/merchant/send-financing-link", async (req, res) => {
+  app.use("/api", apiRouter);
+  // merchantAnalytics routes are already included properly in the apiRouter
+
+  // Create HTTP server
+  const httpServer = createServer(app);
+
+  return httpServer;
+}
+
+// Helper function for monthly payment calculation
+function calculateMonthlyPayment(principal: number, interestRate: number, termMonths: number): number {
+  if (interestRate === 0) {
+    return principal / termMonths;
+  }
+
+  const monthlyRate = interestRate / 100 / 12;
+  return (principal * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / 
+         (Math.pow(1 + monthlyRate, termMonths) - 1);
+}
+
+// Helper function to generate contract numbers
+function generateContractNumber(): string {
+  return `SHI-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+//Helper function to calculate monthly payment.
+function calculateMonthlyPayment(principal: number, interestRate: number, termMonths: number): number {
+  if (interestRate === 0) {
+    return principal / termMonths;
+  }
+
+  const monthlyRate = interestRate / 100 / 12;
+  return (principal * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) /
+         (Math.pow(1 + monthlyRate, termMonths) - 1);
+}
+
+// Add merchant routes
+apiRouter.post("/merchant/send-financing-link", async (req, res) => {
   try {
     const { customerName, customerPhone, customerEmail, amount, merchantId, termMonths, interestRate } = req.body;
 
@@ -3916,4 +3906,4 @@ try {
       details: error instanceof Error ? error.message : String(error)
     });
   }
-});
+}
