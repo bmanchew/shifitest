@@ -16,7 +16,7 @@ export default function SendApplication() {
   const [amount, setAmount] = useState("");
   const [showCalculator, setShowCalculator] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [applicationUrl, setApplicationUrl] = useState(''); //Added state for application URL
+  const [applicationUrl, setApplicationUrl] = useState('');
 
   // Fixed financing terms for ShiFi
   const termMonths = 24;
@@ -59,21 +59,31 @@ export default function SendApplication() {
       });
 
       // Assuming the API response includes a contract ID
-      const contractId = response.contractId; //This line is added, assuming the API returns a contract ID.  Adjust accordingly to your API response.
+      const contractId = response.contractId;
+
+      //Robustly handle potential issues with contractId
+      if (!contractId || typeof contractId !== 'string') {
+        console.error("Contract ID is invalid or missing from API response:", contractId);
+        toast({
+          title: "Error",
+          description: "Failed to generate application link. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
 
       // Generate the correct application URL with the current window origin
-      // Use the /apply/:contractId route which is the public-facing entry point for applications
-      const applicationUrl = `${window.location.origin}/apply/${contractId}`; // Direct path to the application
-      setApplicationUrl(applicationUrl); // set the application URL
+      const applicationUrl = `${window.location.origin}/apply/${contractId}`;
+      setApplicationUrl(applicationUrl);
 
-      // Add detailed logging for debugging
       console.log('Contract ID:', contractId);
       console.log('Generated application URL:', applicationUrl);
       console.log('Phone number:', phoneNumber);
 
       toast({
         title: "Application Sent",
-        description: `ShiFi financing application sent to ${phoneNumber}. Application link: ${applicationUrl}`, //added application URL to the toast message
+        description: `ShiFi financing application sent to ${phoneNumber}. Application link: ${applicationUrl}`,
       });
 
       setPhoneNumber("");
