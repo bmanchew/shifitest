@@ -66,8 +66,10 @@ export default function SendApplication() {
       const applicationUrl = `${window.location.origin}/apply/${contractId}`; // Direct path to the application
       setApplicationUrl(applicationUrl); // set the application URL
 
-      // Also log the URL for debugging purposes
+      // Add detailed logging for debugging
+      console.log('Contract ID:', contractId);
       console.log('Generated application URL:', applicationUrl);
+      console.log('Phone number:', phoneNumber);
 
       toast({
         title: "Application Sent",

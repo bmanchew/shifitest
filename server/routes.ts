@@ -954,6 +954,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
 
+      // Log the contract ID and application URL for debugging
+      console.log(`Creating SMS with Contract ID: ${newContract.id}`);
+      console.log(`Application URL: ${applicationUrl}`);
+
       // Prepare the SMS message
       const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
 
