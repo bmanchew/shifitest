@@ -3823,7 +3823,8 @@ function calculateMonthlyPayment(principal: number, interestRate: number, termMo
 function generateContractNumber(): string {
   return `SHI-${Math.floor(1000 + Math.random() * 9000)}`;
 }
-  try {
+
+try {
     const { contractId, step, completed, data } = req.body;
 
     // Validate required fields
