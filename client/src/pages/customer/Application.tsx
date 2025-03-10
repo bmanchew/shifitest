@@ -26,6 +26,14 @@ export default function Application() {
   const urlParams = new URLSearchParams(location.search);
   const verifySuccess = urlParams.get("verify") === "success";
   const verifyContractId = parseInt(urlParams.get("contractId") || "0");
+  
+  // Debug log to see what's happening with IDs
+  console.log("Application component loaded with:", { 
+    contractIdParam, 
+    contractId, 
+    verifyContractId, 
+    pathname: location.pathname 
+  });
 
   const [currentStep, setCurrentStep] = useState("");
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);

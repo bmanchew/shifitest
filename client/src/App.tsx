@@ -76,8 +76,8 @@ function App() {
           {/* Public customer routes */}
           <Router>
             <Route path="/offer/:contractId" component={CustomerContractOffer} />
-            <Route path="/apply/:contractId" component={CustomerApplication} /> {/*Improved Route*/}
-            <Route path="/customer/application" component={CustomerApplication} />
+            <Route path="/apply/:contractId" component={CustomerApplication} /> 
+            <Route path="/customer/application/:contractId" component={CustomerApplication} />
             <Route path="/dashboard/:contractId" component={CustomerDashboard} />
 
             <Route component={NotFound} />
