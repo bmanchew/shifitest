@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -21,14 +20,14 @@ export default function ContractLookup() {
 
       try {
         console.log(`Looking up contract: ${contractId}`);
-        
+
         // Attempt to fetch the contract
         const response = await fetch(`/api/contracts/${contractId}`);
-        
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           console.error("Contract fetch error:", errorData);
-          
+
           if (response.status === 404) {
             setError("This contract couldn't be found. It may have expired or been cancelled.");
           } else {
@@ -37,11 +36,11 @@ export default function ContractLookup() {
           setLoading(false);
           return;
         }
-        
-        // Successfully found the contract, redirect to the application page
+
+        // Successfully found the contract, redirecting to the application page
         console.log("Contract found, redirecting to application page");
         navigate(`/apply/${contractId}`);
-        
+
       } catch (error) {
         console.error("Error in contract lookup:", error);
         setError("Something went wrong. Please try again later.");
