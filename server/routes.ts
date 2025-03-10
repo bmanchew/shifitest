@@ -951,12 +951,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
+      
+      // Ensure the contract ID is valid before creating the URL
+      const contractId = newContract.id;
+      if (!contractId) {
+        throw new Error("Failed to generate valid contract ID for application URL");
+      }
+      
       // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
-      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
+      const applicationUrl = `https://${replitDomain}/apply/${contractId}`;
 
-      // Log the contract ID and application URL for debugging
-      console.log(`Creating SMS with Contract ID: ${newContract.id}`);
+      // Enhanced logging for debugging URL issues
+      console.log(`Creating SMS with Contract ID: ${contractId} (type: ${typeof contractId})`);
       console.log(`Application URL: ${applicationUrl}`);
+      console.log(`Contract details:`, JSON.stringify(newContract));
 
       // Prepare the SMS message
       const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;

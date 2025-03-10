@@ -16,7 +16,7 @@ const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"]; // Define
 
 export default function Application() {
   const { contractId: contractIdParam } = useParams();
-  const contractId = parseInt(contractIdParam || "0");
+  const contractId = contractIdParam ? parseInt(contractIdParam) : 0;
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -34,6 +34,19 @@ export default function Application() {
     verifyContractId, 
     pathname: location.pathname 
   });
+
+  // Redirect to contract lookup page if contractId is undefined or invalid
+  useEffect(() => {
+    if (contractIdParam === "undefined" || !contractId) {
+      console.error("Invalid contract ID in URL:", contractIdParam);
+      toast({
+        title: "Error",
+        description: "Invalid contract link. Please check your SMS and try again.",
+        variant: "destructive",
+      });
+      navigate("/customer/contract-lookup");
+    }
+  }, [contractIdParam, contractId, navigate, toast]);
 
   const [currentStep, setCurrentStep] = useState("");
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
