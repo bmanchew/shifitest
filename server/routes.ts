@@ -3636,17 +3636,6 @@ function generateContractNumber(): string {
   return `SHI-${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
-//Helper function to calculate monthly payment.
-function calculateMonthlyPayment(principal: number, interestRate: number, termMonths: number): number {
-  if (interestRate === 0) {
-    return principal / termMonths;
-  }
-
-  const monthlyRate = interestRate / 100 / 12;
-  return (principal * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) /
-         (Math.pow(1 + monthlyRate, termMonths) - 1);
-}
-
 // Add merchant routes
 apiRouter.post("/merchant/send-financing-link", async (req, res) => {
   try {
