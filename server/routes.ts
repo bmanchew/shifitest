@@ -3666,10 +3666,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const httpServer = createServer(app);
 
-  return httpServer;
-}
-// Send application link via SMS
-  app.post('/api/send-application', async (req, res) => {
+  // Send application link via SMS
+  apiRouter.post('/send-application', async (req, res) => {
     const { phoneNumber, customerName, amount, term } = req.body;
 
     if (!phoneNumber || !customerName) {
@@ -3704,3 +3702,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  return httpServer;
+}
