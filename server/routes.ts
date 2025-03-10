@@ -1027,7 +1027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Separate URLs for webhook notifications and user redirection
       const webhookUrl = `https://${domain}/api/kyc/webhook`;
-      const redirectUrl = `https://${domain}/apply/${contractId}`;
+      const redirectUrl = `https://${domain}/customer/application/${contractId}`;
 
       // Set the server base URL for the DiDit service to handle mock mode correctly
       diditService.setServerBaseUrl(`https://${domain}`);

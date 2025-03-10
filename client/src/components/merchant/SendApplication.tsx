@@ -16,12 +16,13 @@ export default function SendApplication() {
   const [amount, setAmount] = useState("");
   const [showCalculator, setShowCalculator] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [applicationUrl, setApplicationUrl] = useState(''); //Added state for application URL
 
   // Fixed financing terms for ShiFi
   const termMonths = 24;
   const interestRate = 0; // 0% APR
   const downPaymentPercent = 15; // 15% down
-  
+
   // Calculate financing details
   const purchaseAmount = parseFloat(amount) || 0;
   const downPayment = calculateDownPayment(purchaseAmount, downPaymentPercent);
@@ -51,15 +52,20 @@ export default function SendApplication() {
       // Get merchant ID based on current user
       const merchantId = user?.merchantId || 1;
 
-      await apiRequest("POST", "/api/send-sms", {
+      const response = await apiRequest("POST", "/api/send-sms", {
         phoneNumber,
         merchantId,
         amount: parseFloat(amount),
       });
 
+      // Assuming the API response includes a contract ID
+      const contractId = response.contractId; //This line is added, assuming the API returns a contract ID.  Adjust accordingly to your API response.
+      const applicationBaseUrl = process.env.NEXT_PUBLIC_APPLICATION_BASE_URL || "https://example.com/apply/"; // get base URL from environment variables
+      setApplicationUrl(`${applicationBaseUrl}${contractId}`); // set the application URL
+
       toast({
         title: "Application Sent",
-        description: `ShiFi financing application sent to ${phoneNumber}.`,
+        description: `ShiFi financing application sent to ${phoneNumber}. Application link: ${applicationUrl}`, //added application URL to the toast message
       });
 
       setPhoneNumber("");
@@ -107,7 +113,7 @@ export default function SendApplication() {
                   The customer will receive a text message with a link to apply
                 </p>
               </div>
-              
+
               <div className="grid gap-2">
                 <Label htmlFor="amount">Purchase Amount</Label>
                 <Input
@@ -127,7 +133,7 @@ export default function SendApplication() {
                   required
                 />
               </div>
-              
+
               <div className="flex space-x-3 pt-1">
                 <Button 
                   type="submit" 
@@ -136,7 +142,7 @@ export default function SendApplication() {
                 >
                   {isSubmitting ? "Sending..." : "Send Application"}
                 </Button>
-                
+
                 <Button 
                   type="button" 
                   variant="outline" 
@@ -148,7 +154,7 @@ export default function SendApplication() {
               </div>
             </form>
           </div>
-          
+
           {showCalculator && (
             <div className="p-4 bg-muted/50 rounded-lg">
               <div className="flex items-center justify-between mb-3">
@@ -166,7 +172,7 @@ export default function SendApplication() {
                   ×
                 </Button>
               </div>
-              
+
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between py-1 border-b border-border/50">
                   <span>Financing Term:</span>
