@@ -2176,7 +2176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             body: JSON.stringify(req.body) 
           }
         });
-        });
+      }
         return res.status(200).json({
           status: "success",
           message: "Webhook received but no contractId found",
