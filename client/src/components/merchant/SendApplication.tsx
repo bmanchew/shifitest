@@ -60,7 +60,9 @@ export default function SendApplication() {
 
       // Assuming the API response includes a contract ID
       const contractId = response.contractId; //This line is added, assuming the API returns a contract ID.  Adjust accordingly to your API response.
-      const applicationBaseUrl = import.meta.env.VITE_APPLICATION_BASE_URL || "https://example.com/apply/"; // get base URL from environment variables
+      
+      // Generate the correct application URL with the current window origin
+      const applicationBaseUrl = `${window.location.origin}/customer/application/`;
       setApplicationUrl(`${applicationBaseUrl}${contractId}`); // set the application URL
 
       toast({
