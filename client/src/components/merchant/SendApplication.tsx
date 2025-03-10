@@ -58,14 +58,15 @@ export default function SendApplication() {
         amount: parseFloat(amount),
       });
 
-      // Assuming the API response includes a contract ID
-      const contractId = response.contractId;
+      // Extract contract ID from the API response
+      // The API returns the entire contract object, not just the ID
+      const contractId = response.id || (response.newContract && response.newContract.id);
 
       //Robustly handle potential issues with contractId
-      if (!contractId || typeof contractId !== 'string') {
-        console.error("Contract ID is invalid or missing from API response:", contractId);
+      if (!contractId) {
+        console.error("Contract ID is invalid or missing from API response:", response);
         toast({
-          title: "Error",
+          title: "Error", 
           description: "Failed to generate application link. Please try again.",
           variant: "destructive",
         });
