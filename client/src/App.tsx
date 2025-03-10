@@ -26,6 +26,7 @@ const CustomerContractOffer = lazy(
 );
 const CustomerDashboard = lazy(() => import("@/pages/customer/Dashboard"));
 
+
 function LoadingFallback() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-gray-50">
@@ -75,7 +76,7 @@ function App() {
           {/* Public customer routes */}
           <Router>
             <Route path="/offer/:contractId" component={CustomerContractOffer} />
-            <Route path="/apply/:contractId?" component={CustomerApplication} />
+            <Route path="/apply/:contractId" component={CustomerApplication} /> {/*Improved Route*/}
             <Route path="/customer/application" component={CustomerApplication} />
             <Route path="/dashboard/:contractId" component={CustomerDashboard} />
 
