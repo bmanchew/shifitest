@@ -40,7 +40,7 @@ export default function ContractLookup() {
         
         // Successfully found the contract, redirect to the application page
         console.log("Contract found, redirecting to application page");
-        navigate(`/customer/application/${contractId}`);
+        navigate(`/apply/${contractId}`);
         
       } catch (error) {
         console.error("Error in contract lookup:", error);

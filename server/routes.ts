@@ -967,8 +967,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Failed to generate valid contract ID for application URL");
       }
       
-      // Ensure we use the correct application URL with the /apply/ route as defined in Application.tsx
-      // This should match the route structure in the client app (CONTRACT_STEPS in Application.tsx)
+      // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
+      // The URL format must be /apply/${contractId} to match the React router configuration
+      // This is where customers access their application after receiving the SMS
       const applicationUrl = `https://${replitDomain}/apply/${contractId}`;
 
       // Enhanced logging for debugging URL issues
@@ -1050,6 +1051,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Separate URLs for webhook notifications and user redirection
       const webhookUrl = `https://${domain}/api/kyc/webhook`;
+      // Use the consistent /apply/${contractId} path for redirection after KYC verification
       const redirectUrl = `https://${domain}/apply/${contractId}`;
 
       // Set the server base URL for the DiDit service to handle mock mode correctly
