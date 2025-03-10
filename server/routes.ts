@@ -2245,7 +2245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 metadata: { 
                   customerInfo: JSON.stringify(customerInfo),
                   kycData: JSON.stringify(kycData)
-                },
+                }
               });
 
               // Prepare the data to save with all possible properties
