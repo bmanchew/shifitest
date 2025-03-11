@@ -952,8 +952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentStep: "terms",
       });
 
-            // Create application progress for this contract
-      const newProgress = await storage.createApplicationProgress({
+            // Create application progress for this contract      const newProgress = await storage.createApplicationProgress({
         contractId: newContract.id,
         step: "terms",
         completed: false,
@@ -972,12 +971,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
       // The URL format must be /apply/${contractId} to match the React router configuration
       // This is where customers access their application after receiving the SMS
-      
+
       // Verify the contract ID is valid before creating the URL
       if (isNaN(contractId)) {
         throw new Error("Failed to generate a valid contract ID");
       }
-      
+
       const applicationUrl = `https://${replitDomain}/apply/${contractId}`;
 
       // Enhanced logging for debugging URL issues
@@ -1863,8 +1862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Thanks Roger electronic signature endpoint
   apiRouter.post(
     "/mock/thanks-roger-signing",
-    async (req: Request, res: Response) => {
-      try {
+    async (req: Request, res: Response) => {      try {
         // Check if this is a test request from the admin panel
         if (
           req.body.documentId &&          req.body.signerName &&
@@ -2843,8 +2841,7 @@ metadata: {
           metadata: JSON.stringify({
             contractId,
             itemId: exchangeResponse.itemId,
-            accountsCount: authData.accounts.length,
-          }),
+            accountsCount: authData.accounts.length,          }),
         });
 
         // Return success response with account information
@@ -3690,12 +3687,12 @@ metadata: {
     try {
       // Format phone number to E.164 format (required by Twilio)
       let formattedPhone = phoneNumber.replace(/[^0-9+]/g, '');
-      
+
       // If the number doesn't start with +, format it
       if (!formattedPhone.startsWith('+')) {
         // Remove any existing + that might be in the middle
         formattedPhone = formattedPhone.replace(/\+/g, '');
-        
+
         // Handle US numbers
         if (formattedPhone.length === 10) {
           formattedPhone = `+1${formattedPhone}`;
@@ -3706,12 +3703,12 @@ metadata: {
           formattedPhone = `+${formattedPhone}`;
         }
       }
-      
+
       console.log('Phone number formatting:', {
         original: phoneNumber,
         formatted: formattedPhone
       });
-      
+
       console.log(`Sending SMS to formatted phone: ${formattedPhone} (original: ${phoneNumber})`);
 
       // Create a contract for this financing request
@@ -3753,12 +3750,12 @@ metadata: {
 
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
-      
+
       // Ensure we have a valid contract ID before creating the URL
       if (!newContract.id || isNaN(newContract.id)) {
         throw new Error("Failed to generate valid contract ID for application URL");
       }
-      
+
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
 
       // Enhanced logging for debugging URL issues
@@ -3770,9 +3767,9 @@ metadata: {
       try {
         // Prepare the SMS message with clearer URL formatting
         const messageText = `You've been invited to apply for financing of $${amount}.\n\nApply here: ${applicationUrl}\n\nContract #: ${contractNumber}`;
-        
+
         console.log(`Attempting to send SMS with text: ${messageText}`);
-        
+
         // Send SMS using our Twilio service
         const result = await twilioService.sendSMS({
           to: formattedPhone,

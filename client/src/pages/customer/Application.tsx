@@ -20,15 +20,13 @@ import {
   CardContent 
 } from "@/components/ui/card";
 
-const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"]; // Define CONTRACT_STEPS constant
+const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"];
 
 export default function Application() {
   const { contractId: contractIdParam } = useParams();
 
-  // Better handling of contract ID parsing with more robust checks
   let contractId = null;
   if (contractIdParam && contractIdParam !== "undefined" && contractIdParam !== "null") {
-    // Try to parse the contract ID as a number
     const parsed = parseInt(contractIdParam, 10);
     if (!isNaN(parsed) && parsed > 0) {
       contractId = parsed;
@@ -42,7 +40,6 @@ export default function Application() {
     rawParamType: typeof contractIdParam
   });
 
-  // If contractId is still null after parsing, we have an invalid ID
   if (contractId === null) {
     console.error(`Invalid contract ID (${contractIdParam}) unable to parse as valid number`);
   }
@@ -51,13 +48,11 @@ export default function Application() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  // Extract URL parameters to handle verification redirects
   const location = useLocation();
   const urlParams = new URLSearchParams(location.search);
   const verifySuccess = urlParams.get("verify") === "success";
   const verifyContractId = parseInt(urlParams.get("contractId") || "0");
 
-  // Debug log to see what's happening with IDs
   console.log("Application component loaded with:", { 
     contractIdParam, 
     contractId, 
@@ -65,7 +60,6 @@ export default function Application() {
     pathname: location.pathname 
   });
 
-  // Check for valid contract ID and log debugging information
   useEffect(() => {
     console.log("Contract ID check:", { 
       contractIdParam, 
@@ -73,7 +67,6 @@ export default function Application() {
       isValid: contractId !== null && contractId > 0 
     });
 
-    // If we don't have a valid contract ID, redirect to the contract lookup page
     if (contractId === null) {
       console.error("Invalid contract ID in URL:", contractIdParam);
       toast({
@@ -81,7 +74,7 @@ export default function Application() {
         description: "Invalid contract link. Please check your SMS or try a different link.",
         variant: "destructive",
       });
-      navigate("/apply"); // Redirect to the base application page without ID
+      navigate("/apply"); 
       return;
     }
   }, [contractIdParam, contractId, navigate, toast]);
@@ -93,7 +86,29 @@ export default function Application() {
   const [progressMap, setProgressMap] = useState<Record<string, any>>({});
   const [isHandlingVerification, setIsHandlingVerification] = useState(false);
 
-  // Fetch contract data
+  // Validate contract first
+  const {
+    data: validationData,
+    isLoading: isValidating,
+    error: validationError
+  } = useQuery({
+    queryKey: ["contractValidation", contractId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/validate-contract/${contractId}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.error(`Contract with ID ${contractId} not found in API response`);
+          throw new Error("Contract not found");
+        }
+        throw new Error(`Error validating contract: ${response.statusText}`);
+      }
+      return response.json();
+    },
+    enabled: contractId !== null,
+    retry: 1 
+  });
+
+  // Load contract data after validation
   const {
     data: contractResponse,
     isLoading: isLoadingContract,
@@ -104,15 +119,10 @@ export default function Application() {
     queryKey: ["/api/contracts", contractId || verifyContractId],
     queryFn: async () => {
       try {
-        // Get contract ID from URL or verification flow
         let targetId = null;
-
-        // Check contractId from URL first (has priority)
         if (contractId && contractId > 0) {
           targetId = contractId;
-        } 
-        // Fallback to verification ID if available
-        else if (verifyContractId && verifyContractId > 0) {
+        } else if (verifyContractId && verifyContractId > 0) {
           targetId = verifyContractId;
         }
 
@@ -123,28 +133,23 @@ export default function Application() {
           currentUrl: window.location.href
         });
 
-        // Strict validation before API call
         if (!targetId || targetId <= 0) {
           console.error(`Cannot fetch contract: Invalid ID: ${targetId}`);
           throw new Error(`Invalid contract ID: ${targetId}`);
         }
 
-        // Fetch contract data from API
         const res = await fetch(`/api/contracts/${targetId}`, {
           credentials: "include",
         });
 
-        // Check for HTTP errors
         if (!res.ok) {
           console.error(`API request failed for contract ${targetId} with status: ${res.status}`);
           throw new Error(`Failed to fetch contract: ${res.status}`);
         }
 
-        // Parse response data
         const data = await res.json();
         console.log(`Contract data received for ID ${targetId}:`, data);
 
-        // Validate response contains contract data
         if (!data || !data.contract) {
           console.error(`Contract with ID ${targetId} not found in API response`, data);
           throw new Error(`Contract with ID ${targetId} not found in API response`);
@@ -153,14 +158,31 @@ export default function Application() {
         return data;
       } catch (error) {
         console.error("Error fetching contract:", error);
-        throw error; // Properly throw the error so React Query can handle it
+        throw error; 
       }
     },
-    enabled: !!(contractId > 0 || verifyContractId > 0),
-    retry: false, // Don't retry on failure to avoid spamming the API
+    enabled: !!validationData?.valid, // Only enabled if validation is successful
+    retry: false, 
   });
 
-  // Handle verification redirect
+
+  // Load application progress after validation
+  const { 
+    data: progressData, 
+    isLoading: isProgressLoading,
+    error: progressError
+  } = useQuery({
+    queryKey: ["applicationProgress", contractId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/application-progress?contractId=${contractId}`);
+      if (!response.ok) {
+        throw new Error(`Error loading application progress: ${response.statusText}`);
+      }
+      return response.json();
+    },
+    enabled: !!validationData?.valid, // Only enabled if validation is successful
+  });
+
   useEffect(() => {
     if (verifySuccess && verifyContractId > 0 && !isHandlingVerification) {
       setIsHandlingVerification(true);
@@ -172,19 +194,15 @@ export default function Application() {
             verifyContractId,
           );
 
-          // Clear the URL parameters to prevent infinite loops
           navigate(location.pathname, { replace: true });
 
-          // Refetch the contract data to get the latest progress
           await refetchContract();
 
-          // Show success toast
           toast({
             title: "Verification Complete",
             description: "Your identity has been successfully verified.",
           });
 
-          // Get the KYC progress for this contract
           const kycProgressResponse = await apiRequest<{
             id: number;
             contractId: number;
@@ -195,10 +213,8 @@ export default function Application() {
 
           if (kycProgressResponse) {
             try {
-              // Always mark as completed when redirected from verification
               console.log("Marking KYC as completed from redirect handler", kycProgressResponse);
 
-              // Update the progress status
               const progressUpdateResponse = await apiRequest(
                 "PATCH",
                 `/api/application-progress/${kycProgressResponse.id}`,
@@ -215,7 +231,6 @@ export default function Application() {
 
               console.log("Progress update response:", progressUpdateResponse);
 
-              // Also update the contract step to move to "bank"
               const stepUpdateResponse = await apiRequest(
                 "PATCH",
                 `/api/contracts/${verifyContractId}/step`,
@@ -226,12 +241,9 @@ export default function Application() {
 
               console.log("Contract step update response:", stepUpdateResponse);
 
-              // Force refresh contract data
               await refetchContract();
 
-              // Add a small delay to ensure the UI updates properly
               setTimeout(() => {
-                // Correctly navigate to the application with the contractId and step
                 navigate(`/apply/${verifyContractId}?step=bank`);
               }, 500);
             } catch (error) {
@@ -243,9 +255,7 @@ export default function Application() {
             alert("Your verification was completed, but we couldn't find your application data. Please refresh the page.");
           }
 
-          // Wait for contract data to load before updating steps
           setTimeout(() => {
-            // Add KYC to completed steps if not already there
             setCompletedSteps((prev) => {
               if (!prev.includes("kyc")) {
                 return [...prev, "kyc"];
@@ -253,12 +263,10 @@ export default function Application() {
               return prev;
             });
 
-            // Move to the next step if currently on KYC
             if (currentStep === "kyc") {
               setCurrentStep("bank");
             }
 
-            // Show success message using toast
             toast({
               title: "Identity Verification Complete",
               description: "Your identity has been successfully verified"
@@ -276,14 +284,11 @@ export default function Application() {
     }
   }, [verifySuccess, verifyContractId, location, toast, refetchContract, currentStep, navigate]);
 
-  // Effect to set up contract data and application progress
   useEffect(() => {
     if (contractResponse?.contract) {
-      // Valid contract found from API
       console.log("Valid contract data received:", contractResponse.contract.id);
       setContractData(contractResponse.contract);
 
-      // Create a progress map
       const progressMapObj: Record<string, any> = {};
       contractResponse.progress.forEach((item: any) => {
         progressMapObj[item.step] = item;
@@ -291,34 +296,26 @@ export default function Application() {
       setProgressMap(progressMapObj);
       setApplicationProgress(contractResponse.progress);
 
-      // Set the current step based on progress
       const stepFromContract = contractResponse.contract.currentStep;
       const validStep = CONTRACT_STEPS.includes(stepFromContract) ? stepFromContract : "terms";
       setCurrentStep(validStep);
 
-
-      // Set completed steps
       const completed = contractResponse.progress
         .filter((item: any) => item.completed)
         .map((item: any) => item.step);
       setCompletedSteps(completed);
     } else if (isErrorContract) {
-      // Handle fetch errors
       console.error("Error fetching contract:", errorContract);
-      // Don't return here, just continue to render the component
       console.log(`Contract error for ID ${contractId}, but not redirecting`);
     } else if (!isLoadingContract && !contractResponse?.contract) {
-      // Contract not found but API request completed
       console.error(`Contract with ID ${contractId} not found in API response`);
 
-      // Log more details for debugging
       console.log("Contract API response:", contractResponse);
       console.log("Contract ID from URL:", contractIdParam);
       console.log("Parsed Contract ID:", contractId);
     }
   }, [contractResponse, isLoadingContract, navigate, isErrorContract, contractId, contractIdParam]);
 
-  // All application steps
   const steps: Step[] = [
     {
       id: "terms",
@@ -347,7 +344,6 @@ export default function Application() {
     },
   ];
 
-  // Calculate the next step after completing the current one
   const getNextStep = (currentStep: string): string => {
     const stepIndex = steps.findIndex((step) => step.id === currentStep);
     if (stepIndex < steps.length - 1) {
@@ -356,7 +352,6 @@ export default function Application() {
     return "completed";
   };
 
-  // Calculate the progress percentage
   const calculateProgress = (): number => {
     if (!contractData) return 0;
 
@@ -370,7 +365,6 @@ export default function Application() {
     return Math.round((completedCount / totalSteps) * 100);
   };
 
-  // Calculate the current step number (1-based)
   const getCurrentStepNumber = (): number => {
     if (!contractData) return 1;
 
@@ -382,19 +376,16 @@ export default function Application() {
     return stepIndex >= 0 ? stepIndex + 1 : 1;
   };
 
-  // Handle completion of a step
   const handleCompleteStep = async (stepId: string, nextStep?: string) => {
     if (!contractData) {
       console.error("Cannot complete step: contractData is undefined");
       return;
     }
 
-    // Calculate the next step if not provided
     const calculatedNextStep = nextStep || getNextStep(stepId);
     console.log(`Contract ID: ${contractData.id}, Completed step: ${stepId}, moving to: ${calculatedNextStep}`);
 
     try {
-      // Update contract step in the database if we're moving to a new step
       if (calculatedNextStep !== "completed") {
         console.log(`Updating contract ${contractData.id} step to ${calculatedNextStep}`);
         await apiRequest(
@@ -403,7 +394,6 @@ export default function Application() {
           { step: calculatedNextStep }
         );
       } else {
-        // If completing the final step, update contract status to active
         console.log(`Setting contract ${contractData.id} status to active`);
         await apiRequest(
           "PATCH",
@@ -412,13 +402,11 @@ export default function Application() {
         );
       }
 
-      // Update the list of completed steps
       setCompletedSteps((prev) => {
         if (prev.includes(stepId)) return prev;
         return [...prev, stepId];
       });
 
-      // Move to the next step
       setCurrentStep(calculatedNextStep);
       console.log(`Successfully moved to step ${calculatedNextStep} for contract ${contractData.id}`);
     } catch (error) {
@@ -429,12 +417,10 @@ export default function Application() {
         variant: "destructive",
       });
 
-      // Still move to next step in UI for better user experience
       setCurrentStep(calculatedNextStep);
     }
   };
 
-  // Handle going back to the previous step
   const handleGoBack = () => {
     if (!contractData) return;
 
@@ -444,8 +430,7 @@ export default function Application() {
     }
   };
 
-  // If still loading contract data, show loading state
-  if (isLoadingContract) {
+  if (isValidating || isLoadingContract) {
     return (
       <CustomerLayout>
         <div className="p-6 flex items-center justify-center">
@@ -458,7 +443,15 @@ export default function Application() {
     );
   }
 
-  // Render different content based on current step
+  if (validationError) {
+    return <ContractNotFound errorMessage={validationError.message} contractId={contractId} />;
+  }
+
+  if (isErrorContract) {
+    return <ContractNotFound errorMessage={errorContract.message} contractId={contractId} />;
+  }
+
+
   const renderStepContent = () => {
     switch (currentStep) {
       case "terms":
@@ -618,7 +611,6 @@ export default function Application() {
     }
   };
 
-  // Show the application progress view if we're on the application flow steps
   if (currentStep !== "completed") {
     return (
       <CustomerLayout
@@ -631,7 +623,6 @@ export default function Application() {
     );
   }
 
-  // Show the completed screen
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
       <div className="max-w-md w-full mx-auto">

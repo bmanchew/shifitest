@@ -1,97 +1,130 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
-import { Spinner } from "../../components/ui/spinner";
+
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/use-toast";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { fetchApi } from "@/lib/api";
 
 export default function ContractLookup() {
-  const { contractId } = useParams();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const { contractId: urlContractId } = useParams();
+  const [contractId, setContractId] = useState(urlContractId || "");
+  const [loading, setLoading] = useState(!!urlContractId);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchContract = async () => {
-      if (!contractId) {
-        setError("No contract ID provided");
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contractId.trim()) {
+      setError("Please enter a contract number.");
+      return;
+    }
+    
+    // Clear any previous errors and set loading state
+    setError(null);
+    setLoading(true);
+    
+    // Start the lookup process
+    lookupContract(contractId.trim());
+  };
+
+  const lookupContract = async (id: string) => {
+    try {
+      console.log(`Looking up contract: ${id}`);
+      
+      // Validate the contract ID format first
+      if (!id || id === "undefined" || id === "null") {
+        setError("Invalid contract format. Please check your SMS and try again with the correct link.");
+        console.error(`Invalid contract ID format: ${id}`);
+        setLoading(false);
+        return;
+      }
+      
+      // Attempt to make a numeric ID for API call
+      const numericId = parseInt(id, 10);
+      if (isNaN(numericId) || numericId <= 0) {
+        setError("Contract ID must be a valid positive number. Please check your SMS link.");
+        console.error(`Invalid numeric contract ID: ${id} parsed as ${numericId}`);
         setLoading(false);
         return;
       }
 
-      try {
-        console.log(`Looking up contract: ${contractId}`);
-
-        // Attempt to fetch the contract
-        const response = await fetch(`/api/contracts/${contractId}`);
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error("Contract fetch error:", errorData);
-
-          if (response.status === 404) {
-            setError("This contract couldn't be found. It may have expired or been cancelled.");
-            console.error(`Contract ${contractId} not found (404)`);
-          } else if (contractId === "undefined" || contractId === "null" || !contractId) {
-            setError("Invalid contract link. Please check your SMS and try again with the correct link.");
-            console.error(`Invalid contract ID format: ${contractId}`);
-          } else {
-            setError("There was a problem loading your financing application. Please try again.");
-            console.error(`Error loading contract ${contractId}: ${response.status}`);
-          }
-          setLoading(false);
-          return;
+      // Fetch the contract to verify it exists
+      const response = await fetchApi(`/contracts/${numericId}`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          setError("This contract couldn't be found. It may have expired or been cancelled.");
+          console.error(`Contract ${numericId} not found (404)`);
+        } else {
+          setError("There was a problem loading your financing application. Please try again.");
+          console.error(`Error loading contract ${numericId}: ${response.status}`);
         }
-
-        // Successfully found the contract, redirecting to the application page
-        console.log("Contract found, redirecting to application page");
-        navigate(`/apply/${contractId}`);
-
-      } catch (error) {
-        console.error("Error in contract lookup:", error);
-        setError("Something went wrong. Please try again later.");
         setLoading(false);
+        return;
       }
-    };
 
-    fetchContract();
-  }, [contractId, navigate]);
+      // Contract found, get the data
+      const contract = await response.json();
+      console.log("Contract found:", contract);
+      
+      // Successfully found the contract, redirecting to the application page with the valid ID
+      toast({
+        title: "Contract Found",
+        description: `Loading application for contract ${contract.contractNumber}`,
+      });
+      
+      // Use the numeric ID for consistency
+      navigate(`/apply/${numericId}`);
+    } catch (error) {
+      console.error("Error in contract lookup:", error);
+      setError("Something went wrong. Please try again later.");
+      setLoading(false);
+    }
+  };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="max-w-md w-full mx-auto">
-          <CardHeader className="text-center">
-            <CardTitle>Loading Your Application</CardTitle>
-            <CardDescription>Please wait while we retrieve your financing information</CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center p-6">
-            <Spinner size="lg" />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Auto-lookup if contract ID is in the URL
+  useEffect(() => {
+    if (urlContractId) {
+      lookupContract(urlContractId);
+    }
+  }, []);
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="max-w-md w-full mx-auto">
-          <CardHeader className="text-center">
-            <CardTitle>Application Not Found</CardTitle>
-            <CardDescription>{error}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-4 p-6">
-            <p className="text-sm text-gray-600 text-center mb-4">
-              If you received this link recently, please contact the merchant who sent it to you.
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Try Again
+  return (
+    <div className="container mx-auto flex min-h-screen flex-col items-center justify-center px-4 py-8">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-xl font-semibold">Find Your Application</CardTitle>
+          <CardDescription>
+            Enter your contract number to continue with your financing application.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Input
+                type="text"
+                placeholder="Enter contract number (e.g. SHI-0001)"
+                value={contractId}
+                onChange={(e) => setContractId(e.target.value)}
+                disabled={loading}
+                className="w-full"
+              />
+              {error && <p className="text-sm text-red-500">{error}</p>}
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Looking up contract..." : "Continue Application"}
             </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  return null; // Shouldn't reach here due to the redirect
+          </form>
+        </CardContent>
+        <CardFooter className="flex justify-center">
+          <p className="text-sm text-gray-500">
+            Need help? Contact customer support at (555) 123-4567
+          </p>
+        </CardFooter>
+      </Card>
+    </div>
+  );
 }
