@@ -24,10 +24,10 @@ const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"]; // Define
 
 export default function Application() {
   const { contractId: contractIdParam } = useParams();
-  
+
   // Parse contract ID with better validation
   const contractId = contractIdParam && contractIdParam !== "undefined" ? parseInt(contractIdParam, 10) : 0;
-  
+
   console.log("Parsing contract ID:", { 
     contractIdParam, 
     parsedContractId: contractId,
@@ -38,7 +38,7 @@ export default function Application() {
   if (!contractIdParam || contractIdParam === "undefined" || isNaN(contractId) || contractId <= 0) {
     console.error(`Invalid contract ID (${contractIdParam}) parsed as ${contractId}`);
   }
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -83,24 +83,39 @@ export default function Application() {
   const [progressMap, setProgressMap] = useState<Record<string, any>>({});
   const [isHandlingVerification, setIsHandlingVerification] = useState(false);
 
-  // If contractId is valid, fetch real data
+  // Fetch contract data
   const {
     data: contractResponse,
     isLoading: isLoadingContract,
     isError: isErrorContract,
     error: errorContract,
-    refetch,
+    refetch: refetchContract,
   } = useQuery({
     queryKey: ["/api/contracts", contractId || verifyContractId],
     queryFn: async () => {
       try {
-        // Use contractId from URL or verification flow
-        const targetId = contractId || verifyContractId;
-        console.log("Fetching contract data for ID:", targetId);
-        
-        // Validate contract ID before making API call
-        if (!targetId || targetId <= 0 || isNaN(targetId)) {
-          console.error(`Contract ID is invalid: ${targetId}`);
+        // Get contract ID from URL or verification flow
+        let targetId = null;
+
+        // Check contractId from URL first (has priority)
+        if (contractId && contractId > 0) {
+          targetId = contractId;
+        } 
+        // Fallback to verification ID if available
+        else if (verifyContractId && verifyContractId > 0) {
+          targetId = verifyContractId;
+        }
+
+        console.log("Contract fetch attempt:", { 
+          targetId, 
+          fromUrl: contractId, 
+          fromVerification: verifyContractId,
+          currentUrl: window.location.href
+        });
+
+        // Strict validation before API call
+        if (!targetId || targetId <= 0) {
+          console.error(`Cannot fetch contract: Invalid ID: ${targetId}`);
           throw new Error(`Invalid contract ID: ${targetId}`);
         }
 
@@ -108,23 +123,23 @@ export default function Application() {
         const res = await fetch(`/api/contracts/${targetId}`, {
           credentials: "include",
         });
-        
+
         // Check for HTTP errors
         if (!res.ok) {
           console.error(`API request failed for contract ${targetId} with status: ${res.status}`);
           throw new Error(`Failed to fetch contract: ${res.status}`);
         }
-        
+
         // Parse response data
         const data = await res.json();
         console.log(`Contract data received for ID ${targetId}:`, data);
-        
+
         // Validate response contains contract data
         if (!data || !data.contract) {
           console.error(`Contract with ID ${targetId} not found in API response`, data);
           throw new Error(`Contract with ID ${targetId} not found in API response`);
         }
-        
+
         return data;
       } catch (error) {
         console.error("Error fetching contract:", error);
@@ -151,7 +166,7 @@ export default function Application() {
           navigate(location.pathname, { replace: true });
 
           // Refetch the contract data to get the latest progress
-          await refetch();
+          await refetchContract();
 
           // Show success toast
           toast({
@@ -202,7 +217,7 @@ export default function Application() {
               console.log("Contract step update response:", stepUpdateResponse);
 
               // Force refresh contract data
-              await refetch();
+              await refetchContract();
 
               // Add a small delay to ensure the UI updates properly
               setTimeout(() => {
@@ -249,7 +264,7 @@ export default function Application() {
 
       handleVerificationRedirect();
     }
-  }, [verifySuccess, verifyContractId, location, toast, refetch, currentStep, navigate]);
+  }, [verifySuccess, verifyContractId, location, toast, refetchContract, currentStep, navigate]);
 
   // Effect to set up contract data and application progress
   useEffect(() => {
