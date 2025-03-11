@@ -1006,7 +1006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch (twilioError) {
         console.error("Twilio service error:", twilioError);
-        throwtwilioError;
+        throw twilioError;
       }
 
       // Create log for SMS sending
