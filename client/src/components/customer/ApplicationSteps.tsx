@@ -13,27 +13,40 @@ interface ApplicationStepsProps {
   completedSteps: string[];
 }
 
+import { Check } from "lucide-react";
+
 export default function ApplicationSteps({
   steps,
   currentStep,
   completedSteps,
 }: ApplicationStepsProps) {
+  // Make sure we have valid arrays
+  const validSteps = Array.isArray(steps) ? steps : [];
+  const validCompletedSteps = Array.isArray(completedSteps) ? completedSteps : [];
+  
+  // Add debug logging
+  console.log("ApplicationSteps rendering with:", {
+    steps: validSteps,
+    currentStep,
+    completedSteps: validCompletedSteps
+  });
+  
   return (
     <div className="w-full">
       <div className="hidden sm:flex items-center justify-between">
-        {steps.map((step, index) => (
+        {validSteps.map((step, index) => (
           <div key={step.id} className="flex items-center relative flex-1">
             <div className="flex items-center justify-center">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  completedSteps.includes(step.id)
+                  validCompletedSteps.includes(step.id)
                     ? "bg-green-500"
                     : currentStep === step.id
                     ? "bg-primary-600 text-white"
                     : "bg-gray-200 text-gray-500"
                 }`}
               >
-                {completedSteps.includes(step.id) ? (
+                {validCompletedSteps.includes(step.id) ? (
                   <Check className="h-5 w-5 text-white" />
                 ) : (
                   <span className="text-sm font-medium">{index + 1}</span>
@@ -41,10 +54,10 @@ export default function ApplicationSteps({
               </div>
             </div>
             
-            {index < steps.length - 1 && (
+            {index < validSteps.length - 1 && (
               <div 
                 className={`h-0.5 absolute top-4 left-8 right-0 -mr-4 ${
-                  completedSteps.includes(step.id) ? "bg-green-500" : "bg-gray-200"
+                  validCompletedSteps.includes(step.id) ? "bg-green-500" : "bg-gray-200"
                 }`}
               />
             )}

@@ -230,20 +230,10 @@ export default function Application() {
       setApplicationProgress(contractResponse.progress);
 
       // Set the current step based on progress
-      if (contractResponse.progress.length === 0) {
-        setCurrentStep("terms");
-      } else {
-        // Find the first incomplete step
-        const incompleteStep = CONTRACT_STEPS.find(
-          (step) => !progressMapObj[step]?.completed
-        );
+      const stepFromContract = contractResponse.contract.currentStep;
+      const validStep = CONTRACT_STEPS.includes(stepFromContract) ? stepFromContract : "terms";
+      setCurrentStep(validStep);
 
-        if (incompleteStep) {
-          setCurrentStep(incompleteStep);
-        } else {
-          setCurrentStep("completed");
-        }
-      }
 
       // Set completed steps
       const completed = contractResponse.progress
