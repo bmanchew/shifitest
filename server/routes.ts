@@ -2,6 +2,8 @@ import express, { type Express, Request, Response } from "express";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { ZodError } from "zod";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 import { eq } from "drizzle-orm";
 import { db } from "./db";
@@ -970,10 +972,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
       // The URL format must be /apply/${contractId} to match the React router configuration
       // This is where customers access their application after receiving the SMS
-      const contractId = newContract.id;
       
       // Verify the contract ID is valid before creating the URL
-      if (!contractId || isNaN(contractId)) {
+      if (isNaN(contractId)) {
         throw new Error("Failed to generate a valid contract ID");
       }
       
@@ -2032,7 +2033,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Create HMAC signature using the webhook secret
           const hmac = crypto.createHmac("sha256", webhookSecret);
-          const expectedSignature = hmac.update(rawBody).digest("hex");
+          hmac.update(rawBody);
+          const expectedSignature = hmac.digest("hex");
 
           // Verify the signature
           isVerified = expectedSignature === webhookSignature;
