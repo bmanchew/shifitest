@@ -1856,9 +1856,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({
         success: false,
         message: "An unexpected error occurred while processing your signature. Please try again or contact support.",
-      });    },
-  );
-
+      });
+    }
+  });
   // Thanks Roger electronic signature endpoint
   apiRouter.post(
     "/mock/thanks-roger-signing",
