@@ -53,8 +53,13 @@ function App() {
         {/* Customer public routes */}
         <Route path="/offer/:contractId" component={CustomerContractOffer} />
         <Route path="/apply/:contractId" component={CustomerApplication} />
+        <Route path="/apply" component={CustomerApplication} />
         <Route
           path="/customer/application/:contractId"
+          component={CustomerApplication}
+        />
+        <Route
+          path="/customer/contract-lookup"
           component={CustomerApplication}
         />
         <Route path="/dashboard/:contractId" component={CustomerDashboard} />

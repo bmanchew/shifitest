@@ -35,23 +35,22 @@ export default function Application() {
     pathname: location.pathname 
   });
 
-  // Redirect to contract lookup page if contractId is undefined or invalid
+  // Check for valid contract ID and log debugging information
   useEffect(() => {
-    console.log("Validating contract ID:", { 
+    console.log("Contract ID check:", { 
       contractIdParam, 
-      contractId,
-      isNaN: isNaN(contractId),
-      isZero: contractId === 0
+      contractId, 
+      isValid: !!contractId && contractIdParam !== "undefined" 
     });
-    
-    if (contractIdParam === "undefined" || !contractId || isNaN(contractId) || contractId === 0) {
+
+    if (contractIdParam === "undefined" || (contractIdParam && !contractId)) {
       console.error("Invalid contract ID in URL:", contractIdParam);
       toast({
         title: "Error",
         description: "Invalid contract link. Please check your SMS and try again.",
         variant: "destructive",
       });
-      navigate("/customer/contract-lookup");
+      navigate("/apply");
     }
   }, [contractIdParam, contractId, navigate, toast]);
 
