@@ -24,17 +24,21 @@ const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"]; // Define
 
 export default function Application() {
   const { contractId: contractIdParam } = useParams();
-  // Parse contract ID with proper validation and logging
-const contractId = contractIdParam ? parseInt(contractIdParam, 10) : 0;
-console.log("Parsing contract ID:", { 
-  contractIdParam, 
-  parsedContractId: contractId,
-  isValidNumber: !isNaN(contractId) && contractId > 0
-});
+  
+  // Parse contract ID with better validation
+  const contractId = contractIdParam && contractIdParam !== "undefined" ? parseInt(contractIdParam, 10) : 0;
+  
+  console.log("Parsing contract ID:", { 
+    contractIdParam, 
+    parsedContractId: contractId,
+    isValidNumber: !isNaN(contractId) && contractId > 0,
+    rawParamType: typeof contractIdParam
+  });
 
-if (isNaN(contractId) || contractId <= 0) {
-  console.error(`Invalid contract ID (${contractIdParam}) parsed as ${contractId}`);
-}
+  if (!contractIdParam || contractIdParam === "undefined" || isNaN(contractId) || contractId <= 0) {
+    console.error(`Invalid contract ID (${contractIdParam}) parsed as ${contractId}`);
+  }
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -90,26 +94,32 @@ if (isNaN(contractId) || contractId <= 0) {
     queryKey: ["/api/contracts", contractId || verifyContractId],
     queryFn: async () => {
       try {
+        // Use contractId from URL or verification flow
         const targetId = contractId || verifyContractId;
         console.log("Fetching contract data for ID:", targetId);
         
-        if (!targetId || targetId <= 0) {
+        // Validate contract ID before making API call
+        if (!targetId || targetId <= 0 || isNaN(targetId)) {
           console.error(`Contract ID is invalid: ${targetId}`);
           throw new Error(`Invalid contract ID: ${targetId}`);
         }
 
+        // Fetch contract data from API
         const res = await fetch(`/api/contracts/${targetId}`, {
           credentials: "include",
         });
         
+        // Check for HTTP errors
         if (!res.ok) {
           console.error(`API request failed for contract ${targetId} with status: ${res.status}`);
           throw new Error(`Failed to fetch contract: ${res.status}`);
         }
         
+        // Parse response data
         const data = await res.json();
         console.log(`Contract data received for ID ${targetId}:`, data);
         
+        // Validate response contains contract data
         if (!data || !data.contract) {
           console.error(`Contract with ID ${targetId} not found in API response`, data);
           throw new Error(`Contract with ID ${targetId} not found in API response`);
