@@ -1,4 +1,4 @@
-import express, { type Express, Request, Response } from "express";
+import express, { type Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { ZodError } from "zod";
@@ -16,6 +16,8 @@ import { diditService } from "./services/didit";
 import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { logger } from "./services/logger";
+import { rateLimiter } from "./services/rateLimiter";
+import { errorHandler, asyncHandler, AppError } from "./services/errorHandler";
 import crypto from "crypto";
 
 
@@ -46,6 +48,17 @@ function generateContractNumber(): string {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const apiRouter = express.Router();
+  
+  // Health check endpoint
+  apiRouter.get("/health", (req: Request, res: Response) => {
+    res.status(200).json({
+      status: "success",
+      message: "API is healthy",
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || "development",
+      version: process.env.npm_package_version || "1.0.0"
+    });
+  });
 
   // Auth routes
   apiRouter.post("/auth/login", async (req: Request, res: Response) => {
@@ -3149,8 +3162,25 @@ apiRouter.post("/contract-signing", async (req: Request, res: Response) => {
     }
   });
 
+  // Start rate limiter cleanup
+  rateLimiter.startCleanup();
+  
+  // Apply rate limiting to API routes
+  apiRouter.use(rateLimiter.middleware());
+  
   // Mount the API router
   app.use("/api", apiRouter);
+  
+  // Global error handler - should be after all routes
+  app.use(errorHandler);
+  
+  // 404 handler for undefined routes
+  app.use((req, res, next) => {
+    if (!req.route) {
+      return next(new AppError(`Not found - ${req.originalUrl}`, 404));
+    }
+    next();
+  });
 
   // Create HTTP server
   const httpServer = createServer(app);
