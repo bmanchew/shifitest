@@ -3753,11 +3753,18 @@ metadata: {
 
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
+      
+      // Ensure we have a valid contract ID before creating the URL
+      if (!newContract.id || isNaN(newContract.id)) {
+        throw new Error("Failed to generate valid contract ID for application URL");
+      }
+      
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
 
-      // Log the contract creation
+      // Enhanced logging for debugging URL issues
       console.log(`Created contract ${newContract.id} for ${customerName} (${formattedPhone})`);
       console.log(`Application URL: ${applicationUrl}`);
+      console.log(`Contract details:`, JSON.stringify(newContract));
 
       // Actually send the SMS using twilioService
       try {
