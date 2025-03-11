@@ -60,7 +60,7 @@ function App() {
         />
         <Route
           path="/customer/contract-lookup"
-          component={CustomerApplication}
+          component={lazy(() => import("@/pages/customer/ContractLookup"))}
         />
         <Route path="/dashboard/:contractId" component={CustomerDashboard} />
 

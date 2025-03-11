@@ -25,22 +25,26 @@ const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"]; // Define
 export default function Application() {
   const { contractId: contractIdParam } = useParams();
 
-  // Special handling for the specific contract ID that's failing
-  const contractId = contractIdParam === "54" ? 54 : 
-    (contractIdParam && contractIdParam !== "undefined" ? parseInt(contractIdParam, 10) : 0);
+  // Better handling of contract ID parsing with more robust checks
+  let contractId = null;
+  if (contractIdParam && contractIdParam !== "undefined" && contractIdParam !== "null") {
+    // Try to parse the contract ID as a number
+    const parsed = parseInt(contractIdParam, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      contractId = parsed;
+    }
+  }
 
   console.log("Parsing contract ID:", { 
     contractIdParam, 
     parsedContractId: contractId,
-    isValidNumber: !isNaN(contractId) && contractId > 0,
-    rawParamType: typeof contractIdParam,
-    isSpecialCase: contractIdParam === "54"
+    isValidNumber: contractId !== null && contractId > 0,
+    rawParamType: typeof contractIdParam
   });
 
-  if (contractIdParam === "54") {
-    console.log("Using special handling for contract ID 54");
-  } else if (!contractIdParam || contractIdParam === "undefined" || isNaN(contractId) || contractId <= 0) {
-    console.error(`Invalid contract ID (${contractIdParam}) parsed as ${contractId}`);
+  // If contractId is still null after parsing, we have an invalid ID
+  if (contractId === null) {
+    console.error(`Invalid contract ID (${contractIdParam}) unable to parse as valid number`);
   }
 
   const { toast } = useToast();
@@ -66,17 +70,19 @@ export default function Application() {
     console.log("Contract ID check:", { 
       contractIdParam, 
       contractId, 
-      isValid: !!contractId && contractIdParam !== "undefined" 
+      isValid: contractId !== null && contractId > 0 
     });
 
-    if (contractIdParam === "undefined" || (contractIdParam && !contractId)) {
+    // If we don't have a valid contract ID, redirect to the contract lookup page
+    if (contractId === null) {
       console.error("Invalid contract ID in URL:", contractIdParam);
       toast({
         title: "Error",
-        description: "Invalid contract link. Please check your SMS and try again.",
+        description: "Invalid contract link. Please check your SMS or try a different link.",
         variant: "destructive",
       });
-      navigate("/apply");
+      navigate("/apply"); // Redirect to the base application page without ID
+      return;
     }
   }, [contractIdParam, contractId, navigate, toast]);
 
