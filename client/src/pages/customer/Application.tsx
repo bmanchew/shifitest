@@ -11,6 +11,12 @@ import ApplicationSteps, { Step } from "@/components/customer/ApplicationSteps";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { RefreshCw } from "lucide-react";
+import Card from "@/components/ui/card";
+import CardHeader from "@/components/ui/card-header";
+import CardTitle from "@/components/ui/card-title";
+import CardDescription from "@/components/ui/card-description";
+import CardContent from "@/components/ui/card-content";
 
 const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"]; // Define CONTRACT_STEPS constant
 
@@ -579,6 +585,39 @@ export default function Application() {
           {renderStepContent()}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ContractNotFound({ errorMessage, contractId }: { errorMessage: string; contractId?: number }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Application Not Found</CardTitle>
+          <CardDescription>
+            {errorMessage || "We couldn't find your application"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-muted-foreground">
+            {contractId
+              ? `We couldn't load contract #${contractId}. Please check your SMS for the correct link or contact the merchant.`
+              : "Please check your SMS for the correct link or contact the merchant who sent you the application."}
+          </p>
+          <div className="flex justify-center space-x-3">
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Try Again
+            </Button>
+            <Button onClick={() => navigate("/customer/contract-lookup")}>
+              Look Up Contract
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
