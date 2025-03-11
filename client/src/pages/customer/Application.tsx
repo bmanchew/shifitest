@@ -24,7 +24,17 @@ const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"]; // Define
 
 export default function Application() {
   const { contractId: contractIdParam } = useParams();
-  const contractId = contractIdParam ? parseInt(contractIdParam) : 0;
+  // Parse contract ID with proper validation and logging
+const contractId = contractIdParam ? parseInt(contractIdParam, 10) : 0;
+console.log("Parsing contract ID:", { 
+  contractIdParam, 
+  parsedContractId: contractId,
+  isValidNumber: !isNaN(contractId) && contractId > 0
+});
+
+if (isNaN(contractId) || contractId <= 0) {
+  console.error(`Invalid contract ID (${contractIdParam}) parsed as ${contractId}`);
+}
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -81,21 +91,38 @@ export default function Application() {
     queryFn: async () => {
       try {
         const targetId = contractId || verifyContractId;
-        if (!targetId || targetId <= 0) return null;
+        console.log("Fetching contract data for ID:", targetId);
+        
+        if (!targetId || targetId <= 0) {
+          console.error(`Contract ID is invalid: ${targetId}`);
+          throw new Error(`Invalid contract ID: ${targetId}`);
+        }
 
         const res = await fetch(`/api/contracts/${targetId}`, {
           credentials: "include",
         });
+        
         if (!res.ok) {
-          throw new Error("Failed to fetch contract");
+          console.error(`API request failed for contract ${targetId} with status: ${res.status}`);
+          throw new Error(`Failed to fetch contract: ${res.status}`);
         }
-        return res.json();
+        
+        const data = await res.json();
+        console.log(`Contract data received for ID ${targetId}:`, data);
+        
+        if (!data || !data.contract) {
+          console.error(`Contract with ID ${targetId} not found in API response`, data);
+          throw new Error(`Contract with ID ${targetId} not found in API response`);
+        }
+        
+        return data;
       } catch (error) {
         console.error("Error fetching contract:", error);
-        return null;
+        throw error; // Properly throw the error so React Query can handle it
       }
     },
     enabled: !!(contractId > 0 || verifyContractId > 0),
+    retry: false, // Don't retry on failure to avoid spamming the API
   });
 
   // Handle verification redirect
