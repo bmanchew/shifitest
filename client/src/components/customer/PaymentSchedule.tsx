@@ -30,41 +30,38 @@ export default function PaymentSchedule({
 }: PaymentScheduleProps) {
   const { toast } = useToast();
   const [isConfirming, setIsConfirming] = useState(false);
-  const [actualProgressId, setActualProgressId] = useState<number | null>(progressId > 0 ? progressId : null);
+  const [actualProgressId, setActualProgressId] = useState<number | null>(
+    progressId > 0 ? progressId : null,
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   // Load the correct progress ID when component mounts
   useEffect(() => {
     const fetchPaymentProgress = async () => {
-      // If we already have a valid progress ID (either from props or state), no need to fetch
-      if (progressId || actualProgressId) {
-        if (progressId && !actualProgressId) {
-          console.log(`Using provided progress ID: ${progressId}`);
-          setActualProgressId(progressId);
-        }
+      if (actualProgressId) {
         setIsLoading(false);
-        return;
+        return; // Already have a valid ID
       }
-      
+
       try {
         setIsLoading(true);
-        console.log(`Fetching payment progress for contract ID: ${contractId}`);
-        
+
         // Get all application progress items for this contract
         const progressItems = await apiRequest<any[]>(
-          "GET", 
-          `/api/application-progress?contractId=${contractId}`
+          "GET",
+          `/api/application-progress?contractId=${contractId}`,
         );
-        
+
         // Find the payment step
-        const paymentStep = progressItems?.find(item => item.step === "payment");
-        
+        const paymentStep = progressItems?.find(
+          (item) => item.step === "payment",
+        );
+
         if (paymentStep) {
           console.log("Found existing payment step:", paymentStep.id);
           setActualProgressId(paymentStep.id);
         } else {
           console.log("No payment step found, will create one on confirm");
-          // We'll create it when the user confirms the payment schedule
         }
       } catch (error) {
         console.error("Error fetching payment progress:", error);
@@ -77,9 +74,9 @@ export default function PaymentSchedule({
         setIsLoading(false);
       }
     };
-    
+
     fetchPaymentProgress();
-  }, [contractId, progressId, actualProgressId, toast]);
+  }, [contractId, actualProgressId, toast]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -99,43 +96,52 @@ export default function PaymentSchedule({
   const handleConfirm = async () => {
     try {
       setIsConfirming(true);
-      
+
       const scheduleData = {
         schedule: paymentSchedule,
         confirmedAt: new Date().toISOString(),
       };
-      
+
       if (actualProgressId) {
         // Update existing progress item
         console.log("Updating payment progress:", actualProgressId);
-        await apiRequest("PATCH", `/api/application-progress/${actualProgressId}`, {
-          completed: true,
-          data: JSON.stringify(scheduleData),
-        });
+        await apiRequest(
+          "PATCH",
+          `/api/application-progress/${actualProgressId}`,
+          {
+            completed: true,
+            data: JSON.stringify(scheduleData),
+          },
+        );
       } else {
         // Create new payment progress item
         console.log("Creating new payment progress for contract:", contractId);
         // Fixed: Don't call .json() on the response since apiRequest already returns the parsed JSON
-        const newProgress = await apiRequest<{ id: number }>("POST", "/api/application-progress", {
-          contractId: contractId,
-          step: "payment",
-          completed: true,
-          data: JSON.stringify(scheduleData),
-        });
+        const newProgress = await apiRequest<{ id: number }>(
+          "POST",
+          "/api/application-progress",
+          {
+            contractId: contractId,
+            step: "payment",
+            completed: true,
+            data: JSON.stringify(scheduleData),
+          },
+        );
         setActualProgressId(newProgress.id);
       }
-      
+
       toast({
         title: "Schedule Confirmed",
         description: "Your payment schedule has been confirmed.",
       });
-      
+
       onComplete();
     } catch (error) {
       console.error("Payment schedule confirmation failed:", error);
       toast({
         title: "Confirmation Failed",
-        description: "Unable to confirm the payment schedule. Please try again.",
+        description:
+          "Unable to confirm the payment schedule. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -156,7 +162,9 @@ export default function PaymentSchedule({
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">Payment Schedule</h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+        Payment Schedule
+      </h3>
       <p className="text-sm text-gray-600 mb-4">
         Review and confirm your payment schedule for the financing contract.
       </p>
@@ -164,24 +172,36 @@ export default function PaymentSchedule({
       <div className="rounded-lg border border-gray-200 p-4 mb-6">
         <div className="flex justify-between mb-3">
           <span className="text-sm text-gray-500">Purchase Amount</span>
-          <span className="text-sm font-medium text-gray-900">{formatCurrency(amount)}</span>
+          <span className="text-sm font-medium text-gray-900">
+            {formatCurrency(amount)}
+          </span>
         </div>
         <div className="flex justify-between mb-3">
           <span className="text-sm text-gray-500">Down Payment (15%)</span>
-          <span className="text-sm font-medium text-gray-900">{formatCurrency(downPayment)}</span>
+          <span className="text-sm font-medium text-gray-900">
+            {formatCurrency(downPayment)}
+          </span>
         </div>
         <div className="flex justify-between pt-3 border-t border-gray-200">
-          <span className="text-sm font-medium text-gray-900">Financed Amount</span>
-          <span className="text-sm font-medium text-gray-900">{formatCurrency(financedAmount)}</span>
+          <span className="text-sm font-medium text-gray-900">
+            Financed Amount
+          </span>
+          <span className="text-sm font-medium text-gray-900">
+            {formatCurrency(financedAmount)}
+          </span>
         </div>
       </div>
 
       <div className="mb-6">
-        <h4 className="text-sm font-medium text-gray-900 mb-3">Payment Details</h4>
+        <h4 className="text-sm font-medium text-gray-900 mb-3">
+          Payment Details
+        </h4>
         <div className="bg-gray-50 rounded-lg p-4 flex flex-col sm:flex-row sm:justify-between">
           <div className="mb-3 sm:mb-0">
             <p className="text-xs text-gray-500">Monthly Payment</p>
-            <p className="text-lg font-medium text-gray-900">{formatCurrency(monthlyPayment)}</p>
+            <p className="text-lg font-medium text-gray-900">
+              {formatCurrency(monthlyPayment)}
+            </p>
           </div>
           <div className="mb-3 sm:mb-0">
             <p className="text-xs text-gray-500">Total Payments</p>
@@ -189,7 +209,9 @@ export default function PaymentSchedule({
           </div>
           <div>
             <p className="text-xs text-gray-500">First Payment Due</p>
-            <p className="text-lg font-medium text-gray-900">{format(addMonths(startDate, 1), "MMM d, yyyy")}</p>
+            <p className="text-lg font-medium text-gray-900">
+              {format(addMonths(startDate, 1), "MMM d, yyyy")}
+            </p>
           </div>
         </div>
       </div>
@@ -210,7 +232,9 @@ export default function PaymentSchedule({
                 <div className="grid grid-cols-3 text-sm">
                   <div>{payment.paymentNumber}</div>
                   <div>{format(payment.dueDate, "MMM d, yyyy")}</div>
-                  <div className="text-right">{formatCurrency(payment.amount)}</div>
+                  <div className="text-right">
+                    {formatCurrency(payment.amount)}
+                  </div>
                 </div>
               </div>
             ))}
@@ -226,9 +250,12 @@ export default function PaymentSchedule({
       <div className="bg-blue-50 rounded-lg p-4 mb-6 flex">
         <CalendarDays className="h-5 w-5 text-blue-500 mr-3 flex-shrink-0" />
         <div>
-          <p className="text-sm font-medium text-blue-800 mb-1">Automatic Payments</p>
+          <p className="text-sm font-medium text-blue-800 mb-1">
+            Automatic Payments
+          </p>
           <p className="text-sm text-blue-700">
-            Payments will be automatically debited from your connected bank account on the due dates.
+            Payments will be automatically debited from your connected bank
+            account on the due dates.
           </p>
         </div>
       </div>

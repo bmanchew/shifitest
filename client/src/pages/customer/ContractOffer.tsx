@@ -1,10 +1,24 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, ArrowRight, Clock, DollarSign, CreditCard, Shield } from "lucide-react";
+import {
+  Check,
+  ArrowRight,
+  Clock,
+  DollarSign,
+  CreditCard,
+  Shield,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Logo } from "@/components/ui/logo";
@@ -13,14 +27,14 @@ export default function ContractOffer() {
   const { contractId: contractIdParam } = useParams();
   const contractId = parseInt(contractIdParam || "0");
   const { toast } = useToast();
-  const navigate = useNavigate();
-  
+  const [_, setLocation] = useLocation();
+
   // Fetch contract details
   const { data: contract, isLoading } = useQuery({
     queryKey: ["/api/contracts", contractId],
     queryFn: async () => {
       if (!contractId) return null;
-      
+
       try {
         const res = await fetch(`/api/contracts/${contractId}`, {
           credentials: "include",
@@ -46,7 +60,7 @@ export default function ContractOffer() {
 
   const handleAcceptOffer = () => {
     // Navigate to the application flow to begin the onboarding process
-    navigate(`/apply/${contractId}`);
+    setLocation(`/apply/${contractId}`);
   };
 
   const handleDeclineOffer = () => {
@@ -62,7 +76,9 @@ export default function ContractOffer() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
-          <p className="mt-4 text-sm text-gray-600">Loading your financing offer...</p>
+          <p className="mt-4 text-sm text-gray-600">
+            Loading your financing offer...
+          </p>
         </div>
       </div>
     );
@@ -75,13 +91,15 @@ export default function ContractOffer() {
           <Card>
             <CardHeader>
               <CardTitle>Offer Not Found</CardTitle>
-              <CardDescription>We couldn't find the financing offer you're looking for.</CardDescription>
+              <CardDescription>
+                We couldn't find the financing offer you're looking for.
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center">
               <p className="text-sm text-gray-600 mb-6">
                 The offer may have expired or the link might be incorrect.
               </p>
-              <Button onClick={() => navigate("/")}>
+              <Button onClick={() => (window.location.href = "/")}>
                 Return Home
               </Button>
             </CardContent>
@@ -106,8 +124,8 @@ export default function ContractOffer() {
         <div className="max-w-6xl mx-auto px-4">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-12">
-              <Badge 
-                variant="outline" 
+              <Badge
+                variant="outline"
                 className="mb-3 bg-primary-50 text-primary-700 border-primary-200 py-1 px-3"
               >
                 Exclusive Financing Offer
@@ -116,7 +134,9 @@ export default function ContractOffer() {
                 0% Interest Financing for Your Purchase
               </h1>
               <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                {contract.merchantName} has offered you 24-month interest-free financing for your purchase. Accept this offer to begin your easy monthly payments.
+                {contract.merchantName} has offered you 24-month interest-free
+                financing for your purchase. Accept this offer to begin your
+                easy monthly payments.
               </p>
             </div>
 
@@ -130,36 +150,54 @@ export default function ContractOffer() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
-                    <h3 className="text-lg font-medium mb-4 text-gray-900">Offer Details</h3>
+                    <h3 className="text-lg font-medium mb-4 text-gray-900">
+                      Offer Details
+                    </h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Purchase Amount:</span>
-                        <span className="font-medium">{formatCurrency(contract.amount)}</span>
+                        <span className="font-medium">
+                          {formatCurrency(contract.amount)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Down Payment:</span>
-                        <span className="font-medium">{formatCurrency(contract.downPayment)}</span>
+                        <span className="font-medium">
+                          {formatCurrency(contract.downPayment)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Financed Amount:</span>
-                        <span className="font-medium">{formatCurrency(contract.financedAmount)}</span>
+                        <span className="font-medium">
+                          {formatCurrency(contract.financedAmount)}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Term Length:</span>
-                        <span className="font-medium">{contract.termMonths} Months</span>
+                        <span className="font-medium">
+                          {contract.termMonths} Months
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Interest Rate:</span>
-                        <span className="font-medium">{contract.interestRate}%</span>
+                        <span className="font-medium">
+                          {contract.interestRate}%
+                        </span>
                       </div>
                       <div className="flex justify-between pt-3 border-t">
-                        <span className="font-medium text-gray-900">Monthly Payment:</span>
-                        <span className="font-bold text-xl text-primary-600">{formatCurrency(contract.monthlyPayment)}</span>
+                        <span className="font-medium text-gray-900">
+                          Monthly Payment:
+                        </span>
+                        <span className="font-bold text-xl text-primary-600">
+                          {formatCurrency(contract.monthlyPayment)}
+                        </span>
                       </div>
                     </div>
                   </div>
                   <div className="bg-gray-50 p-6 rounded-lg">
-                    <h3 className="text-lg font-medium mb-4 text-gray-900">Key Benefits</h3>
+                    <h3 className="text-lg font-medium mb-4 text-gray-900">
+                      Key Benefits
+                    </h3>
                     <ul className="space-y-4">
                       <li className="flex">
                         <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
@@ -175,7 +213,9 @@ export default function ContractOffer() {
                       </li>
                       <li className="flex">
                         <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
-                        <span>Automatic monthly payments from your bank account</span>
+                        <span>
+                          Automatic monthly payments from your bank account
+                        </span>
                       </li>
                       <li className="flex">
                         <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
@@ -186,7 +226,9 @@ export default function ContractOffer() {
                 </div>
 
                 <div className="border-t border-gray-200 mt-8 pt-6">
-                  <h3 className="text-lg font-medium mb-4 text-gray-900">What to Expect</h3>
+                  <h3 className="text-lg font-medium mb-4 text-gray-900">
+                    What to Expect
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="bg-white p-4 rounded-lg border">
                       <div className="flex justify-center mb-3">
@@ -194,7 +236,9 @@ export default function ContractOffer() {
                           <CreditCard className="h-6 w-6 text-primary-500" />
                         </div>
                       </div>
-                      <h4 className="text-center font-medium mb-1">Review Terms</h4>
+                      <h4 className="text-center font-medium mb-1">
+                        Review Terms
+                      </h4>
                       <p className="text-sm text-gray-500 text-center">
                         Accept offer & review contract details
                       </p>
@@ -205,7 +249,9 @@ export default function ContractOffer() {
                           <Shield className="h-6 w-6 text-primary-500" />
                         </div>
                       </div>
-                      <h4 className="text-center font-medium mb-1">Verify Identity</h4>
+                      <h4 className="text-center font-medium mb-1">
+                        Verify Identity
+                      </h4>
                       <p className="text-sm text-gray-500 text-center">
                         Quick ID verification via DiDit
                       </p>
@@ -216,7 +262,9 @@ export default function ContractOffer() {
                           <DollarSign className="h-6 w-6 text-primary-500" />
                         </div>
                       </div>
-                      <h4 className="text-center font-medium mb-1">Link Bank</h4>
+                      <h4 className="text-center font-medium mb-1">
+                        Link Bank
+                      </h4>
                       <p className="text-sm text-gray-500 text-center">
                         Connect your bank account via Plaid
                       </p>
@@ -227,7 +275,9 @@ export default function ContractOffer() {
                           <Clock className="h-6 w-6 text-primary-500" />
                         </div>
                       </div>
-                      <h4 className="text-center font-medium mb-1">Start Payments</h4>
+                      <h4 className="text-center font-medium mb-1">
+                        Start Payments
+                      </h4>
                       <p className="text-sm text-gray-500 text-center">
                         First payment due in 30 days
                       </p>
@@ -259,8 +309,14 @@ export default function ContractOffer() {
               <p>Offer expires in 7 days. Subject to terms and conditions.</p>
               <p className="mt-2">
                 By accepting, you agree to our{" "}
-                <a href="#" className="text-primary-600 hover:underline">Terms of Service</a> and{" "}
-                <a href="#" className="text-primary-600 hover:underline">Privacy Policy</a>.
+                <a href="#" className="text-primary-600 hover:underline">
+                  Terms of Service
+                </a>{" "}
+                and{" "}
+                <a href="#" className="text-primary-600 hover:underline">
+                  Privacy Policy
+                </a>
+                .
               </p>
             </div>
           </div>
@@ -269,7 +325,10 @@ export default function ContractOffer() {
 
       <footer className="bg-gray-100 py-6">
         <div className="max-w-6xl mx-auto px-4 text-center text-sm text-gray-600">
-          <p>© {new Date().getFullYear()} ShiFi Financial, Inc. All rights reserved.</p>
+          <p>
+            © {new Date().getFullYear()} ShiFi Financial, Inc. All rights
+            reserved.
+          </p>
         </div>
       </footer>
     </div>

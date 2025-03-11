@@ -25,12 +25,14 @@ export default function MerchantDashboard() {
 
   // Calculate statistics
   const activeContracts = contracts.filter((c) => c.status === "active").length;
-  
+
   const totalFinanced = contracts
     .filter((c) => c.status === "active" || c.status === "completed")
     .reduce((sum, contract) => sum + contract.financedAmount, 0);
-  
-  const pendingApplications = contracts.filter((c) => c.status === "pending").length;
+
+  const pendingApplications = contracts.filter(
+    (c) => c.status === "pending",
+  ).length;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -44,15 +46,30 @@ export default function MerchantDashboard() {
       <div className="px-4 py-5 sm:px-0">
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-6 mb-6 text-white">
           <h1 className="text-2xl font-bold">Welcome to ShiFi Dashboard</h1>
-          <p className="mt-2 text-blue-100">Hello, {user?.name || "Merchant"}! Manage your financing contracts and help your customers get the financing they need.</p>
+          <p className="mt-2 text-blue-100">
+            Hello, {user?.name || "Merchant"}! Manage your financing contracts
+            and help your customers get the financing they need.
+          </p>
           <div className="mt-4 flex space-x-3">
             <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
               <div className="text-sm text-blue-100">Current Date</div>
-              <div className="font-medium">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+              <div className="font-medium">
+                {new Date().toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </div>
             </div>
             <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
               <div className="text-sm text-blue-100">Last Login</div>
-              <div className="font-medium">Today, {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>
+              <div className="font-medium">
+                Today,{" "}
+                {new Date().toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </div>
             </div>
           </div>
         </div>

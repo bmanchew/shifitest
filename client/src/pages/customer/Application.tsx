@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import CustomerLayout from "@/components/layout/CustomerLayout";
 import ContractTerms from "@/components/customer/ContractTerms";
@@ -11,73 +11,36 @@ import ApplicationSteps, { Step } from "@/components/customer/ApplicationSteps";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { RefreshCw } from "lucide-react";
-import { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardDescription, 
-  CardContent 
-} from "@/components/ui/card";
-
-const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"];
 
 export default function Application() {
   const { contractId: contractIdParam } = useParams();
-
-  let contractId = null;
-  if (contractIdParam && contractIdParam !== "undefined" && contractIdParam !== "null") {
-    const parsed = parseInt(contractIdParam, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      contractId = parsed;
-    }
-  }
-
-  console.log("Parsing contract ID:", { 
-    contractIdParam, 
-    parsedContractId: contractId,
-    isValidNumber: contractId !== null && contractId > 0,
-    rawParamType: typeof contractIdParam
-  });
-
-  if (contractId === null) {
-    console.error(`Invalid contract ID (${contractIdParam}) unable to parse as valid number`);
-  }
-
+  const contractId = parseInt(contractIdParam || "0");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
-  const location = useLocation();
-  const urlParams = new URLSearchParams(location.search);
+  // Extract URL parameters to handle verification redirects
+  const [location, setLocation] = useLocation();
+  const urlParams = new URLSearchParams(location.split("?")[1] || "");
   const verifySuccess = urlParams.get("verify") === "success";
   const verifyContractId = parseInt(urlParams.get("contractId") || "0");
 
-  console.log("Application component loaded with:", { 
-    contractIdParam, 
-    contractId, 
-    verifyContractId, 
-    pathname: location.pathname 
-  });
-
-  useEffect(() => {
-    console.log("Contract ID check:", { 
-      contractIdParam, 
-      contractId, 
-      isValid: contractId !== null && contractId > 0 
-    });
-
-    if (contractId === null) {
-      console.error("Invalid contract ID in URL:", contractIdParam);
-      toast({
-        title: "Error",
-        description: "Invalid contract link. Please check your SMS or try a different link.",
-        variant: "destructive",
-      });
-      navigate("/apply"); 
-      return;
-    }
-  }, [contractIdParam, contractId, navigate, toast]);
+  // Mock data for demo purposes when no valid contractId is provided
+  const mockContractData = {
+    id: 999,
+    contractNumber: "SHI-DEMO",
+    merchantId: 1,
+    customerId: null,
+    amount: 2800,
+    downPayment: 420,
+    financedAmount: 2380,
+    termMonths: 24,
+    interestRate: 0,
+    monthlyPayment: 99.17,
+    status: "pending",
+    currentStep: "terms",
+    merchantName: "TechSolutions Inc.",
+    customerName: "Demo Customer",
+  };
 
   const [currentStep, setCurrentStep] = useState("");
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
@@ -86,103 +49,34 @@ export default function Application() {
   const [progressMap, setProgressMap] = useState<Record<string, any>>({});
   const [isHandlingVerification, setIsHandlingVerification] = useState(false);
 
-  // Validate contract first
-  const {
-    data: validationData,
-    isLoading: isValidating,
-    error: validationError
-  } = useQuery({
-    queryKey: ["contractValidation", contractId],
-    queryFn: async () => {
-      const response = await apiRequest("GET", `/validate-contract/${contractId}`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.error(`Contract with ID ${contractId} not found in API response`);
-          throw new Error("Contract not found");
-        }
-        throw new Error(`Error validating contract: ${response.statusText}`);
-      }
-      return response.json();
-    },
-    enabled: contractId !== null,
-    retry: 1 
-  });
-
-  // Load contract data after validation
+  // If contractId is valid, fetch real data
   const {
     data: contractResponse,
     isLoading: isLoadingContract,
-    isError: isErrorContract,
-    error: errorContract,
-    refetch: refetchContract,
+    refetch,
   } = useQuery({
     queryKey: ["/api/contracts", contractId || verifyContractId],
     queryFn: async () => {
       try {
-        let targetId = null;
-        if (contractId && contractId > 0) {
-          targetId = contractId;
-        } else if (verifyContractId && verifyContractId > 0) {
-          targetId = verifyContractId;
-        }
-
-        console.log("Contract fetch attempt:", { 
-          targetId, 
-          fromUrl: contractId, 
-          fromVerification: verifyContractId,
-          currentUrl: window.location.href
-        });
-
-        if (!targetId || targetId <= 0) {
-          console.error(`Cannot fetch contract: Invalid ID: ${targetId}`);
-          throw new Error(`Invalid contract ID: ${targetId}`);
-        }
+        const targetId = contractId || verifyContractId;
+        if (!targetId || targetId <= 0) return null;
 
         const res = await fetch(`/api/contracts/${targetId}`, {
           credentials: "include",
         });
-
         if (!res.ok) {
-          console.error(`API request failed for contract ${targetId} with status: ${res.status}`);
-          throw new Error(`Failed to fetch contract: ${res.status}`);
+          throw new Error("Failed to fetch contract");
         }
-
-        const data = await res.json();
-        console.log(`Contract data received for ID ${targetId}:`, data);
-
-        if (!data || !data.contract) {
-          console.error(`Contract with ID ${targetId} not found in API response`, data);
-          throw new Error(`Contract with ID ${targetId} not found in API response`);
-        }
-
-        return data;
+        return res.json();
       } catch (error) {
         console.error("Error fetching contract:", error);
-        throw error; 
+        return null;
       }
     },
-    enabled: !!validationData?.valid, // Only enabled if validation is successful
-    retry: false, 
+    enabled: !!(contractId > 0 || verifyContractId > 0),
   });
 
-
-  // Load application progress after validation
-  const { 
-    data: progressData, 
-    isLoading: isProgressLoading,
-    error: progressError
-  } = useQuery({
-    queryKey: ["applicationProgress", contractId],
-    queryFn: async () => {
-      const response = await apiRequest("GET", `/application-progress?contractId=${contractId}`);
-      if (!response.ok) {
-        throw new Error(`Error loading application progress: ${response.statusText}`);
-      }
-      return response.json();
-    },
-    enabled: !!validationData?.valid, // Only enabled if validation is successful
-  });
-
+  // Handle verification redirect
   useEffect(() => {
     if (verifySuccess && verifyContractId > 0 && !isHandlingVerification) {
       setIsHandlingVerification(true);
@@ -194,15 +88,20 @@ export default function Application() {
             verifyContractId,
           );
 
-          navigate(location.pathname, { replace: true });
+          // Clear the URL parameters to prevent infinite loops
+          const cleanPath = location.split("?")[0];
+          setLocation(cleanPath, { replace: true });
 
-          await refetchContract();
+          // Refetch the contract data to get the latest progress
+          await refetch();
 
+          // Show success toast
           toast({
             title: "Verification Complete",
             description: "Your identity has been successfully verified.",
           });
 
+          // Get the KYC progress for this contract
           const kycProgressResponse = await apiRequest<{
             id: number;
             contractId: number;
@@ -211,51 +110,29 @@ export default function Application() {
             data: string | null;
           }>("GET", `/api/application-progress/kyc/${verifyContractId}`);
 
-          if (kycProgressResponse) {
-            try {
-              console.log("Marking KYC as completed from redirect handler", kycProgressResponse);
+          if (kycProgressResponse && !kycProgressResponse.completed) {
+            // If not already marked as completed, mark it complete
+            console.log("Marking KYC as completed from redirect handler");
+            await apiRequest(
+              "PATCH",
+              `/api/application-progress/${kycProgressResponse.id}`,
+              {
+                completed: true,
+                data: JSON.stringify({
+                  verifiedAt: new Date().toISOString(),
+                  status: "approved",
+                  completedVia: "redirect",
+                }),
+              },
+            );
 
-              const progressUpdateResponse = await apiRequest(
-                "PATCH",
-                `/api/application-progress/${kycProgressResponse.id}`,
-                {
-                  completed: true,
-                  data: JSON.stringify({
-                    verified: true,
-                    verifiedAt: new Date().toISOString(),
-                    status: "approved",
-                    completedVia: "redirect",
-                  }),
-                },
-              );
-
-              console.log("Progress update response:", progressUpdateResponse);
-
-              const stepUpdateResponse = await apiRequest(
-                "PATCH",
-                `/api/contracts/${verifyContractId}/step`,
-                {
-                  step: "bank"
-                }
-              );
-
-              console.log("Contract step update response:", stepUpdateResponse);
-
-              await refetchContract();
-
-              setTimeout(() => {
-                navigate(`/apply/${verifyContractId}?step=bank`);
-              }, 500);
-            } catch (error) {
-              console.error("Error updating KYC verification status:", error);
-              alert("Your verification was completed, but we encountered an issue updating your application. Please refresh the page.");
-            }
-          } else {
-            console.error("Could not find KYC progress for contract", verifyContractId);
-            alert("Your verification was completed, but we couldn't find your application data. Please refresh the page.");
+            // Refresh contract data
+            await refetch();
           }
 
+          // Wait for contract data to load before updating steps
           setTimeout(() => {
+            // Add KYC to completed steps if not already there
             setCompletedSteps((prev) => {
               if (!prev.includes("kyc")) {
                 return [...prev, "kyc"];
@@ -263,14 +140,10 @@ export default function Application() {
               return prev;
             });
 
+            // Move to the next step if currently on KYC
             if (currentStep === "kyc") {
               setCurrentStep("bank");
             }
-
-            toast({
-              title: "Identity Verification Complete",
-              description: "Your identity has been successfully verified"
-            });
 
             setIsHandlingVerification(false);
           }, 500);
@@ -282,40 +155,70 @@ export default function Application() {
 
       handleVerificationRedirect();
     }
-  }, [verifySuccess, verifyContractId, location, toast, refetchContract, currentStep, navigate]);
+  }, [verifySuccess, verifyContractId, location, toast, refetch, currentStep]);
 
+  // When contract data loads, set up the application state
   useEffect(() => {
-    if (contractResponse?.contract) {
-      console.log("Valid contract data received:", contractResponse.contract.id);
-      setContractData(contractResponse.contract);
+    if (contractResponse) {
+      // Real contract data
+      const { contract, progress } = contractResponse;
 
+      // Get merchant name (in a real app would be fetched from API)
+      let merchantName = "TechSolutions Inc.";
+      // Get customer name (in a real app would be fetched from API)
+      let customerName = "Customer";
+
+      setContractData({
+        ...contract,
+        merchantName,
+        customerName,
+      });
+
+      setApplicationProgress(progress);
+
+      // Create a map for easier access to progress items
       const progressMapObj: Record<string, any> = {};
-      contractResponse.progress.forEach((item: any) => {
+      progress.forEach((item: any) => {
         progressMapObj[item.step] = item;
       });
       setProgressMap(progressMapObj);
-      setApplicationProgress(contractResponse.progress);
 
-      const stepFromContract = contractResponse.contract.currentStep;
-      const validStep = CONTRACT_STEPS.includes(stepFromContract) ? stepFromContract : "terms";
-      setCurrentStep(validStep);
+      // Set current step from contract
+      setCurrentStep(contract.currentStep);
 
-      const completed = contractResponse.progress
+      // Set completed steps
+      const completed = progress
         .filter((item: any) => item.completed)
         .map((item: any) => item.step);
       setCompletedSteps(completed);
-    } else if (isErrorContract) {
-      console.error("Error fetching contract:", errorContract);
-      console.log(`Contract error for ID ${contractId}, but not redirecting`);
-    } else if (!isLoadingContract && !contractResponse?.contract) {
-      console.error(`Contract with ID ${contractId} not found in API response`);
+    } else if (!isLoadingContract) {
+      // Use mock data if no contract found and not still loading
+      setContractData(mockContractData);
 
-      console.log("Contract API response:", contractResponse);
-      console.log("Contract ID from URL:", contractIdParam);
-      console.log("Parsed Contract ID:", contractId);
+      // Create mock progress items
+      const mockProgress = [
+        { id: 1001, step: "terms", completed: false },
+        { id: 1002, step: "kyc", completed: false },
+        { id: 1003, step: "bank", completed: false },
+        { id: 1004, step: "payment", completed: false },
+        { id: 1005, step: "signing", completed: false },
+      ];
+
+      setApplicationProgress(mockProgress);
+
+      // Create a progress map
+      const progressMapObj: Record<string, any> = {};
+      mockProgress.forEach((item) => {
+        progressMapObj[item.step] = item;
+      });
+      setProgressMap(progressMapObj);
+
+      setCurrentStep("terms");
+      setCompletedSteps([]);
     }
-  }, [contractResponse, isLoadingContract, navigate, isErrorContract, contractId, contractIdParam]);
+  }, [contractResponse, isLoadingContract]);
 
+  // All application steps
   const steps: Step[] = [
     {
       id: "terms",
@@ -344,6 +247,7 @@ export default function Application() {
     },
   ];
 
+  // Calculate the next step after completing the current one
   const getNextStep = (currentStep: string): string => {
     const stepIndex = steps.findIndex((step) => step.id === currentStep);
     if (stepIndex < steps.length - 1) {
@@ -352,6 +256,7 @@ export default function Application() {
     return "completed";
   };
 
+  // Calculate the progress percentage
   const calculateProgress = (): number => {
     if (!contractData) return 0;
 
@@ -365,6 +270,7 @@ export default function Application() {
     return Math.round((completedCount / totalSteps) * 100);
   };
 
+  // Calculate the current step number (1-based)
   const getCurrentStepNumber = (): number => {
     if (!contractData) return 1;
 
@@ -376,51 +282,45 @@ export default function Application() {
     return stepIndex >= 0 ? stepIndex + 1 : 1;
   };
 
-  const handleCompleteStep = async (stepId: string, nextStep?: string) => {
-    if (!contractData) {
-      console.error("Cannot complete step: contractData is undefined");
-      return;
+  // Handle completion of a step
+  const handleCompleteStep = async () => {
+    if (!contractData) return;
+
+    // Add current step to completed steps if not already there
+    if (!completedSteps.includes(currentStep)) {
+      setCompletedSteps((prev) => [...prev, currentStep]);
     }
 
-    const calculatedNextStep = nextStep || getNextStep(stepId);
-    console.log(`Contract ID: ${contractData.id}, Completed step: ${stepId}, moving to: ${calculatedNextStep}`);
+    // Get the next step
+    const nextStep = getNextStep(currentStep);
 
     try {
-      if (calculatedNextStep !== "completed") {
-        console.log(`Updating contract ${contractData.id} step to ${calculatedNextStep}`);
-        await apiRequest(
-          "PATCH",
-          `/api/contracts/${contractData.id}/step`,
-          { step: calculatedNextStep }
-        );
-      } else {
-        console.log(`Setting contract ${contractData.id} status to active`);
-        await apiRequest(
-          "PATCH",
-          `/api/contracts/${contractData.id}/status`,
-          { status: "active" }
-        );
+      // In a real app, update the contract step on the server
+      if (contractData.id > 0) {
+        await apiRequest("PATCH", `/api/contracts/${contractData.id}/step`, {
+          step: nextStep,
+        });
+
+        // Refresh contract data
+        queryClient.invalidateQueries(["/api/contracts", contractData.id]);
       }
 
-      setCompletedSteps((prev) => {
-        if (prev.includes(stepId)) return prev;
-        return [...prev, stepId];
-      });
-
-      setCurrentStep(calculatedNextStep);
-      console.log(`Successfully moved to step ${calculatedNextStep} for contract ${contractData.id}`);
+      // Move to the next step
+      setCurrentStep(nextStep);
     } catch (error) {
-      console.error(`Error updating contract ${contractData.id} step:`, error);
+      console.error("Error updating contract step:", error);
       toast({
         title: "Error",
         description: "There was a problem updating your application progress.",
         variant: "destructive",
       });
 
-      setCurrentStep(calculatedNextStep);
+      // Still move to next step in UI for better user experience
+      setCurrentStep(nextStep);
     }
   };
 
+  // Handle going back to the previous step
   const handleGoBack = () => {
     if (!contractData) return;
 
@@ -430,7 +330,8 @@ export default function Application() {
     }
   };
 
-  if (isValidating || isLoadingContract) {
+  // If still loading contract data, show loading state
+  if (!contractData) {
     return (
       <CustomerLayout>
         <div className="p-6 flex items-center justify-center">
@@ -443,15 +344,7 @@ export default function Application() {
     );
   }
 
-  if (validationError) {
-    return <ContractNotFound errorMessage={validationError.message} contractId={contractId} />;
-  }
-
-  if (isErrorContract) {
-    return <ContractNotFound errorMessage={errorContract.message} contractId={contractId} />;
-  }
-
-
+  // Render different content based on current step
   const renderStepContent = () => {
     switch (currentStep) {
       case "terms":
@@ -611,6 +504,7 @@ export default function Application() {
     }
   };
 
+  // Show the application progress view if we're on the application flow steps
   if (currentStep !== "completed") {
     return (
       <CustomerLayout
@@ -623,6 +517,7 @@ export default function Application() {
     );
   }
 
+  // Show the completed screen
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
       <div className="max-w-md w-full mx-auto">
@@ -630,39 +525,6 @@ export default function Application() {
           {renderStepContent()}
         </div>
       </div>
-    </div>
-  );
-}
-
-function ContractNotFound({ errorMessage, contractId }: { errorMessage: string; contractId?: number }) {
-  const navigate = useNavigate();
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Application Not Found</CardTitle>
-          <CardDescription>
-            {errorMessage || "We couldn't find your application"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-muted-foreground">
-            {contractId
-              ? `We couldn't load contract #${contractId}. Please check your SMS for the correct link or contact the merchant.`
-              : "Please check your SMS for the correct link or contact the merchant who sent you the application."}
-          </p>
-          <div className="flex justify-center space-x-3">
-            <Button variant="outline" onClick={() => window.location.reload()}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Try Again
-            </Button>
-            <Button onClick={() => navigate("/apply")}>
-              Start New Application
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

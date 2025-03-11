@@ -2,11 +2,21 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import { calculateMonthlyPayment, calculateDownPayment, calculateFinancedAmount } from "@/lib/utils";
+import {
+  calculateMonthlyPayment,
+  calculateDownPayment,
+  calculateFinancedAmount,
+} from "@/lib/utils";
 import { SendHorizontal, Calculator, RefreshCw } from "lucide-react";
 
 export default function SendApplication() {
@@ -16,7 +26,6 @@ export default function SendApplication() {
   const [amount, setAmount] = useState("");
   const [showCalculator, setShowCalculator] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [applicationUrl, setApplicationUrl] = useState('');
 
   // Fixed financing terms for ShiFi
   const termMonths = 24;
@@ -27,22 +36,25 @@ export default function SendApplication() {
   const purchaseAmount = parseFloat(amount) || 0;
   const downPayment = calculateDownPayment(purchaseAmount, downPaymentPercent);
   const financedAmount = calculateFinancedAmount(purchaseAmount, downPayment);
-  const monthlyPayment = calculateMonthlyPayment(financedAmount, termMonths, interestRate);
+  const monthlyPayment = calculateMonthlyPayment(
+    financedAmount,
+    termMonths,
+    interestRate,
+  );
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
     }).format(value);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!phoneNumber || !amount) {
       toast({
         title: "Error",
-        description: "Please fill in all required fields.",
+        description: "Please enter both phone number and amount",
         variant: "destructive",
       });
       return;
@@ -50,35 +62,19 @@ export default function SendApplication() {
 
     try {
       setIsSubmitting(true);
+      // Get merchant ID based on current user
+      const merchantId = user?.merchantId || 1;
 
-      // Make API call to send the application via SMS
-      const response = await apiRequest("POST", "/api/send-application", {
-        phoneNumber: phoneNumber,
-        customerName: "Customer", // Default customer name
+      await apiRequest("POST", "/api/send-sms", {
+        phoneNumber,
+        merchantId,
         amount: parseFloat(amount),
-        merchantId: user?.merchantId || 1, // Fall back to ID 1 if not available
       });
 
-      // Check if the request was successful and contains contractId
-      if (response.success && response.contractId) {
-        // Log contract details
-        console.log('SendApplication - Details:', response);
-
-        //Assuming response includes applicationUrl
-        setApplicationUrl(response.applicationUrl);
-
-        toast({
-          title: "Application Sent",
-          description: `ShiFi financing application sent to ${phoneNumber}. Application link: ${response.applicationUrl}`,
-        });
-      } else {
-        console.error("Contract ID is missing or API request failed:", response);
-        toast({
-          title: "Warning",
-          description: "Application sent, but contract tracking may be unavailable.",
-          variant: "warning",
-        });
-      }
+      toast({
+        title: "Application Sent",
+        description: `ShiFi financing application sent to ${phoneNumber}.`,
+      });
 
       setPhoneNumber("");
       setAmount("");
@@ -147,18 +143,18 @@ export default function SendApplication() {
               </div>
 
               <div className="flex space-x-3 pt-1">
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? "Sending..." : "Send Application"}
                 </Button>
 
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="px-3" 
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="px-3"
                   onClick={() => setShowCalculator(!showCalculator)}
                 >
                   <Calculator className="h-5 w-5" />
@@ -174,14 +170,13 @@ export default function SendApplication() {
                   <Calculator className="h-4 w-4 mr-2 text-primary" />
                   Payment Calculator
                 </h3>
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  className="h-7 w-7 p-0" 
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
                   onClick={() => setShowCalculator(false)}
                 >
-                  <span className="sr-only">Close</span>
-                  ×
+                  <span className="sr-only">Close</span>×
                 </Button>
               </div>
 
@@ -196,19 +191,27 @@ export default function SendApplication() {
                 </div>
                 <div className="flex justify-between py-1 border-b border-border/50">
                   <span>Purchase Amount:</span>
-                  <span className="font-medium">{formatCurrency(purchaseAmount)}</span>
+                  <span className="font-medium">
+                    {formatCurrency(purchaseAmount)}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-border/50">
                   <span>Down Payment (15%):</span>
-                  <span className="font-medium">{formatCurrency(downPayment)}</span>
+                  <span className="font-medium">
+                    {formatCurrency(downPayment)}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-border/50">
                   <span>Amount Financed:</span>
-                  <span className="font-medium">{formatCurrency(financedAmount)}</span>
+                  <span className="font-medium">
+                    {formatCurrency(financedAmount)}
+                  </span>
                 </div>
                 <div className="flex justify-between py-2 mt-1 font-semibold">
                   <span>Monthly Payment:</span>
-                  <span className="text-primary">{formatCurrency(monthlyPayment)}</span>
+                  <span className="text-primary">
+                    {formatCurrency(monthlyPayment)}
+                  </span>
                 </div>
               </div>
             </div>

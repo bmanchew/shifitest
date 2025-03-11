@@ -2,13 +2,6 @@ import express, { type Express, Request, Response } from "express";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { ZodError } from "zod";
-import jwt from "jsonwebtoken";
-import crypto from "crypto";
-
-import { eq } from "drizzle-orm";
-import { db } from "./db";
-import { contracts } from "@shared/schema"; // Fix import path
-
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
@@ -23,60 +16,9 @@ import { diditService } from "./services/didit";
 import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { logger } from "./services/logger";
-import { underwritingService } from "./services/underwriting";
-// Create admin reports router
-const adminReportsRouter = express.Router();
-import merchantAnalytics from "./routes/merchantAnalytics"; // Added import
+import crypto from "crypto";
 
-// Register merchant analytics routes
-adminReportsRouter.use("/complaint-trends", merchantAnalytics);
 
-// Authentication middleware
-export const authenticateToken = (
-  req: Request,
-  res: Response,
-  next: Function,
-) => {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-
-  if (!token) {
-    return res
-      .status(401)
-      .json({ message: "Authentication token is required" });
-  }
-
-  const secret = process.env.JWT_SECRET || "default_secret_key_for_development";
-
-  jwt.verify(token, secret, (err: any, user: any) => {
-    if (err) {
-      return res.status(403).json({ message: "Invalid or expired token" });
-    }
-
-    (req as any).user = user;
-    next();
-  });
-};
-
-// Admin role middleware
-export const isAdmin = (req: Request, res: Response, next: Function) => {
-  if ((req as any).user && (req as any).user.role === "admin") {
-    next();
-  } else {
-    res.status(403).json({ message: "Access denied: Admin role required" });
-  }
-};
-
-// Merchant role middleware
-export const isMerchantUser = (req: Request, res: Response, next: Function) => {
-  if ((req as any).user && (req as any).user.role === "merchant") {
-    next();
-  } else {
-    res.status(403).json({ message: "Access denied: Merchant role required" });
-  }
-};
-
-// Helper function to convert metadata to JSON string for storage
 function objectMetadata<T>(data: T): string {
   if (!data) return JSON.stringify({});
   if (typeof data === "string") {
@@ -105,30 +47,11 @@ function generateContractNumber(): string {
 export async function registerRoutes(app: Express): Promise<Server> {
   const apiRouter = express.Router();
 
-  // Enable CORS for all API routes
-  apiRouter.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization",
-    );
-    next();
-  });
-
   // Auth routes
   apiRouter.post("/auth/login", async (req: Request, res: Response) => {
     try {
-      console.log("Login attempt:", req.body.email);
       const { email, password } = req.body;
-
-      if (!email || !password) {
-        return res
-          .status(400)
-          .json({ message: "Email and password are required" });
-      }
-
       const user = await storage.getUserByEmail(email);
-      console.log("User found:", !!user);
 
       if (!user || user.password !== password) {
         return res.status(401).json({ message: "Invalid credentials" });
@@ -149,12 +72,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }),
       });
 
-      console.log(
-        "Login successful for user:",
-        user.email,
-        "with role:",
-        user.role,
-      );
       res.json({ user: userWithoutPassword });
     } catch (error) {
       console.error("Login error:", error);
@@ -162,105 +79,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ================ UNDERWRITING ROUTES =================
-  app.post("/api/underwriting/process", async (req, res) => {
-    const { userId, contractId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
-
-    try {
-      const result = await underwritingService.processUnderwriting(
-        parseInt(userId),
-        contractId ? parseInt(contractId) : undefined,
-      );
-      res.json({ success: true, data: result });
-    } catch (error) {
-      logger.error({
-        message: "Error processing underwriting",
-        error,
-        metadata: {
-          userId,
-          contractId,
-        },
-      });
-      res
-        .status(500)
-        .json({
-          message: "Error processing underwriting",
-          error: error.message,
-        });
-    }
-  });
-
-  app.get("/api/underwriting/user/:userId", async (req, res) => {
-    const { userId } = req.params;
-
-    try {
-      const data = await storage.getUnderwritingDataByUserId(parseInt(userId));
-      res.json({ success: true, data });
-    } catch (error) {
-      logger.error({
-        message: "Error retrieving underwriting data",
-        error,
-        metadata: {
-          userId,
-        },
-      });
-      res
-        .status(500)
-        .json({
-          message: "Error retrieving underwriting data",
-          error: error.message,
-        });
-    }
-  });
-
-  app.get("/api/underwriting/contract/:contractId", async (req, res) => {
-    const { contractId } = req.params;
-    const userRole = (req.query.role as string) || "customer";
-
-    try {
-      const data = await storage.getUnderwritingDataByContractId(
-        parseInt(contractId),
-      );
-
-      // For non-admin users, limit the data to just the credit tier
-      if (userRole !== "admin") {
-        // If data exists, only return limited information
-        if (data && data.length > 0) {
-          const limitedData = data.map((item) => ({
-            id: item.id,
-            contractId: item.contractId,
-            creditTier: item.creditTier,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt,
-          }));
-          return res.json({ success: true, data: limitedData });
-        }
-      }
-
-      // For admins, return complete data
-      res.json({ success: true, data });
-    } catch (error) {
-      logger.error({
-        message: "Error retrieving underwriting data",
-        error,
-        metadata: {
-          contractId,
-        },
-      });
-      res
-        .status(500)
-        .json({
-          message: "Error retrieving underwriting data",
-          error: error.message,
-        });
-    }
-  });
-
-  // ================ USER ROUTES =================
+  // User routes
   apiRouter.post("/users", async (req: Request, res: Response) => {
     try {
       const userData = insertUserSchema.parse(req.body);
@@ -419,18 +238,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create initial application progress steps
       const steps = ["terms", "kyc", "bank", "payment", "signing"];
-      // Verify contractId is available and valid
-      if (!newContract.id || isNaN(newContract.id)) {
-        logger.error({
-          message:
-            "Invalid contract ID when creating application progress steps",
-          metadata: { contractId: newContract.id },
-        });
-        throw new Error(
-          "Failed to create application progress due to invalid contract ID",
-        );
-      }
-
       for (const step of steps) {
         await storage.createApplicationProgress({
           contractId: newContract.id,
@@ -762,147 +569,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // Route to handle creation of application progress items
-  apiRouter.post(
-    "/application-progress",
-    async (req: Request, res: Response) => {
-      try {
-        const { contractId, step, completed, data } = req.body;
 
-        console.log("Creating application progress:", {
-          contractId,
-          contractIdType: typeof contractId,
-          step,
-          completed,
-          dataExists: !!data,
-        });
+  // Add this route to handle creation of application progress items
+apiRouter.post("/application-progress", async (req: Request, res: Response) => {
+  try {
+    const { contractId, step, completed, data } = req.body;
 
-        if (!contractId || !step) {
-          console.error("Missing required fields:", { contractId, step });
-          return res.status(400).json({
-            message: "Contract ID and step are required",
-          });
-        }
+    if (!contractId || !step) {
+      return res.status(400).json({ 
+        message: "Contract ID and step are required" 
+      });
+    }
 
-        // Verify the contract exists with safer parsing
-        let contractIdNum: number;
-        try {
-          // Handle different input types properly
-          if (typeof contractId === "string") {
-            contractIdNum = parseInt(contractId);
-          } else if (typeof contractId === "number") {
-            contractIdNum = contractId;
-          } else {
-            contractIdNum = parseInt(String(contractId));
-          }
+    // Verify the contract exists
+    const contract = await storage.getContract(parseInt(contractId));
+    if (!contract) {
+      return res.status(404).json({ 
+        message: "Contract not found" 
+      });
+    }
 
-          if (isNaN(contractIdNum)) {
-            throw new Error(`Invalid contract ID format: ${contractId}`);
-          }
+    // Create the application progress item
+    const progressItem = await storage.createApplicationProgress({
+      contractId: parseInt(contractId),
+      step: step,
+      completed: !!completed,
+      data: data || null
+    });
 
-          console.log(
-            `Parsed contract ID: ${contractIdNum} (from input: ${contractId})`,
-          );
-        } catch (parseError) {
-          console.error("Contract ID parse error:", parseError);
-          return res.status(400).json({
-            message: `Invalid contract ID format: ${contractId}`,
-            details: String(parseError),
-          });
-        }
+    // Log the creation
+    await storage.createLog({
+      level: "info",
+      category: "contract",
+      message: `Application progress created for contract ${contractId}, step ${step}`,
+      metadata: JSON.stringify({ 
+        contractId, 
+        step, 
+        completed: !!completed 
+      })
+    });
 
-        // Check if the progress item already exists for this contract and step
-        const existingProgressItems =
-          await storage.getApplicationProgressByContractId(contractIdNum);
-        const existingProgressItem = existingProgressItems.find(
-          (item) => item.step === step,
-        );
-
-        if (existingProgressItem) {
-          console.log(
-            `Found existing progress for contract ${contractIdNum}, step ${step} with ID ${existingProgressItem.id}`,
-          );
-
-          // If the progress item exists and we're updating it, update it
-          if (completed !== undefined || data !== undefined) {
-            const updatedProgress =
-              await storage.updateApplicationProgressCompletion(
-                existingProgressItem.id,
-                completed !== undefined
-                  ? !!completed
-                  : existingProgressItem.completed,
-                data !== undefined ? data : existingProgressItem.data,
-              );
-
-            console.log(
-              `Updated existing progress item for contract ${contractIdNum}, step ${step}`,
-              updatedProgress,
-            );
-
-            return res.status(200).json(updatedProgress);
-          }
-
-          // Otherwise, just return the existing progress item
-          return res.status(200).json(existingProgressItem);
-        }
-
-        // Verify the contract exists
-        try {
-          const contract = await storage.getContract(contractIdNum);
-          if (!contract) {
-            console.error(`Contract not found: ${contractIdNum}`);
-            return res.status(404).json({
-              message: "Contract not found",
-              details: `No contract with ID ${contractIdNum} exists in the database`,
-            });
-          }
-          console.log(
-            `Found contract: ${contract.id}, number: ${contract.contractNumber}`,
-          );
-        } catch (dbError) {
-          console.error(
-            `Database error when looking up contract ${contractIdNum}:`,
-            dbError,
-          );
-          return res.status(500).json({
-            message: "Error looking up contract",
-            details: String(dbError),
-          });
-        }
-
-        // Create the application progress item
-        const progressItem = await storage.createApplicationProgress({
-          contractId: contractIdNum,
-          step: step,
-          completed: !!completed,
-          data: data || null,
-        });
-
-        // Log the creation
-        await storage.createLog({
-          level: "info",
-          category: "contract",
-          message: `Application progress created for contract ${contractIdNum}, step ${step}`,
-          metadata: JSON.stringify({
-            contractId: contractIdNum,
-            step,
-            completed: !!completed,
-          }),
-        });
-
-        console.log(
-          `Successfully created progress item for contract ${contractIdNum}, step ${step}`,
-        );
-        res.status(201).json(progressItem);
-      } catch (error) {
-        console.error("Create application progress error:", error);
-        res.status(500).json({
-          message: "Internal server error",
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    },
-  );
+    res.status(201).json(progressItem);
+  } catch (error) {
+    console.error("Create application progress error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
   // Log routes
   apiRouter.get("/logs", async (req: Request, res: Response) => {
@@ -928,180 +640,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SMS endpoint using Twilio API
-  // apiRouter.post("/send-sms", async (req: Request, res: Response) => {
-  //   try {
-  //     // Check if this is a test SMS from admin panel
-  //     if (req.body.phone && req.body.isTest) {
-  //       // This is a test request from the admin API verification
-  //       console.log(`Processing test SMS to ${req.body.phone}`);
+  apiRouter.post("/send-sms", async (req: Request, res: Response) => {
+    try {
+      // Check if this is a test SMS from admin panel
+      if (req.body.phone && req.body.isTest) {
+        // This is a test request from the admin API verification
+        console.log(`Processing test SMS to ${req.body.phone}`);
 
-  //       // Create test log entry
-  //       await storage.createLog({
-  //         level: "info",
-  //         category: "api",
-  //         source: "twilio",
-  //         message: `Test SMS to ${req.body.phone}`,
-  //         metadata: JSON.stringify(req.body),
-  //       });
+        // Create test log entry
+        await storage.createLog({
+          level: "info",
+          category: "api",
+          source: "twilio",
+          message: `Test SMS to ${req.body.phone}`,
+          metadata: JSON.stringify(req.body),
+        });
 
-  //       // Send a real test message via Twilio service
-  //       const testResult = await twilioService.sendSMS({
-  //         to: req.body.phone,
-  //         body: "This is a test message from ShiFi. Your API verification was successful.",
-  //       });
+        // Send a real test message via Twilio service
+        const testResult = await twilioService.sendSMS({
+          to: req.body.phone,
+          body: "This is a test message from ShiFi. Your API verification was successful.",
+        });
 
-  //       // Return appropriate response
-  //       return res.json({
-  //         success: true,
-  //         message: testResult.isSimulated
-  //           ? `Test SMS would be sent to ${req.body.phone}`
-  //           : `Test SMS sent to ${req.body.phone}`,
-  //         messageId:
-  //           testResult.messageId ||
-  //           "SM" + Math.random().toString(36).substring(2, 15).toUpperCase(),
-  //         status: testResult.isSimulated ? "simulated" : "delivered",
-  //       });
-  //     }
+        // Return appropriate response
+        return res.json({
+          success: true,
+          message: testResult.isSimulated
+            ? `Test SMS would be sent to ${req.body.phone}`
+            : `Test SMS sent to ${req.body.phone}`,
+          messageId:
+            testResult.messageId ||
+            "SM" + Math.random().toString(36).substring(2, 15).toUpperCase(),
+          status: testResult.isSimulated ? "simulated" : "delivered",
+        });
+      }
 
-  //     // Regular SMS flow
-  //     const { phoneNumber, merchantId, amount } = req.body;
+      // Regular SMS flow
+      const { phoneNumber, merchantId, amount } = req.body;
 
-  //     if (!phoneNumber || !merchantId || !amount) {
-  //       return res.status(400).json({
-  //         message: "Phone number, merchant ID, and amount are required",
-  //       });
-  //     }
+      if (!phoneNumber || !merchantId || !amount) {
+        return res.status(400).json({
+          message: "Phone number, merchant ID, and amount are required",
+        });
+      }
 
-  //     // Get merchant
-  //     const merchant = await storage.getMerchant(parseInt(merchantId));
-  //     if (!merchant) {
-  //       return res.status(404).json({ message: "Merchant not found" });
-  //     }
+      // Get merchant
+      const merchant = await storage.getMerchant(parseInt(merchantId));
+      if (!merchant) {
+        return res.status(404).json({ message: "Merchant not found" });
+      }
 
-  //     // Create a contract for this financing request
-  //     const contractNumber = generateContractNumber();
-  //     const termMonths = 24; // Fixed term
-  //     const interestRate = 0; // 0% APR
-  //     const downPaymentPercent = 15; // 15% down payment
-  //     const downPayment = amount * (downPaymentPercent / 100);
-  //     const financedAmount = amount - downPayment;
-  //     const monthlyPayment = financedAmount / termMonths;
+      // Create a contract for this financing request
+      const contractNumber = generateContractNumber();
+      const termMonths = 24; // Fixed term
+      const interestRate = 0; // 0% APR
+      const downPaymentPercent = 15; // 15% down payment
+      const downPayment = amount * (downPaymentPercent / 100);
+      const financedAmount = amount - downPayment;
+      const monthlyPayment = financedAmount / termMonths;
 
-  //     console.log("Creating contract with:", {
-  //       contractNumber,
-  //       merchantId,
-  //       amount,
-  //       downPayment,
-  //       financedAmount,
-  //       termMonths,
-  //       interestRate,
-  //       monthlyPayment,
-  //     });
+      console.log("Creating contract with:", {
+        contractNumber,
+        merchantId,
+        amount,
+        downPayment,
+        financedAmount,
+        termMonths,
+        interestRate,
+        monthlyPayment,
+      });
 
-  //     // Create a new contract
-  //     const newContract = await storage.createContract({
-  //       contractNumber,
-  //       merchantId,
-  //       customerId: null, // Will be set when the customer completes the application
-  //       amount,
-  //       downPayment,
-  //       financedAmount,
-  //       termMonths,
-  //       interestRate,
-  //       monthlyPayment,
-  //       status: "pending",
-  //       currentStep: "terms",
-  //     });
+      // Create a new contract
+      const newContract = await storage.createContract({
+        contractNumber,
+        merchantId,
+        customerId: null, // Will be set when the customer completes the application
+        amount,
+        downPayment,
+        financedAmount,
+        termMonths,
+        interestRate,
+        monthlyPayment,
+        status: "pending",
+        currentStep: "terms",
+      });
 
-  //           // Create application progress for this contract      const newProgress = await storage.createApplicationProgress({
-  //       contractId: newContract.id,
-  //       step: "terms",
-  //       completed: false,
-  //       data: null,
-  //     });
+      // Create application progress for this contract
+      const newProgress = await storage.createApplicationProgress({
+        contractId: newContract.id,
+        step: "terms",
+        completed: false,
+        data: null,
+      });
 
-  //     // Get the application base URL from Replit
-  //     const replitDomain = getAppDomain();
+      // Get the application base URL from Replit
+      const replitDomain = getAppDomain();
+      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
 
-  //     // Ensure the contract ID is valid before creating the URL
-  //     const contractId = newContract.id;
-  //     if (!contractId) {
-  //       throw new Error("Failed to generate valid contract ID for application URL");
-  //     }
+      // Prepare the SMS message
+      const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
 
-  //     // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
-  //     // The URL format must be /apply/${contractId} to match the React router configuration
-  //     // This is where customers access their application after receiving the SMS
+      try {
+        // Send SMS using our Twilio service
+        const result = await twilioService.sendSMS({
+          to: phoneNumber,
+          body: messageText,
+        });
 
-  //     // Verify the contract ID is valid before creating the URL
-  //     if (isNaN(contractId)) {
-  //       throw new Error("Failed to generate a valid contract ID");
-  //     }
+        if (result.isSimulated) {
+          console.log(`Simulated SMS to ${phoneNumber}: ${messageText}`);
+        } else if (result.success) {
+          console.log(
+            `Successfully sent SMS to ${phoneNumber}, Message ID: ${result.messageId}`,
+          );
+        } else {
+          console.error(`Failed to send SMS: ${result.error}`);
+          throw new Error(result.error);
+        }
+      } catch (twilioError) {
+        console.error("Twilio service error:", twilioError);
+        throw twilioError;
+      }
 
-  //     const applicationUrl = `https://${replitDomain}/apply/${contractId}`;
+      // Create log for SMS sending
+      await storage.createLog({
+        level: "info",
+        category: "api",
+        source: "twilio",
+        message: `SMS sent to ${phoneNumber}`,
+        metadata: JSON.stringify({
+          merchantId,
+          amount,
+          contractId: newContract.id,
+        }),
+      });
 
-  //     // Enhanced logging for debugging URL issues
-  //     console.log(`Creating SMS with Contract ID: ${contractId} (type: ${typeof contractId})`);
-  //     console.log(`Application URL: ${applicationUrl}`);
-  //     console.log(`Contract details:`, JSON.stringify(newContract));
+      res.json({ success: true, message: "SMS sent successfully" });
+    } catch (error) {
+      console.error("Send SMS error:", error);
 
-  //     // Prepare the SMS message with clearer URL formatting
-  //     const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}.\n\nApply here: ${applicationUrl}\n\nContract #: ${contractNumber}`;
+      // Create error log
+      await storage.createLog({
+        level: "error",
+        category: "api",
+        source: "twilio",
+        message: `Failed to send SMS: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: JSON.stringify({
+          error: error instanceof Error ? error.stack : null,
+        }),
+      });
 
-  //     try {
-  //       // Send SMS using our Twilio service
-  //       const result = await twilioService.sendSMS({
-  //         to: phoneNumber,
-  //         body: messageText,
-  //       });
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
 
-  //       if (result.isSimulated) {
-  //         console.log(`Simulated SMS to ${phoneNumber}: ${messageText}`);
-  //       } else if (result.success) {
-  //         console.log(
-  //           `Successfully sent SMS to ${phoneNumber}, Message ID: ${result.messageId}`,
-  //         );
-  //       } else {
-  //         console.error(`Failed to send SMS: ${result.error}`);
-  //         throw new Error(result.error);
-  //       }
-  //     } catch (twilioError) {
-  //       console.error("Twilio service error:", twilioError);
-  //       throw twilioError;
-  //     }
-
-  //     // Create log for SMS sending
-  //     await storage.createLog({
-  //       level: "info",
-  //       category: "api",
-  //       source: "twilio",
-  //       message: `SMS sent to ${phoneNumber}`,
-  //       metadata: JSON.stringify({
-  //         merchantId,
-  //         amount,
-  //         contractId: newContract.id,
-  //       }),
-  //     });
-
-  //     res.json({ success: true, message: "SMS sent successfully", contractId: newContract.id });
-  //   } catch (error) {
-  //     console.error("Send SMS error:", error);
-
-  //     // Create error log
-  //     await storage.createLog({
-  //       level: "error",
-  //       category: "api",
-  //       source: "twilio",
-  //       message: `Failed to send SMS: ${error instanceof Error ? error.message : String(error)}`,
-  //       metadata: JSON.stringify({
-  //         error: error instanceof Error ? error.stack : null,
-  //       }),
-  //     });
-
-  //     res.status(500).json({ message: "Internal server error" });
-  //   }
-  // });
-
+  // KYC verification API endpoint
   // KYC verification API endpoint
   apiRouter.post("/kyc/create-session", async (req: Request, res: Response) => {
     try {
@@ -1119,7 +812,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Separate URLs for webhook notifications and user redirection
       const webhookUrl = `https://${domain}/api/kyc/webhook`;
-      // Use the consistent /apply/${contractId} path for redirection after KYC verification
       const redirectUrl = `https://${domain}/apply/${contractId}`;
 
       // Set the server base URL for the DiDit service to handle mock mode correctly
@@ -1224,7 +916,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           <title>DiDit Verification</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sansserif; margin: 0; padding: 0; color: #333; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; color: #333; }
             .container { max-width: 800px; margin: 0 auto; padding: 20px; }
             .header { background: linear-gradient(to right, #4776E6, #8E54E9); color: white; padding: 20px; text-align: center; }
             .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
@@ -1538,398 +1230,390 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Thanks Roger contract signing endpoint
-  apiRouter.post("/contract-signing", async (req: Request, res: Response) => {
-    try {
-      const { contractId, contractNumber, customerName, signatureData } =
-        req.body;
 
-      if (!contractId || !contractNumber || !customerName || !signatureData) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Missing required fields: contractId, contractNumber, customerName, and signatureData are required",
-        });
-      }
+// Thanks Roger contract signing endpoint
+// Thanks Roger contract signing endpoint
+apiRouter.post("/contract-signing", async (req: Request, res: Response) => {
+  try {
+    const { contractId, contractNumber, customerName, signatureData } = req.body;
 
-      // Get the contract details
-      const contract = await storage.getContract(Number(contractId));
-      if (!contract) {
-        return res.status(404).json({
-          success: false,
-          message: "Contract not found",
-        });
-      }
+    if (!contractId || !contractNumber || !customerName || !signatureData) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: contractId, contractNumber, customerName, and signatureData are required",
+      });
+    }
 
-      // Get merchant details
-      const merchant = await storage.getMerchant(contract.merchantId);
-      if (!merchant) {
-        return res.status(404).json({
-          success: false,
-          message: "Merchant not found",
-        });
-      }
+    // Get the contract details
+    const contract = await storage.getContract(Number(contractId));
+    if (!contract) {
+      return res.status(404).json({
+        success: false,
+        message: "Contract not found",
+      });
+    }
 
-      logger.info({
-        message: `Processing contract signing for contract #${contractNumber}`,
+    // Get merchant details
+    const merchant = await storage.getMerchant(contract.merchantId);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found",
+      });
+    }
+
+    logger.info({
+      message: `Processing contract signing for contract #${contractNumber}`,
+      category: "contract",
+      source: "thanksroger",
+      metadata: { contractId, customerName },
+    });
+
+    // Check if the API is properly configured
+    const apiKey = process.env.THANKSROGER_API_KEY;
+    const workspaceId = process.env.THANKSROGER_WORKSPACE_ID;
+    const templateId = process.env.THANKSROGER_TEMPLATE_ID;
+
+    const apiConfigured = apiKey && workspaceId && templateId;
+    if (!apiConfigured) {
+      logger.warn({
+        message: "ThanksRoger API not fully configured. Missing env variables.",
         category: "contract",
         source: "thanksroger",
-        metadata: { contractId, customerName },
+        metadata: { 
+          apiKeySet: !!apiKey,
+          workspaceIdSet: !!workspaceId,
+          templateIdSet: !!templateId
+        }
       });
+    }
 
-      // Check if the API is properly configured
-      const apiKey = process.env.THANKSROGER_API_KEY;
-      const workspaceId = process.env.THANKSROGER_WORKSPACE_ID;
-      const templateId = process.env.THANKSROGER_TEMPLATE_ID;
+    // First, check if we already have a ThanksRoger contract ID for this contract
+    // If not, create a new contract in ThanksRoger
+    let thankRogerContractId = "";
+    let signingLink = "";
 
-      const apiConfigured = apiKey && workspaceId && templateId;
-      if (!apiConfigured) {
-        logger.warn({
-          message:
-            "ThanksRoger API not fully configured. Missing env variables.",
-          category: "contract",
-          source: "thanksroger",
-          metadata: {
-            apiKeySet: !!apiKey,
-            workspaceIdSet: !!workspaceId,
-            templateIdSet: !!templateId,
-          },
-        });
-      }
+    // Look up the ThanksRoger contract ID in the application progress
+    const progress = await storage.getApplicationProgressByContractId(Number(contractId));
+    const signingProgress = progress.find(step => step.step === "signing");
 
-      // First, check if we already have a ThanksRoger contract ID for this contract
-      // If not, create a new contract in ThanksRoger
-      let thankRogerContractId = "";
-      let signingLink = "";
-
-      // Look up the ThanksRoger contract ID in the application progress
-      const progress = await storage.getApplicationProgressByContractId(
-        Number(contractId),
-      );
-      const signingProgress = progress.find((step) => step.step === "signing");
-
-      if (signingProgress && signingProgress.data) {
-        try {
-          const data = JSON.parse(signingProgress.data);
-          if (data.thankRogerContractId) {
-            thankRogerContractId = data.thankRogerContractId;
-            signingLink = data.signingLink || "";
-            logger.info({
-              message: `Found existing ThanksRoger contract: ${thankRogerContractId}`,
-              category: "contract",
-              source: "thanksroger",
-            });
-          }
-        } catch (error) {
-          logger.warn({
-            message: `Error parsing signing progress data: ${error instanceof Error ? error.message : String(error)}`,
+    if (signingProgress && signingProgress.data) {
+      try {
+        const data = JSON.parse(signingProgress.data);
+        if (data.thankRogerContractId) {
+          thankRogerContractId = data.thankRogerContractId;
+          signingLink = data.signingLink || "";
+          logger.info({
+            message: `Found existing ThanksRoger contract: ${thankRogerContractId}`,
             category: "contract",
             source: "thanksroger",
           });
         }
-      }
-
-      // FALLBACK MODE: If API is not configured or we encounter auth issues, use local signing
-      let usingFallbackMode = !apiConfigured;
-      let signingProgressId = signingProgress?.id;
-
-      // If we don't have a ThanksRoger contract ID, create a new contract
-      if (!thankRogerContractId && apiConfigured) {
-        logger.info({
-          message: `No existing ThanksRoger contract found, creating a new one`,
+      } catch (error) {
+        logger.warn({
+          message: `Error parsing signing progress data: ${error instanceof Error ? error.message : String(error)}`,
           category: "contract",
           source: "thanksroger",
         });
+      }
+    }
 
-        // Get customer email if available
-        let customerEmail = "customer@example.com";
-        if (contract.customerId) {
-          const customer = await storage.getUser(contract.customerId);
-          if (customer && customer.email) {
-            customerEmail = customer.email;
-          }
+    // FALLBACK MODE: If API is not configured or we encounter auth issues, use local signing
+    let usingFallbackMode = !apiConfigured;
+    let signingProgressId = signingProgress?.id;
+
+    // If we don't have a ThanksRoger contract ID, create a new contract
+    if (!thankRogerContractId && apiConfigured) {
+      logger.info({
+        message: `No existing ThanksRoger contract found, creating a new one`,
+        category: "contract",
+        source: "thanksroger",
+      });
+
+      // Get customer email if available
+      let customerEmail = "customer@example.com";
+      if (contract.customerId) {
+        const customer = await storage.getUser(contract.customerId);
+        if (customer && customer.email) {
+          customerEmail = customer.email;
         }
+      }
 
-        try {
-          // Create a contract in Thanks Roger
-          const thanksRogerContract =
-            await thanksRogerService.createFinancingContract({
-              templateId: templateId as string,
-              customerName,
-              customerEmail,
-              merchantName: merchant.name,
-              contractNumber,
-              amount: contract.amount,
-              downPayment: contract.downPayment,
-              financedAmount: contract.financedAmount,
-              termMonths: contract.termMonths,
-              interestRate: contract.interestRate,
-              monthlyPayment: contract.monthlyPayment,
-              sendEmail: false, // Don't send email since we're handling the flow in the app
-            });
+      try {
+        // Create a contract in Thanks Roger
+        const thanksRogerContract = await thanksRogerService.createFinancingContract({
+          templateId: templateId as string,
+          customerName,
+          customerEmail,
+          merchantName: merchant.name,
+          contractNumber,
+          amount: contract.amount,
+          downPayment: contract.downPayment,
+          financedAmount: contract.financedAmount,
+          termMonths: contract.termMonths,
+          interestRate: contract.interestRate,
+          monthlyPayment: contract.monthlyPayment,
+          sendEmail: false, // Don't send email since we're handling the flow in the app
+        });
 
-          if (!thanksRogerContract) {
-            logger.warn({
-              message:
-                "Failed to create contract in Thanks Roger, using fallback mode",
-              category: "contract",
-              source: "thanksroger",
-              metadata: { contractId, contractNumber },
-            });
-            usingFallbackMode = true;
-          } else {
-            // Store the ThanksRoger contract ID for future reference
-            thankRogerContractId = thanksRogerContract.contractId;
-            signingLink = thanksRogerContract.signingLink;
-
-            // Update the signing progress with the ThanksRoger contract ID
-            if (signingProgress) {
-              await storage.updateApplicationProgressCompletion(
-                signingProgress.id,
-                false, // Not completed yet
-                JSON.stringify({
-                  thankRogerContractId,
-                  signingLink,
-                  status: "created",
-                  createdAt: new Date().toISOString(),
-                }),
-              );
-              signingProgressId = signingProgress.id;
-            } else {
-              // Create a new signing progress if it doesn't exist
-              const newProgress = await storage.createApplicationProgress({
-                contractId: Number(contractId),
-                step: "signing",
-                completed: false,
-                data: JSON.stringify({
-                  thankRogerContractId,
-                  signingLink,
-                  status: "created",
-                  createdAt: new Date().toISOString(),
-                }),
-              });
-              signingProgressId = newProgress.id;
-            }
-          }
-        } catch (error) {
-          logger.error({
-            message: `Error creating contract in ThanksRoger: ${error instanceof Error ? error.message : String(error)}`,
+        if (!thanksRogerContract) {
+          logger.warn({
+            message: "Failed to create contract in Thanks Roger, using fallback mode",
             category: "contract",
             source: "thanksroger",
             metadata: { contractId, contractNumber },
           });
           usingFallbackMode = true;
-        }
-      }
-
-      // FALLBACK MODE: If we're in fallback mode, we'll store the signature locally without using ThanksRoger API
-      if (usingFallbackMode) {
-        logger.info({
-          message:
-            "Using fallback mode for contract signing - storing signature locally",
-          category: "contract",
-          source: "thanksroger",
-          metadata: { contractId, contractNumber },
-        });
-
-        const signatureId = `local-sig-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
-        const signedAt = new Date().toISOString();
-
-        // Update or create the signature progress
-        const signatureData = {
-          signatureId,
-          signedAt,
-          usingFallbackMode: true,
-          status: "signed",
-          contractNumber,
-        };
-
-        if (signingProgressId) {
-          await storage.updateApplicationProgressCompletion(
-            signingProgressId,
-            true, // Mark as completed
-            JSON.stringify(signatureData),
-          );
         } else {
-          // Create new progress item
-          const newProgress = await storage.createApplicationProgress({
-            contractId: Number(contractId),
-            step: "signing",
-            completed: true,
-            data: JSON.stringify(signatureData),
-          });
-          signingProgressId = newProgress.id;
+          // Store the ThanksRoger contract ID for future reference
+          thankRogerContractId = thanksRogerContract.contractId;
+          signingLink = thanksRogerContract.signingLink;
+
+          // Update the signing progress with the ThanksRoger contract ID
+          if (signingProgress) {
+            await storage.updateApplicationProgressCompletion(
+              signingProgress.id,
+              false, // Not completed yet
+              JSON.stringify({
+                thankRogerContractId,
+                signingLink,
+                status: "created",
+                createdAt: new Date().toISOString()
+              })
+            );
+            signingProgressId = signingProgress.id;
+          } else {
+            // Create a new signing progress if it doesn't exist
+            const newProgress = await storage.createApplicationProgress({
+              contractId: Number(contractId),
+              step: "signing",
+              completed: false,
+              data: JSON.stringify({
+                thankRogerContractId,
+                signingLink,
+                status: "created",
+                createdAt: new Date().toISOString()
+              })
+            });
+            signingProgressId = newProgress.id;
+          }
         }
-
-        // Update contract status
-        await storage.updateContractStep(Number(contractId), "completed");
-        await storage.updateContractStatus(Number(contractId), "active");
-
-        // Return success response with local signature ID
-        return res.json({
-          success: true,
-          contractId: `local-${contractId}`,
-          signatureId,
-          signedAt,
-          status: "signed",
-          fallbackMode: true,
-          message: "Contract signed successfully using fallback mode",
-        });
-      }
-
-      // If we have a ThanksRoger contract ID, try to sign the contract through the API
-      if (!thankRogerContractId) {
-        return res.status(500).json({
-          success: false,
-          message:
-            "Failed to obtain contract ID from ThanksRoger. Please try again or contact support.",
-        });
-      }
-
-      try {
-        // Now sign the contract with the provided signature data
-        const signResult = await thanksRogerService.signContract({
-          contractId: thankRogerContractId,
-          signatureData,
-          signerName: customerName,
-          signatureDate: new Date().toISOString(),
-        });
-
-        if (!signResult || !signResult.success) {
-          throw new Error("Failed to process signature with ThanksRoger API");
-        }
-
-        // Update the signing progress with the signature data
-        if (signingProgressId) {
-          await storage.updateApplicationProgressCompletion(
-            signingProgressId,
-            true, // Mark as completed
-            JSON.stringify({
-              thankRogerContractId,
-              signingLink,
-              signatureId: signResult.signatureId,
-              status: signResult.status,
-              signedAt: signResult.signedAt,
-              documentUrl: signResult.documentUrl,
-            }),
-          );
-        } else {
-          // Create a new signing progress if it doesn't exist
-          const newProgress = await storage.createApplicationProgress({
-            contractId: Number(contractId),
-            step: "signing",
-            completed: true,
-            data: JSON.stringify({
-              thankRogerContractId,
-              signingLink,
-              signatureId: signResult.signatureId,
-              status: signResult.status,
-              signedAt: signResult.signedAt,
-              documentUrl: signResult.documentUrl,
-            }),
-          });
-          signingProgressId = newProgress.id;
-        }
-
-        // Update contract status
-        await storage.updateContractStep(Number(contractId), "completed");
-        await storage.updateContractStatus(Number(contractId), "active");
-
-        // Return success response
-        return res.json({
-          success: true,
-          contractId: thankRogerContractId,
-          signatureId: signResult.signatureId,
-          signingLink,
-          signedAt: signResult.signedAt,
-          status: signResult.status,
-          message: "Contract signed successfully",
-        });
       } catch (error) {
         logger.error({
-          message: `Error signing contract with ThanksRoger API: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Error creating contract in ThanksRoger: ${error instanceof Error ? error.message : String(error)}`,
           category: "contract",
           source: "thanksroger",
-          metadata: { contractId, thankRogerContractId },
+          metadata: { contractId, contractNumber }
         });
-
-        // Switch to fallback mode if API signing fails
-        logger.info({
-          message: "Switching to fallback mode after API signing failure",
-          category: "contract",
-          source: "thanksroger",
-        });
-
-        const signatureId = `local-sig-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
-        const signedAt = new Date().toISOString();
-
-        // Update the signing progress with the local signature data
-        if (signingProgressId) {
-          await storage.updateApplicationProgressCompletion(
-            signingProgressId,
-            true, // Mark as completed
-            JSON.stringify({
-              thankRogerContractId, // Keep the ThanksRoger ID for reference
-              signingLink,
-              signatureId,
-              status: "signed",
-              signedAt,
-              usingFallbackMode: true,
-              apiError: error instanceof Error ? error.message : String(error),
-            }),
-          );
-        } else {
-          // Create a new signing progress
-          const newProgress = await storage.createApplicationProgress({
-            contractId: Number(contractId),
-            step: "signing",
-            completed: true,
-            data: JSON.stringify({
-              thankRogerContractId, // Keep the ThanksRoger ID for reference
-              signingLink,
-              signatureId,
-              status: "signed",
-              signedAt,
-              usingFallbackMode: true,
-              apiError: error instanceof Error ? error.message : String(error),
-            }),
-          });
-          signingProgressId = newProgress.id;
-        }
-
-        // Update contract status
-        await storage.updateContractStep(Number(contractId), "completed");
-        await storage.updateContractStatus(Number(contractId), "active");
-
-        // Return success with fallback notice
-        return res.json({
-          success: true,
-          contractId: thankRogerContractId,
-          signatureId,
-          signingLink,
-          signedAt,
-          status: "signed",
-          fallbackMode: true,
-          message: "Contract signed successfully using fallback mode",
-        });
+        usingFallbackMode = true;
       }
-    } catch (error) {
-      logger.error({
-        message: `Contract signing error: ${error instanceof Error ? error.message : String(error)}`,
+    }
+
+    // FALLBACK MODE: If we're in fallback mode, we'll store the signature locally without using ThanksRoger API
+    if (usingFallbackMode) {
+      logger.info({
+        message: "Using fallback mode for contract signing - storing signature locally",
         category: "contract",
         source: "thanksroger",
-        metadata: {
-          error: error instanceof Error ? error.stack : String(error),
-        },
+        metadata: { contractId, contractNumber }
       });
 
-      return res.status(500).json({
-        success: false,
-        message:
-          "An unexpected error occurred while processing your signature. Please try again or contact support.",
+      const signatureId = `local-sig-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+      const signedAt = new Date().toISOString();
+
+      // Update or create the signature progress
+      const signatureData = {
+        signatureId,
+        signedAt,
+        usingFallbackMode: true,
+        status: "signed",
+        contractNumber
+      };
+
+      if (signingProgressId) {
+        await storage.updateApplicationProgressCompletion(
+          signingProgressId,
+          true, // Mark as completed
+          JSON.stringify(signatureData)
+        );
+      } else {
+        // Create new progress item
+        const newProgress = await storage.createApplicationProgress({
+          contractId: Number(contractId),
+          step: "signing",
+          completed: true,
+          data: JSON.stringify(signatureData)
+        });
+        signingProgressId = newProgress.id;
+      }
+
+      // Update contract status
+      await storage.updateContractStep(Number(contractId), "completed");
+      await storage.updateContractStatus(Number(contractId), "active");
+
+      // Return success response with local signature ID
+      return res.json({
+        success: true,
+        contractId: `local-${contractId}`,
+        signatureId,
+        signedAt,
+        status: "signed",
+        fallbackMode: true,
+        message: "Contract signed successfully using fallback mode"
       });
     }
-  });
+
+    // If we have a ThanksRoger contract ID, try to sign the contract through the API
+    if (!thankRogerContractId) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to obtain contract ID from ThanksRoger. Please try again or contact support.",
+      });
+    }
+
+    try {
+      // Now sign the contract with the provided signature data
+      const signResult = await thanksRogerService.signContract({
+        contractId: thankRogerContractId,
+        signatureData,
+        signerName: customerName,
+        signatureDate: new Date().toISOString()
+      });
+
+      if (!signResult || !signResult.success) {
+        throw new Error("Failed to process signature with ThanksRoger API");
+      }
+
+      // Update the signing progress with the signature data
+      if (signingProgressId) {
+        await storage.updateApplicationProgressCompletion(
+          signingProgressId,
+          true, // Mark as completed
+          JSON.stringify({
+            thankRogerContractId,
+            signingLink,
+            signatureId: signResult.signatureId,
+            status: signResult.status,
+            signedAt: signResult.signedAt,
+            documentUrl: signResult.documentUrl
+          })
+        );
+      } else {
+        // Create a new signing progress if it doesn't exist
+        const newProgress = await storage.createApplicationProgress({
+          contractId: Number(contractId),
+          step: "signing",
+          completed: true,
+          data: JSON.stringify({
+            thankRogerContractId,
+            signingLink,
+            signatureId: signResult.signatureId,
+            status: signResult.status,
+            signedAt: signResult.signedAt,
+            documentUrl: signResult.documentUrl
+          })
+        });
+        signingProgressId = newProgress.id;
+      }
+
+      // Update contract status
+      await storage.updateContractStep(Number(contractId), "completed");
+      await storage.updateContractStatus(Number(contractId), "active");
+
+      // Return success response
+      return res.json({
+        success: true,
+        contractId: thankRogerContractId,
+        signatureId: signResult.signatureId,
+        signingLink,
+        signedAt: signResult.signedAt,
+        status: signResult.status,
+        message: "Contract signed successfully",
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error signing contract with ThanksRoger API: ${error instanceof Error ? error.message : String(error)}`,
+        category: "contract",
+        source: "thanksroger",
+        metadata: { contractId, thankRogerContractId }
+      });
+
+      // Switch to fallback mode if API signing fails
+      logger.info({
+        message: "Switching to fallback mode after API signing failure",
+        category: "contract",
+        source: "thanksroger"
+      });
+
+      const signatureId = `local-sig-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+      const signedAt = new Date().toISOString();
+
+      // Update the signing progress with the local signature data
+      if (signingProgressId) {
+        await storage.updateApplicationProgressCompletion(
+          signingProgressId,
+          true, // Mark as completed
+          JSON.stringify({
+            thankRogerContractId, // Keep the ThanksRoger ID for reference
+            signingLink,
+            signatureId,
+            status: "signed",
+            signedAt,
+            usingFallbackMode: true,
+            apiError: error instanceof Error ? error.message : String(error)
+          })
+        );
+      } else {
+        // Create a new signing progress
+        const newProgress = await storage.createApplicationProgress({
+          contractId: Number(contractId),
+          step: "signing",
+          completed: true,
+          data: JSON.stringify({
+            thankRogerContractId, // Keep the ThanksRoger ID for reference
+            signingLink,
+            signatureId,
+            status: "signed",
+            signedAt,
+            usingFallbackMode: true,
+            apiError: error instanceof Error ? error.message : String(error)
+          })
+        });
+        signingProgressId = newProgress.id;
+      }
+
+      // Update contract status
+      await storage.updateContractStep(Number(contractId), "completed");
+      await storage.updateContractStatus(Number(contractId), "active");
+
+      // Return success with fallback notice
+      return res.json({
+        success: true,
+        contractId: thankRogerContractId,
+        signatureId,
+        signingLink,
+        signedAt,
+        status: "signed",
+        fallbackMode: true,
+        message: "Contract signed successfully using fallback mode"
+      });
+    }
+  } catch (error) {
+    logger.error({
+      message: `Contract signing error: ${error instanceof Error ? error.message : String(error)}`,
+      category: "contract",
+      source: "thanksroger",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error),
+      },
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "An unexpected error occurred while processing your signature. Please try again or contact support.",
+    });
+  }
+});
   // Thanks Roger electronic signature endpoint
   apiRouter.post(
     "/mock/thanks-roger-signing",
@@ -1995,7 +1679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             // In a production environment, this is how we would make the call:
             /*
-          constsignatureResponse = await fetch("https://api.thanksroger.com/v1/signatures", {
+          const signatureResponse = await fetch("https://api.thanksroger.com/v1/signatures", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${thanksRogerApiKey}`,
@@ -2072,6 +1756,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // DiDit KYC Webhook endpoint - for receiving status updates from DiDit
+  // Webhook endpoint for DiDit KYC verification process
+  // DiDit KYC Webhook endpoint - for receiving status updates from DiDit
   apiRouter.post("/kyc/webhook", async (req: Request, res: Response) => {
     try {
       // Extract webhook signature from headers for verification
@@ -2081,7 +1767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get the webhook secret from environment variables
       const webhookSecret = process.env.DIDIT_WEBHOOK_SECRET_KEY;
 
-      // Log the receipt of webhook with more detailed information
+      // Log the receipt of webhook
       logger.info({
         message: `Received DiDit webhook event`,
         category: "api",
@@ -2089,8 +1775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           eventType: req.body.event_type || req.body.status,
           sessionId: req.body.session_id,
-          body: JSON.stringify(req.body),
-          headers: JSON.stringify(req.headers),
+          body: req.body,
         },
       });
 
@@ -2104,8 +1789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Create HMAC signature using the webhook secret
           const hmac = crypto.createHmac("sha256", webhookSecret);
-          hmac.update(rawBody);
-          const expectedSignature = hmac.digest("hex");
+          const expectedSignature = hmac.update(rawBody).digest("hex");
 
           // Verify the signature
           isVerified = expectedSignature === webhookSignature;
@@ -2152,52 +1836,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Extract key information from the webhook
-      const {
-        event_type,
-        session_id,
-        status,
-        decision,
-        vendor_data,
-        customer_details,
-      } = req.body;
+      const { event_type, session_id, status, decision, vendor_data } =
+        req.body;
 
-      // Extract contractId from vendor_data with improved error handling
+      // Parse vendor_data to extract contractId
       let contractId = null;
       try {
         if (vendor_data) {
-          // Handle different vendor_data formats
-          if (typeof vendor_data === "string") {
-            // Try to parse as JSON
-            try {
-              const parsedData = JSON.parse(vendor_data);
-              contractId = parsedData.contractId?.toString();
-            } catch (jsonError) {
-              // If not valid JSON, check if the string itself is a numeric ID
-              if (/^\d+$/.test(vendor_data)) {
-                contractId = vendor_data;
-              }
-            }
-          } else if (typeof vendor_data === "object") {
-            // Direct object access
-            contractId = vendor_data.contractId?.toString();
-          }
-        }
-
-        // Final fallback - try to find contract ID in the request body directly
-        if (!contractId && req.body.contractId) {
-          contractId = req.body.contractId.toString();
+          const parsedData = JSON.parse(vendor_data);
+          contractId = parsedData.contractId;
         }
       } catch (error) {
         logger.warn({
           message: `Failed to parse vendor_data in DiDit webhook: ${error instanceof Error ? error.message : String(error)}`,
           category: "api",
           source: "didit",
-          metadata: {
-            vendor_data:
-              typeof vendor_data === "object"
-                ? JSON.stringify(vendor_data)
-                : vendor_data,
-          },
+          metadata: { vendor_data },
         });
       }
 
@@ -2209,11 +1863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           contractId,
           sessionId: session_id,
           status: status || event_type,
-          decision: decision ? JSON.stringify(decision) : null,
           isVerified,
-          customer_details: customer_details
-            ? JSON.stringify(customer_details)
-            : null,
         },
       });
 
@@ -2222,15 +1872,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "Missing contractId in DiDit webhook vendor_data",
           category: "api",
           source: "didit",
-          metadata: {
-            vendor_data:
-              typeof vendor_data === "object"
-                ? JSON.stringify(vendor_data)
-                : vendor_data,
-            body: JSON.stringify(req.body),
-          },
+          metadata: { vendor_data },
         });
-
         return res.status(200).json({
           status: "success",
           message: "Webhook received but no contractId found",
@@ -2241,10 +1884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (
         event_type === "verification.completed" ||
         status === "Approved" ||
-        status === "Declined" ||
-        status === "approved" ||
-        status === "declined" ||
-        status === "completed"
+        status === "Declined"
       ) {
         logger.info({
           message: `DiDit verification completed for session ${session_id}, contract ${contractId}`,
@@ -2258,14 +1898,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
 
-        // Check if verification was approved with more comprehensive checks
+        // Check if verification was approved
         const isApproved =
           decision?.status === "approved" ||
-          decision?.status === "Approved" ||
           status === "Approved" ||
           status === "approved" ||
-          status === "completed" ||
-          status === "Completed";
+          status === "completed";
 
         try {
           // Find the KYC step in the application progress
@@ -2273,181 +1911,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.getApplicationProgressByContractId(
               parseInt(contractId),
             );
-
-          let kycStep = applicationProgress.find((step) => step.step === "kyc");
-
-          // If KYC step doesn't exist, create it
-          if (!kycStep) {
-            logger.info({
-              message: `Creating missing KYC step for contract ${contractId}`,
-              category: "api",
-              source: "didit",
-            });
-
-            const newKycStep = await storage.createApplicationProgress({
-              contractId: parseInt(contractId),
-              step: "kyc",
-              completed: false,
-              data: null,
-            });
-
-            kycStep = newKycStep;
-          }
+          const kycStep = applicationProgress.find(
+            (step) => step.step === "kyc",
+          );
 
           if (kycStep) {
             if (isApproved) {
-              // Get customer details from different possible locations in the webhook
-              const kycData = decision?.kyc || {};
-              const customerInfo = customer_details || {};
-
-              // Log full customer details received
-              logger.info({
-                message: `DiDit customer details for contract ${contractId}`,
-                category: "api",
-                source: "didit",
-
-                metadata: {
-                  customerInfo: JSON.stringify(customerInfo),
-                  kycData: JSON.stringify(kycData),
-                },
-              });
-
-              // Prepare the data to save with all possible properties
-              const kycSaveData = {
-                verified: true,
-                sessionId: session_id,
-                verifiedAt: new Date().toISOString(),
-                firstName: customerInfo.first_name || kycData.first_name,
-                lastName: customerInfo.last_name || kycData.last_name,
-                email: customerInfo.email || kycData.email,
-                phone: customerInfo.phone || kycData.phone,
-                documentType:
-                  kycData.document_type || customerInfo.document_type,
-                documentNumber:
-                  kycData.document_number || customerInfo.document_number,
-                dateOfBirth:
-                  customerInfo.date_of_birth || kycData.date_of_birth,
-                address: kycData.address || customerInfo.address,
-                completedVia: "webhook",
-                rawResponse: JSON.stringify(req.body),
-              };
-
-              // Log the data we're about to save
-              logger.info({
-                message: `Saving KYC data for contract ${contractId}`,
-                category: "api",
-                source: "didit",
-                metadata: {
-                  kycStepId: kycStep.id,
-                  kycSaveData,
-                },
-              });
+              // Get any customer details from the verification if available
+              const customerDetails = decision?.kyc || {};
 
               // Mark the KYC step as completed
-              const updateResult =
-                await storage.updateApplicationProgressCompletion(
-                  kycStep.id,
-                  true, // Completed
-                  JSON.stringify(kycSaveData),
-                );
+              await storage.updateApplicationProgressCompletion(
+                kycStep.id,
+                true, // Completed
+                JSON.stringify({
+                  verified: true,
+                  sessionId: session_id,
+                  verifiedAt: new Date().toISOString(),
+                  firstName: customerDetails.first_name,
+                  lastName: customerDetails.last_name,
+                  documentType: customerDetails.document_type,
+                  documentNumber: customerDetails.document_number,
+                  dateOfBirth: customerDetails.date_of_birth,
+                  completedVia: "webhook",
+                }),
+              );
 
-              logger.info({
-                message: `KYC step update result for contract ${contractId}`,
-                category: "api",
-                source: "didit",
-                metadata: { updateResult },
-              });
-
-              // Move the contract to the next step and update customer information if available
+              // Move the contract to the next step
               const contract = await storage.getContract(parseInt(contractId));
-              if (contract) {
-                // If contract doesn't have a customer ID yet, try to find or create user
-                if (
-                  !contract.customerId &&
-                  kycSaveData.firstName &&
-                  kycSaveData.lastName
-                ) {
-                  try {
-                    // Try to find existing user by email
-                    let user = null;
-                    if (kycSaveData.email) {
-                      user = await storage.getUserByEmail(kycSaveData.email);
-                    }
-
-                    // If no user found, create a new one based on KYC data
-                    if (!user) {
-                      logger.info({
-                        message: `Creating new user from KYC data for contract ${contractId}`,
-                        category: "user",
-                        source: "didit",
-                      });
-
-                      // Generate a secure temporary password
-                      const tempPassword = Math.random()
-                        .toString(36)
-                        .slice(-10);
-
-                      // Create new user
-                      user = await storage.createUser({
-                        name: `${kycSaveData.firstName} ${kycSaveData.lastName}`,
-                        email:
-                          kycSaveData.email ||
-                          `customer-${Date.now()}@example.com`,
-                        password: tempPassword, // In a real app, would hash and notify user
-                        role: "customer",
-                        phone: kycSaveData.phone || "",
-                        metadata: JSON.stringify({
-                          createdFromKyc: true,
-                          kycSessionId: session_id,
-                        }),
-                      });
-
-                      // Log user creation
-                      logger.info({
-                        message: `Created new user ${user.id} from KYC data`,
-                        category: "user",
-                        source: "didit",
-                        metadata: { userId: user.id, contractId },
-                      });
-                    }
-
-                    // Associate user with contract
-                    if (user) {
-                      await db
-                        .update(contracts)
-                        .set({ customerId: user.id })
-                        .where(eq(contracts.id, parseInt(contractId)))
-                        .execute();
-
-                      logger.info({
-                        message: `Associated user ${user.id} with contract ${contractId}`,
-                        category: "contract",
-                        source: "didit",
-                      });
-                    }
-                  } catch (userError) {
-                    logger.error({
-                      message: `Error creating/associating user from KYC data: ${userError instanceof Error ? userError.message : String(userError)}`,
-                      category: "user",
-                      source: "didit",
-                      metadata: {
-                        contractId,
-                        kycData: JSON.stringify(kycSaveData),
-                      },
-                    });
-                  }
-                }
-
-                // Update contract step if currently on KYC
-                if (contract.currentStep === "kyc") {
-                  await storage.updateContractStep(
-                    parseInt(contractId),
-                    "bank",
-                  );
-                }
+              if (contract && contract.currentStep === "kyc") {
+                await storage.updateContractStep(parseInt(contractId), "bank");
               }
 
-              // Log successful KYC verification
               logger.info({
                 message: `KYC verification approved for contract ${contractId}`,
                 category: "contract",
@@ -2455,19 +1950,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
             } else {
               // Mark verification as failed but don't complete the step
-              const failureData = {
-                verified: false,
-                sessionId: session_id,
-                status: decision?.status || status,
-                timestamp: new Date().toISOString(),
-                reason: "Verification declined or incomplete",
-                rawResponse: JSON.stringify(req.body),
-              };
-
               await storage.updateApplicationProgressCompletion(
                 kycStep.id,
                 false, // Not completed
-                JSON.stringify(failureData),
+                JSON.stringify({
+                  verified: false,
+                  sessionId: session_id,
+                  status: decision?.status || status,
+                  timestamp: new Date().toISOString(),
+                  reason: "Verification declined or incomplete",
+                }),
               );
 
               logger.warn({
@@ -2477,15 +1969,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   contractId,
                   kycStepId: kycStep.id,
                   status: decision?.status || status,
-                  failureData,
                 },
               });
             }
           } else {
             logger.error({
-              message: `Could not find or create KYC step for contract ${contractId}`,
+              message: `Could not find KYC step for contract ${contractId}`,
               category: "contract",
-              metadata: { contractId },
+              metadata: { contractId, applicationProgress },
             });
           }
         } catch (storageError) {
@@ -2507,37 +1998,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: "didit",
           metadata: { sessionId: session_id, contractId },
         });
-
-        // Store initial status in the KYC step
-        try {
-          const applicationProgress =
-            await storage.getApplicationProgressByContractId(
-              parseInt(contractId),
-            );
-          const kycStep = applicationProgress.find(
-            (step) => step.step === "kyc",
-          );
-
-          if (kycStep) {
-            await storage.updateApplicationProgressCompletion(
-              kycStep.id,
-              false, // Not completed yet
-              JSON.stringify({
-                verified: false,
-                sessionId: session_id,
-                startedAt: new Date().toISOString(),
-                status: "in_progress",
-              }),
-            );
-          }
-        } catch (error) {
-          logger.warn({
-            message: `Error updating KYC step for verification start: ${error instanceof Error ? error.message : String(error)}`,
-            category: "api",
-            source: "didit",
-            metadata: { contractId, sessionId: session_id },
-          });
-        }
       } else if (event_type === "verification.cancelled") {
         logger.info({
           message: `DiDit verification cancelled for session ${session_id}, contract ${contractId}`,
@@ -2545,37 +2005,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: "didit",
           metadata: { sessionId: session_id, contractId },
         });
-
-        // Update KYC step as cancelled
-        try {
-          const applicationProgress =
-            await storage.getApplicationProgressByContractId(
-              parseInt(contractId),
-            );
-          const kycStep = applicationProgress.find(
-            (step) => step.step === "kyc",
-          );
-
-          if (kycStep) {
-            await storage.updateApplicationProgressCompletion(
-              kycStep.id,
-              false, // Not completed
-              JSON.stringify({
-                verified: false,
-                sessionId: session_id,
-                cancelledAt: new Date().toISOString(),
-                status: "cancelled",
-              }),
-            );
-          }
-        } catch (error) {
-          logger.warn({
-            message: `Error updating KYC step for verification cancellation: ${error instanceof Error ? error.message : String(error)}`,
-            category: "api",
-            source: "didit",
-            metadata: { contractId, sessionId: session_id },
-          });
-        }
       }
 
       // Always respond with 200 OK to acknowledge receipt of the webhook
@@ -2587,7 +2016,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         source: "didit",
         metadata: {
           error: error instanceof Error ? error.stack : null,
-          body: req.body ? JSON.stringify(req.body) : null,
         },
       });
 
@@ -3030,7 +2458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fetch access token for this contract from your database
         // For example:
         // const bankAccount = await db.query.bankAccounts.findFirst({
-        //   where: eq(bank`accounts.contractId, parseInt(contractId as string))
+        //   where: eq(bankAccounts.contractId, parseInt(contractId as string))
         // });
         // accessToken = bankAccount?.accessToken;
 
@@ -3043,7 +2471,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (step) => step.step === "bank",
         );
 
-        if (bankStep && bankStep.completed && bankStep.data) {
+        if (bankStep && bankStep.data) {
           try {
             const bankData = JSON.parse(bankStep.data);
 
@@ -3091,7 +2519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       logger.error({
-        message: `Failed to get Plaidaccount info: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to get Plaid accounts: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         source: "plaid",
         metadata: {
@@ -3101,7 +2529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(500).json({
         success: false,
-        message: "Failed to get account information",
+        message: "Failed to get bank account information",
       });
     }
   });
@@ -3397,7 +2825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Simulate getting an asset report
         // In a real implementation, you would:
         // 1. Retrieve the asset report token from your database
-        // 2. Makeactual asset report API call
+        // 2. Make the actual asset report API call
 
         // Create some mock asset report data
         const mockAssetReport = {
@@ -3721,267 +3149,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ================ ADMIN ROUTES =================
-
-  // Route to trigger database migrations (admin only)
-  app.post("/api/admin/run-migrations", async (req, res) => {
-    try {
-      // In production this should have proper authentication
-      const { runMigrations } = require("./migrations");
-      await runMigrations();
-      res.json({ success: true, message: "Migrations completed successfully" });
-    } catch (error) {
-      logger.error({
-        message: "Error running migrations",
-        error,
-      });
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Error running migrations",
-          error: error.message,
-        });
-    }
-  });
-
-  // Mount admin reports router
-  app.use("/api/admin/reports", adminReportsRouter);
-
-  // Route for creating application progress
-  apiRouter.post(
-    "/application-progress",
-    async (req: Request, res: Response) => {
-      try {
-        const { contractId, step, completed, data } = req.body;
-
-        if (!contractId || !step) {
-          return res.status(400).json({
-            message: "Contract ID and step are required",
-          });
-        }
-
-        // Verify the contract exists
-        const contract = await storage.getContract(parseInt(contractId));
-        if (!contract) {
-          return res.status(404).json({
-            message: "Contract not found",
-          });
-        }
-
-        // Create the application progress item
-        const progressItem = await storage.createApplicationProgress({
-          contractId: parseInt(contractId),
-          step: step,
-          completed: !!completed,
-          data: data || null,
-        });
-
-        // Log the creation
-        await storage.createLog({
-          level: "info",
-          category: "contract",
-          message: `Application progress created for contract ${contractId}, step ${step}`,
-          metadata: JSON.stringify({
-            contractId,
-            step,
-            completed: !!completed,
-          }),
-        });
-
-        res.status(201).json(progressItem);
-      } catch (error) {
-        console.error("Create application progress error:", error);
-        res.status(500).json({ message: "Internal server error" });
-      }
-    },
-  );
-
   // Mount the API router
   app.use("/api", apiRouter);
-  // merchantAnalytics routes are already included properly in the apiRouter
 
   // Create HTTP server
   const httpServer = createServer(app);
-
-  // Send application link via SMS
-  apiRouter.post("/send-application", async (req, res) => {
-    const { phoneNumber, customerName, amount, term } = req.body;
-
-    if (!phoneNumber || !customerName) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone number and customer name are required",
-      });
-    }
-
-    try {
-      // Format phone number to E.164 format (required by Twilio)
-      let formattedPhone = phoneNumber.replace(/[^0-9+]/g, "");
-
-      // If the number doesn't start with +, format it
-      if (!formattedPhone.startsWith("+")) {
-        // Remove any existing + that might be in the middle
-        formattedPhone = formattedPhone.replace(/\+/g, "");
-
-        // Handle US numbers
-        if (formattedPhone.length === 10) {
-          formattedPhone = `+1${formattedPhone}`;
-        } else if (
-          formattedPhone.length === 11 &&
-          formattedPhone.startsWith("1")
-        ) {
-          formattedPhone = `+${formattedPhone}`;
-        } else {
-          // For any other number format, just add +
-          formattedPhone = `+${formattedPhone}`;
-        }
-      }
-
-      console.log("Phone number formatting:", {
-        original: phoneNumber,
-        formatted: formattedPhone,
-      });
-
-      console.log(
-        `Sending SMS to formatted phone: ${formattedPhone} (original: ${phoneNumber})`,
-      );
-
-      // Create a contract for this financing request
-      const contractNumber = generateContractNumber();
-      const termMonths = term || 24; // Use provided term or default to 24 months
-      const interestRate = 0; // 0% APR
-      const downPaymentPercent = 15; // 15% down payment
-      const downPayment = amount * (downPaymentPercent / 100);
-      const financedAmount = amount - downPayment;
-      const monthlyPayment = financedAmount / termMonths;
-
-      // Create a new contract
-      const newContract = await storage.createContract({
-        contractNumber,
-        merchantId: 1, // Default merchant ID
-        customerId: null, // Will be set when the customer completes the application
-        amount,
-        downPayment,
-        financedAmount,
-        termMonths,
-        interestRate,
-        monthlyPayment,
-        status: "pending",
-        currentStep: "terms",
-      });
-
-      // Create initial application progress steps
-      const steps = ["terms", "kyc", "bank", "payment", "signing"];
-
-      // Create each application progress step
-      for (const step of steps) {
-        await storage.createApplicationProgress({
-          contractId: newContract.id,
-          step: step as any,
-          completed: false,
-          data: null,
-        });
-      }
-
-      // Get the application base URL from Replit
-      const replitDomain = getAppDomain();
-
-      // Ensure we have a valid contract ID before creating the URL
-      if (!newContract.id || isNaN(newContract.id)) {
-        throw new Error(
-          "Failed to generate valid contract ID for application URL",
-        );
-      }
-
-      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
-
-      // Enhanced logging for debugging URL issues
-      console.log(
-        `Created contract ${newContract.id} for ${customerName} (${formattedPhone})`,
-      );
-      console.log(`Application URL: ${applicationUrl}`);
-      console.log(`Contract details:`, JSON.stringify(newContract));
-
-      // Actually send the SMS using twilioService
-      try {
-        // Prepare the SMS message with clearer URL formatting
-        const messageText = `You've been invited to apply for financing of $${amount}.\n\nApply here: ${applicationUrl}\n\nContract #: ${contractNumber}`;
-
-        console.log(`Attempting to send SMS with text: ${messageText}`);
-
-        // Send SMS using our Twilio service
-        const result = await twilioService.sendSMS({
-          to: formattedPhone,
-          body: messageText,
-        });
-
-        if (result.isSimulated) {
-          console.log(`Simulated SMS to ${formattedPhone}: ${messageText}`);
-          logger.info({
-            message: `Simulated SMS to ${formattedPhone}`,
-            category: "api",
-            source: "twilio",
-            metadata: { formattedPhone, messageText },
-          });
-        } else if (result.success) {
-          console.log(
-            `Successfully sent SMS to ${formattedPhone}, Message ID: ${result.messageId}`,
-          );
-          logger.info({
-            message: `SMS sent successfully to ${formattedPhone}`,
-            category: "api",
-            source: "twilio",
-            metadata: { messageId: result.messageId },
-          });
-        } else {
-          console.error(`Failed to send SMS: ${result.error}`);
-          logger.error({
-            message: `Failed to send SMS to ${formattedPhone}`,
-            category: "api",
-            source: "twilio",
-            metadata: { error: result.error },
-          });
-        }
-      } catch (smsError) {
-        console.error("SMS sending error:", smsError);
-        logger.error({
-          message: `SMS sending error for ${formattedPhone}`,
-          category: "api",
-          source: "twilio",
-          metadata: {
-            error:
-              smsError instanceof Error ? smsError.message : String(smsError),
-          },
-        });
-        // We won't throw the error so the API still returns successfully
-      }
-
-      // Return success with the contract ID and application URL
-      return res.json({
-        success: true,
-        message:
-          "Application created successfully. SMS delivery was attempted.",
-        contractId: newContract.id,
-        contractNumber: contractNumber,
-        phoneNumber: formattedPhone,
-        applicationUrl: applicationUrl,
-      });
-    } catch (error) {
-      console.error("Error sending application:", error);
-      logger.error({
-        message: "Error creating application",
-        category: "api",
-        metadata: {
-          error: error instanceof Error ? error.message : String(error),
-        },
-      });
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send application link",
-      });
-    }
-  });
 
   return httpServer;
 }
