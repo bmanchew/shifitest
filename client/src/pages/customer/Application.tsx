@@ -37,7 +37,14 @@ export default function Application() {
 
   // Redirect to contract lookup page if contractId is undefined or invalid
   useEffect(() => {
-    if (contractIdParam === "undefined" || !contractId) {
+    console.log("Validating contract ID:", { 
+      contractIdParam, 
+      contractId,
+      isNaN: isNaN(contractId),
+      isZero: contractId === 0
+    });
+    
+    if (contractIdParam === "undefined" || !contractId || isNaN(contractId) || contractId === 0) {
       console.error("Invalid contract ID in URL:", contractIdParam);
       toast({
         title: "Error",

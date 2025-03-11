@@ -970,6 +970,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure we use the correct application URL with the /apply/ route as defined in App.tsx
       // The URL format must be /apply/${contractId} to match the React router configuration
       // This is where customers access their application after receiving the SMS
+      const contractId = newContract.id;
+      
+      // Verify the contract ID is valid before creating the URL
+      if (!contractId || isNaN(contractId)) {
+        throw new Error("Failed to generate a valid contract ID");
+      }
+      
       const applicationUrl = `https://${replitDomain}/apply/${contractId}`;
 
       // Enhanced logging for debugging URL issues
