@@ -1,10 +1,10 @@
-import { Switch, Route, Router } from "wouter";
+import { Switch, Route } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 import { useAuth } from "@/hooks/use-auth";
 import { Suspense, lazy } from "react";
-import Portfolio from "@/pages/admin/Portfolio"; //Import Portfolio component
+import Portfolio from "@/pages/admin/Portfolio"; // Import Portfolio component
 
 // Admin pages
 const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
@@ -26,7 +26,6 @@ const CustomerContractOffer = lazy(
 );
 const CustomerDashboard = lazy(() => import("@/pages/customer/Dashboard"));
 
-
 function LoadingFallback() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-gray-50">
@@ -41,49 +40,54 @@ function LoadingFallback() {
 function App() {
   const { user, isLoading } = useAuth();
 
+  if (isLoading) {
+    return <LoadingFallback />;
+  }
+
   return (
     <Suspense fallback={<LoadingFallback />}>
-      {isLoading ? (
-        <LoadingFallback />
-      ) : (
-        <Switch>
-          {!user && <Route path="/" component={Login} />}
+      <Switch>
+        {/* Public routes */}
+        {!user && <Route path="/" component={Login} />}
 
-          {user && user.role === "admin" && (
-            <>
-              <Route path="/" component={AdminDashboard} />
-              <Route path="/admin" component={AdminDashboard} />
-              <Route path="/admin/dashboard" component={AdminDashboard} />
-              <Route path="/admin/merchants" component={AdminMerchants} />
-              <Route path="/admin/contracts" component={AdminContracts} />
-              <Route path="/admin/logs" component={AdminLogs} />
-              <Route path="/admin/settings" component={AdminSettings} />
-              <Route path="/admin/portfolio" component={Portfolio} /> {/* Added Portfolio route */}
-            </>
-          )}
+        {/* Customer public routes */}
+        <Route path="/offer/:contractId" component={CustomerContractOffer} />
+        <Route path="/apply/:contractId" component={CustomerApplication} />
+        <Route
+          path="/customer/application/:contractId"
+          component={CustomerApplication}
+        />
+        <Route path="/dashboard/:contractId" component={CustomerDashboard} />
 
-          {user && user.role === "merchant" && (
-            <>
-              <Route path="/" component={MerchantDashboard} />
-              <Route path="/merchant" component={MerchantDashboard} />
-              <Route path="/merchant/dashboard" component={MerchantDashboard} />
-              <Route path="/merchant/contracts" component={MerchantContracts} />
-              <Route path="/merchant/reports" component={MerchantReports} />
-              <Route path="/merchant/settings" component={MerchantSettings} />
-            </>
-          )}
+        {/* Admin routes */}
+        {user && user.role === "admin" && (
+          <>
+            <Route path="/" component={AdminDashboard} />
+            <Route path="/admin" component={AdminDashboard} />
+            <Route path="/admin/dashboard" component={AdminDashboard} />
+            <Route path="/admin/merchants" component={AdminMerchants} />
+            <Route path="/admin/contracts" component={AdminContracts} />
+            <Route path="/admin/logs" component={AdminLogs} />
+            <Route path="/admin/settings" component={AdminSettings} />
+            <Route path="/admin/portfolio" component={Portfolio} />
+          </>
+        )}
 
-          {/* Public customer routes */}
-          <Router>
-            <Route path="/offer/:contractId" component={CustomerContractOffer} />
-            <Route path="/apply/:contractId" component={CustomerApplication} /> 
-            <Route path="/customer/application/:contractId" component={CustomerApplication} />
-            <Route path="/dashboard/:contractId" component={CustomerDashboard} />
+        {/* Merchant routes */}
+        {user && user.role === "merchant" && (
+          <>
+            <Route path="/" component={MerchantDashboard} />
+            <Route path="/merchant" component={MerchantDashboard} />
+            <Route path="/merchant/dashboard" component={MerchantDashboard} />
+            <Route path="/merchant/contracts" component={MerchantContracts} />
+            <Route path="/merchant/reports" component={MerchantReports} />
+            <Route path="/merchant/settings" component={MerchantSettings} />
+          </>
+        )}
 
-            <Route component={NotFound} />
-          </Router>
-        </Switch>
-      )}
+        {/* Catch-all route */}
+        <Route component={NotFound} />
+      </Switch>
       <Toaster />
     </Suspense>
   );

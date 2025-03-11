@@ -3680,16 +3680,28 @@ metadata: {
 
     try {
       // Format phone number to E.164 format (required by Twilio)
-      let formattedPhone = phoneNumber.replace(/[^0-9]/g, '');
+      let formattedPhone = phoneNumber.replace(/[^0-9+]/g, '');
       
-      // Add +1 if it's a US number and doesn't already have it
-      if (formattedPhone.length === 10) {
-        formattedPhone = `+1${formattedPhone}`;
-      } else if (formattedPhone.length === 11 && formattedPhone.startsWith('1')) {
-        formattedPhone = `+${formattedPhone}`;
-      } else if (!formattedPhone.startsWith('+')) {
-        formattedPhone = `+${formattedPhone}`;
+      // If the number doesn't start with +, format it
+      if (!formattedPhone.startsWith('+')) {
+        // Remove any existing + that might be in the middle
+        formattedPhone = formattedPhone.replace(/\+/g, '');
+        
+        // Handle US numbers
+        if (formattedPhone.length === 10) {
+          formattedPhone = `+1${formattedPhone}`;
+        } else if (formattedPhone.length === 11 && formattedPhone.startsWith('1')) {
+          formattedPhone = `+${formattedPhone}`;
+        } else {
+          // For any other number format, just add +
+          formattedPhone = `+${formattedPhone}`;
+        }
       }
+      
+      console.log('Phone number formatting:', {
+        original: phoneNumber,
+        formatted: formattedPhone
+      });
       
       console.log(`Sending SMS to formatted phone: ${formattedPhone} (original: ${phoneNumber})`);
 
