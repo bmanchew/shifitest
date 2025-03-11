@@ -12,11 +12,13 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { RefreshCw } from "lucide-react";
-import Card from "@/components/ui/card";
-import CardHeader from "@/components/ui/card-header";
-import CardTitle from "@/components/ui/card-title";
-import CardDescription from "@/components/ui/card-description";
-import CardContent from "@/components/ui/card-content";
+import { 
+  Card, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription, 
+  CardContent 
+} from "@/components/ui/card";
 
 const CONTRACT_STEPS = ["terms", "kyc", "bank", "payment", "signing"]; // Define CONTRACT_STEPS constant
 
@@ -612,8 +614,8 @@ function ContractNotFound({ errorMessage, contractId }: { errorMessage: string; 
               <RefreshCw className="mr-2 h-4 w-4" />
               Try Again
             </Button>
-            <Button onClick={() => navigate("/customer/contract-lookup")}>
-              Look Up Contract
+            <Button onClick={() => navigate("/apply")}>
+              Start New Application
             </Button>
           </div>
         </CardContent>
