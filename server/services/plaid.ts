@@ -1,48 +1,17 @@
-import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from "plaid";
+import {
+  Configuration,
+  PlaidApi,
+  PlaidEnvironments,
+  CountryCode,
+  Products,
+  LinkTokenCreateRequest,
+  ProcessorTokenCreateRequest,
+  TransferCreateRequest,
+  TransferType,
+  TransferNetwork,
+  AssetReportCreateRequest,
+} from "plaid";
 import { logger } from "./logger";
-
-// Response types
-interface GetAssetReportResponse {
-  report: any;
-  warnings: any[];
-  requestId: string;
-}
-
-interface UnderwritingAnalysis {
-  income: {
-    annualIncome: number;
-    incomeStreams: string[];
-    confidenceScore: number;
-  };
-  employment: {
-    employmentMonths: number;
-    employers: string[];
-    confidenceScore: number;
-  };
-  debt: {
-    monthlyDebtPayments: number;
-    identifiedDebts: string[];
-    dtiRatio: number;
-  };
-  housing: {
-    housingStatus: string;
-    monthlyPayment: number;
-    paymentHistoryMonths: number;
-    consistencyScore: number;
-  };
-  delinquency: {
-    overdraftCount: number;
-    insufficientFundsCount: number;
-    lateFeeCount: number;
-    lastDelinquencyDate: string | null;
-  };
-  summary: {
-    numberOfAccounts: number;
-    totalBalance: number;
-    accountTypes: string[];
-    oldestAccountMonths: number;
-  };
-}
 
 interface PlaidLinkTokenParams {
   userId: string;
@@ -64,21 +33,6 @@ interface PlaidTransferParams {
   metadata?: Record<string, string>;
 }
 
-interface PlaidAssetReportParams {
-  accessToken: string;
-  daysRequested: number;
-  clientReportId?: string;
-  webhook?: string;
-  user?: {
-    clientUserId: string;
-    firstName?: string;
-    lastName?: string;
-    ssn?: string;
-    phoneNumber?: string;
-    email?: string;
-  };
-}
-
 class PlaidService {
   private client: PlaidApi | null = null;
   private initialized = false;
@@ -95,7 +49,8 @@ class PlaidService {
 
     if (!clientId || !secret) {
       logger.warn({
-        message: "Plaid credentials not configured, functionality will be limited",
+        message:
+          "Plaid credentials not configured, functionality will be limited",
         category: "system",
         source: "plaid",
       });
@@ -166,7 +121,7 @@ class PlaidService {
         clientUserId,
         userName,
         userEmail,
-        products = [Products.Auth, Products.Transactions, Products.Assets],
+        products = [Products.Auth, Products.Transactions],
         redirectUri,
       } = params;
 
@@ -178,14 +133,14 @@ class PlaidService {
       };
 
       // Prepare request
-      const request = {
+      const request: LinkTokenCreateRequest = {
         user,
         client_name: "ShiFi Financial",
         products: products,
         country_codes: [CountryCode.Us],
         language: "en",
         webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
-      } as any;
+      };
 
       // Add optional redirect URI if provided
       if (redirectUri) {
@@ -326,16 +281,168 @@ class PlaidService {
   }
 
   /**
-   * Create an asset report with enhanced options
+   * Create a processor token for a specific account
    */
-  async createAssetReport(params: PlaidAssetReportParams) {
+  async createProcessorToken(
+    accessToken: string,
+    accountId: string,
+    processor: string,
+  ) {
     if (!this.isInitialized() || !this.client) {
       throw new Error("Plaid client not initialized");
     }
 
     try {
-      const { accessToken, daysRequested, clientReportId, webhook, user } = params;
+      logger.info({
+        message: `Creating Plaid processor token for processor ${processor}`,
+        category: "api",
+        source: "plaid",
+        metadata: { accountId },
+      });
 
+      const request: ProcessorTokenCreateRequest = {
+        access_token: accessToken,
+        account_id: accountId,
+        processor: processor as any,
+      };
+
+      const response = await this.client.processorTokenCreate(request);
+
+      logger.info({
+        message: `Created Plaid processor token for processor ${processor}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          accountId,
+          requestId: response.data.request_id,
+        },
+      });
+
+      return {
+        processorToken: response.data.processor_token,
+        requestId: response.data.request_id,
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to create Plaid processor token: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          accountId,
+          processor,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Create a transfer
+   */
+  async createTransfer(params: PlaidTransferParams) {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    try {
+      const {
+        accessToken,
+        accountId,
+        amount,
+        description,
+        achClass = "ppd",
+        userId,
+        customerId,
+        metadata,
+      } = params;
+
+      // First, create a processor token
+      const { processorToken } = await this.createProcessorToken(
+        accessToken,
+        accountId,
+        "transfer",
+      );
+
+      // Prepare transfer request
+      const transferRequest: TransferCreateRequest = {
+        access_token: accessToken,
+        account_id: accountId,
+        authorization_id: processorToken, // Using processor token as authorization
+        type: TransferType.Debit, // Pull money from user's account
+        network: TransferNetwork.Ach,
+        amount: amount.toString(),
+        description: description,
+        ach_class: achClass as any,
+        user: {
+          legal_name: userId || "Unknown User",
+        },
+      };
+
+      // Add optional user metadata
+      if (metadata) {
+        transferRequest.metadata = metadata;
+      }
+
+      logger.info({
+        message: "Creating Plaid transfer",
+        category: "api",
+        source: "plaid",
+        metadata: {
+          accountId,
+          amount,
+          description,
+        },
+      });
+
+      const response = await this.client.transferCreate(transferRequest);
+
+      logger.info({
+        message: "Created Plaid transfer",
+        category: "api",
+        source: "plaid",
+        metadata: {
+          transferId: response.data.transfer.id,
+          status: response.data.transfer.status,
+          requestId: response.data.request_id,
+        },
+      });
+
+      return {
+        transferId: response.data.transfer.id,
+        status: response.data.transfer.status,
+        requestId: response.data.request_id,
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to create Plaid transfer: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          accountId: params.accountId,
+          amount: params.amount,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Create an asset report
+   */
+  async createAssetReport(
+    accessToken: string,
+    daysRequested: number = 60,
+    options?: any,
+  ) {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    try {
       logger.info({
         message: "Creating Plaid asset report",
         category: "api",
@@ -344,34 +451,11 @@ class PlaidService {
       });
 
       // Prepare asset report request
-      const request = {
+      const request: AssetReportCreateRequest = {
         access_tokens: [accessToken],
         days_requested: daysRequested,
-        options: {} as any,
+        options: options || {},
       };
-
-      // Add optional parameters if provided
-      if (clientReportId) {
-        request.options.client_report_id = clientReportId;
-      }
-
-      if (webhook) {
-        request.options.webhook = webhook;
-      }
-
-      if (user) {
-        const userData = {
-          client_user_id: user.clientUserId,
-        } as any;
-
-        if (user.firstName) userData.first_name = user.firstName;
-        if (user.lastName) userData.last_name = user.lastName;
-        if (user.ssn) userData.ssn = user.ssn;
-        if (user.phoneNumber) userData.phone_number = user.phoneNumber;
-        if (user.email) userData.email = user.email;
-        
-        request.options.user = userData;
-      }
 
       const response = await this.client.assetReportCreate(request);
 
@@ -397,7 +481,7 @@ class PlaidService {
         category: "api",
         source: "plaid",
         metadata: {
-          daysRequested: params.daysRequested,
+          daysRequested,
           error: error instanceof Error ? error.stack : null,
         },
       });
@@ -412,7 +496,7 @@ class PlaidService {
   async getAssetReport(
     assetReportToken: string,
     includeInsights: boolean = false,
-  ): Promise<GetAssetReportResponse> {
+  ) {
     if (!this.isInitialized() || !this.client) {
       throw new Error("Plaid client not initialized");
     }
@@ -462,227 +546,35 @@ class PlaidService {
   }
 
   /**
-   * Analyze asset report data for underwriting purposes
-   * This extracts financial information relevant to the underwriting criteria
+   * Validate Plaid credentials by trying to create a link token
    */
-  async analyzeAssetReportForUnderwriting(assetReportToken: string): Promise<UnderwritingAnalysis> {
+  async validateCredentials(): Promise<boolean> {
     if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
+      return false;
     }
 
     try {
-      // Get the asset report with insights for more detailed transaction data
-      const { report } = await this.getAssetReport(assetReportToken, true);
-      
-      // Process the report data to extract relevant information
-      const accounts = report.items.flatMap((item: any) => item.accounts);
-      const transactions = accounts.flatMap((account: any) => account.transactions || []);
-      
-      // Calculate monthly income based on recurring deposits
-      const depositAmounts = transactions
-        .filter((tx: any) => tx.amount > 0 && tx.type === 'deposit')
-        .map((tx: any) => tx.amount);
-      const estimatedMonthlyIncome = depositAmounts.length > 0 
-        ? (depositAmounts.reduce((a: number, b: number) => a + b, 0) / depositAmounts.length) 
-        : 0;
-      
-      // Identify employment duration from transaction patterns
-      const employmentMonths = Math.floor(transactions.length / 30); // Rough estimate based on transaction history
-      
-      // Calculate debt payments and DTI ratio
-      const monthlyDebtPayments = transactions
-        .filter((tx: any) => 
-          tx.amount < 0 && 
-          (tx.category || []).some((cat: string) => 
-            ['loan', 'credit', 'debt'].includes(cat.toLowerCase())
-          )
-        )
-        .reduce((total: number, tx: any) => total + Math.abs(tx.amount), 0) / (transactions.length / 30);
-      
-      const dtiRatio = monthlyDebtPayments > 0 ? (monthlyDebtPayments / estimatedMonthlyIncome) : 0;
-      
-      // Housing payment analysis
-      const housingTransactions = transactions.filter((tx: any) => 
-        (tx.category || []).some((cat: string) => 
-          ['rent', 'mortgage'].includes(cat.toLowerCase())
-        )
-      );
-      
-      const housingStatus = housingTransactions.length > 0 ? 'stable' : 'unknown';
-      const paymentHistoryMonths = Math.floor(housingTransactions.length);
-      
-      // Initialize analysis result with calculated values
-      const analysis: UnderwritingAnalysis = {
-        income: {
-          annualIncome: estimatedMonthlyIncome * 12,
-          incomeStreams: Array.from(new Set(depositAmounts.map((amount: number) => amount.toFixed(2)))),
-          confidenceScore: Math.min(depositAmounts.length / 6, 1), // Higher confidence with more data points
-        },
-        employment: {
-          employmentMonths,
-          employers: Array.from(new Set(transactions
-            .filter((tx: any) => tx.amount > 0 && tx.type === 'deposit')
-            .map((tx: any) => tx.name)
-          )),
-          confidenceScore: Math.min(employmentMonths / 12, 1),
-        },
-        debt: {
-          monthlyDebtPayments,
-          identifiedDebts: Array.from(new Set(transactions
-            .filter((tx: any) => tx.amount < 0 && (tx.category || []).some((cat: string) => ['loan', 'credit', 'debt'].includes(cat.toLowerCase())))
-            .map((tx: any) => tx.name)
-          )),
-          dtiRatio,
-        },
-        housing: {
-          housingStatus,
-          monthlyPayment: housingTransactions.length > 0 
-            ? Math.abs(housingTransactions[0].amount) 
-            : 0,
-          paymentHistoryMonths,
-          consistencyScore: housingTransactions.length > 0 
-            ? housingTransactions.filter((tx: any) => tx.amount < 0).length / housingTransactions.length 
-            : 0,
-        },
-        delinquency: {
-          overdraftCount: transactions.filter((tx: any) => 
-            tx.amount < 0 && tx.type === 'overdraft'
-          ).length,
-          insufficientFundsCount: transactions.filter((tx: any) => 
-            (tx.category || []).includes('insufficient_funds')
-          ).length,
-          lateFeeCount: transactions.filter((tx: any) => 
-            (tx.category || []).includes('late_fee')
-          ).length,
-          lastDelinquencyDate: null, // Would need additional data to determine this
-        },
-        summary: {
-          numberOfAccounts: accounts.length,
-          totalBalance: accounts.reduce((total: number, account: any) => total + (account.balances.current || 0), 0),
-          accountTypes: Array.from(new Set(accounts.map((account: any) => account.type))),
-          oldestAccountMonths: Math.max(...accounts.map((account: any) => 
-            account.daysAvailable ? Math.floor(account.daysAvailable / 30) : 0
-          )),
-        },
-      };
+      // Attempt to create a test link token
+      await this.createLinkToken({
+        userId: "validation-test",
+        clientUserId: "validation-test",
+        products: [Products.Auth],
+      });
 
-      // Process each item (financial institution)
-      for (const item of report.items) {
-        // Process each account
-        for (const account of item.accounts) {
-          // Add to summary
-          analysis.summary.numberOfAccounts++;
-          analysis.summary.totalBalance += account.balances.current || 0;
-          
-          if (!analysis.summary.accountTypes.includes(account.type)) {
-            analysis.summary.accountTypes.push(account.type);
-          }
-          
-          // Calculate account age in months if available
-          if (account.days_available) {
-            const accountAgeMonths = Math.floor(account.days_available / 30);
-            if (accountAgeMonths > analysis.summary.oldestAccountMonths) {
-              analysis.summary.oldestAccountMonths = accountAgeMonths;
-            }
-          }
-          
-          // If we have transaction history, analyze it
-          if (account.transactions && account.transactions.length > 0) {
-            this.analyzeTransactionsForUnderwriting(account.transactions, analysis);
-          }
-        }
-      }
-      
-      // Calculate DTI ratio if we have both income and debt data
-      if (analysis.income.annualIncome > 0) {
-        const monthlyIncome = analysis.income.annualIncome / 12;
-        analysis.debt.dtiRatio = analysis.debt.monthlyDebtPayments / monthlyIncome;
-      }
-      
-      return analysis;
+      return true;
     } catch (error) {
       logger.error({
-        message: `Failed to analyze asset report for underwriting: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Plaid credential validation failed: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         source: "plaid",
         metadata: {
-          assetReportToken,
           error: error instanceof Error ? error.stack : null,
         },
       });
-      
-      throw error;
-    }
-  }
 
-  /**
-   * Helper method to analyze transaction data for underwriting purposes
-   * This updates the analysis object with insights from transaction data
-   */
-  private analyzeTransactionsForUnderwriting(transactions: any[], analysis: UnderwritingAnalysis) {
-    for (const transaction of transactions) {
-      // Skip pending transactions
-      if (transaction.pending) continue;
-
-      // Analyze income deposits
-      if (transaction.amount > 0 && transaction.type === 'deposit') {
-        // Add to income streams if not already present
-        const streamId = `${transaction.name}-${transaction.amount.toFixed(2)}`;
-        if (!analysis.income.incomeStreams.includes(streamId)) {
-          analysis.income.incomeStreams.push(streamId);
-        }
-
-        // Update employment information if it looks like a payroll deposit
-        if (transaction.name.toLowerCase().includes('payroll') || 
-            transaction.name.toLowerCase().includes('direct deposit')) {
-          const employer = transaction.name.replace(/(payroll|direct deposit)/i, '').trim();
-          if (!analysis.employment.employers.includes(employer)) {
-            analysis.employment.employers.push(employer);
-          }
-        }
-      }
-
-      // Analyze debt payments
-      if (transaction.amount < 0 && 
-          (transaction.category || []).some((cat: string) => 
-            ['loan', 'credit', 'debt'].includes(cat.toLowerCase()))) {
-        // Add to identified debts if not already present
-        if (!analysis.debt.identifiedDebts.includes(transaction.name)) {
-          analysis.debt.identifiedDebts.push(transaction.name);
-        }
-        analysis.debt.monthlyDebtPayments += Math.abs(transaction.amount);
-      }
-
-      // Track delinquency indicators
-      if (transaction.type === 'overdraft') {
-        analysis.delinquency.overdraftCount++;
-      }
-      if ((transaction.category || []).includes('insufficient_funds')) {
-        analysis.delinquency.insufficientFundsCount++;
-      }
-      if ((transaction.category || []).includes('late_fee')) {
-        analysis.delinquency.lateFeeCount++;
-        // Update last delinquency date if this is more recent
-        const txDate = new Date(transaction.date);
-        if (!analysis.delinquency.lastDelinquencyDate || 
-            txDate > new Date(analysis.delinquency.lastDelinquencyDate)) {
-          analysis.delinquency.lastDelinquencyDate = transaction.date;
-        }
-      }
-
-      // Analyze housing payments
-      if ((transaction.category || []).some((cat: string) => 
-          ['rent', 'mortgage'].includes(cat.toLowerCase()))) {
-        analysis.housing.housingStatus = 'stable';
-        if (!analysis.housing.monthlyPayment) {
-          analysis.housing.monthlyPayment = Math.abs(transaction.amount);
-        }
-        analysis.housing.paymentHistoryMonths++;
-      }
+      return false;
     }
   }
 }
 
-// Create and export a singleton instance
 export const plaidService = new PlaidService();
-export type { GetAssetReportResponse, UnderwritingAnalysis };
