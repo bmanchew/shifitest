@@ -279,10 +279,10 @@ export class AIAnalyticsService {
       let unsecuredPersonalLoanComplaints;
       
       try {
-        // First attempt: Try using sub_product parameter for Personal loan
+        // Use a broader date range (36 months) and correct product category
         unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('Payday loan, title loan, or personal loan', {
-          dateReceivedMin: this.getDateXMonthsAgo(24),
-          subProduct: 'Personal loan', 
+          dateReceivedMin: this.getDateXMonthsAgo(36),
+          // Don't specify subProduct to get all types in this category
           size: 1000
         });
         
@@ -322,10 +322,10 @@ export class AIAnalyticsService {
           source: 'internal'
         });
         
-        merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Payday loan, title loan, or personal loan', {
-          dateReceivedMin: this.getDateXMonthsAgo(24),
-          // Use the sub_product parameter directly as documented in CFPB API
-          subProduct: 'Merchant cash advance',
+        // Try with broader search for MCA - use a longer date range and all product types
+        merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Business or consumer loan', {
+          dateReceivedMin: this.getDateXMonthsAgo(48), // Look back 4 years for MCA data
+          searchTerm: 'merchant cash advance', // Search for this term in complaint narratives
           size: 1000
         });
       } catch (error) {
@@ -337,9 +337,10 @@ export class AIAnalyticsService {
         });
         
         try {
-          merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Payday loan, title loan, or personal loan', {
-            dateReceivedMin: this.getDateXMonthsAgo(24),
-            searchTerm: 'Merchant cash advance',
+          // Try with all loan categories and a wider date range
+          merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Credit card or prepaid card', {
+            dateReceivedMin: this.getDateXMonthsAgo(48),
+            searchTerm: 'cash advance',
             size: 1000
           });
         } catch (error) {
@@ -350,9 +351,10 @@ export class AIAnalyticsService {
             source: 'internal',
           });
           
-          merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Business or consumer loan', {
-            dateReceivedMin: this.getDateXMonthsAgo(24),
-            subProduct: 'Business loan',
+          // Last resort: try with a very general search across all categories
+          merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('', {
+            dateReceivedMin: this.getDateXMonthsAgo(60), // Look back 5 years
+            searchTerm: 'business financing', // Use a more general term
             size: 1000
           });
         }
@@ -411,7 +413,7 @@ export class AIAnalyticsService {
           topCompanies: this.extractTopCompanies(merchantCashAdvanceComplaints) || [],
           monthlyTrend: this.extractMonthlyTrend(merchantCashAdvanceComplaints) || createEmptyMonthlyTrend(),
         },
-        insights: this.generateFintechInsights(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
+        insights: this.generateConsumerLoanInsights(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
         recommendedUnderwritingAdjustments: this.generateUnderwritingRecommendations(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
       };
 

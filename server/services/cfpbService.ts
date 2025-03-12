@@ -60,8 +60,12 @@ export class CFPBService {
       // This allows us to find mentions of specific terms in complaint narratives
       if (options.searchTerm) {
         params.append('search_term', options.searchTerm);
-        // When using search_term, specify which field to search
+        // When using search_term, we need to ensure the complaint_what_happened field is included
         params.append('field', 'complaint_what_happened');
+        // Also search company name for relevant terms
+        params.append('field', 'company');
+        // And include issue field
+        params.append('field', 'issue');
       }
 
       // Format should be JSON
@@ -487,217 +491,10 @@ export class CFPBService {
     }
   }
   
-  /**
-   * Get mock complaint data when the API fails
+  /* 
+   * Note: All mock data fallbacks have been removed to ensure we only use authentic data
+   * from the CFPB API.
    */
-  getMockData(product: string, subProduct?: string) {
-    const currentDate = new Date();
-    const twoYearsAgo = new Date();
-    twoYearsAgo.setMonth(currentDate.getMonth() - 24);
-    
-    // Updated: Create mock data structure that matches CFPB API response
-    // Now with 24 months of data instead of 3 months
-    return {
-      hits: {
-        total: 580,
-        hits: Array.from({ length: 50 }, (_, i) => {
-          const randomDate = new Date(
-            twoYearsAgo.getTime() + Math.random() * (currentDate.getTime() - twoYearsAgo.getTime())
-          );
-          
-          return {
-            _source: {
-              product: product,
-              sub_product: subProduct || (product === 'Consumer Loan' ? 'Personal loan' : 'Merchant Cash Advance'),
-              issue: ['Loan origination', 'Fees', 'Application process', 'Terms and conditions', 'Payment issues', 'Collection practices'][Math.floor(Math.random() * 6)],
-              date_received: randomDate.toISOString().split('T')[0],
-              company: ['LendingTree', 'Upstart', 'SoFi', 'Avant', 'LendingClub', 'OppFi', 'Kabbage', 'OnDeck', 'Funding Circle'][Math.floor(Math.random() * 9)]
-            }
-          };
-        })
-      },
-      aggregations: {
-        issue: {
-          buckets: [
-            { key: 'Loan origination', doc_count: 125 },
-            { key: 'Fees', doc_count: 105 },
-            { key: 'Application process', doc_count: 90 },
-            { key: 'Terms and conditions', doc_count: 80 },
-            { key: 'Payment issues', doc_count: 75 },
-            { key: 'Collection practices', doc_count: 65 }
-          ]
-        },
-        company: {
-          buckets: [
-            { key: 'LendingTree', doc_count: 95 },
-            { key: 'Upstart', doc_count: 85 },
-            { key: 'SoFi', doc_count: 75 },
-            { key: 'Avant', doc_count: 65 },
-            { key: 'LendingClub', doc_count: 60 },
-            { key: 'OppFi', doc_count: 55 },
-            { key: 'Kabbage', doc_count: 50 },
-            { key: 'OnDeck', doc_count: 45 },
-            { key: 'Funding Circle', doc_count: 40 }
-          ]
-        },
-        date_received: {
-          buckets: Array.from({ length: 24 }, (_, i) => {
-            const month = new Date();
-            month.setMonth(month.getMonth() - i);
-            
-            // Generate a realistic trend pattern with seasonal variations
-            let baseCount = 30 - Math.floor(i / 8) * 5; // Gradually declining trend
-            
-            // Add some seasonal variation
-            if ((month.getMonth() + 1) % 12 <= 2) {
-              // Winter months (Dec-Feb) have fewer complaints
-              baseCount = Math.max(5, baseCount - 10);
-            } else if ((month.getMonth() + 1) % 12 >= 6 && (month.getMonth() + 1) % 12 <= 8) {
-              // Summer months (Jun-Aug) have more complaints
-              baseCount += 15;
-            }
-            
-            // Add some randomness
-            const randomFactor = 0.8 + (Math.random() * 0.4); // 0.8 to 1.2
-            const docCount = Math.round(baseCount * randomFactor);
-            
-            return {
-              key_as_string: month.toISOString().split('T')[0].substring(0, 7),
-              key: month.getTime(),
-              doc_count: docCount
-            };
-          })
-        }
-      }
-    };
-  }
-  
-  /**
-   * Get mock complaint trends when the API fails
-   */
-  getMockComplaintTrends() {
-    const lastUpdated = new Date().toISOString();
-    const currentDate = new Date();
-    
-    // Generate monthly trend data for the last 24 months
-    const generateMonthlyTrend = () => {
-      const trends = [];
-      for (let i = 0; i < 24; i++) {
-        const month = new Date();
-        month.setMonth(currentDate.getMonth() - i);
-        
-        // Create a realistic pattern with seasonal variations
-        let baseCount = 25 - Math.floor(i / 8) * 4; // Gradually declining trend
-        
-        // Add seasonal variations
-        if ((month.getMonth() + 1) % 12 <= 2) {
-          // Winter months (Dec-Feb) have fewer complaints
-          baseCount = Math.max(5, baseCount - 8);
-        } else if ((month.getMonth() + 1) % 12 >= 6 && (month.getMonth() + 1) % 12 <= 8) {
-          // Summer months (Jun-Aug) have more complaints
-          baseCount += 12;
-        }
-        
-        // Add randomness
-        const randomFactor = 0.8 + (Math.random() * 0.4); // 0.8 to 1.2
-        const complaints = Math.round(baseCount * randomFactor);
-        
-        // Format for display using the same format as our extractMonthlyTrend method
-        const monthStr = month.toLocaleString('default', { month: 'short' });
-        const year = month.getFullYear();
-        
-        trends.push({
-          month: `${monthStr} ${year}`,
-          complaints: complaints
-        });
-      }
-      
-      // Sort newest months first (will be reversed in UI if needed)
-      return trends.slice(0, 6);
-    };
-    
-    // Get personal loan and MCA trends
-    const personalLoanTrend = generateMonthlyTrend();
-    const mcaTrend = generateMonthlyTrend().map(item => ({
-      ...item,
-      complaints: Math.round(item.complaints * 0.8) // MCA slightly fewer complaints
-    }));
-    
-    return {
-      lastUpdated,
-      totalComplaints: 580,
-      personalLoans: {
-        totalComplaints: 320,
-        topIssues: [
-          { issue: 'Loan origination', count: 125, percentage: 39.1 },
-          { issue: 'Fees', count: 105, percentage: 32.8 },
-          { issue: 'Application process', count: 90, percentage: 28.1 },
-          { issue: 'Terms and conditions', count: 80, percentage: 25.0 },
-          { issue: 'Payment issues', count: 75, percentage: 23.4 }
-        ],
-        topCompanies: [
-          { company: 'LendingTree', count: 95, percentage: 29.7 },
-          { company: 'Upstart', count: 85, percentage: 26.6 },
-          { company: 'SoFi', count: 75, percentage: 23.4 },
-          { company: 'Avant', count: 65, percentage: 20.3 },
-          { company: 'LendingClub', count: 60, percentage: 18.8 }
-        ],
-        monthlyTrend: personalLoanTrend
-      },
-      merchantCashAdvances: {
-        totalComplaints: 260,
-        topIssues: [
-          { issue: 'Terms and conditions', count: 95, percentage: 36.5 },
-          { issue: 'High fees', count: 75, percentage: 28.8 },
-          { issue: 'Collection practices', count: 65, percentage: 25.0 },
-          { issue: 'Payment amount changes', count: 55, percentage: 21.2 },
-          { issue: 'Application process', count: 45, percentage: 17.3 }
-        ],
-        topCompanies: [
-          { company: 'Square Capital', count: 65, percentage: 25.0 },
-          { company: 'Kabbage', count: 55, percentage: 21.2 },
-          { company: 'OnDeck', count: 50, percentage: 19.2 },
-          { company: 'Funding Circle', count: 45, percentage: 17.3 },
-          { company: 'Clearco', count: 35, percentage: 13.5 }
-        ],
-        monthlyTrend: mcaTrend
-      },
-      insights: [
-        "Loan origination issues represent the highest category of complaints for unsecured personal loans in the past 24 months.",
-        "Fees and terms transparency are common issues across both personal loans and merchant cash advances.",
-        "Personal loan complaints have increased 15% over the past quarter.",
-        "Terms and conditions complaints for merchant cash advances have seen a 23% increase in the past 6 months.",
-        "The current data shows a seasonal pattern with higher complaint volumes in summer months for both product categories.",
-        "Analytics from 24 months of data reveal a correlation between economic indicators and complaint types, with payment-related issues increasing during economic downturns."
-      ],
-      recommendedUnderwritingAdjustments: [
-        {
-          factor: "Debt-to-Income Ratio",
-          currentThreshold: "< 45%",
-          recommendedThreshold: "< 42%",
-          reasoning: "Complaints analysis shows increased default risk at DTI > 42% in current economic conditions."
-        },
-        {
-          factor: "Credit Score Weight",
-          currentThreshold: "35% of decision",
-          recommendedThreshold: "30% of decision",
-          reasoning: "Plaid transaction data has proven more predictive than credit scores in recent performance analysis."
-        },
-        {
-          factor: "Employment Verification",
-          currentThreshold: "Required for loans > $10,000",
-          recommendedThreshold: "Required for all loans",
-          reasoning: "Complaints data shows employment misrepresentation correlates strongly with delinquency."
-        },
-        {
-          factor: "Bank Account Minimum Age",
-          currentThreshold: "None",
-          recommendedThreshold: "3+ months",
-          reasoning: "Newly opened accounts show 3x higher risk of payment issues in first 6 months of loan."
-        }
-      ]
-    };
-  }
 }
 
 // Export a singleton instance
