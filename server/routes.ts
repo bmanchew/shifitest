@@ -732,6 +732,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: "application",
           metadata: JSON.stringify({ userId: customer.id })
         });
+      } else {
+        logger.info({
+          message: `Found existing user for phone number ${phoneNumber}`,
+          category: "api",
+          source: "application",
+          metadata: JSON.stringify({ userId: customer.id })
+        });
       }
 
       // Update customer name if provided

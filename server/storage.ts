@@ -148,7 +148,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
-    return await db.select().from(contracts).where(eq(contracts.merchantId, merchantId));
+    // Explicitly select the columns we know exist to avoid errors
+    return await db.select({
+      id: contracts.id,
+      contractNumber: contracts.contractNumber,
+      merchantId: contracts.merchantId,
+      customerId: contracts.customerId,
+      amount: contracts.amount,
+      downPayment: contracts.downPayment,
+      financedAmount: contracts.financedAmount,
+      termMonths: contracts.termMonths,
+      interestRate: contracts.interestRate,
+      monthlyPayment: contracts.monthlyPayment,
+      status: contracts.status,
+      currentStep: contracts.currentStep,
+      createdAt: contracts.createdAt,
+      completedAt: contracts.completedAt,
+      phoneNumber: contracts.phoneNumber
+    }).from(contracts).where(eq(contracts.merchantId, merchantId));
   }
 
   async getContractsByCustomerId(customerId: number): Promise<Contract[]> {
