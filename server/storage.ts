@@ -272,6 +272,11 @@ export class DatabaseStorage implements IStorage {
     return assetReport;
   }
 
+  async getAssetReportById(id: number): Promise<AssetReport | undefined> {
+    const [assetReport] = await db.select().from(assetReports).where(eq(assetReports.id, id));
+    return assetReport || undefined;
+  }
+
   async getAssetReportsByContractId(contractId: number) {
     return await db.select().from(assetReports).where(eq(assetReports.contractId, contractId)).orderBy(desc(assetReports.createdAt));
   }
