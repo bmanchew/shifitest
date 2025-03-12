@@ -1,0 +1,47 @@
+To integrate with the Consumer Financial Protection Bureau (CFPB) and retrieve complaints and trends related to unsecured personal loans and merchant cash advances originated in the past 12 months, you can utilize the Consumer Complaint Database API. This API allows you to programmatically access and analyze consumer complaint data.
+
+**API Documentation:**
+
+The CFPB provides comprehensive API documentation, including details on endpoints, parameters, and response formats. You can access the documentation here: 
+
+**Accessing the API:**
+
+The API is publicly accessible and does not require authentication. You can send HTTP GET requests to the API endpoints to retrieve data. For example, to search for consumer complaints, you can use the following endpoint:
+
+
+```
+GET https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/
+```
+
+
+**Filtering for Unsecured Personal Loans and Merchant Cash Advances:**
+
+To filter complaints related to unsecured personal loans and merchant cash advances, you can use the `product` parameter in your API request. The CFPB categorizes these under "Payday loan, title loan, or personal loan." For example:
+
+
+```
+GET https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?product=Payday%20loan,%20title%20loan,%20or%20personal%20loan
+```
+
+
+**Filtering by Date Range:**
+
+To retrieve complaints from the past 12 months, you can use the `date_received_min` and `date_received_max` parameters. For instance, to get complaints received between March 12, 2024, and March 12, 2025:
+
+
+```
+GET https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?product=Payday%20loan,%20title%20loan,%20or%20personal%20loan&date_received_min=2024-03-12&date_received_max=2025-03-12
+```
+
+
+**Analyzing Trends:**
+
+To analyze trends over time, you can aggregate complaint data by month or quarter. The API returns data in JSON format, which you can parse and analyze using your preferred programming language or data analysis tools.
+
+**Additional Resources:**
+
+- **Postman Collection:** The CFPB provides a Postman collection with ready-to-use requests and documentation, which can help you get started quickly: citeturn0search3
+
+- **GitHub Repository:** For more technical details and to access the source code, you can refer to the CFPB's GitHub repository: citeturn0search5
+
+By leveraging the Consumer Complaint Database API, you can effectively retrieve and analyze complaint data related to unsecured personal loans and merchant cash advances over the desired time frame. 

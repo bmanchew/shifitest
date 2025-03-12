@@ -23,6 +23,7 @@ export class CFPBService {
     state?: string;
     issue?: string;
     subProduct?: string;
+    searchTerm?: string;
   } = {}) {
     try {
       const params = new URLSearchParams();
@@ -41,6 +42,8 @@ export class CFPBService {
       if (options.size) params.append('size', options.size.toString());
       if (options.state) params.append('search_term', `state: "${options.state}"`);
       if (options.issue) params.append('search_term', `issue: "${options.issue}"`);
+      // Add searchTerm for free-text searching (e.g., for Merchant Cash Advance)
+      if (options.searchTerm) params.append('search_term', options.searchTerm);
 
       // Format should be JSON
       params.append('format', 'json');
