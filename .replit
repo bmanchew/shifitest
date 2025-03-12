@@ -7,7 +7,7 @@ channel = "stable-24_05"
 
 [deployment]
 deploymentTarget = "cloudrun"
-build = ["sh", "-c", "npm run build && [ $? -eq 0 ] || exit 1"]
+build = ["sh", "-c", "npm run build"]
 run = ["sh", "-c", "npm run start"]
 
 [[ports]]
