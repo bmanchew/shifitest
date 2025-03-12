@@ -2932,7 +2932,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Return success response
         res.json({
-          successtrue,
+          success: true,
           transferId,
           status,
           message: "Payment initiated successfully",
