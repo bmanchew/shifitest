@@ -138,21 +138,23 @@ export class AIAnalyticsService {
   /**
    * Generate underwriting recommendations based on complaint data
    */
-  private generateUnderwritingRecommendations(personalLoanComplaints: any, creditCardComplaints: any) {
+  private generateUnderwritingRecommendations(unsecuredPersonalLoanComplaints: any, merchantCashAdvanceComplaints: any) {
     try {
       const recommendations = [];
       
-      if (personalLoanComplaints?.hits?.total > 0) {
-        recommendations.push("Consider enhancing verification processes for income sources to reduce fraud-related complaints.");
-        recommendations.push("Update disclosure language for fees and payment terms to improve transparency.");
+      if (unsecuredPersonalLoanComplaints?.hits?.total > 0) {
+        recommendations.push("Strengthen income verification processes for unsecured personal loans to reduce fraud.");
+        recommendations.push("Improve transparency in personal loan fee structures and payment terms.");
+        recommendations.push("Consider implementing stronger identity verification for online loan applications.");
       }
       
-      if (creditCardComplaints?.hits?.total > 0) {
-        recommendations.push("Review credit limit increase policies to prevent overleveraging customers.");
-        recommendations.push("Enhance monitoring for potential ID theft in credit card applications.");
+      if (merchantCashAdvanceComplaints?.hits?.total > 0) {
+        recommendations.push("Review merchant cash advance factoring rates to ensure they're clearly explained to businesses.");
+        recommendations.push("Consider more flexible repayment options for merchant cash advances during slow business periods.");
+        recommendations.push("Enhance business stability assessment to reduce defaults on merchant cash advances.");
       }
       
-      return recommendations.length > 0 ? recommendations : ["Not enough data to generate recommendations."];
+      return recommendations.length > 0 ? recommendations : ["Not enough recent origination data to generate recommendations."];
     } catch (error) {
       logger.error({
         message: 'Error generating underwriting recommendations from complaints data',
@@ -161,6 +163,77 @@ export class AIAnalyticsService {
         metadata: { error }
       });
       return ["Error generating underwriting recommendations from complaints data."];
+    }
+  }
+  
+  /**
+   * Generate insights from complaint data
+   */
+  private generateInsights(unsecuredPersonalLoanComplaints: any, merchantCashAdvanceComplaints: any) {
+    try {
+      const insights = [];
+      
+      // Generate insights for unsecured personal loans
+      if (unsecuredPersonalLoanComplaints?.hits?.total > 0) {
+        const issues = this.extractTopIssues(unsecuredPersonalLoanComplaints);
+        const companies = this.extractTopCompanies(unsecuredPersonalLoanComplaints);
+        const trends = this.extractMonthlyTrend(unsecuredPersonalLoanComplaints);
+        
+        if (issues.length > 0) {
+          insights.push(`Most common unsecured personal loan complaint: ${issues[0].issue} (${issues[0].count} complaints).`);
+        }
+        
+        if (companies.length > 0) {
+          insights.push(`Lender with most unsecured personal loan complaints: ${companies[0].company}.`);
+        }
+        
+        if (trends.length >= 2) {
+          const currentMonth = trends[0];
+          const prevMonth = trends[1];
+          const percentChange = ((currentMonth.count - prevMonth.count) / prevMonth.count) * 100;
+          if (percentChange > 0) {
+            insights.push(`Unsecured personal loan complaints increased by ${percentChange.toFixed(1)}% from ${prevMonth.month} to ${currentMonth.month}.`);
+          } else if (percentChange < 0) {
+            insights.push(`Unsecured personal loan complaints decreased by ${Math.abs(percentChange).toFixed(1)}% from ${prevMonth.month} to ${currentMonth.month}.`);
+          }
+        }
+      }
+      
+      // Generate insights for merchant cash advances
+      if (merchantCashAdvanceComplaints?.hits?.total > 0) {
+        const issues = this.extractTopIssues(merchantCashAdvanceComplaints);
+        const companies = this.extractTopCompanies(merchantCashAdvanceComplaints);
+        
+        if (issues.length > 0) {
+          insights.push(`Most common merchant cash advance complaint: ${issues[0].issue} (${issues[0].count} complaints).`);
+        }
+        
+        if (companies.length > 0) {
+          insights.push(`Provider with most merchant cash advance complaints: ${companies[0].company}.`);
+        }
+      }
+      
+      // Compare the two products if data exists for both
+      if (unsecuredPersonalLoanComplaints?.hits?.total > 0 && merchantCashAdvanceComplaints?.hits?.total > 0) {
+        const personalLoanTotal = unsecuredPersonalLoanComplaints.hits.total;
+        const mcaTotal = merchantCashAdvanceComplaints.hits.total;
+        
+        if (personalLoanTotal > mcaTotal) {
+          insights.push(`Unsecured personal loans received ${((personalLoanTotal - mcaTotal) / mcaTotal * 100).toFixed(1)}% more complaints than merchant cash advances in the last 3 months.`);
+        } else if (mcaTotal > personalLoanTotal) {
+          insights.push(`Merchant cash advances received ${((mcaTotal - personalLoanTotal) / personalLoanTotal * 100).toFixed(1)}% more complaints than unsecured personal loans in the last 3 months.`);
+        }
+      }
+      
+      return insights.length > 0 ? insights : ["Not enough recent origination data to generate meaningful insights."];
+    } catch (error) {
+      logger.error({
+        message: 'Error generating insights from complaints data',
+        category: 'system',
+        source: 'ai_analytics',
+        metadata: { error }
+      });
+      return ["Error generating insights from complaints data."];
     }
   }
 
@@ -175,44 +248,60 @@ export class AIAnalyticsService {
         source: 'ai_analytics',
       });
 
-      // Get complaint data from CFPB API for personal loans and credit products
-      const personalLoanComplaints = await cfpbService.getComplaintsByProduct('Consumer Loan', {
-        dateReceivedMin: this.getDateXMonthsAgo(12),
+      // Get complaint data from CFPB API for unsecured personal loans and merchant cash advances
+      // Only get data from last 3 months to focus on recent origination issues
+      const unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('Consumer Loan', {
+        dateReceivedMin: this.getDateXMonthsAgo(3),
+        subProduct: 'Personal loan',
+        issue: 'Loan origination',
         size: 1000
       });
 
-      const creditCardComplaints = await cfpbService.getComplaintsByProduct('Credit card', {
-        dateReceivedMin: this.getDateXMonthsAgo(12),
+      // Merchant Cash Advances are typically categorized under "Credit card or prepaid card"
+      // or sometimes "Credit card", with sub-product "Merchant Cash Advance"
+      const merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Credit card or prepaid card', {
+        dateReceivedMin: this.getDateXMonthsAgo(3),
+        subProduct: 'Merchant cash advance',
         size: 1000
       });
 
       // Save complaint data to database for historical tracking
-      if (personalLoanComplaints?.hits?.hits) {
-        await storage.saveComplaintsData(personalLoanComplaints.hits.hits.map(hit => hit._source));
+      if (unsecuredPersonalLoanComplaints?.hits?.hits) {
+        logger.info({
+          message: `Saving ${unsecuredPersonalLoanComplaints.hits.hits.length} unsecured personal loan complaints`,
+          category: 'system',
+          source: 'ai_analytics'
+        });
+        await storage.saveComplaintsData(unsecuredPersonalLoanComplaints.hits.hits.map(hit => hit._source));
       }
 
-      if (creditCardComplaints?.hits?.hits) {
-        await storage.saveComplaintsData(creditCardComplaints.hits.hits.map(hit => hit._source));
+      if (merchantCashAdvanceComplaints?.hits?.hits) {
+        logger.info({
+          message: `Saving ${merchantCashAdvanceComplaints.hits.hits.length} merchant cash advance complaints`,
+          category: 'system',
+          source: 'ai_analytics'
+        });
+        await storage.saveComplaintsData(merchantCashAdvanceComplaints.hits.hits.map(hit => hit._source));
       }
 
       // Analyze the complaints data
       const analysisResults = {
         lastUpdated: new Date().toISOString(),
-        totalComplaints: (personalLoanComplaints?.hits?.total || 0) + (creditCardComplaints?.hits?.total || 0),
+        totalComplaints: (unsecuredPersonalLoanComplaints?.hits?.total || 0) + (merchantCashAdvanceComplaints?.hits?.total || 0),
         personalLoans: {
-          totalComplaints: personalLoanComplaints?.hits?.total || 0,
-          topIssues: this.extractTopIssues(personalLoanComplaints),
-          topCompanies: this.extractTopCompanies(personalLoanComplaints),
-          monthlyTrend: this.extractMonthlyTrend(personalLoanComplaints),
+          totalComplaints: unsecuredPersonalLoanComplaints?.hits?.total || 0,
+          topIssues: this.extractTopIssues(unsecuredPersonalLoanComplaints),
+          topCompanies: this.extractTopCompanies(unsecuredPersonalLoanComplaints),
+          monthlyTrend: this.extractMonthlyTrend(unsecuredPersonalLoanComplaints),
         },
-        creditCards: {
-          totalComplaints: creditCardComplaints?.hits?.total || 0,
-          topIssues: this.extractTopIssues(creditCardComplaints),
-          topCompanies: this.extractTopCompanies(creditCardComplaints),
-          monthlyTrend: this.extractMonthlyTrend(creditCardComplaints),
+        merchantCashAdvances: {
+          totalComplaints: merchantCashAdvanceComplaints?.hits?.total || 0,
+          topIssues: this.extractTopIssues(merchantCashAdvanceComplaints),
+          topCompanies: this.extractTopCompanies(merchantCashAdvanceComplaints),
+          monthlyTrend: this.extractMonthlyTrend(merchantCashAdvanceComplaints),
         },
-        insights: this.generateInsights(personalLoanComplaints, creditCardComplaints),
-        recommendedUnderwritingAdjustments: this.generateUnderwritingRecommendations(personalLoanComplaints, creditCardComplaints),
+        insights: this.generateInsights(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
+        recommendedUnderwritingAdjustments: this.generateUnderwritingRecommendations(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
       };
 
       logger.info({
@@ -220,9 +309,11 @@ export class AIAnalyticsService {
         category: 'system',
         source: 'ai_analytics',
         metadata: {
-          personalLoanComplaintsCount: personalLoanComplaints?.hits?.total || 0,
-          creditCardComplaintsCount: creditCardComplaints?.hits?.total || 0,
+          personalLoanComplaintsCount: unsecuredPersonalLoanComplaints?.hits?.total || 0,
+          merchantCashAdvanceComplaintsCount: merchantCashAdvanceComplaints?.hits?.total || 0,
           insightsGenerated: analysisResults.insights.length,
+          recentDataOnly: true,
+          focusedOnOrigination: true
         }
       });
 
