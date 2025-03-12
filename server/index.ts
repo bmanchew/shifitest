@@ -12,8 +12,8 @@ app.use(express.json());
 const requiredEnvVars = [
   'PLAID_CLIENT_ID', 
   'PLAID_SECRET', 
-  'PREFI_API_KEY',
-  'CFPB_API_KEY'
+  'PREFI_API_KEY'
+  // The CFPB API is public and doesn't require an API key
 ];
 
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);

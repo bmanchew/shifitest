@@ -78,36 +78,13 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
       source: "internal"
     });
 
-    // Try to get real data from the CFPB API
-    try {
-      const analysisResults = await aiAnalyticsService.analyzeComplaintTrends();
+    // Get real data from CFPB API
+    const analysisResults = await aiAnalyticsService.analyzeComplaintTrends();
 
-      return res.json({
-        success: true,
-        data: analysisResults
-      });
-    } catch (apiError) {
-      logger.warn({
-        message: `Falling back to mock data: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
-        category: 'api',
-        source: 'internal',
-      });
-
-      // If the API call fails, fall back to mock data
-      logger.info({
-        message: 'Falling back to mock CFPB complaint data',
-        category: "api",
-        source: "internal"
-      });
-      const mockData = cfpbService.getMockComplaintTrends();
-      return res.json({ 
-        success: true, 
-        data: {
-          ...mockData,
-          isMockData: true
-        }
-      });
-    }
+    return res.json({
+      success: true,
+      data: analysisResults
+    });
   } catch (error) {
     logger.error({
       message: `Failed to get CFPB complaint trends: ${error instanceof Error ? error.message : String(error)}`,
