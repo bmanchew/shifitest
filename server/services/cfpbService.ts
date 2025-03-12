@@ -172,7 +172,6 @@ export class CFPBService {
       params.append('field', 'complaint_what_happened');
       params.append('field', 'state');
       params.append('field', 'consumer_consent_provided');
-      params.append('field', 'submitted_via');
       
       // Request aggregations for analysis
       params.append('no_aggs', 'false');
@@ -361,7 +360,6 @@ export class CFPBService {
       params.append('field', 'company_response');
       params.append('field', 'state');
       params.append('field', 'consumer_consent_provided');
-      params.append('field', 'submitted_via');
 
       logger.info({
         message: 'Fetching CFPB complaints for company',
@@ -530,7 +528,6 @@ export class CFPBService {
       params.append('field', 'complaint_what_happened');
       params.append('field', 'company_response');
       params.append('field', 'consumer_consent_provided');
-      params.append('field', 'submitted_via');
       
       // Use trends endpoint for this call
       const trendsUrl = this.baseUrl.replace(/\/$/, '') + '/trends';
