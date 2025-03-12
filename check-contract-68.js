@@ -2,7 +2,7 @@
 /**
  * Script to check contract #68 details
  */
-const { storage } = require('./server/storage');
+import { storage } from './server/storage.js';
 
 async function checkContract68() {
   try {
