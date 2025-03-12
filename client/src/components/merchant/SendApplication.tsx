@@ -65,11 +65,24 @@ export default function SendApplication() {
       // Get merchant ID based on current user
       const merchantId = user?.merchantId || 1;
 
-      await apiRequest("POST", "/api/send-sms", {
-        phoneNumber,
-        merchantId,
-        amount: parseFloat(amount),
+      const response = await fetch("/api/send-sms", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phoneNumber,
+          merchantId,
+          amount: parseFloat(amount),
+        }),
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
 
       toast({
         title: "Application Sent",
@@ -83,7 +96,7 @@ export default function SendApplication() {
       console.error("Failed to send application:", error);
       toast({
         title: "Error",
-        description: "Failed to send the application. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to send the application. Please try again.",
         variant: "destructive",
       });
     } finally {
