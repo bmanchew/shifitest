@@ -55,6 +55,7 @@ export interface IStorage {
   getAllUnderwritingData(): Promise<any[]>;
   getContractsByStatus(status: string): Promise<Contract[]>;
   storeAssetReportToken(contractId: number, assetReportToken: string, assetReportId: string, options: any): Promise<AssetReport>;
+  getAssetReportById(id: number): Promise<AssetReport | undefined>;
   getAssetReportsByContractId(contractId: number): Promise<AssetReport[]>;
   getAssetReportsByAssetReportId(assetReportId: string): Promise<AssetReport[]>;
   updateAssetReportStatus(id: number, status: string, analysisData?: any): Promise<AssetReport | undefined>;
