@@ -253,7 +253,7 @@ export class AIAnalyticsService {
       const unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('Consumer Loan', {
         dateReceivedMin: this.getDateXMonthsAgo(6),
         subProduct: 'Personal loan',
-        issue: 'Loan origination', // Focus specifically on origination issues
+        // Removed issue filter to get more results
         size: 1000
       });
 

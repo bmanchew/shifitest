@@ -1,0 +1,187 @@
+{
+  "aggregations": {
+    "company": {
+      "doc_count": 0,
+      "field": {
+        "buckets": [
+          {
+            "doc_count": 0,
+            "field.raw": {
+              "buckets": [
+                {
+                  "doc_count": 0,
+                  "field": {
+                    "buckets": [
+                      {
+                        "doc_count": 0,
+                        "key": "string"
+                      }
+                    ],
+                    "doc_count_error_upper_bound": 0,
+                    "sum_other_doc_count": 0
+                  }
+                }
+              ]
+            },
+            "key": "string"
+          }
+        ],
+        "doc_count_error_upper_bound": 0,
+        "sum_other_doc_count": 0
+      }
+    },
+    "issue": {
+      "doc_count": 0,
+      "field": {
+        "buckets": [
+          {
+            "doc_count": 0,
+            "field.raw": {
+              "buckets": [
+                {
+                  "doc_count": 0,
+                  "field": {
+                    "buckets": [
+                      {
+                        "doc_count": 0,
+                        "key": "string"
+                      }
+                    ],
+                    "doc_count_error_upper_bound": 0,
+                    "sum_other_doc_count": 0
+                  }
+                }
+              ]
+            },
+            "key": "string"
+          }
+        ],
+        "doc_count_error_upper_bound": 0,
+        "sum_other_doc_count": 0
+      }
+    },
+    "product": {
+      "doc_count": 0,
+      "field": {
+        "buckets": [
+          {
+            "doc_count": 0,
+            "field.raw": {
+              "buckets": [
+                {
+                  "doc_count": 0,
+                  "field": {
+                    "buckets": [
+                      {
+                        "doc_count": 0,
+                        "key": "string"
+                      }
+                    ],
+                    "doc_count_error_upper_bound": 0,
+                    "sum_other_doc_count": 0
+                  }
+                }
+              ]
+            },
+            "key": "string"
+          }
+        ],
+        "doc_count_error_upper_bound": 0,
+        "sum_other_doc_count": 0
+      }
+    },
+    "sub_issue": {
+      "doc_count": 0,
+      "field": {
+        "buckets": [
+          {
+            "doc_count": 0,
+            "field.raw": {
+              "buckets": [
+                {
+                  "doc_count": 0,
+                  "field": {
+                    "buckets": [
+                      {
+                        "doc_count": 0,
+                        "key": "string"
+                      }
+                    ],
+                    "doc_count_error_upper_bound": 0,
+                    "sum_other_doc_count": 0
+                  }
+                }
+              ]
+            },
+            "key": "string"
+          }
+        ],
+        "doc_count_error_upper_bound": 0,
+        "sum_other_doc_count": 0
+      }
+    },
+    "sub_product": {
+      "doc_count": 0,
+      "field": {
+        "buckets": [
+          {
+            "doc_count": 0,
+            "field.raw": {
+              "buckets": [
+                {
+                  "doc_count": 0,
+                  "field": {
+                    "buckets": [
+                      {
+                        "doc_count": 0,
+                        "key": "string"
+                      }
+                    ],
+                    "doc_count_error_upper_bound": 0,
+                    "sum_other_doc_count": 0
+                  }
+                }
+              ]
+            },
+            "key": "string"
+          }
+        ],
+        "doc_count_error_upper_bound": 0,
+        "sum_other_doc_count": 0
+      }
+    },
+    "tags": {
+      "doc_count": 0,
+      "field": {
+        "buckets": [
+          {
+            "doc_count": 0,
+            "field.raw": {
+              "buckets": [
+                {
+                  "doc_count": 0,
+                  "field": {
+                    "buckets": [
+                      {
+                        "doc_count": 0,
+                        "key": "string"
+                      }
+                    ],
+                    "doc_count_error_upper_bound": 0,
+                    "sum_other_doc_count": 0
+                  }
+                }
+              ]
+            },
+            "key": "string"
+          }
+        ],
+        "doc_count_error_upper_bound": 0,
+        "sum_other_doc_count": 0
+      }
+    }
+  }
+}
+No links
+400	
+Invalid status value
