@@ -680,6 +680,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Application sending endpoint (alias for send-sms)
+  apiRouter.post("/send-application", async (req: Request, res: Response) => {
+    // Forward to send-sms endpoint with appropriate parameter mapping
+    try {
+      const { phoneNumber, customerName, amount, term } = req.body;
+      
+      // Log the incoming request
+      logger.info({
+        message: `Processing send-application request`,
+        category: "api",
+        source: "application",
+        metadata: JSON.stringify({ 
+          phoneNumber, 
+          customerName,
+          amount 
+        })
+      });
+      
+      // Prepare data for the SMS endpoint
+      const smsData = {
+        phoneNumber,
+        merchantId: req.body.merchantId || 1, // Default to merchant ID 1 if not provided
+        amount
+      };
+      
+      // Call the SMS sending logic
+      const result = await twilioService.sendSMS({
+        to: phoneNumber,
+        body: `You've been invited to apply for financing of $${amount}. Visit our application to continue.`
+      });
+      
+      // Create a contract for this financing request
+      const contractNumber = generateContractNumber();
+      const termMonths = term || 24; // Use provided term or default to 24 months
+      const interestRate = 0; // 0% APR
+      const downPaymentPercent = 15; // 15% down payment
+      const downPayment = amount * (downPaymentPercent / 100);
+      const financedAmount = amount - downPayment;
+      const monthlyPayment = financedAmount / termMonths;
+      
+      // Find or create a user for this phone number
+      const customer = await storage.findOrCreateUserByPhone(phoneNumber);
+      
+      // Update customer name if provided
+      if (customerName && customer) {
+        const nameParts = customerName.trim().split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+        
+        await storage.updateUserName(customer.id, firstName, lastName);
+      }
+      
+      // Create a new contract
+      const contract = await storage.createContract({
+        contractNumber,
+        merchantId: smsData.merchantId,
+        customerId: customer.id,
+        amount,
+        downPayment,
+        financedAmount,
+        termMonths,
+        interestRate,
+        monthlyPayment,
+        status: "pending",
+        currentStep: "terms",
+        phoneNumber: phoneNumber
+      });
+      
+      // Create application progress for this contract
+      await storage.createApplicationProgress({
+        contractId: contract.id,
+        step: "terms",
+        completed: false,
+        data: null,
+      });
+      
+      // Get the application base URL from Replit
+      const replitDomain = getAppDomain();
+      const applicationUrl = `https://${replitDomain}/apply/${contract.id}`;
+      
+      // Create log for application creation
+      await storage.createLog({
+        level: "info",
+        category: "api",
+        source: "application",
+        message: `Application created for ${phoneNumber}`,
+        metadata: JSON.stringify({
+          contractId: contract.id,
+          amount,
+          customerName,
+          applicationUrl
+        }),
+      });
+      
+      res.json({ 
+        success: true, 
+        message: "Application sent successfully", 
+        contractId: contract.id,
+        applicationUrl
+      });
+    } catch (error) {
+      console.error("Send application error:", error);
+      
+      // Create error log
+      await storage.createLog({
+        level: "error",
+        category: "api",
+        source: "application",
+        message: `Failed to send application: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: JSON.stringify({
+          error: error instanceof Error ? error.stack : null,
+        }),
+      });
+      
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
   // SMS endpoint using Twilio API
   apiRouter.post("/send-sms", async (req: Request, res: Response) => {
     try {
