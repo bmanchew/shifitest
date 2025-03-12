@@ -49,6 +49,9 @@ export default function ComplaintTrends() {
           <div className="flex flex-col items-center justify-center py-6">
             <AlertCircle className="h-12 w-12 text-destructive mb-2" />
             <p className="text-center text-muted-foreground">Failed to load CFPB complaint data. Please try again later.</p>
+            <div className="text-sm text-destructive mt-2">
+              {error instanceof Error ? error.message : 'Unknown error'}
+            </div>
             <Button className="mt-4" onClick={() => refetch()}>Retry</Button>
           </div>
         </CardContent>
@@ -56,15 +59,42 @@ export default function ComplaintTrends() {
     );
   }
 
-  const trends = data?.data;
-  if (!trends) {
-    return null;
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Complaint Trends</CardTitle>
+          <CardDescription>Loading CFPB complaint data...</CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center py-6">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </CardContent>
+      </Card>
+    );
   }
 
-  const monthlyTrendData = trends.personalLoans.monthlyTrend || [];
-  const topIssuesData = trends.personalLoans.topIssues || [];
-  const topCompaniesData = trends.personalLoans.topCompanies || [];
-  const ccMonthlyTrendData = trends.creditCards.monthlyTrend || [];
+  const trends = data?.data;
+  if (!trends) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Complaint Trends</CardTitle>
+          <CardDescription>No data available</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center py-6">
+            <p className="text-center text-muted-foreground">No CFPB complaint data available.</p>
+            <Button className="mt-4" onClick={() => refetch()}>Retry</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const monthlyTrendData = trends.personalLoans?.monthlyTrend || [];
+  const topIssuesData = trends.personalLoans?.topIssues || [];
+  const topCompaniesData = trends.personalLoans?.topCompanies || [];
+  const ccMonthlyTrendData = trends.creditCards?.monthlyTrend || [];
 
   return (
     <Card className="col-span-2">
