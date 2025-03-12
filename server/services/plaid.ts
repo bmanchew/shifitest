@@ -544,6 +544,77 @@ class PlaidService {
       throw error;
     }
   }
+  
+  /**
+   * Create an asset report for a specific user by phone number
+   * This is a helper method that finds the user by phone number and creates an asset report
+   */
+  async createAssetReportByPhone(
+    accessToken: string,
+    phoneNumber: string,
+    daysRequested: number = 60,
+    options?: any,
+  ) {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+    
+    // Import storage here to avoid circular dependency
+    const { storage } = await import('../storage');
+    
+    try {
+      // Find the user by phone number
+      const user = await storage.getUserByPhone(phoneNumber);
+      
+      if (!user) {
+        throw new Error(`User with phone number ${phoneNumber} not found`);
+      }
+
+      logger.info({
+        message: `Creating Plaid asset report for user with phone ${phoneNumber}`,
+        category: "api",
+        source: "plaid",
+        metadata: { userId: user.id, daysRequested },
+      });
+      
+      // Get user's recent contracts
+      const contracts = await storage.getContractsByCustomerId(user.id);
+      
+      if (!contracts || contracts.length === 0) {
+        throw new Error(`No contracts found for user with phone ${phoneNumber}`);
+      }
+      
+      // Use the most recent contract
+      const contractId = contracts[0].id;
+      
+      // Create the asset report
+      const result = await this.createAssetReport(accessToken, daysRequested, options);
+      
+      // Store the asset report token in our database
+      await storage.storeAssetReportToken(contractId, result.assetReportToken, result.assetReportId, {
+        userId: user.id,
+        daysRequested
+      });
+      
+      return {
+        ...result,
+        userId: user.id,
+        contractId
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to create asset report by phone: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          phoneNumber,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+      
+      throw error;
+    }
+  }
 
   /**
    * Validate Plaid credentials by trying to create a link token

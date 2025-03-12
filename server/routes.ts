@@ -713,11 +713,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         monthlyPayment,
       });
 
+      // Find or create a user for this phone number
+      const customer = await storage.findOrCreateUserByPhone(phoneNumber);
+      
       // Create a new contract
       const newContract = await storage.createContract({
         contractNumber,
         merchantId,
-        customerId: null, // Will be set when the customer completes the application
+        customerId: customer.id, // Link to the customer immediately
         amount,
         downPayment,
         financedAmount,
@@ -2801,6 +2804,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(500).json({
           success: false,
           message: "Failed to create asset report",
+        });
+      }
+    },
+  );
+
+  // Create asset report by phone number
+  apiRouter.post(
+    "/plaid/create-asset-report-by-phone",
+    async (req: Request, res: Response) => {
+      try {
+        const { phoneNumber, accessToken, daysRequested = 60, options } = req.body;
+
+        if (!phoneNumber) {
+          return res.status(400).json({
+            success: false,
+            message: "Phone number is required",
+          });
+        }
+
+        if (!accessToken) {
+          return res.status(400).json({
+            success: false,
+            message: "Access token is required",
+          });
+        }
+
+        logger.info({
+          message: `Creating asset report by phone number`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            phoneNumber,
+            daysRequested,
+          },
+        });
+
+        // Create the asset report using the Plaid service
+        const result = await plaidService.createAssetReportByPhone(
+          accessToken,
+          phoneNumber,
+          daysRequested,
+          options
+        );
+
+        // Create a log entry
+        await storage.createLog({
+          level: "info",
+          category: "api",
+          source: "plaid",
+          message: `Asset report created by phone number`,
+          userId: result.userId || null,
+          metadata: JSON.stringify({
+            phoneNumber,
+            contractId: result.contractId,
+            assetReportId: result.assetReportId,
+            daysRequested,
+          }),
+        });
+
+        // Return success response
+        res.json({
+          success: true,
+          assetReportId: result.assetReportId,
+          contractId: result.contractId,
+          userId: result.userId,
+          message: "Asset report created successfully",
+        });
+      } catch (error) {
+        logger.error({
+          message: `Failed to create Plaid asset report by phone: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            error: error instanceof Error ? error.stack : null,
+          },
+        });
+
+        // Create error log
+        await storage.createLog({
+          level: "error",
+          category: "api",
+          source: "plaid",
+          message: `Failed to create asset report by phone: ${error instanceof Error ? error.message : String(error)}`,
+          metadata: JSON.stringify({
+            error: error instanceof Error ? error.stack : null,
+          }),
+        });
+
+        res.status(500).json({
+          success: false,
+          message: "Failed to create asset report by phone",
         });
       }
     },

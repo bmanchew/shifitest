@@ -78,10 +78,36 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user || undefined;
   }
+  
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.phone, phone));
+    return user || undefined;
+  }
 
   async createUser(user: InsertUser): Promise<User> {
     const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
+  }
+  
+  async findOrCreateUserByPhone(phone: string): Promise<User> {
+    // First, try to find the user by phone
+    const existingUser = await this.getUserByPhone(phone);
+    if (existingUser) {
+      return existingUser;
+    }
+    
+    // If not found, create a new user with temporary data
+    // The user can update these fields later during the application process
+    const tempEmail = `temp_${phone.replace(/\D/g, '')}@shifi.com`;
+    const newUser: InsertUser = {
+      email: tempEmail,
+      password: Math.random().toString(36).substring(2, 15), // temporary password
+      phone: phone,
+      role: 'customer',
+      name: `Customer ${phone}`,
+    };
+    
+    return await this.createUser(newUser);
   }
 
   // Merchant methods
