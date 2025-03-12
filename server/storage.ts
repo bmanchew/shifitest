@@ -16,7 +16,9 @@ export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  findOrCreateUserByPhone(phone: string): Promise<User>;
 
   // Merchant operations
   getMerchant(id: number): Promise<Merchant | undefined>;
