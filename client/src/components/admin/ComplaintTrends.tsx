@@ -8,14 +8,18 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 export default function ComplaintTrends() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { data, isLoading, isError, error, refetch } = useQuery<any, Error>({
+  const { data: complaintData, isLoading, isError, error, refetch } = useQuery<any, Error>({
     queryKey: ["/api/admin/reports/complaint-trends"],
     queryFn: async () => {
       const response = await fetch('/api/admin/reports/complaint-trends');
       if (!response.ok) {
         throw new Error('Failed to fetch complaint trends');
       }
-      return response.json();
+      const responseData = await response.json();
+      if (!responseData.success) {
+        throw new Error(responseData.message || 'Failed to fetch complaint trends');
+      }
+      return responseData;
     },
     refetchOnWindowFocus: false,
   });
@@ -68,7 +72,7 @@ export default function ComplaintTrends() {
             </TabsList>
             <TabsContent value="monthly">
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={data?.data?.personalLoans?.monthlyTrend}>
+                <LineChart data={complaintData?.data?.personalLoans?.monthlyTrend}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
@@ -80,7 +84,7 @@ export default function ComplaintTrends() {
             </TabsContent>
             <TabsContent value="category">
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={data?.data?.personalLoans?.topIssues}>
+                <BarChart data={complaintData?.data?.personalLoans?.topIssues}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="issue" />
                   <YAxis />
@@ -91,7 +95,7 @@ export default function ComplaintTrends() {
               </ResponsiveContainer>
             </TabsContent>
           </Tabs>
-          {data?.data?.isMockData && (
+          {complaintData?.isMockData && (
             <div className="text-xs text-muted-foreground mt-2 text-center">
               Note: Displaying mock data for demonstration purposes
             </div>

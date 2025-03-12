@@ -43,11 +43,33 @@ reportsRouter.get('/complaint-trends', async (req, res) => {
       source: 'reports',
     });
 
-    // Use the AI analytics service to get complaint trends
-    const trends = await aiAnalyticsService.analyzeComplaintTrends();
-
-    // Return the results
-    res.json(trends);
+    try {
+      // Try to use the AI analytics service to get complaint trends
+      const trends = await aiAnalyticsService.analyzeComplaintTrends();
+      
+      // Return the results with success status
+      return res.json({
+        success: true,
+        data: trends,
+        isMockData: false
+      });
+    } catch (analyticsError) {
+      logger.warn({
+        message: `Using mock complaint trends due to error: ${analyticsError instanceof Error ? analyticsError.message : String(analyticsError)}`,
+        category: 'api',
+        source: 'reports'
+      });
+      
+      // If AI analytics fails, fall back to mock data
+      const mockData = cfpbService.getMockComplaintTrends();
+      
+      // Return mock data with flag indicating it's mock
+      return res.json({
+        success: true,
+        data: mockData,
+        isMockData: true
+      });
+    }
   } catch (error) {
     logger.error({
       message: `Error fetching complaint trends: ${error instanceof Error ? error.message : String(error)}`,
@@ -59,6 +81,7 @@ reportsRouter.get('/complaint-trends', async (req, res) => {
     });
 
     res.status(500).json({ 
+      success: false,
       error: 'Failed to fetch complaint trends',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
