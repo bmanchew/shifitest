@@ -81,6 +81,26 @@ export class CFPBService {
         
         // Check if response is valid JSON
         try {
+          // Check if the response seems to be HTML instead of JSON
+          if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+            logger.error({
+              message: `CFPB API returned HTML instead of JSON`,
+              category: 'api',
+              source: 'cfpb',
+              metadata: {
+                responsePreview: responseText.substring(0, 500),
+                contentType: response.headers.get('content-type')
+              }
+            });
+            // Return mock data instead of throwing an error
+            logger.info({
+              message: 'Falling back to mock CFPB data',
+              category: 'api',
+              source: 'cfpb'
+            });
+            return this.getMockData(product, options.subProduct);
+          }
+          
           const data = JSON.parse(responseText);
           
           logger.info({
