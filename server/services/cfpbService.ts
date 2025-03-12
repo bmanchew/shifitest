@@ -1,4 +1,4 @@
-import fetch, { RequestInit } from 'node-fetch';
+import fetch, { RequestInit, Response } from 'node-fetch';
 import { logger } from './logger';
 
 // Extended RequestInit interface to include timeout
@@ -6,12 +6,102 @@ interface ExtendedRequestInit extends RequestInit {
   timeout?: number;
 }
 
+// Delay utility function for retry mechanism
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
  * Service to interact with the Consumer Financial Protection Bureau's
  * Consumer Complaint Database API
  */
 export class CFPBService {
   private readonly baseUrl = 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/';
+  private readonly maxRetries = 3; // Maximum number of retry attempts
+  
+  /**
+   * Helper method to fetch data from CFPB API with retry logic for throttling
+   * @param url The complete URL to fetch
+   * @param options Fetch options
+   * @returns Response object and response text
+   */
+  private async fetchWithRetry(url: string, options: ExtendedRequestInit): Promise<{response: Response, text: string}> {
+    let retries = 0;
+    let lastError: Error | null = null;
+    
+    while (retries <= this.maxRetries) {
+      try {
+        const response = await fetch(url, options);
+        const text = await response.text();
+        
+        // Check if we got a throttling response
+        if (response.status === 429 || 
+            (text.includes("throttled") && text.includes("Request was throttled"))) {
+          
+          // Extract the wait time if available
+          let waitTime = 2000 * Math.pow(2, retries); // Default exponential backoff
+          
+          // Try to parse the wait time from response if available
+          const waitTimeMatch = text.match(/Expected available in (\d+) seconds/);
+          if (waitTimeMatch && waitTimeMatch[1]) {
+            const seconds = parseInt(waitTimeMatch[1], 10);
+            waitTime = (seconds + 1) * 1000; // Convert to ms and add a little buffer
+          }
+          
+          logger.info({
+            message: `CFPB API request throttled, retrying in ${waitTime/1000} seconds...`,
+            category: 'api',
+            source: 'internal',
+            metadata: { 
+              retryCount: retries + 1, 
+              maxRetries: this.maxRetries,
+              waitTimeMs: waitTime,
+              url
+            }
+          });
+          
+          // Wait before retrying
+          await delay(waitTime);
+          retries++;
+          continue;
+        }
+        
+        // If not throttled, return the response
+        return { response, text };
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        // Only retry on network errors or timeouts
+        if (error instanceof Error && 
+            (error.message.includes('timeout') || 
+             error.message.includes('network') ||
+             error.message.includes('ECONNRESET'))) {
+          
+          const waitTime = 1000 * Math.pow(2, retries);
+          
+          logger.info({
+            message: `CFPB API network error, retrying in ${waitTime/1000} seconds...`,
+            category: 'api',
+            source: 'internal',
+            metadata: { 
+              retryCount: retries + 1, 
+              maxRetries: this.maxRetries,
+              error: error.message,
+              url
+            }
+          });
+          
+          await delay(waitTime);
+          retries++;
+          continue;
+        }
+        
+        // Other errors should be thrown immediately
+        throw error;
+      }
+    }
+    
+    // If we've exhausted all retries
+    throw lastError || new Error('Failed to fetch data after multiple retries');
+  }
   
   /**
    * Get complaints related to a specific financial product
@@ -105,10 +195,9 @@ export class CFPBService {
           },
           timeout: 15000 // 15 second timeout
         };
-        const response = await fetch(requestUrl, fetchOptions);
-
-        // Log full response details for debugging
-        const responseText = await response.text();
+        
+        // Use fetchWithRetry instead of direct fetch
+        const { response, text: responseText } = await this.fetchWithRetry(requestUrl, fetchOptions);
         
         if (!response.ok) {
           logger.error({
@@ -263,10 +352,9 @@ export class CFPBService {
         },
         timeout: 15000 // 15 second timeout
       };
-      const response = await fetch(requestUrl, fetchOptions);
-
-      // Handle response with better error checking
-      const responseText = await response.text();
+      
+      // Use fetchWithRetry instead of direct fetch
+      const { response, text: responseText } = await this.fetchWithRetry(requestUrl, fetchOptions);
       
       if (!response.ok) {
         logger.error({
