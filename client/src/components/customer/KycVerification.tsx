@@ -108,7 +108,7 @@ export default function KycVerification({
 
       const { session } = response;
 
-      // Get the verification URL from either url or session_url property
+      // Set the session ID and URL
       const sessionUrl = session.url || session.session_url;
 
       if (!sessionUrl) {
