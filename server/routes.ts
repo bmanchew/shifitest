@@ -19,6 +19,7 @@ import { logger } from "./services/logger";
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
+import contractsRouter from "./routes/contracts";
 
 function objectMetadata<T>(data: T): string {
   if (!data) return JSON.stringify({});
@@ -135,6 +136,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get user error:", error);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  
+  // Get user by phone number
+  apiRouter.get("/user-by-phone", async (req: Request, res: Response) => {
+    try {
+      const { phone } = req.query;
+      
+      if (!phone) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Phone number is required" 
+        });
+      }
+
+      // First try to find the user
+      let user = await storage.getUserByPhone(phone as string);
+      
+      // If user doesn't exist, create a new one
+      if (!user) {
+        user = await storage.findOrCreateUserByPhone(phone as string);
+      }
+
+      // Remove password from response
+      const { password, ...userData } = user;
+
+      res.json({
+        success: true,
+        user: userData,
+        message: "User found or created successfully"
+      });
+    } catch (error) {
+      console.error("Get user by phone error:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Internal server error" 
+      });
     }
   });
 
@@ -3180,6 +3218,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount the admin reports routers
   apiRouter.use("/admin/reports", reportsRouter);
   apiRouter.use("/admin", adminReportsRouter);
+  
+  // Mount the contracts router
+  apiRouter.use("/contracts", contractsRouter);
 
   // Mount the API router
   app.use("/api", apiRouter);
