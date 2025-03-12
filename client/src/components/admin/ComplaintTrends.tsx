@@ -3,11 +3,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { Button } from "@/components/ui/button";
 
 export default function ComplaintTrends() {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['/api/admin/complaint-trends'],
+    refetchOnWindowFocus: false,
+  });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["/api/admin/reports/complaint-trends"],
