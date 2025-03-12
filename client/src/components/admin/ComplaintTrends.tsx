@@ -5,7 +5,6 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function ComplaintTrends() {
   const [isRefreshing, setIsRefreshing] = useState(false);
