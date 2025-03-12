@@ -145,7 +145,13 @@ export default function ContractTable({ contracts }: ContractTableProps) {
 
       <DataTable
         columns={columns}
-        data={contracts}
+        data={contracts.map(contract => ({
+          ...contract,
+          // Format customer name for display, falling back to various options if specific fields aren't available
+          customerName: contract.customerFirstName && contract.customerLastName 
+            ? `${contract.customerFirstName} ${contract.customerLastName}`
+            : contract.customerName || "Unknown Customer"
+        }))}
         searchField="contractNumber"
         searchPlaceholder="Search contracts..."
       />

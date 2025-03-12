@@ -16,7 +16,9 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  name: text("name"),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  name: text("name"), // Keep for backward compatibility
   role: userRoleEnum("role").notNull().default('customer'),
   phone: text("phone"),
   createdAt: timestamp("created_at").defaultNow(),
