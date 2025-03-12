@@ -16,7 +16,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export class CFPBService {
   private readonly baseUrl = 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/';
   private readonly maxRetries = 3; // Maximum number of retry attempts
-  
+
   /**
    * Helper method to fetch data from CFPB API with retry logic for throttling
    * @param url The complete URL to fetch
@@ -26,26 +26,26 @@ export class CFPBService {
   private async fetchWithRetry(url: string, options: ExtendedRequestInit): Promise<{response: Response, text: string}> {
     let retries = 0;
     let lastError: Error | null = null;
-    
+
     while (retries <= this.maxRetries) {
       try {
         const response = await fetch(url, options);
         const text = await response.text();
-        
+
         // Check if we got a throttling response
         if (response.status === 429 || 
             (text.includes("throttled") && text.includes("Request was throttled"))) {
-          
+
           // Extract the wait time if available
           let waitTime = 2000 * Math.pow(2, retries); // Default exponential backoff
-          
+
           // Try to parse the wait time from response if available
           const waitTimeMatch = text.match(/Expected available in (\d+) seconds/);
           if (waitTimeMatch && waitTimeMatch[1]) {
             const seconds = parseInt(waitTimeMatch[1], 10);
             waitTime = (seconds + 1) * 1000; // Convert to ms and add a little buffer
           }
-          
+
           logger.info({
             message: `CFPB API request throttled, retrying in ${waitTime/1000} seconds...`,
             category: 'api',
@@ -57,26 +57,26 @@ export class CFPBService {
               url
             }
           });
-          
+
           // Wait before retrying
           await delay(waitTime);
           retries++;
           continue;
         }
-        
+
         // If not throttled, return the response
         return { response, text };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        
+
         // Only retry on network errors or timeouts
         if (error instanceof Error && 
             (error.message.includes('timeout') || 
              error.message.includes('network') ||
              error.message.includes('ECONNRESET'))) {
-          
+
           const waitTime = 1000 * Math.pow(2, retries);
-          
+
           logger.info({
             message: `CFPB API network error, retrying in ${waitTime/1000} seconds...`,
             category: 'api',
@@ -88,21 +88,21 @@ export class CFPBService {
               url
             }
           });
-          
+
           await delay(waitTime);
           retries++;
           continue;
         }
-        
+
         // Other errors should be thrown immediately
         throw error;
       }
     }
-    
+
     // If we've exhausted all retries
     throw lastError || new Error('Failed to fetch data after multiple retries');
   }
-  
+
   /**
    * Get complaints related to a specific financial product
    */
@@ -121,7 +121,7 @@ export class CFPBService {
       // According to CFPB API docs, we need to use the correct product parameter
       // The CFPB API accepts direct URL parameters
       params.append('product', product);
-      
+
       // Add specific sub-product if provided - use direct parameter
       if (options.subProduct) {
         params.append('sub_product', options.subProduct);
@@ -138,14 +138,14 @@ export class CFPBService {
         const today = new Date().toISOString().split('T')[0];
         params.append('date_received_max', today);
       }
-      
+
       // Set result size (default is small, we want more data)
       params.append('size', (options.size || 1000).toString());
-      
+
       // Add other filters if provided
       if (options.state) params.append('state', options.state);
       if (options.issue) params.append('issue', options.issue);
-      
+
       // Add searchTerm for free-text searching
       // This allows us to find mentions of specific terms in complaint narratives
       if (options.searchTerm) {
@@ -160,7 +160,7 @@ export class CFPBService {
 
       // Format should be JSON
       params.append('format', 'json');
-      
+
       // Add required fields for comprehensive data
       params.append('field', 'product');
       params.append('field', 'sub_product');
@@ -171,8 +171,7 @@ export class CFPBService {
       params.append('field', 'company_response');
       params.append('field', 'complaint_what_happened');
       params.append('field', 'state');
-      params.append('field', 'consumer_consent_provided');
-      
+
       // Request aggregations for analysis
       params.append('no_aggs', 'false');
 
@@ -192,7 +191,7 @@ export class CFPBService {
           source: 'internal',
           metadata: { url: requestUrl }
         });
-        
+
         const fetchOptions: ExtendedRequestInit = {
           headers: {
             'Accept': 'application/json',
@@ -200,10 +199,10 @@ export class CFPBService {
           },
           timeout: 15000 // 15 second timeout
         };
-        
+
         // Use fetchWithRetry instead of direct fetch
         const { response, text: responseText } = await this.fetchWithRetry(requestUrl, fetchOptions);
-        
+
         if (!response.ok) {
           logger.error({
             message: `CFPB API returned error status: ${response.status}`,
@@ -218,7 +217,7 @@ export class CFPBService {
           });
           throw new Error(`CFPB API error: ${response.status} ${response.statusText}`);
         }
-        
+
         // Check if response is valid JSON
         try {
           // Check if the response seems to be HTML instead of JSON
@@ -241,13 +240,13 @@ export class CFPBService {
             });
             throw new Error('CFPB API returned HTML instead of JSON data');
           }
-          
+
           const data = JSON.parse(responseText);
-          
+
           // Improve handling of different response formats from CFPB API
           let complaintsCount = 0;
           let hasHits = false;
-          
+
           // Check for different response formats
           if (data.hits && typeof data.hits.total === 'number') {
             complaintsCount = data.hits.total;
@@ -261,7 +260,7 @@ export class CFPBService {
             complaintsCount = data.length;
             hasHits = true;
           }
-          
+
           logger.info({
             message: 'Successfully fetched CFPB complaints',
             category: 'api',
@@ -278,7 +277,7 @@ export class CFPBService {
               totalType: data.hits?.total ? (typeof data.hits.total) : 'undefined'
             }
           });
-          
+
           return data;
         } catch (parseError) {
           logger.error({
@@ -314,7 +313,7 @@ export class CFPBService {
           product
         }
       });
-      
+
       // Throw the error to ensure proper error handling
       throw error;
     }
@@ -345,10 +344,10 @@ export class CFPBService {
 
       // Format should be JSON
       params.append('format', 'json');
-      
+
       // Request aggregations for analysis
       params.append('no_aggs', 'false');
-      
+
       // Add field parameters - ensure we get all fields needed for analysis
       params.append('field', 'company');
       params.append('field', 'issue');
@@ -359,7 +358,6 @@ export class CFPBService {
       params.append('field', 'complaint_what_happened');
       params.append('field', 'company_response');
       params.append('field', 'state');
-      params.append('field', 'consumer_consent_provided');
 
       logger.info({
         message: 'Fetching CFPB complaints for company',
@@ -384,10 +382,10 @@ export class CFPBService {
         },
         timeout: 15000 // 15 second timeout
       };
-      
+
       // Use fetchWithRetry instead of direct fetch
       const { response, text: responseText } = await this.fetchWithRetry(requestUrl, fetchOptions);
-      
+
       if (!response.ok) {
         logger.error({
           message: `CFPB API returned error status: ${response.status}`,
@@ -402,7 +400,7 @@ export class CFPBService {
         });
         throw new Error(`CFPB API error: ${response.status} ${response.statusText}`);
       }
-      
+
       // Check for valid JSON
       try {
         // Check if the response is HTML
@@ -425,13 +423,13 @@ export class CFPBService {
           });
           throw new Error('CFPB API returned HTML instead of JSON data');
         }
-        
+
         const data = JSON.parse(responseText);
-        
+
         // Improve handling of different response formats
         let complaintsCount = 0;
         let hasHits = false;
-        
+
         // Check for different response formats
         if (data.hits && typeof data.hits.total === 'number') {
           complaintsCount = data.hits.total;
@@ -445,7 +443,7 @@ export class CFPBService {
           complaintsCount = data.length;
           hasHits = true;
         }
-        
+
         logger.info({
           message: 'Successfully fetched CFPB complaints for company',
           category: 'api',
@@ -462,7 +460,7 @@ export class CFPBService {
             totalType: data.hits?.total ? (typeof data.hits.total) : 'undefined'
           }
         });
-        
+
         return data;
       } catch (parseError) {
         logger.error({
@@ -516,7 +514,7 @@ export class CFPBService {
 
       // Format should be JSON
       params.append('format', 'json');
-      
+
       // Fields to include in the response - expanded for comprehensive analysis
       params.append('field', 'company');
       params.append('field', 'date_received');
@@ -527,8 +525,7 @@ export class CFPBService {
       params.append('field', 'state');
       params.append('field', 'complaint_what_happened');
       params.append('field', 'company_response');
-      params.append('field', 'consumer_consent_provided');
-      
+
       // Use trends endpoint for this call
       const trendsUrl = this.baseUrl.replace(/\/$/, '') + '/trends';
 
@@ -555,10 +552,10 @@ export class CFPBService {
         },
         timeout: 15000 // 15 second timeout
       };
-      
+
       // Use fetchWithRetry instead of direct fetch
       const { response, text: responseText } = await this.fetchWithRetry(requestUrl, fetchOptions);
-      
+
       if (!response.ok) {
         logger.error({
           message: `CFPB API returned error status: ${response.status}`,
@@ -573,7 +570,7 @@ export class CFPBService {
         });
         throw new Error(`CFPB API error: ${response.status} ${response.statusText}`);
       }
-      
+
       // Check for valid JSON
       try {
         // Check if the response is HTML
@@ -596,13 +593,13 @@ export class CFPBService {
           });
           throw new Error('CFPB API returned HTML instead of JSON data');
         }
-        
+
         const data = JSON.parse(responseText);
-        
+
         // Improve handling of different response formats
         let complaintsCount = 0;
         let hasHits = false;
-        
+
         // Check for different response formats
         if (data.hits && typeof data.hits.total === 'number') {
           complaintsCount = data.hits.total;
@@ -620,7 +617,7 @@ export class CFPBService {
           complaintsCount = data.trends.length;
           hasHits = true;
         }
-        
+
         logger.info({
           message: 'Successfully fetched CFPB industry trends',
           category: 'api',
@@ -638,7 +635,7 @@ export class CFPBService {
             totalType: data.hits?.total ? (typeof data.hits.total) : 'undefined'
           }
         });
-        
+
         return data;
       } catch (parseError) {
         logger.error({
