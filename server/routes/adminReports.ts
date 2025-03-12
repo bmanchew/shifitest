@@ -8,6 +8,73 @@ import { logger } from "../services/logger";
 
 export const adminReportsRouter = express.Router();
 
+// Get CFPB complaint trends
+adminReportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
+  try {
+    const complaintTrends = await cfpbService.getMockComplaintTrends();
+    
+    res.json({
+      success: true,
+      data: complaintTrends
+    });
+  } catch (error) {
+    logger.error({
+      message: `Failed to get CFPB complaint trends: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "admin",
+      metadata: {
+        error: error instanceof Error ? error.stack : null
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to get CFPB complaint trends"
+    });
+  }
+});
+
+// Get AI analytics data
+adminReportsRouter.get("/ai-analytics", async (req: Request, res: Response) => {
+  try {
+    // First try to get real analytics, fallback to mock data
+    try {
+      const analyticsData = await aiAnalyticsService.analyzeComplaintTrends();
+      res.json({
+        success: true,
+        data: analyticsData
+      });
+    } catch (analyticError) {
+      logger.warn({
+        message: `Could not get real AI analytics, using mock data: ${analyticError instanceof Error ? analyticError.message : String(analyticError)}`,
+        category: "api",
+        source: "admin"
+      });
+      
+      const mockData = await cfpbService.getMockComplaintTrends();
+      res.json({
+        success: true,
+        data: mockData,
+        isMockData: true
+      });
+    }
+  } catch (error) {
+    logger.error({
+      message: `Failed to get AI analytics: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "admin",
+      metadata: {
+        error: error instanceof Error ? error.stack : null
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to get AI analytics"
+    });
+  }
+});
+
 // Get portfolio health dashboard
 adminReportsRouter.get("/portfolio-health", async (req: Request, res: Response) => {
   try {

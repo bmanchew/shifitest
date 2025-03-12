@@ -97,6 +97,10 @@ export class AIAnalyticsService {
         limit: 500
       });
       
+
+// Export a singleton instance
+export const aiAnalyticsService = new AIAnalyticsService();
+
       // Get underwriting data
       const underwritingData = await storage.getAllUnderwritingData();
       

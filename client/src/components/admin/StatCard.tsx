@@ -1,7 +1,7 @@
 import { forwardRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { ArrowUp, ArrowDown } from "lucide-react";
 
 interface StatCardProps {
