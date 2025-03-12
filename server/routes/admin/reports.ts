@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { logger } from '../../services/logger';
 import { cfpbService } from '../../services/cfpbService';
@@ -66,7 +66,7 @@ reportsRouter.get('/complaint-trends', async (req, res) => {
 });
 
 // Get CFPB complaint trends
-adminReportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
+reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
   try {
     logger.info({
       message: 'Starting CFPB complaint trends analysis',

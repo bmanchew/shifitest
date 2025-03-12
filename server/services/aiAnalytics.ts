@@ -167,9 +167,9 @@ export class AIAnalyticsService {
   }
   
   /**
-   * Generate insights from complaint data
+   * Generate insights from complaint data for fintech products
    */
-  private generateInsights(unsecuredPersonalLoanComplaints: any, merchantCashAdvanceComplaints: any) {
+  private generateFintechInsights(unsecuredPersonalLoanComplaints: any, merchantCashAdvanceComplaints: any) {
     try {
       const insights = [];
       
@@ -316,7 +316,7 @@ export class AIAnalyticsService {
           topCompanies: this.extractTopCompanies(merchantCashAdvanceComplaints),
           monthlyTrend: this.extractMonthlyTrend(merchantCashAdvanceComplaints),
         },
-        insights: this.generateInsights(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
+        insights: this.generateFintechInsights(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
         recommendedUnderwritingAdjustments: this.generateUnderwritingRecommendations(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
       };
 
@@ -360,10 +360,6 @@ export class AIAnalyticsService {
         limit: 500
       });
       
-
-// Export a singleton instance
-export const aiAnalyticsService = new AIAnalyticsService();
-
       // Get underwriting data
       const underwritingData = await storage.getAllUnderwritingData();
       
@@ -496,7 +492,7 @@ export const aiAnalyticsService = new AIAnalyticsService();
     }));
   }
 
-  private generateInsights(personalLoanComplaints: any, creditCardComplaints: any): string[] {
+  private generateConsumerLoanInsights(personalLoanComplaints: any, creditCardComplaints: any): string[] {
     // This would be a much more sophisticated analysis in production
     const insights = [
       "Complaints about loan payment processing have increased 23% over the past 6 months, indicating potential issues with payment systems.",

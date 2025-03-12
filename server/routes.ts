@@ -17,6 +17,8 @@ import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { logger } from "./services/logger";
 import crypto from "crypto";
+import { adminReportsRouter } from "./routes/adminReports";
+import { reportsRouter } from "./routes/admin/reports";
 
 function objectMetadata<T>(data: T): string {
   if (!data) return JSON.stringify({});
@@ -3159,6 +3161,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Mount the admin reports routers
+  apiRouter.use("/admin/reports", reportsRouter);
+  apiRouter.use("/admin", adminReportsRouter);
+  
   // Mount the API router
   app.use("/api", apiRouter);
 
