@@ -98,8 +98,10 @@ adminReportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
       const mockData = cfpbService.getMockComplaintTrends();
       return res.json({ 
         success: true, 
-        data: mockData,
-        isMockData: true
+        data: {
+          ...mockData,
+          isMockData: true
+        }
       });
     }
   } catch (error) {

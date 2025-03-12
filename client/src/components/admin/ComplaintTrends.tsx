@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -8,7 +9,6 @@ import { RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function ComplaintTrends() {
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const isMockData = true; // Added to simulate mock data condition.  Replace with actual check.
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["/api/admin/reports/complaint-trends"],
@@ -123,7 +123,14 @@ export default function ComplaintTrends() {
           )}
         </Button>
       </CardHeader>
-      {isMockData && <CardContent className="pt-0 pb-0"><MockDataBanner /></CardContent>}
+      {data?.isMockData && (
+        <CardContent className="pt-0 pb-0">
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-md text-sm flex items-center mb-4">
+            <AlertCircle className="h-4 w-4 mr-2" />
+            <span>Showing mock data. Real-time CFPB API data could not be loaded.</span>
+          </div>
+        </CardContent>
+      )}
       <CardContent>
         <Tabs defaultValue="monthly">
           <TabsList className="grid w-full grid-cols-4">
