@@ -11,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import { Contract } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -21,7 +21,7 @@ interface ContractListProps {
 }
 
 export default function ContractList({ contracts, isLoading }: ContractListProps) {
-  const navigate = useNavigate();
+  const [_, navigate] = useLocation();
   const [customers, setCustomers] = useState<Record<number, { name: string; email: string }>>({});
   
   useEffect(() => {
