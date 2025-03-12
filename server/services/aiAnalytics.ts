@@ -249,9 +249,9 @@ export class AIAnalyticsService {
       });
 
       // Get complaint data from CFPB API for unsecured personal loans and merchant cash advances
-      // Only get data from last 3 months to focus on recent origination issues
+      // Get data from last 6 months to increase chances of finding relevant complaints
       const unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('Consumer Loan', {
-        dateReceivedMin: this.getDateXMonthsAgo(3),
+        dateReceivedMin: this.getDateXMonthsAgo(6),
         subProduct: 'Personal loan',
         issue: 'Loan origination', // Focus specifically on origination issues
         size: 1000
@@ -260,25 +260,57 @@ export class AIAnalyticsService {
       // The CFPB categorizes Merchant Cash Advances under a few different categories
       // Try both common categorizations to ensure we get all relevant data
       let merchantCashAdvanceComplaints;
+      // Try multiple categories where Merchant Cash Advance might be found in CFPB data
+      // Based on CFPB categorization, MCA could be under different product categories
       try {
+        // First try: Credit card or prepaid card category
         merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Credit card or prepaid card', {
-          dateReceivedMin: this.getDateXMonthsAgo(3),
+          dateReceivedMin: this.getDateXMonthsAgo(6),
           subProduct: 'Merchant cash advance',
           size: 1000
         });
       } catch (error) {
-        // If the first attempt fails, try the alternative category
+        // Second try: Try directly with Merchant cash advance as the product
         logger.warn({
-          message: 'Failed to fetch MCA complaints from first category, trying alternative',
+          message: 'Failed to fetch MCA complaints from first category, trying direct product name',
           category: 'system',
           source: 'internal',
         });
         
-        merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Credit card', {
-          dateReceivedMin: this.getDateXMonthsAgo(3),
-          subProduct: 'Merchant cash advance',
-          size: 1000
-        });
+        try {
+          merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Merchant cash advance', {
+            dateReceivedMin: this.getDateXMonthsAgo(6),
+            size: 1000
+          });
+        } catch (error) {
+          // Third try: Check under payday loans since MCAs are sometimes categorized here
+          logger.warn({
+            message: 'Failed to fetch MCA complaints from second category, trying payday category',
+            category: 'system',
+            source: 'internal',
+          });
+          
+          try {
+            merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Payday loan, title loan, or personal loan', {
+              dateReceivedMin: this.getDateXMonthsAgo(6),
+              subProduct: 'Merchant cash advance',
+              size: 1000
+            });
+          } catch (error) {
+            // Fourth try: Check under business loans
+            logger.warn({
+              message: 'Failed to fetch MCA complaints from third category, trying business loans category',
+              category: 'system',
+              source: 'internal',
+            });
+            
+            merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Business or consumer loan', {
+              dateReceivedMin: this.getDateXMonthsAgo(6),
+              subProduct: 'Business loan',
+              size: 1000
+            });
+          }
+        }
       }
 
       // Save complaint data to database for historical tracking
