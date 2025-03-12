@@ -86,17 +86,35 @@ export default function SendApplication() {
 
       toast({
         title: "Application Sent",
-        description: `ShiFi financing application sent to ${phoneNumber}.`,
+        description: data.message || "The application has been sent to the customer.",
       });
 
+      console.log("Application sent successfully:", data);
+
+      // Reset form fields
       setPhoneNumber("");
       setAmount("");
       setShowCalculator(false);
     } catch (error) {
       console.error("Failed to send application:", error);
+
+      // Try to extract more detailed error information
+      let errorMessage = "Failed to send the application. Please try again.";
+
+      if (error instanceof Error) {
+        // Try to parse the error message as JSON for more details
+        try {
+          const errorData = JSON.parse(error.message);
+          errorMessage = errorData.message || error.message;
+        } catch {
+          // If parsing fails, use the original error message
+          errorMessage = error.message;
+        }
+      }
+
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send the application. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
