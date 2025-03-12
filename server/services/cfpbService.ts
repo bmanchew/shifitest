@@ -490,11 +490,6 @@ export class CFPBService {
       throw error;
     }
   }
-  
-  /* 
-   * Note: All mock data fallbacks have been removed to ensure we only use authentic data
-   * from the CFPB API.
-   */
 }
 
 // Export a singleton instance

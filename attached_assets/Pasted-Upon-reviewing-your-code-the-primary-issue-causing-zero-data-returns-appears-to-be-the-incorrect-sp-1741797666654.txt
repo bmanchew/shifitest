@@ -1,0 +1,53 @@
+Upon reviewing your code, the primary issue causing zero data returns appears to be the incorrect specification of the `product` parameter in your API requests. The Consumer Financial Protection Bureau's (CFPB) Consumer Complaint Database API expects exact product names as defined in their documentation. Using incorrect or non-existent product names will result in no data being returned.
+
+**Correct Product Names:**
+
+- For unsecured personal loans, the correct product name is:
+  - `Payday loan, title loan, or personal loan`
+
+- For merchant cash advances, the correct product name is:
+  - `Merchant cash advance`
+
+**Recommended Code Adjustments:**
+
+1. **Update the `product` Parameter:**
+   - Ensure that the `product` parameter in your API requests matches the exact product names as specified above.
+
+   ```javascript
+   // Example for unsecured personal loans
+   const product = 'Payday loan, title loan, or personal loan';
+
+   // Example for merchant cash advances
+   const product = 'Merchant cash advance';
+   ```
+
+
+2. **Verify Date Range Parameters:**
+   - Ensure that the `date_received_min` and `date_received_max` parameters are correctly formatted in `YYYY-MM-DD` format and represent a valid date range.
+
+   ```javascript
+   // Example date range for the past 12 months
+   const dateReceivedMin = '2024-03-12';
+   const dateReceivedMax = '2025-03-12';
+   ```
+
+
+3. **Review Other Optional Parameters:**
+   - Double-check other optional parameters such as `state`, `issue`, and `sub_product` to ensure they align with the API's expected values.
+
+**Example Corrected API Request:**
+
+
+```javascript
+const params = new URLSearchParams();
+params.append('product', 'Payday loan, title loan, or personal loan');
+params.append('date_received_min', '2024-03-12');
+params.append('date_received_max', '2025-03-12');
+params.append('size', '1000');
+params.append('format', 'json');
+
+const requestUrl = `${this.baseUrl}?${params.toString()}`;
+```
+
+
+By implementing these adjustments, your API requests should return the expected data. Ensure that all parameter values strictly adhere to the CFPB API's specifications to avoid similar issues in the future. 
