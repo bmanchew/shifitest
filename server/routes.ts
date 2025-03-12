@@ -138,12 +138,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
-  
+
   // Get user by phone number
   apiRouter.get("/user-by-phone", async (req: Request, res: Response) => {
     try {
       const { phone } = req.query;
-      
+
       if (!phone) {
         return res.status(400).json({ 
           success: false,
@@ -153,7 +153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // First try to find the user
       let user = await storage.getUserByPhone(phone as string);
-      
+
       // If user doesn't exist, create a new one
       if (!user) {
         user = await storage.findOrCreateUserByPhone(phone as string);
@@ -685,7 +685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Forward to send-sms endpoint with appropriate parameter mapping
     try {
       const { phoneNumber, customerName, amount, term } = req.body;
-      
+
       // Log the incoming request
       logger.info({
         message: `Processing send-application request`,
@@ -697,20 +697,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           amount 
         })
       });
-      
+
       // Prepare data for the SMS endpoint
       const smsData = {
         phoneNumber,
         merchantId: req.body.merchantId || 1, // Default to merchant ID 1 if not provided
         amount
       };
-      
+
       // Call the SMS sending logic
       const result = await twilioService.sendSMS({
         to: phoneNumber,
         body: `You've been invited to apply for financing of $${amount}. Visit our application to continue.`
       });
-      
+
       // Create a contract for this financing request
       const contractNumber = generateContractNumber();
       const termMonths = term || 24; // Use provided term or default to 24 months
@@ -719,19 +719,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const downPayment = amount * (downPaymentPercent / 100);
       const financedAmount = amount - downPayment;
       const monthlyPayment = financedAmount / termMonths;
-      
+
       // Find or create a user for this phone number
-      const customer = await storage.findOrCreateUserByPhone(phoneNumber);
-      
+      let customer = await storage.getUserByPhone(phoneNumber);
+
+      // If user doesn't exist, create a new one
+      if (!customer) {
+        customer = await storage.findOrCreateUserByPhone(phoneNumber);
+        logger.info({
+          message: `Created new user for phone number ${phoneNumber}`,
+          category: "api",
+          source: "application",
+          metadata: JSON.stringify({ userId: customer.id })
+        });
+      }
+
       // Update customer name if provided
       if (customerName && customer) {
         const nameParts = customerName.trim().split(' ');
         const firstName = nameParts[0];
         const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-        
+
         await storage.updateUserName(customer.id, firstName, lastName);
       }
-      
+
       // Create a new contract
       const contract = await storage.createContract({
         contractNumber,
@@ -747,7 +758,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentStep: "terms",
         phoneNumber: phoneNumber
       });
-      
+
       // Create application progress for this contract
       await storage.createApplicationProgress({
         contractId: contract.id,
@@ -755,11 +766,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         completed: false,
         data: null,
       });
-      
+
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
       const applicationUrl = `https://${replitDomain}/apply/${contract.id}`;
-      
+
       // Create log for application creation
       await storage.createLog({
         level: "info",
@@ -773,7 +784,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           applicationUrl
         }),
       });
-      
+
       res.json({ 
         success: true, 
         message: "Application sent successfully", 
@@ -782,7 +793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Send application error:", error);
-      
+
       // Create error log
       await storage.createLog({
         level: "error",
@@ -793,7 +804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: error instanceof Error ? error.stack : null,
         }),
       });
-      
+
       res.status(500).json({ success: false, message: "Internal server error" });
     }
   });
@@ -870,8 +881,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Find or create a user for this phone number
-      const customer = await storage.findOrCreateUserByPhone(phoneNumber);
-      
+      let customer = await storage.getUserByPhone(phoneNumber);
+
+      // If user doesn't exist, create a new one
+      if (!customer) {
+        customer = await storage.findOrCreateUserByPhone(phoneNumber);
+        logger.info({
+          message: `Created new user for phone number ${phoneNumber}`,
+          category: "api", 
+          source: "twilio",
+          metadata: JSON.stringify({ userId: customer.id })
+        });
+      }
+
       // Create a new contract
       const newContract = await storage.createContract({
         contractNumber,
@@ -1879,7 +1901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               `Simulating successful Thanks Roger API call for contract ${contractId} signature`,
             );
           } catch (signingError) {
-            console.error("Thanks Roger API error:", signingError);
+            console.errorerror("Thanks Roger API error:", signingError);
             throw signingError;
           }
         }
@@ -2093,10 +2115,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 source: "didit",
                 metadata: { contractId, phoneNumber: contract.phoneNumber },
               });
-              
+
               // Find or create user by phone number
               const user = await storage.findOrCreateUserByPhone(contract.phoneNumber);
-              
+
               if (user) {
                 // Update the contract with the user ID
                 await storage.updateContractCustomerId(parseInt(contractId), user.id);
@@ -2150,7 +2172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
               // Get the updated contract info after potential user assignment
               const updatedContract = await storage.getContract(parseInt(contractId));
-              
+
               // Move the contract to the next step
               if (updatedContract && updatedContract.currentStep === "kyc") {
                 await storage.updateContractStep(parseInt(contractId), "bank");
@@ -2910,7 +2932,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Return success response
         res.json({
-          success: true,
+          successtrue,
           transferId,
           status,
           message: "Payment initiated successfully",
@@ -3415,7 +3437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount the admin reports routers
   apiRouter.use("/admin/reports", reportsRouter);
   apiRouter.use("/admin", adminReportsRouter);
-  
+
   // Mount the contracts router
   apiRouter.use("/contracts", contractsRouter);
 
