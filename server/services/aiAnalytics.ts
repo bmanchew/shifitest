@@ -36,7 +36,7 @@ export class AIAnalyticsService {
       logger.error({
         message: 'Error extracting top issues from complaints data',
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
         metadata: { error }
       });
       return [];
@@ -62,7 +62,7 @@ export class AIAnalyticsService {
       logger.error({
         message: 'Error extracting top companies from complaints data',
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
         metadata: { error }
       });
       return [];
@@ -90,7 +90,7 @@ export class AIAnalyticsService {
       logger.error({
         message: 'Error extracting monthly trend from complaints data',
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
         metadata: { error }
       });
       return [];
@@ -128,7 +128,7 @@ export class AIAnalyticsService {
       logger.error({
         message: 'Error generating insights from complaints data',
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
         metadata: { error }
       });
       return ["Error generating insights from complaints data."];
@@ -159,7 +159,7 @@ export class AIAnalyticsService {
       logger.error({
         message: 'Error generating underwriting recommendations from complaints data',
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
         metadata: { error }
       });
       return ["Error generating underwriting recommendations from complaints data."];
@@ -230,7 +230,7 @@ export class AIAnalyticsService {
       logger.error({
         message: 'Error generating insights from complaints data',
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
         metadata: { error }
       });
       return ["Error generating insights from complaints data."];
@@ -245,7 +245,7 @@ export class AIAnalyticsService {
       logger.info({
         message: 'Starting analysis of CFPB complaint trends',
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
       });
 
       // Get complaint data from CFPB API for unsecured personal loans and merchant cash advances
@@ -271,7 +271,7 @@ export class AIAnalyticsService {
         logger.warn({
           message: 'Failed to fetch MCA complaints from first category, trying alternative',
           category: 'system',
-          source: 'ai_analytics',
+          source: 'internal',
         });
         
         merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Credit card', {
@@ -286,7 +286,7 @@ export class AIAnalyticsService {
         logger.info({
           message: `Saving ${unsecuredPersonalLoanComplaints.hits.hits.length} unsecured personal loan complaints`,
           category: 'system',
-          source: 'ai_analytics'
+          source: 'internal'
         });
         await storage.saveComplaintsData(unsecuredPersonalLoanComplaints.hits.hits.map(hit => hit._source));
       }
@@ -295,7 +295,7 @@ export class AIAnalyticsService {
         logger.info({
           message: `Saving ${merchantCashAdvanceComplaints.hits.hits.length} merchant cash advance complaints`,
           category: 'system',
-          source: 'ai_analytics'
+          source: 'internal'
         });
         await storage.saveComplaintsData(merchantCashAdvanceComplaints.hits.hits.map(hit => hit._source));
       }
@@ -323,7 +323,7 @@ export class AIAnalyticsService {
       logger.info({
         message: 'Completed analysis of CFPB complaint trends',
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
         metadata: {
           personalLoanComplaintsCount: unsecuredPersonalLoanComplaints?.hits?.total || 0,
           merchantCashAdvanceComplaintsCount: merchantCashAdvanceComplaints?.hits?.total || 0,
@@ -338,7 +338,7 @@ export class AIAnalyticsService {
       logger.error({
         message: `Failed to analyze complaint trends: ${error instanceof Error ? error.message : String(error)}`,
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
         metadata: {
           error: error instanceof Error ? error.stack : null,
         }
@@ -441,7 +441,7 @@ export class AIAnalyticsService {
       logger.error({
         message: `Failed to generate model adjustment recommendations: ${error instanceof Error ? error.message : String(error)}`,
         category: 'system',
-        source: 'ai_analytics',
+        source: 'internal',
         metadata: {
           error: error instanceof Error ? error.stack : null,
         }
