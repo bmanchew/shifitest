@@ -239,16 +239,38 @@ export class CFPBService {
           
           const data = JSON.parse(responseText);
           
+          // Improve handling of different response formats from CFPB API
+          let complaintsCount = 0;
+          let hasHits = false;
+          
+          // Check for different response formats
+          if (data.hits && typeof data.hits.total === 'number') {
+            complaintsCount = data.hits.total;
+            hasHits = true;
+          } else if (data.hits && typeof data.hits.total === 'object' && data.hits.total.value) {
+            // Handle Elasticsearch 7+ format where total is an object like { value: 123, relation: "eq" }
+            complaintsCount = data.hits.total.value;
+            hasHits = true;
+          } else if (Array.isArray(data) && data.length > 0) {
+            // Handle array response format
+            complaintsCount = data.length;
+            hasHits = true;
+          }
+          
           logger.info({
             message: 'Successfully fetched CFPB complaints',
             category: 'api',
             source: 'internal',
             metadata: { 
               product,
-              complaintsCount: data.hits?.total || 0,
+              complaintsCount,
               hasAggregations: !!data.aggregations,
+              hasHits,
               responsePreview: JSON.stringify(data).substring(0, 500), // Log first 500 chars of response
-              hitsSample: data.hits?.hits?.length > 0 ? JSON.stringify(data.hits.hits[0]).substring(0, 300) : 'No hits'
+              hitsSample: data.hits?.hits?.length > 0 ? JSON.stringify(data.hits.hits[0]).substring(0, 300) : 'No hits',
+              responseType: Array.isArray(data) ? 'array' : 'object',
+              hasHitsProperty: !!data.hits,
+              totalType: data.hits?.total ? (typeof data.hits.total) : 'undefined'
             }
           });
           
@@ -396,16 +418,38 @@ export class CFPBService {
         
         const data = JSON.parse(responseText);
         
+        // Improve handling of different response formats
+        let complaintsCount = 0;
+        let hasHits = false;
+        
+        // Check for different response formats
+        if (data.hits && typeof data.hits.total === 'number') {
+          complaintsCount = data.hits.total;
+          hasHits = true;
+        } else if (data.hits && typeof data.hits.total === 'object' && data.hits.total.value) {
+          // Handle Elasticsearch 7+ format where total is an object like { value: 123, relation: "eq" }
+          complaintsCount = data.hits.total.value;
+          hasHits = true;
+        } else if (Array.isArray(data) && data.length > 0) {
+          // Handle array response format
+          complaintsCount = data.length;
+          hasHits = true;
+        }
+        
         logger.info({
           message: 'Successfully fetched CFPB complaints for company',
           category: 'api',
           source: 'internal',
           metadata: { 
             company,
-            complaintsCount: data.hits?.total || 0,
+            complaintsCount,
             hasAggregations: !!data.aggregations,
+            hasHits,
             responsePreview: JSON.stringify(data).substring(0, 500), // Log first 500 chars of response
-            hitsSample: data.hits?.hits?.length > 0 ? JSON.stringify(data.hits.hits[0]).substring(0, 300) : 'No hits'
+            hitsSample: data.hits?.hits?.length > 0 ? JSON.stringify(data.hits.hits[0]).substring(0, 300) : 'No hits',
+            responseType: Array.isArray(data) ? 'array' : 'object',
+            hasHitsProperty: !!data.hits,
+            totalType: data.hits?.total ? (typeof data.hits.total) : 'undefined'
           }
         });
         
@@ -498,10 +542,9 @@ export class CFPBService {
         },
         timeout: 15000 // 15 second timeout
       };
-      const response = await fetch(requestUrl, fetchOptions);
-
-      // Handle response with better error checking
-      const responseText = await response.text();
+      
+      // Use fetchWithRetry instead of direct fetch
+      const { response, text: responseText } = await this.fetchWithRetry(requestUrl, fetchOptions);
       
       if (!response.ok) {
         logger.error({
@@ -543,16 +586,43 @@ export class CFPBService {
         
         const data = JSON.parse(responseText);
         
+        // Improve handling of different response formats
+        let complaintsCount = 0;
+        let hasHits = false;
+        
+        // Check for different response formats
+        if (data.hits && typeof data.hits.total === 'number') {
+          complaintsCount = data.hits.total;
+          hasHits = true;
+        } else if (data.hits && typeof data.hits.total === 'object' && data.hits.total.value) {
+          // Handle Elasticsearch 7+ format where total is an object like { value: 123, relation: "eq" }
+          complaintsCount = data.hits.total.value;
+          hasHits = true;
+        } else if (Array.isArray(data) && data.length > 0) {
+          // Handle array response format
+          complaintsCount = data.length;
+          hasHits = true;
+        } else if (data.trends && Array.isArray(data.trends)) {
+          // Special handling for trends data which has a different format
+          complaintsCount = data.trends.length;
+          hasHits = true;
+        }
+        
         logger.info({
           message: 'Successfully fetched CFPB industry trends',
           category: 'api',
           source: 'internal',
           metadata: { 
-            complaintsCount: data.hits?.total || 0,
+            complaintsCount,
             hasAggregations: !!data.aggregations,
+            hasTrends: !!data.trends,
+            hasHits,
             dataStructure: Object.keys(data).join(', '),
             responsePreview: JSON.stringify(data).substring(0, 500), // Log first 500 chars of response
-            hitsSample: data.hits?.hits?.length > 0 ? JSON.stringify(data.hits.hits[0]).substring(0, 300) : 'No hits'
+            hitsSample: data.hits?.hits?.length > 0 ? JSON.stringify(data.hits.hits[0]).substring(0, 300) : 'No hits',
+            responseType: Array.isArray(data) ? 'array' : 'object',
+            hasHitsProperty: !!data.hits,
+            totalType: data.hits?.total ? (typeof data.hits.total) : 'undefined'
           }
         });
         
