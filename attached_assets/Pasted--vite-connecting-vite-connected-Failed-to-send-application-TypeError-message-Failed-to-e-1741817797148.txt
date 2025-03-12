@@ -1,0 +1,59 @@
+[vite] connecting...
+[vite] connected.
+Failed to send application: 
+TypeError {message: "Failed to execute 'text' on 'Response': body stream already read"}
+message: "Failed to execute 'text' on 'Response': body stream already read"
+stack: "TypeError: body stream already read↵ at throwIfResNotOk (https://8dc3f57a-133b-45a5-ba2b-9e2b16042657-00-572nlsfm974b.janeway.replit.dev/src/lib/queryClient.ts:9:30)↵ at async apiRequest (https://8dc3f57a-133b-45a5-ba2b-9e2b16042657-00-572nlsfm974b.janeway.replit.dev/src/lib/queryClient.ts:21:3)↵ at async handleSubmit (https://8dc3f57a-133b-45a5-ba2b-9e2b16042657-00-572nlsfm974b.janeway.replit.dev/src/components/merchant/SendApplication.tsx:76:7)"
+get stack: ƒ ()
+length: 0
+name: ""
+[[Prototype]]: ƒ ()
+apply: ƒ apply()
+arguments: "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"
+get arguments: ƒ ()
+set arguments: ƒ ()
+bind: ƒ bind()
+call: ƒ call()
+caller: "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"
+get caller: ƒ ()
+set caller: ƒ ()
+constructor: ƒ Function()
+length: 1
+name: ""
+toString: ƒ toString()
+Symbol(Symbol.hasInstance): undefined
+[[Prototype]]: Object
+set stack: ƒ ()
+length: 1
+name: ""
+[[Prototype]]: ƒ ()
+apply: ƒ apply()
+arguments: "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"
+get arguments: ƒ ()
+set arguments: ƒ ()
+bind: ƒ bind()
+call: ƒ call()
+caller: "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"
+get caller: ƒ ()
+set caller: ƒ ()
+constructor: ƒ Function()
+length: 1
+name: ""
+toString: ƒ toString()
+Symbol(Symbol.hasInstance): undefined
+[[Prototype]]: Object
+[[Prototype]]: Object
+constructor: ƒ TypeError()
+length: 1
+name: "TypeError"
+prototype: Object
+[[Prototype]]: ƒ Error()
+message: "Failed to execute 'text' on 'Response': body stream already read"
+name: "TypeError"
+[[Prototype]]: Object
+constructor: ƒ TypeError()
+message: "Failed to execute 'text' on 'Response': body stream already read"
+name: "TypeError"
+toString: ƒ toString()
+[[Prototype]]: Object
+
