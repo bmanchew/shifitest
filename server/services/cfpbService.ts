@@ -161,12 +161,18 @@ export class CFPBService {
       // Format should be JSON
       params.append('format', 'json');
       
-      // Add required fields for better data
+      // Add required fields for comprehensive data
       params.append('field', 'product');
       params.append('field', 'sub_product');
       params.append('field', 'issue');
+      params.append('field', 'sub_issue');
       params.append('field', 'date_received');
       params.append('field', 'company');
+      params.append('field', 'company_response');
+      params.append('field', 'complaint_what_happened');
+      params.append('field', 'state');
+      params.append('field', 'consumer_consent_provided');
+      params.append('field', 'submitted_via');
       
       // Request aggregations for analysis
       params.append('no_aggs', 'false');
@@ -344,12 +350,18 @@ export class CFPBService {
       // Request aggregations for analysis
       params.append('no_aggs', 'false');
       
-      // Add field parameters
+      // Add field parameters - ensure we get all fields needed for analysis
       params.append('field', 'company');
       params.append('field', 'issue');
       params.append('field', 'product');
       params.append('field', 'date_received');
       params.append('field', 'sub_product');
+      params.append('field', 'sub_issue');
+      params.append('field', 'complaint_what_happened');
+      params.append('field', 'company_response');
+      params.append('field', 'state');
+      params.append('field', 'consumer_consent_provided');
+      params.append('field', 'submitted_via');
 
       logger.info({
         message: 'Fetching CFPB complaints for company',
@@ -507,7 +519,7 @@ export class CFPBService {
       // Format should be JSON
       params.append('format', 'json');
       
-      // Fields to include in the response
+      // Fields to include in the response - expanded for comprehensive analysis
       params.append('field', 'company');
       params.append('field', 'date_received');
       params.append('field', 'issue');
@@ -515,6 +527,10 @@ export class CFPBService {
       params.append('field', 'sub_product');
       params.append('field', 'sub_issue');
       params.append('field', 'state');
+      params.append('field', 'complaint_what_happened');
+      params.append('field', 'company_response');
+      params.append('field', 'consumer_consent_provided');
+      params.append('field', 'submitted_via');
       
       // Use trends endpoint for this call
       const trendsUrl = this.baseUrl.replace(/\/$/, '') + '/trends';

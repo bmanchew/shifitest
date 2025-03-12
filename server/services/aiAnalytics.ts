@@ -637,10 +637,25 @@ export class AIAnalyticsService {
       return [];
     }
     
+    // Get total count properly handling different response formats
+    let totalComplaints = 0;
+    if (complaintsData.hits?.total) {
+      if (typeof complaintsData.hits.total === 'number') {
+        totalComplaints = complaintsData.hits.total;
+      } else if (typeof complaintsData.hits.total === 'object' && complaintsData.hits.total.value) {
+        totalComplaints = complaintsData.hits.total.value;
+      }
+    } else if (Array.isArray(complaintsData) && complaintsData.length > 0) {
+      totalComplaints = complaintsData.length;
+    }
+    
+    // Prevent division by zero
+    if (totalComplaints === 0) totalComplaints = 1;
+    
     return complaintsData.aggregations.company.buckets.map((bucket: any) => ({
       company: bucket.key,
       count: bucket.doc_count,
-      percentage: (bucket.doc_count / complaintsData.hits.total) * 100
+      percentage: (bucket.doc_count / totalComplaints) * 100
     })).slice(0, 5);
   }
 
