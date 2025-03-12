@@ -35,6 +35,7 @@ export interface IStorage {
   createContract(contract: InsertContract): Promise<Contract>;
   updateContractStatus(id: number, status: string): Promise<Contract | undefined>;
   updateContractStep(id: number, step: string): Promise<Contract | undefined>;
+  updateContractCustomerId(id: number, customerId: number): Promise<Contract | undefined>;
 
   // Application Progress operations
   getApplicationProgress(id: number): Promise<ApplicationProgress | undefined>;
@@ -65,6 +66,7 @@ export interface IStorage {
   updatePortfolioMonitoring(data: any): Promise<PortfolioMonitoring>;
   saveComplaintsData(complaints: any[]): Promise<ComplaintsData[]>;
   getComplaintsData(options?: { product?: string; company?: string; limit?: number; offset?: number }): Promise<ComplaintsData[]>;
+  updateUserName(userId: number, firstName?: string, lastName?: string): Promise<User | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -78,7 +80,7 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user || undefined;
   }
-  
+
   async getUserByPhone(phone: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.phone, phone));
     return user || undefined;
@@ -88,14 +90,14 @@ export class DatabaseStorage implements IStorage {
     const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
   }
-  
+
   async findOrCreateUserByPhone(phone: string): Promise<User> {
     // First, try to find the user by phone
     const existingUser = await this.getUserByPhone(phone);
     if (existingUser) {
       return existingUser;
     }
-    
+
     // If not found, create a new user with temporary data
     // The user can update these fields later during the application process
     const tempEmail = `temp_${phone.replace(/\D/g, '')}@shifi.com`;
@@ -106,7 +108,7 @@ export class DatabaseStorage implements IStorage {
       role: 'customer',
       name: `Customer ${phone}`,
     };
-    
+
     return await this.createUser(newUser);
   }
 
@@ -191,6 +193,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(contracts.id, id))
       .returning();
 
+    return updatedContract;
+  }
+
+  async updateContractCustomerId(id: number, customerId: number): Promise<Contract | undefined> {
+    const [updatedContract] = await db
+      .update(contracts)
+      .set({ customerId })
+      .where(eq(contracts.id, id))
+      .returning();
     return updatedContract;
   }
 
@@ -296,7 +307,7 @@ export class DatabaseStorage implements IStorage {
       createdAt: new Date(),
       expiresAt: expiresAt ? new Date(expiresAt) : undefined
     }).returning();
-    
+
     return assetReport;
   }
 
@@ -545,6 +556,33 @@ export class DatabaseStorage implements IStorage {
       console.error("Error fetching users:", error);
       return []; // Return empty array to prevent further errors
     }
+  }
+
+  async updateUserName(userId: number, firstName?: string, lastName?: string): Promise<User | null> {
+    const updates: any = {};
+
+    if (firstName) updates.firstName = firstName;
+    if (lastName) updates.lastName = lastName;
+
+    // Only update if we have at least one field to update
+    if (Object.keys(updates).length === 0) return null;
+
+    // Update name field for backward compatibility
+    if (firstName && lastName) {
+      updates.name = `${firstName} ${lastName}`;
+    } else if (firstName) {
+      updates.name = firstName;
+    } else if (lastName) {
+      updates.name = lastName;
+    }
+
+    const result = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    return result[0];
   }
 }
 

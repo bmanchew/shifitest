@@ -767,6 +767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         monthlyPayment,
         status: "pending",
         currentStep: "terms",
+        phoneNumber: phoneNumber, // Store the phone number directly in the contract
       });
 
       // Create application progress for this contract
@@ -1958,6 +1959,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status === "completed";
 
         try {
+          // Get the contract to find the associated customer
+          const contract = await storage.getContract(parseInt(contractId));
+          if (!contract) {
+            throw new Error(`Contract ${contractId} not found`);
+          }
+
+          // Ensure the contract has a customerId
+          if (!contract.customerId) {
+            // If contract doesn't have a customerId, try to find a user by phone number
+            if (contract.phoneNumber) {
+              logger.info({
+                message: `Looking up user by phone number for contract ${contractId}`,
+                category: "api",
+                source: "didit",
+                metadata: { contractId, phoneNumber: contract.phoneNumber },
+              });
+              
+              // Find or create user by phone number
+              const user = await storage.findOrCreateUserByPhone(contract.phoneNumber);
+              
+              if (user) {
+                // Update the contract with the user ID
+                await storage.updateContractCustomerId(parseInt(contractId), user.id);
+                logger.info({
+                  message: `Updated contract ${contractId} with user ID ${user.id}`,
+                  category: "api",
+                  source: "didit",
+                  metadata: { contractId, userId: user.id },
+                });
+              }
+            } else {
+              logger.warn({
+                message: `Contract ${contractId} has no customerId or phone number`,
+                category: "api",
+                source: "didit",
+                metadata: { contractId },
+              });
+            }
+          }
+
           // Find the KYC step in the application progress
           const applicationProgress =
             await storage.getApplicationProgressByContractId(
@@ -1989,16 +2030,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }),
               );
 
+              // Get the updated contract info after potential user assignment
+              const updatedContract = await storage.getContract(parseInt(contractId));
+              
               // Move the contract to the next step
-              const contract = await storage.getContract(parseInt(contractId));
-              if (contract && contract.currentStep === "kyc") {
+              if (updatedContract && updatedContract.currentStep === "kyc") {
                 await storage.updateContractStep(parseInt(contractId), "bank");
+              }
+
+              // Update user information if we have customer details and a customerId
+              if (updatedContract && updatedContract.customerId && (customerDetails.first_name || customerDetails.last_name)) {
+                try {
+                  // Update user's name based on KYC verification
+                  await storage.updateUserName(
+                    updatedContract.customerId,
+                    customerDetails.first_name,
+                    customerDetails.last_name
+                  );
+                  logger.info({
+                    message: `Updated user ${updatedContract.customerId} name information from KYC data`,
+                    category: "api",
+                    source: "didit",
+                    metadata: { 
+                      userId: updatedContract.customerId,
+                      firstName: customerDetails.first_name,
+                      lastName: customerDetails.last_name
+                    },
+                  });
+                } catch (userUpdateError) {
+                  logger.error({
+                    message: `Error updating user information: ${userUpdateError instanceof Error ? userUpdateError.message : String(userUpdateError)}`,
+                    category: "api",
+                    source: "didit",
+                    metadata: {
+                      userId: updatedContract.customerId,
+                      error: userUpdateError instanceof Error ? userUpdateError.stack : null,
+                    },
+                  });
+                }
               }
 
               logger.info({
                 message: `KYC verification approved for contract ${contractId}`,
                 category: "contract",
-                metadata: { contractId, kycStepId: kycStep.id },
+                metadata: { 
+                  contractId, 
+                  kycStepId: kycStep.id,
+                  userId: updatedContract?.customerId
+                },
               });
             } else {
               // Mark verification as failed but don't complete the step

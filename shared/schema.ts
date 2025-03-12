@@ -63,6 +63,7 @@ export const contracts = pgTable("contracts", {
   currentStep: applicationStepEnum("current_step").notNull().default('terms'),
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
+  phoneNumber: text("phone_number"), // Store customer phone number directly in contract
 });
 
 export const insertContractSchema = createInsertSchema(contracts).omit({
