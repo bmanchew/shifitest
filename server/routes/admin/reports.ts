@@ -64,3 +64,57 @@ reportsRouter.get('/complaint-trends', async (req, res) => {
     });
   }
 });
+
+// Get CFPB complaint trends
+adminReportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
+  try {
+    logger.info({
+      message: 'Starting CFPB complaint trends analysis',
+      category: "api",
+      source: "admin"
+    });
+
+    // Try to get real data from the CFPB API
+    try {
+      const analysisResults = await aiAnalyticsService.analyzeComplaintTrends();
+
+      return res.json({
+        success: true,
+        data: analysisResults
+      });
+    } catch (apiError) {
+      logger.warn({
+        message: `Falling back to mock data: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
+        category: 'api',
+        source: 'admin',
+      });
+
+      // If the API call fails, fall back to mock data
+      logger.info({
+        message: 'Falling back to mock CFPB complaint data',
+        category: "api",
+        source: "admin"
+      });
+      const mockData = cfpbService.getMockComplaintTrends();
+      return res.json({ 
+        success: true, 
+        data: mockData,
+        isMockData: true
+      });
+    }
+  } catch (error) {
+    logger.error({
+      message: `Failed to get CFPB complaint trends: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "admin",
+      metadata: {
+        error: error instanceof Error ? error.stack : null
+      }
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to get CFPB complaint trends"
+    });
+  }
+});

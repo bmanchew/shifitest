@@ -165,6 +165,21 @@ export class CFPBService {
 
       // Format should be JSON
       params.append('format', 'json');
+      
+      // Fields to include in the response
+      params.append('field', 'complaint_what_happened');
+      params.append('field', 'company');
+      params.append('field', 'company_public_response');
+      params.append('field', 'consumer_consent_provided');
+      params.append('field', 'consumer_disputed');
+      params.append('field', 'date_received');
+      params.append('field', 'date_sent_to_company');
+      params.append('field', 'issue');
+      params.append('field', 'product');
+      params.append('field', 'state');
+      params.append('field', 'submitted_via');
+      params.append('field', 'sub_issue');
+      params.append('field', 'sub_product');
 
       logger.info({
         message: 'Fetching CFPB industry trends',

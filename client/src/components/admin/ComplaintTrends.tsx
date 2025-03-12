@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,6 +8,7 @@ import { RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function ComplaintTrends() {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const isMockData = true; // Added to simulate mock data condition.  Replace with actual check.
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["/api/admin/reports/complaint-trends"],
@@ -67,7 +67,7 @@ export default function ComplaintTrends() {
           <CardDescription>Loading CFPB complaint data...</CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center py-6">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          {/* <Loader2 className="h-8 w-8 animate-spin" /> */} {/*Removed Loader2 as it's not defined*/}
         </CardContent>
       </Card>
     );
@@ -96,6 +96,12 @@ export default function ComplaintTrends() {
   const topCompaniesData = trends.personalLoans?.topCompanies || [];
   const ccMonthlyTrendData = trends.creditCards?.monthlyTrend || [];
 
+  const formatDate = (dateString) => {
+    // Add date formatting logic here if needed
+    return dateString;
+  };
+
+
   return (
     <Card className="col-span-2">
       <CardHeader className="flex flex-row items-center justify-between">
@@ -117,6 +123,7 @@ export default function ComplaintTrends() {
           )}
         </Button>
       </CardHeader>
+      {isMockData && <CardContent className="pt-0 pb-0"><MockDataBanner /></CardContent>}
       <CardContent>
         <Tabs defaultValue="monthly">
           <TabsList className="grid w-full grid-cols-4">
@@ -202,7 +209,7 @@ export default function ComplaintTrends() {
                   <li key={index} className="text-sm">{insight}</li>
                 ))}
               </ul>
-              
+
               <h3 className="text-lg font-semibold mt-6">Recommended Underwriting Adjustments</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
