@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 export default function ComplaintTrends() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery<any, Error>({
     queryKey: ["/api/admin/reports/complaint-trends"],
     queryFn: async () => {
       const response = await fetch('/api/admin/reports/complaint-trends');
@@ -68,25 +68,25 @@ export default function ComplaintTrends() {
             </TabsList>
             <TabsContent value="monthly">
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={data?.data?.monthlyTrends}>
+                <LineChart data={data?.data?.personalLoans?.monthlyTrend}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} />
+                  <Line type="monotone" dataKey="count" name="Complaints" stroke="#3b82f6" strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </TabsContent>
             <TabsContent value="category">
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={data?.data?.categoryTrends}>
+                <BarChart data={data?.data?.personalLoans?.topIssues}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="category" />
+                  <XAxis dataKey="issue" />
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="count" fill="#3b82f6" />
+                  <Bar dataKey="count" name="Complaints" fill="#3b82f6" />
                 </BarChart>
               </ResponsiveContainer>
             </TabsContent>
