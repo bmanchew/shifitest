@@ -29,7 +29,7 @@ export class CFPBService {
       const params = new URLSearchParams();
 
       // According to CFPB API docs, we need to use the correct product parameter
-      // The CFPB API accepts both direct parameters and search_term syntax
+      // The CFPB API accepts direct URL parameters
       params.append('product', product);
       
       // Add specific sub-product if provided - use direct parameter
@@ -37,15 +37,27 @@ export class CFPBService {
         params.append('sub_product', options.subProduct);
       }
 
-      // Add optional parameters using the correct format
+      // Set date range
+      // Use date parameters properly formatted according to CFPB documentation
       if (options.dateReceivedMin) params.append('date_received_min', options.dateReceivedMin);
-      if (options.dateReceivedMax) params.append('date_received_max', options.dateReceivedMax);
-      if (options.size) params.append('size', options.size.toString());
+      // Set today as the max date if not provided
+      if (options.dateReceivedMax) {
+        params.append('date_received_max', options.dateReceivedMax);
+      } else {
+        // Default to current date if not specified
+        const today = new Date().toISOString().split('T')[0];
+        params.append('date_received_max', today);
+      }
+      
+      // Set result size (default is small, we want more data)
+      params.append('size', (options.size || 1000).toString());
+      
+      // Add other filters if provided
       if (options.state) params.append('state', options.state);
       if (options.issue) params.append('issue', options.issue);
       
       // Add searchTerm for free-text searching
-      // This allows us to find mentions of "Merchant Cash Advance" in complaint narratives
+      // This allows us to find mentions of specific terms in complaint narratives
       if (options.searchTerm) {
         params.append('search_term', options.searchTerm);
         // When using search_term, specify which field to search
@@ -123,13 +135,13 @@ export class CFPBService {
                 requestUrl
               }
             });
-            // Return mock data instead of throwing an error
-            logger.info({
-              message: 'Falling back to mock CFPB data',
+            // Don't return mock data - throw an error to ensure data integrity
+            logger.error({
+              message: 'CFPB API returned HTML instead of JSON - this is likely an error with the API',
               category: 'api',
               source: 'internal'
             });
-            return this.getMockData(product, options.subProduct);
+            throw new Error('CFPB API returned HTML instead of JSON data');
           }
           
           const data = JSON.parse(responseText);
@@ -181,8 +193,8 @@ export class CFPBService {
         }
       });
       
-      // Instead of throwing the error, return mock data
-      return this.getMockData(product, options.subProduct);
+      // Throw the error to ensure proper error handling
+      throw error;
     }
   }
 
@@ -279,8 +291,13 @@ export class CFPBService {
               requestUrl
             }
           });
-          // Return mock data instead of throwing an error
-          return this.getMockData('Any', company);
+          // Don't return mock data - throw an error to ensure data integrity
+          logger.error({
+            message: 'CFPB API returned HTML instead of JSON - this is likely an error with the API',
+            category: 'api',
+            source: 'internal'
+          });
+          throw new Error('CFPB API returned HTML instead of JSON data');
         }
         
         const data = JSON.parse(responseText);
@@ -321,8 +338,8 @@ export class CFPBService {
         }
       });
 
-      // Use mock data instead of throwing an error for better user experience
-      return this.getMockData('Any', company);
+      // Throw the error to ensure proper error handling
+      throw error;
     }
   }
 
@@ -419,8 +436,13 @@ export class CFPBService {
               requestUrl
             }
           });
-          // Return mock data instead of throwing an error
-          return this.getMockData(options.product || 'Any');
+          // Don't return mock data - throw an error to ensure data integrity
+          logger.error({
+            message: 'CFPB API returned HTML instead of JSON - this is likely an error with the API',
+            category: 'api',
+            source: 'internal'
+          });
+          throw new Error('CFPB API returned HTML instead of JSON data');
         }
         
         const data = JSON.parse(responseText);
@@ -460,8 +482,8 @@ export class CFPBService {
         }
       });
 
-      // Use mock data instead of throwing the error
-      return this.getMockData(options.product || 'Any');
+      // Throw the error to ensure proper error handling
+      throw error;
     }
   }
   

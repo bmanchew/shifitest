@@ -1,0 +1,126 @@
+To assist your Replit API developer in integrating with the Consumer Financial Protection Bureau (CFPB) to retrieve complaints and trends related to unsecured personal loans and merchant cash advances over the past 12 months, please refer to the following detailed technical documentation:
+
+**1. API Endpoint:**
+
+The CFPB provides a public API to access the Consumer Complaint Database. The primary endpoint for searching consumer complaints is:
+
+
+```
+GET https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/
+```
+
+
+**2. Query Parameters:**
+
+To filter complaints related to unsecured personal loans and merchant cash advances within the last 12 months, use the following query parameters:
+
+- **Product Filter:** The CFPB categorizes these under "Payday loan, title loan, or personal loan."
+
+  
+```
+  product=Payday%20loan,%20title%20loan,%20or%20personal%20loan
+  ```
+
+
+- **Date Range Filter:** To specify the date range from March 12, 2024, to March 12, 2025:
+
+  
+```
+  date_received_min=2024-03-12
+  date_received_max=2025-03-12
+  ```
+
+
+**3. Example API Request:**
+
+Combining the above parameters, an example API request would be:
+
+
+```
+GET https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?product=Payday%20loan,%20title%20loan,%20or%20personal%20loan&date_received_min=2024-03-12&date_received_max=2025-03-12
+```
+
+
+**4. Response Format:**
+
+The API returns data in JSON format, containing an array of complaint records. Each record includes fields such as:
+
+- `date_received`: The date the CFPB received the complaint.
+- `product`: The type of product the consumer identified in the complaint.
+- `sub_product`: The type of sub-product, if applicable.
+- `issue`: The issue the consumer identified in the complaint.
+- `sub_issue`: The sub-issue, if applicable.
+- `consumer_complaint_narrative`: The consumer's description of what happened (if consented to publish).
+- `company_public_response`: The company's public-facing response to the complaint.
+- `company`: The company the complaint is about.
+- `state`: The state of the mailing address provided by the consumer.
+- `zip_code`: The mailing ZIP code provided by the consumer.
+
+**5. Pagination:**
+
+The API supports pagination through the `frm` and `size` parameters:
+
+- `frm`: The starting index of the results (default is 0).
+- `size`: The number of results to return (default is 10).
+
+For example, to retrieve the next 10 results:
+
+
+```
+GET https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?product=Payday%20loan,%20title%20loan,%20or%20personal%20loan&date_received_min=2024-03-12&date_received_max=2025-03-12&frm=10&size=10
+```
+
+
+**6. Sorting:**
+
+Results can be sorted using the `sort` parameter. For example, to sort by date received in descending order:
+
+
+```
+sort=date_received_desc
+```
+
+
+**7. Additional Filters:**
+
+The API supports various additional filters, such as:
+
+- `company`: Filter by company name.
+- `state`: Filter by state.
+- `zip_code`: Filter by ZIP code.
+- `issue`: Filter by specific issue.
+- `sub_issue`: Filter by specific sub-issue.
+
+**8. Example: Filtering by Company and State:**
+
+To retrieve complaints about a specific company in a particular state:
+
+
+```
+GET https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?product=Payday%20loan,%20title%20loan,%20or%20personal%20loan&company=Example%20Company&state=AZ&date_received_min=2024-03-12&date_received_max=2025-03-12
+```
+
+
+**9. Rate Limiting:**
+
+The CFPB API may implement rate limiting to ensure fair usage. If you encounter HTTP 429 errors, consider implementing retry logic with exponential backoff in your application.
+
+**10. Error Handling:**
+
+Ensure your application handles HTTP errors appropriately. Common HTTP status codes include:
+
+- `200 OK`: Successful request.
+- `400 Bad Request`: The request was invalid or cannot be served.
+- `404 Not Found`: The requested resource could not be found.
+- `429 Too Many Requests`: Rate limit exceeded.
+- `500 Internal Server Error`: An error occurred on the server.
+
+**11. Data Usage and Privacy:**
+
+When using the data retrieved from the CFPB API, ensure compliance with any applicable data usage policies and privacy considerations.
+
+**12. Additional Resources:**
+
+- **API Documentation:** For comprehensive details on the API, including all available endpoints and parameters, refer to the CFPB's official API documentation: 
+
+- **Field Reference:** A detailed reference of all fields available in the Consumer Complaint Database can be found here:  
