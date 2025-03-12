@@ -48,7 +48,7 @@ export class CFPBService {
       logger.info({
         message: 'Fetching CFPB complaints',
         category: 'api',
-        source: 'cfpb',
+        source: 'internal',
         metadata: { product, subProduct: options.subProduct, ...options }
       });
 
@@ -69,7 +69,7 @@ export class CFPBService {
           logger.error({
             message: `CFPB API returned error status: ${response.status}`,
             category: 'api',
-            source: 'cfpb',
+            source: 'internal',
             metadata: { 
               status: response.status,
               statusText: response.statusText,
@@ -86,7 +86,7 @@ export class CFPBService {
             logger.error({
               message: `CFPB API returned HTML instead of JSON`,
               category: 'api',
-              source: 'cfpb',
+              source: 'internal',
               metadata: {
                 responsePreview: responseText.substring(0, 500),
                 contentType: response.headers.get('content-type')
@@ -96,7 +96,7 @@ export class CFPBService {
             logger.info({
               message: 'Falling back to mock CFPB data',
               category: 'api',
-              source: 'cfpb'
+              source: 'internal'
             });
             return this.getMockData(product, options.subProduct);
           }
@@ -106,7 +106,7 @@ export class CFPBService {
           logger.info({
             message: 'Successfully fetched CFPB complaints',
             category: 'api',
-            source: 'cfpb',
+            source: 'internal',
             metadata: { 
               product,
               complaintsCount: data.hits?.total || 0
@@ -118,7 +118,7 @@ export class CFPBService {
           logger.error({
             message: `Failed to parse CFPB API response as JSON`,
             category: 'api',
-            source: 'cfpb',
+            source: 'internal',
             metadata: {
               parseError: parseError instanceof Error ? parseError.message : String(parseError),
               responsePreview: responseText.substring(0, 500)
@@ -130,7 +130,7 @@ export class CFPBService {
         logger.error({
           message: `Fetch error when calling CFPB API`,
           category: 'api',
-          source: 'cfpb',
+          source: 'internal',
           metadata: {
             error: fetchError instanceof Error ? fetchError.message : String(fetchError)
           }
@@ -141,7 +141,7 @@ export class CFPBService {
       logger.error({
         message: `Failed to fetch CFPB complaints: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
-        source: 'cfpb',
+        source: 'internal',
         metadata: {
           error: error instanceof Error ? error.stack : null,
           product
@@ -182,7 +182,7 @@ export class CFPBService {
       logger.info({
         message: 'Fetching CFPB complaints for company',
         category: 'api',
-        source: 'cfpb',
+        source: 'internal',
         metadata: { company, ...options }
       });
 
@@ -197,7 +197,7 @@ export class CFPBService {
       logger.info({
         message: 'Successfully fetched CFPB complaints for company',
         category: 'api',
-        source: 'cfpb',
+        source: 'internal',
         metadata: { 
           company,
           complaintsCount: data.hits?.total || 0
@@ -209,7 +209,7 @@ export class CFPBService {
       logger.error({
         message: `Failed to fetch CFPB complaints for company: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
-        source: 'cfpb',
+        source: 'internal',
         metadata: {
           error: error instanceof Error ? error.stack : null,
           company
@@ -262,7 +262,7 @@ export class CFPBService {
       logger.info({
         message: 'Fetching CFPB industry trends',
         category: 'api',
-        source: 'cfpb',
+        source: 'internal',
         metadata: options
       });
 
@@ -277,7 +277,7 @@ export class CFPBService {
       logger.info({
         message: 'Successfully fetched CFPB industry trends',
         category: 'api',
-        source: 'cfpb',
+        source: 'internal',
         metadata: { 
           complaintsCount: data.hits?.total || 0
         }
@@ -288,7 +288,7 @@ export class CFPBService {
       logger.error({
         message: `Failed to fetch CFPB industry trends: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
-        source: 'cfpb',
+        source: 'internal',
         metadata: {
           error: error instanceof Error ? error.stack : null
         }
