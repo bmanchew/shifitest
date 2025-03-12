@@ -2712,7 +2712,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/plaid/create-asset-report",
     async (req: Request, res: Response) => {
       try {
-        const { userId, contractId, daysRequested = 60 } = req.body;
+        const { userId, contractId, accessToken, daysRequested = 60, options } = req.body;
 
         if (!userId && !contractId) {
           return res.status(400).json({
@@ -2721,8 +2721,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        // In a real app, fetch the access token from your database
-        // For this example, we'll simulate the asset report creation
+        if (!accessToken) {
+          return res.status(400).json({
+            success: false,
+            message: "Access token is required",
+          });
+        }
 
         logger.info({
           message: `Creating asset report`,
@@ -2735,30 +2739,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
 
-        // Simulate creating an asset report
-        // In a real implementation, you would:
-        // 1. Retrieve the access token from your database
-        // 2. Make the actual asset report API call
-
-        const assetReportId =
-          "asset_" + Math.random().toString(36).substring(2, 15);
-        const assetReportToken =
-          "asset-token-" + Math.random().toString(36).substring(2, 15);
-
-        // Create a record of the asset report
-        const assetReportInfo = {
-          userId: userId ? parseInt(userId) : null,
-          contractId: contractId ? parseInt(contractId) : null,
-          assetReportId,
-          assetReportToken, // This should be encrypted in a real app
+        // Create the asset report using the Plaid service
+        const assetReportResult = await plaidService.createAssetReport(
+          accessToken,
           daysRequested,
-          status: "pending",
-          createdAt: new Date(),
-        };
+          options
+        );
 
-        // In a real app, store this in your database
-        // For example:
-        // await db.insert(assetReports).values(assetReportInfo);
+        // Store the asset report information in the database
+        const assetReportInfo = await storage.storeAssetReportToken(
+          contractId ? parseInt(contractId) : 0,
+          assetReportResult.assetReportToken,
+          assetReportResult.assetReportId,
+          {
+            userId: userId ? parseInt(userId) : undefined,
+            daysRequested,
+          }
+        );
 
         // Create a log entry
         await storage.createLog({
@@ -2769,7 +2766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: userId ? parseInt(userId) : null,
           metadata: JSON.stringify({
             contractId,
-            assetReportId,
+            assetReportId: assetReportResult.assetReportId,
             daysRequested,
           }),
         });
@@ -2778,7 +2775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Do NOT include the asset report token in the response
         res.json({
           success: true,
-          assetReportId,
+          assetReportId: assetReportResult.assetReportId,
           message: "Asset report created successfully",
         });
       } catch (error) {
@@ -2824,9 +2821,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        // In a real app, fetch the asset report token from your database
-        // For this example, we'll simulate the asset report retrieval
-
         logger.info({
           message: `Retrieving asset report`,
           category: "api",
@@ -2834,92 +2828,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata: { assetReportId },
         });
 
-        // Simulate getting an asset report
-        // In a real implementation, you would:
-        // 1. Retrieve the asset report token from your database
-        // 2. Make the actual asset report API call
+        // Fetch the asset report data from database using the assetReportId
+        const assetReports = await storage.getAssetReportsByAssetReportId(assetReportId);
+        
+        if (!assetReports || assetReports.length === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Asset report not found",
+          });
+        }
 
-        // Create some mock asset report data
-        const mockAssetReport = {
-          assetReportId,
-          createdDate: new Date().toISOString(),
-          daysRequested: 60,
-          user: {
-            firstName: "John",
-            lastName: "Doe",
-          },
-          items: [
-            {
-              institutionName: "Chase",
-              lastUpdated: new Date().toISOString(),
-              accounts: [
-                {
-                  accountId:
-                    "acc_" + Math.random().toString(36).substring(2, 10),
-                  accountName: "Chase Checking",
-                  type: "depository",
-                  subtype: "checking",
-                  currentBalance: 5280.25,
-                  availableBalance: 5200.1,
-                  transactions: [
-                    {
-                      transactionId:
-                        "tx_" + Math.random().toString(36).substring(2, 10),
-                      date: new Date(
-                        Date.now() - 3 * 24 * 60 * 60 * 1000,
-                      ).toISOString(),
-                      description: "WALMART",
-                      amount: 45.23,
-                      pending: false,
-                    },
-                    {
-                      transactionId:
-                        "tx_" + Math.random().toString(36).substring(2, 10),
-                      date: new Date(
-                        Date.now() - 5 * 24 * 60 * 60 * 1000,
-                      ).toISOString(),
-                      description: "AMAZON",
-                      amount: 67.89,
-                      pending: false,
-                    },
-                  ],
-                },
-                {
-                  accountId:
-                    "acc_" + Math.random().toString(36).substring(2, 10),
-                  accountName: "Chase Savings",
-                  type: "depository",
-                  subtype: "savings",
-                  currentBalance: 10250.75,
-                  availableBalance: 10250.75,
-                  transactions: [
-                    {
-                      transactionId:
-                        "tx_" + Math.random().toString(36).substring(2, 10),
-                      date: new Date(
-                        Date.now() - 10 * 24 * 60 * 60 * 1000,
-                      ).toISOString(),
-                      description: "TRANSFER FROM CHECKING",
-                      amount: -500.0,
-                      pending: false,
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-          summary: {
-            totalAccounts: 2,
-            totalTransactions: 3,
-            totalBalances: 15531.0,
-            income: {
-              estimatedMonthlyIncome: 5200,
-              estimatedAnnualIncome: 62400,
-              confidenceScore: 0.95,
-            },
-          },
-        };
-
+        const assetReportData = assetReports[0];
+        
+        // Retrieve the actual asset report from Plaid
+        const assetReport = await plaidService.getAssetReport(assetReportData.assetReportToken);
+        
         // Create a log entry
         await storage.createLog({
           level: "info",
@@ -2930,9 +2853,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             assetReportId,
           }),
         });
-
-        // Retrieve the actual asset report
-        const assetReport = await plaidService.getAssetReport(assetReportToken);
         
         // Return success response with the real asset report data
         res.json({
