@@ -1,6 +1,6 @@
 
 import axios from 'axios';
-import { logger } from '../utils/logger';
+import { logger } from './logger';
 
 class PreFiService {
   private apiKey: string;
