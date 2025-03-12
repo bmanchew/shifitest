@@ -286,12 +286,29 @@ export class AIAnalyticsService {
           size: 1000
         });
         
+        // Handle different Elasticsearch response formats for hit totals
+        let complaintsCount = 0;
+        if (unsecuredPersonalLoanComplaints?.hits?.total) {
+          if (typeof unsecuredPersonalLoanComplaints.hits.total === 'number') {
+            complaintsCount = unsecuredPersonalLoanComplaints.hits.total;
+          } else if (typeof unsecuredPersonalLoanComplaints.hits.total === 'object' && 
+                    unsecuredPersonalLoanComplaints.hits.total.value) {
+            // Handle Elasticsearch 7+ format where total is an object like { value: 123, relation: "eq" }
+            complaintsCount = unsecuredPersonalLoanComplaints.hits.total.value;
+          }
+        } else if (Array.isArray(unsecuredPersonalLoanComplaints) && unsecuredPersonalLoanComplaints.length > 0) {
+          // Handle array response format
+          complaintsCount = unsecuredPersonalLoanComplaints.length;
+        }
+        
         logger.info({
           message: 'Successfully fetched personal loan complaints',
           category: 'system',
           source: 'internal',
           metadata: {
-            complaintsCount: unsecuredPersonalLoanComplaints?.hits?.total || 0
+            complaintsCount,
+            responseType: Array.isArray(unsecuredPersonalLoanComplaints) ? 'array' : 'object',
+            hasHitsProperty: !!unsecuredPersonalLoanComplaints?.hits
           }
         });
       } catch (error) {
@@ -328,6 +345,32 @@ export class AIAnalyticsService {
           subProduct: 'Merchant cash advance',
           dateReceivedMin: '2020-01-01', // Fixed date for consistent testing
           size: 1000
+        });
+        
+        // Handle different Elasticsearch response formats for hit totals
+        let complaintsCount = 0;
+        if (merchantCashAdvanceComplaints?.hits?.total) {
+          if (typeof merchantCashAdvanceComplaints.hits.total === 'number') {
+            complaintsCount = merchantCashAdvanceComplaints.hits.total;
+          } else if (typeof merchantCashAdvanceComplaints.hits.total === 'object' && 
+                    merchantCashAdvanceComplaints.hits.total.value) {
+            // Handle Elasticsearch 7+ format where total is an object like { value: 123, relation: "eq" }
+            complaintsCount = merchantCashAdvanceComplaints.hits.total.value;
+          }
+        } else if (Array.isArray(merchantCashAdvanceComplaints) && merchantCashAdvanceComplaints.length > 0) {
+          // Handle array response format
+          complaintsCount = merchantCashAdvanceComplaints.length;
+        }
+        
+        logger.info({
+          message: 'Successfully fetched merchant cash advance complaints',
+          category: 'system',
+          source: 'internal',
+          metadata: {
+            complaintsCount,
+            responseType: Array.isArray(merchantCashAdvanceComplaints) ? 'array' : 'object',
+            hasHitsProperty: !!merchantCashAdvanceComplaints?.hits
+          }
         });
       } catch (error) {
         // Try with just the product category and search term if specific categorization fails
@@ -382,18 +425,38 @@ export class AIAnalyticsService {
         return months;
       };
       
+      // Get total counts with proper handling of different response formats
+      const getComplaintsCount = (complaintsData: any): number => {
+        if (!complaintsData) return 0;
+        
+        if (complaintsData.hits?.total) {
+          if (typeof complaintsData.hits.total === 'number') {
+            return complaintsData.hits.total;
+          } else if (typeof complaintsData.hits.total === 'object' && complaintsData.hits.total.value) {
+            return complaintsData.hits.total.value;
+          }
+        } else if (Array.isArray(complaintsData) && complaintsData.length > 0) {
+          return complaintsData.length;
+        }
+        
+        return 0;
+      };
+      
+      const personalLoanComplaintsCount = getComplaintsCount(unsecuredPersonalLoanComplaints);
+      const merchantCashAdvanceComplaintsCount = getComplaintsCount(merchantCashAdvanceComplaints);
+      
       // Analyze the complaints data
       const analysisResults = {
         lastUpdated: new Date().toISOString(),
-        totalComplaints: (unsecuredPersonalLoanComplaints?.hits?.total || 0) + (merchantCashAdvanceComplaints?.hits?.total || 0),
+        totalComplaints: personalLoanComplaintsCount + merchantCashAdvanceComplaintsCount,
         personalLoans: {
-          totalComplaints: unsecuredPersonalLoanComplaints?.hits?.total || 0,
+          totalComplaints: personalLoanComplaintsCount,
           topIssues: this.extractTopIssues(unsecuredPersonalLoanComplaints) || [],
           topCompanies: this.extractTopCompanies(unsecuredPersonalLoanComplaints) || [],
           monthlyTrend: this.extractMonthlyTrend(unsecuredPersonalLoanComplaints) || createEmptyMonthlyTrend(),
         },
         merchantCashAdvances: {
-          totalComplaints: merchantCashAdvanceComplaints?.hits?.total || 0,
+          totalComplaints: merchantCashAdvanceComplaintsCount,
           topIssues: this.extractTopIssues(merchantCashAdvanceComplaints) || [],
           topCompanies: this.extractTopCompanies(merchantCashAdvanceComplaints) || [],
           monthlyTrend: this.extractMonthlyTrend(merchantCashAdvanceComplaints) || createEmptyMonthlyTrend(),
@@ -407,9 +470,12 @@ export class AIAnalyticsService {
         category: 'system',
         source: 'internal',
         metadata: {
-          personalLoanComplaintsCount: unsecuredPersonalLoanComplaints?.hits?.total || 0,
-          merchantCashAdvanceComplaintsCount: merchantCashAdvanceComplaints?.hits?.total || 0,
+          personalLoanComplaintsCount,
+          merchantCashAdvanceComplaintsCount,
+          totalComplaints: personalLoanComplaintsCount + merchantCashAdvanceComplaintsCount,
           insightsGenerated: analysisResults.insights.length,
+          personalLoansHasAggregations: !!unsecuredPersonalLoanComplaints?.aggregations,
+          merchantCashAdvancesHasAggregations: !!merchantCashAdvanceComplaints?.aggregations,
           recentDataOnly: true,
           focusedOnOrigination: true
         }
@@ -544,10 +610,25 @@ export class AIAnalyticsService {
       return [];
     }
     
+    // Get total count properly handling different response formats
+    let totalComplaints = 0;
+    if (complaintsData.hits?.total) {
+      if (typeof complaintsData.hits.total === 'number') {
+        totalComplaints = complaintsData.hits.total;
+      } else if (typeof complaintsData.hits.total === 'object' && complaintsData.hits.total.value) {
+        totalComplaints = complaintsData.hits.total.value;
+      }
+    } else if (Array.isArray(complaintsData) && complaintsData.length > 0) {
+      totalComplaints = complaintsData.length;
+    }
+    
+    // Prevent division by zero
+    if (totalComplaints === 0) totalComplaints = 1;
+    
     return complaintsData.aggregations.issue.buckets.map((bucket: any) => ({
       issue: bucket.key,
       count: bucket.doc_count,
-      percentage: (bucket.doc_count / complaintsData.hits.total) * 100
+      percentage: (bucket.doc_count / totalComplaints) * 100
     })).slice(0, 5);
   }
 
