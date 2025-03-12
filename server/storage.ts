@@ -56,6 +56,7 @@ export interface IStorage {
   getContractsByStatus(status: string): Promise<Contract[]>;
   storeAssetReportToken(contractId: number, assetReportToken: string, assetReportId: string, options: any): Promise<AssetReport>;
   getAssetReportsByContractId(contractId: number): Promise<AssetReport[]>;
+  getAssetReportsByAssetReportId(assetReportId: string): Promise<AssetReport[]>;
   updateAssetReportStatus(id: number, status: string, analysisData?: any): Promise<AssetReport | undefined>;
   getLatestPortfolioMonitoring(): Promise<PortfolioMonitoring | null>;
   updatePortfolioMonitoring(data: any): Promise<PortfolioMonitoring>;
@@ -255,7 +256,7 @@ export class DatabaseStorage implements IStorage {
   async storeAssetReportToken(contractId: number, assetReportToken: string, assetReportId: string, options: any = {}) {
     const { userId, plaidItemId, daysRequested = 60, expiresAt } = options;
 
-    return await db.insert(assetReports).values({
+    const [assetReport] = await db.insert(assetReports).values({
       contractId,
       userId,
       assetReportId,
@@ -266,10 +267,16 @@ export class DatabaseStorage implements IStorage {
       createdAt: new Date(),
       expiresAt: expiresAt ? new Date(expiresAt) : undefined
     }).returning();
+    
+    return assetReport;
   }
 
   async getAssetReportsByContractId(contractId: number) {
     return await db.select().from(assetReports).where(eq(assetReports.contractId, contractId)).orderBy(desc(assetReports.createdAt));
+  }
+
+  async getAssetReportsByAssetReportId(assetReportId: string) {
+    return await db.select().from(assetReports).where(eq(assetReports.assetReportId, assetReportId)).orderBy(desc(assetReports.createdAt));
   }
 
   async updateAssetReportStatus(id: number, status: string, analysisData?: any) {
@@ -282,7 +289,8 @@ export class DatabaseStorage implements IStorage {
       updates.analysisData = typeof analysisData === 'string' ? analysisData : JSON.stringify(analysisData);
     }
 
-    return await db.update(assetReports).set(updates).where(eq(assetReports.id, id)).returning();
+    const [updatedReport] = await db.update(assetReports).set(updates).where(eq(assetReports.id, id)).returning();
+    return updatedReport;
   }
 
   async getLatestPortfolioMonitoring() {
@@ -295,21 +303,23 @@ export class DatabaseStorage implements IStorage {
 
     if (monitoring) {
       // Update existing record
-      return await db.update(portfolioMonitoring)
+      const [updatedMonitoring] = await db.update(portfolioMonitoring)
         .set({
           ...data,
           updatedAt: new Date()
         })
         .where(eq(portfolioMonitoring.id, monitoring.id))
         .returning();
+      return updatedMonitoring;
     } else {
       // Create new record
-      return await db.insert(portfolioMonitoring)
+      const [newMonitoring] = await db.insert(portfolioMonitoring)
         .values({
           ...data,
           createdAt: new Date()
         })
         .returning();
+      return newMonitoring;
     }
   }
 
