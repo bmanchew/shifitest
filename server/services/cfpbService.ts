@@ -28,22 +28,29 @@ export class CFPBService {
     try {
       const params = new URLSearchParams();
 
-      // Add product filter - using the correct field name from CFPB API docs
-      params.append('search_term', `product: "${product}"`);
+      // According to CFPB API docs, we need to use the correct product parameter
+      // The CFPB API accepts both direct parameters and search_term syntax
+      params.append('product', product);
       
-      // Add specific sub-product if provided - using filters syntax from docs
+      // Add specific sub-product if provided - use direct parameter
       if (options.subProduct) {
-        params.append('search_term', `sub_product: "${options.subProduct}"`);
+        params.append('sub_product', options.subProduct);
       }
 
       // Add optional parameters using the correct format
       if (options.dateReceivedMin) params.append('date_received_min', options.dateReceivedMin);
       if (options.dateReceivedMax) params.append('date_received_max', options.dateReceivedMax);
       if (options.size) params.append('size', options.size.toString());
-      if (options.state) params.append('search_term', `state: "${options.state}"`);
-      if (options.issue) params.append('search_term', `issue: "${options.issue}"`);
-      // Add searchTerm for free-text searching (e.g., for Merchant Cash Advance)
-      if (options.searchTerm) params.append('search_term', options.searchTerm);
+      if (options.state) params.append('state', options.state);
+      if (options.issue) params.append('issue', options.issue);
+      
+      // Add searchTerm for free-text searching
+      // This allows us to find mentions of "Merchant Cash Advance" in complaint narratives
+      if (options.searchTerm) {
+        params.append('search_term', options.searchTerm);
+        // When using search_term, specify which field to search
+        params.append('field', 'complaint_what_happened');
+      }
 
       // Format should be JSON
       params.append('format', 'json');
@@ -192,15 +199,15 @@ export class CFPBService {
     try {
       const params = new URLSearchParams();
 
-      // Add company filter with the correct syntax
-      params.append('search_term', `company: "${company}"`);
+      // Add company filter - use direct parameter instead of search_term syntax
+      params.append('company', company);
 
-      // Add optional parameters
+      // Add optional parameters using the direct parameter format
       if (options.dateReceivedMin) params.append('date_received_min', options.dateReceivedMin);
       if (options.dateReceivedMax) params.append('date_received_max', options.dateReceivedMax);
       if (options.size) params.append('size', options.size.toString());
-      if (options.product) params.append('search_term', `product: "${options.product}"`);
-      if (options.issue) params.append('search_term', `issue: "${options.issue}"`);
+      if (options.product) params.append('product', options.product);
+      if (options.issue) params.append('issue', options.issue);
 
       // Format should be JSON
       params.append('format', 'json');
@@ -331,8 +338,8 @@ export class CFPBService {
     try {
       const params = new URLSearchParams();
 
-      // Add optional parameters with correct syntax
-      if (options.product) params.append('search_term', `product: "${options.product}"`);
+      // Add optional parameters with direct parameter approach
+      if (options.product) params.append('product', options.product);
       if (options.dateReceivedMin) params.append('date_received_min', options.dateReceivedMin);
       if (options.dateReceivedMax) params.append('date_received_max', options.dateReceivedMax);
       if (options.size) params.append('size', options.size.toString());
