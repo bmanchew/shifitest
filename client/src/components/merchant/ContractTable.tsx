@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import { Contract } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -22,7 +22,7 @@ interface ContractTableProps {
 }
 
 export default function ContractTable({ contracts, isLoading, onSendApplication }: ContractTableProps) {
-  const navigate = useNavigate();
+  const [_, setLocation] = useLocation();
   const [customers, setCustomers] = useState<Record<number, { name: string; email: string }>>({});
   
   useEffect(() => {
@@ -91,7 +91,7 @@ export default function ContractTable({ contracts, isLoading, onSendApplication 
   };
 
   const handleRowClick = (contract: Contract) => {
-    navigate(`/merchant/contracts/${contract.id}`);
+    setLocation(`/merchant/contracts/${contract.id}`);
   };
 
   if (isLoading) {
