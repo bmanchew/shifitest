@@ -40,7 +40,7 @@ reportsRouter.get('/complaint-trends', async (req, res) => {
     logger.info({
       message: 'Fetching complaint trends data',
       category: 'api',
-      source: 'reports',
+      source: 'internal',
     });
 
     try {
@@ -57,7 +57,7 @@ reportsRouter.get('/complaint-trends', async (req, res) => {
       logger.warn({
         message: `Using mock complaint trends due to error: ${analyticsError instanceof Error ? analyticsError.message : String(analyticsError)}`,
         category: 'api',
-        source: 'reports'
+        source: 'internal'
       });
       
       // If AI analytics fails, fall back to mock data
@@ -74,7 +74,7 @@ reportsRouter.get('/complaint-trends', async (req, res) => {
     logger.error({
       message: `Error fetching complaint trends: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
-      source: 'reports',
+      source: 'internal',
       metadata: {
         error: error instanceof Error ? error.stack : null
       }
@@ -94,7 +94,7 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
     logger.info({
       message: 'Starting CFPB complaint trends analysis',
       category: "api",
-      source: "admin"
+      source: "internal"
     });
 
     // Try to get real data from the CFPB API
@@ -109,14 +109,14 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
       logger.warn({
         message: `Falling back to mock data: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
         category: 'api',
-        source: 'admin',
+        source: 'internal',
       });
 
       // If the API call fails, fall back to mock data
       logger.info({
         message: 'Falling back to mock CFPB complaint data',
         category: "api",
-        source: "admin"
+        source: "internal"
       });
       const mockData = cfpbService.getMockComplaintTrends();
       return res.json({ 
@@ -131,7 +131,7 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
     logger.error({
       message: `Failed to get CFPB complaint trends: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "admin",
+      source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null
       }
