@@ -279,11 +279,10 @@ export class AIAnalyticsService {
       let unsecuredPersonalLoanComplaints;
       
       try {
-        // Use extremely broad search with 48+ month date range and minimum filtering
-        // We're focusing on getting ANY results from the CFPB API
-        unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('', {
-          dateReceivedMin: '2020-01-01', // Use fixed date for testing
-          searchTerm: 'loan',           // Very generic search term
+        // Using correct product and sub-product categorization per CFPB API specification
+        unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('Payday loan, title loan, or personal loan', {
+          subProduct: 'Personal loan',
+          dateReceivedMin: '2020-01-01', // Use fixed date for consistent testing
           size: 1000
         });
         
@@ -296,17 +295,16 @@ export class AIAnalyticsService {
           }
         });
       } catch (error) {
-        // If the main query fails, try an even broader approach with minimal filters
+        // If the main query fails, try an approach with just the product and no sub-product
         logger.warn({
-          message: 'Failed to fetch personal loan complaints with primary query, trying with minimal filters',
+          message: 'Failed to fetch personal loan complaints with specific sub-product, trying with product only',
           category: 'system',
           source: 'internal',
         });
         
-        // Try with empty product parameter and a "personal loan" search term which should return results
-        unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('', {
+        // Try with just the product parameter without specifying sub-product
+        unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('Payday loan, title loan, or personal loan', {
           dateReceivedMin: this.getDateXMonthsAgo(60), // Look back 5 years for maximum data coverage
-          searchTerm: 'personal loan',
           size: 1000
         });
       }
@@ -318,31 +316,31 @@ export class AIAnalyticsService {
       // under "Payday loan, title loan, or personal loan"
       // Extending to 24 months to capture more data for better trend analysis
       try {
-        // First attempt: search directly for Merchant Cash Advance in the payday/title/personal loan category
+        // Using correct product and sub-product categorization per CFPB API specification
         logger.info({
-          message: 'Searching for Merchant Cash Advance complaints in the payday loan category',
+          message: 'Fetching Merchant Cash Advance complaints with proper categorization',
           category: 'system',
           source: 'internal'
         });
         
-        // Using the broadest possible search to get any loan-related complaints
-        merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('', {
-          dateReceivedMin: '2020-01-01', // Use fixed date for testing
-          searchTerm: 'business',       // Very generic search term
+        // Correct product categorization for Merchant Cash Advances
+        merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Business loan', {
+          subProduct: 'Merchant cash advance',
+          dateReceivedMin: '2020-01-01', // Fixed date for consistent testing
           size: 1000
         });
       } catch (error) {
-        // Try with an even more general search if the specific one fails
+        // Try with just the product category and search term if specific categorization fails
         logger.warn({
-          message: 'Failed to fetch MCA complaints with first approach, trying more general search',
+          message: 'Failed to fetch MCA complaints with specific categorization, trying broader approach',
           category: 'system',
           source: 'internal',
         });
         
-        // Fall back to a very general search that should return results
-        merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('', {
+        // Fall back to the product with search term
+        merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Business loan', {
           dateReceivedMin: this.getDateXMonthsAgo(60), // Look back 5 years for maximum data
-          searchTerm: 'business loan', // Very general search term that should return results
+          searchTerm: 'merchant cash advance', // Search for MCA mentions in any business loans
           size: 1000
         });
       }

@@ -1,0 +1,51 @@
+Upon reviewing your code, I have identified several areas where adjustments are necessary to align with the Consumer Financial Protection Bureau (CFPB) API specifications:
+
+1. **Product and Sub-Product Categorization:**
+   - **Issue:** The CFPB API categorizes products and sub-products distinctly. For instance, "Payday loan, title loan, or personal loan" is a product category, while "Personal loan" is a sub-product under this category.
+   - **Correction:** When fetching complaints related to personal loans, specify the product as "Payday loan, title loan, or personal loan" and the sub-product as "Personal loan."
+
+2. **Merchant Cash Advance (MCA) Classification:**
+   - **Issue:** Merchant Cash Advances are typically categorized under the "Business loan" product category.
+   - **Correction:** To retrieve complaints related to MCAs, set the product parameter to "Business loan" and use "Merchant cash advance" as the sub-product.
+
+3. **Date Range Parameters:**
+   - **Issue:** The CFPB API uses "date_received_min" and "date_received_max" to define the date range for complaints.
+   - **Correction:** Ensure that your date range parameters align with these field names. For example, to fetch complaints from the past 48 months, set "date_received_min" to the date 48 months ago.
+
+4. **Search Term Usage:**
+   - **Issue:** The API allows filtering complaints using the "search_term" parameter.
+   - **Correction:** When searching for specific terms within complaints, such as "merchant cash advance," include the "search_term" parameter in your API request.
+
+5. **Aggregation and Size Parameters:**
+   - **Issue:** The API supports aggregation parameters to summarize data and a "size" parameter to limit the number of results returned.
+   - **Correction:** Utilize these parameters to optimize data retrieval. For example, set "size" to 1000 to retrieve up to 1000 complaints per request.
+
+**Example API Request for Personal Loan Complaints:**
+
+```javascript
+const personalLoanComplaints = await cfpbService.getComplaints({
+  product: 'Payday loan, title loan, or personal loan',
+  sub_product: 'Personal loan',
+  date_received_min: this.getDateXMonthsAgo(48),
+  size: 1000
+});
+```
+
+**Example API Request for Merchant Cash Advance Complaints:**
+
+```javascript
+const merchantCashAdvanceComplaints = await cfpbService.getComplaints({
+  product: 'Business loan',
+  sub_product: 'Merchant cash advance',
+  date_received_min: this.getDateXMonthsAgo(48),
+  size: 1000
+});
+```
+
+**Additional Recommendations:**
+
+- **Error Handling:** Implement robust error handling to manage scenarios where the API returns unexpected results or errors.
+- **Data Validation:** Validate the structure and content of the API responses before processing to ensure data integrity.
+- **Logging:** Enhance logging to capture detailed information about API requests and responses, aiding in debugging and monitoring.
+
+By incorporating these adjustments, your code will better align with the CFPB API specifications, ensuring accurate and efficient data retrieval and analysis. 

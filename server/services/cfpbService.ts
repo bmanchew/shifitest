@@ -157,7 +157,9 @@ export class CFPBService {
             metadata: { 
               product,
               complaintsCount: data.hits?.total || 0,
-              hasAggregations: !!data.aggregations
+              hasAggregations: !!data.aggregations,
+              responsePreview: JSON.stringify(data).substring(0, 500), // Log first 500 chars of response
+              hitsSample: data.hits?.hits?.length > 0 ? JSON.stringify(data.hits.hits[0]).substring(0, 300) : 'No hits'
             }
           });
           
@@ -313,7 +315,9 @@ export class CFPBService {
           metadata: { 
             company,
             complaintsCount: data.hits?.total || 0,
-            hasAggregations: !!data.aggregations
+            hasAggregations: !!data.aggregations,
+            responsePreview: JSON.stringify(data).substring(0, 500), // Log first 500 chars of response
+            hitsSample: data.hits?.hits?.length > 0 ? JSON.stringify(data.hits.hits[0]).substring(0, 300) : 'No hits'
           }
         });
         
@@ -458,7 +462,9 @@ export class CFPBService {
           metadata: { 
             complaintsCount: data.hits?.total || 0,
             hasAggregations: !!data.aggregations,
-            dataStructure: Object.keys(data).join(', ')
+            dataStructure: Object.keys(data).join(', '),
+            responsePreview: JSON.stringify(data).substring(0, 500), // Log first 500 chars of response
+            hitsSample: data.hits?.hits?.length > 0 ? JSON.stringify(data.hits.hits[0]).substring(0, 300) : 'No hits'
           }
         });
         
