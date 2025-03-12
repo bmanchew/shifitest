@@ -1,7 +1,7 @@
 /**
  * Test script for finding contract data by phone number
  */
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 async function testContractByPhone() {
   try {

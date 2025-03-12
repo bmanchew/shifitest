@@ -1,7 +1,7 @@
 /**
  * Test script for creating a Plaid asset report by phone number
  */
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 async function testCreateAssetReportByPhone() {
   try {
