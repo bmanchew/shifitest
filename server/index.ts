@@ -7,6 +7,22 @@ import { storage } from "./storage";
 
 const app = express();
 app.use(express.json());
+
+// Validate required environment variables
+const requiredEnvVars = [
+  'PLAID_CLIENT_ID', 
+  'PLAID_SECRET', 
+  'PREFI_API_KEY',
+  'CFPB_API_KEY'
+];
+
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('ERROR: Missing required environment variables:', missingEnvVars.join(', '));
+  console.error('Please set these variables in the Secrets tab');
+}
+
 app.use(express.urlencoded({ extended: false }));
 
 // Enable CORS for all routes

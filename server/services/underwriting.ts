@@ -100,17 +100,50 @@ export class UnderwritingService {
   }
   
   private async getCreditData(userId: number) {
-    // In a real implementation, this would call Pre-Fi API
-    // For now, we'll return mock data
-    return {
-      creditScore: Math.floor(Math.random() * (800 - 600) + 600),
-      delinquencyHistory: {
-        late30: Math.floor(Math.random() * 2),
-        late60: Math.floor(Math.random() * 2),
-        late90: 0,
-      },
-      // Other credit data...
-    };
+    try {
+      // Get user data to retrieve KYC info
+      const userData = await this.getUserData(userId);
+      
+      if (!userData || !userData.ssn || !userData.firstName || !userData.lastName || !userData.dob) {
+        logger.error({
+          message: `Missing required KYC data for user ${userId}`,
+          category: 'underwriting',
+          userId
+        });
+        throw new Error('Missing required KYC data for credit check');
+      }
+      
+      // Call the Pre-Fi API to get real credit data
+      const creditReport = await preFiService.getCreditReport(
+        userData.ssn,
+        userData.firstName,
+        userData.lastName,
+        userData.dob,
+        {
+          street: userData.address?.street,
+          city: userData.address?.city,
+          state: userData.address?.state,
+          zip: userData.address?.zip
+        }
+      );
+      
+      return {
+        creditScore: creditReport.creditScore,
+        delinquencyHistory: creditReport.delinquencyDetails || {
+          late30: creditReport.late30Days || 0,
+          late60: creditReport.late60Days || 0,
+          late90: creditReport.late90Days || 0
+        }
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error getting credit data from Pre-Fi: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'underwriting',
+        userId,
+        error: error instanceof Error ? error.stack : null
+      });
+      throw error;
+    }
   }
   
   private async getPlaidData(userId: number) {

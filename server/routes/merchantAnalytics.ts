@@ -139,17 +139,22 @@ router.get('/complaint-trends', async (req, res) => {
         source: 'admin',
       });
 
-      return res.json({ success: true, data: mockData });
+      return res.json({ success: true, data: apiData });
     } catch (apiError) {
-      logger.warn({
-        message: `Falling back to mock data: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
+      logger.error({
+        message: `Failed to retrieve data from CFPB API: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
         category: 'api',
         source: 'admin',
+        metadata: {
+          error: apiError instanceof Error ? apiError.stack : null,
+        }
       });
 
-      // If the API call fails, fall back to mock data
-      const mockData = cfpbService.getMockComplaintTrends();
-      return res.json({ success: true, data: mockData });
+      // Return error response instead of mock data
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to retrieve data from CFPB API' 
+      });
     }
   } catch (error) {
     logger.error({

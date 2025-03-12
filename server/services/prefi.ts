@@ -1,6 +1,6 @@
 
 import axios from 'axios';
-import { logger } from './logger';
+import { logger } from '../utils/logger';
 
 class PreFiService {
   private apiKey: string;
@@ -27,6 +27,10 @@ class PreFiService {
   
   async getCreditReport(ssn: string, firstName: string, lastName: string, dob: string, address: any) {
     try {
+      if (!this.apiKey) {
+        throw new Error('Pre-Fi API key not configured');
+      }
+      
       const response = await axios.post(
         `${this.apiBaseUrl}/credit/report`,
         {
@@ -50,7 +54,11 @@ class PreFiService {
         message: "Error getting credit report from Pre-Fi API",
         category: "api",
         source: "prefi",
-        metadata: { error }
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error),
+          firstName,
+          lastName
+        }
       });
       throw error;
     }
@@ -121,8 +129,6 @@ class PreFiService {
   }
   
   calculateDelinquencyPoints(delinquencyHistory: any): number {
-    // This is a simplified example
-    // In a real system, you'd have more detailed analysis
     if (!delinquencyHistory || Object.keys(delinquencyHistory).length === 0) {
       return 5; // No delinquencies
     }

@@ -2931,10 +2931,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }),
         });
 
-        // Return success response with the asset report data
+        // Retrieve the actual asset report
+        const assetReport = await plaidService.getAssetReport(assetReportToken);
+        
+        // Return success response with the real asset report data
         res.json({
           success: true,
-          assetReport: mockAssetReport,
+          assetReport: assetReport.report,
         });
       } catch (error) {
         logger.error({
