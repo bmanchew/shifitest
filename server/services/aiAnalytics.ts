@@ -300,21 +300,38 @@ export class AIAnalyticsService {
         await storage.saveComplaintsData(merchantCashAdvanceComplaints.hits.hits.map(hit => hit._source));
       }
 
+      // Create mock monthly trend data if none exists
+      const createEmptyMonthlyTrend = () => {
+        const months = [];
+        const today = new Date();
+        
+        for (let i = 2; i >= 0; i--) {
+          const date = new Date();
+          date.setMonth(today.getMonth() - i);
+          months.push({
+            month: date.toLocaleString('default', { month: 'short' }),
+            complaints: 0
+          });
+        }
+        
+        return months;
+      };
+      
       // Analyze the complaints data
       const analysisResults = {
         lastUpdated: new Date().toISOString(),
         totalComplaints: (unsecuredPersonalLoanComplaints?.hits?.total || 0) + (merchantCashAdvanceComplaints?.hits?.total || 0),
         personalLoans: {
           totalComplaints: unsecuredPersonalLoanComplaints?.hits?.total || 0,
-          topIssues: this.extractTopIssues(unsecuredPersonalLoanComplaints),
-          topCompanies: this.extractTopCompanies(unsecuredPersonalLoanComplaints),
-          monthlyTrend: this.extractMonthlyTrend(unsecuredPersonalLoanComplaints),
+          topIssues: this.extractTopIssues(unsecuredPersonalLoanComplaints) || [],
+          topCompanies: this.extractTopCompanies(unsecuredPersonalLoanComplaints) || [],
+          monthlyTrend: this.extractMonthlyTrend(unsecuredPersonalLoanComplaints) || createEmptyMonthlyTrend(),
         },
         merchantCashAdvances: {
           totalComplaints: merchantCashAdvanceComplaints?.hits?.total || 0,
-          topIssues: this.extractTopIssues(merchantCashAdvanceComplaints),
-          topCompanies: this.extractTopCompanies(merchantCashAdvanceComplaints),
-          monthlyTrend: this.extractMonthlyTrend(merchantCashAdvanceComplaints),
+          topIssues: this.extractTopIssues(merchantCashAdvanceComplaints) || [],
+          topCompanies: this.extractTopCompanies(merchantCashAdvanceComplaints) || [],
+          monthlyTrend: this.extractMonthlyTrend(merchantCashAdvanceComplaints) || createEmptyMonthlyTrend(),
         },
         insights: this.generateFintechInsights(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
         recommendedUnderwritingAdjustments: this.generateUnderwritingRecommendations(unsecuredPersonalLoanComplaints, merchantCashAdvanceComplaints),
@@ -486,10 +503,13 @@ export class AIAnalyticsService {
       return [];
     }
     
-    return complaintsData.aggregations.date_received.buckets.map((bucket: any) => ({
-      date: bucket.key_as_string,
-      count: bucket.doc_count
-    }));
+    return complaintsData.aggregations.date_received.buckets.map((bucket: any) => {
+      const date = new Date(bucket.key_as_string);
+      return {
+        month: date.toLocaleString('default', { month: 'short' }),
+        complaints: bucket.doc_count
+      };
+    });
   }
 
   private generateConsumerLoanInsights(personalLoanComplaints: any, creditCardComplaints: any): string[] {

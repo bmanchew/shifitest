@@ -72,26 +72,40 @@ export default function ComplaintTrends() {
             </TabsList>
             <TabsContent value="monthly">
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={complaintData?.data?.personalLoans?.monthlyTrend}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="count" name="Complaints" stroke="#3b82f6" strokeWidth={2} />
-                </LineChart>
+                {complaintData?.data?.personalLoans?.monthlyTrend && complaintData.data.personalLoans.monthlyTrend.length > 0 ? (
+                  <LineChart data={complaintData.data.personalLoans.monthlyTrend}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="complaints" name="Complaints" stroke="#3b82f6" strokeWidth={2} />
+                  </LineChart>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-12 border rounded-md">
+                    <p className="text-muted-foreground mb-2">No monthly trend data available</p>
+                    <p className="text-xs text-muted-foreground">The CFPB API returned no complaints data for this period</p>
+                  </div>
+                )}
               </ResponsiveContainer>
             </TabsContent>
             <TabsContent value="category">
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={complaintData?.data?.personalLoans?.topIssues}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="issue" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="count" name="Complaints" fill="#3b82f6" />
-                </BarChart>
+                {complaintData?.data?.personalLoans?.topIssues && complaintData.data.personalLoans.topIssues.length > 0 ? (
+                  <BarChart data={complaintData.data.personalLoans.topIssues}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="issue" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="count" name="Complaints" fill="#3b82f6" />
+                  </BarChart>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-12 border rounded-md">
+                    <p className="text-muted-foreground mb-2">No category data available</p>
+                    <p className="text-xs text-muted-foreground">The CFPB API returned no complaints data for this period</p>
+                  </div>
+                )}
               </ResponsiveContainer>
             </TabsContent>
           </Tabs>
