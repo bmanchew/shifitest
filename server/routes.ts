@@ -938,13 +938,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         <body>
           <div class="header">
             <div class="logo">DiDit Identity Verification</div>
-            <div>Contract #${contractId} | Session ID: ${sessionId}</div>
-          </div>
+            <div>Contract #${contractId} | Session ID: ${sessionId}</div></div>
           <div class="container">
             <div class="progress-bar">
               <div class="progress-bar-inner" id="progress"></div>
             </div>
-            
+
             <div class="step active" id="step1">
               <h2>Welcome to DiDit Identity Verification</h2>
               <p>We'll guide you through a simple identity verification process to confirm you are who you say you are.</p>
@@ -958,7 +957,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 <button class="button" onclick="nextStep(1, 2)">Start Verification</button>
               </div>
             </div>
-            
+
             <div class="step" id="step2">
               <h2>Document Verification</h2>
               <p>Please take a clear photo of your identification document.</p>
@@ -971,7 +970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 <button class="button" onclick="nextStep(2, 3)">Continue</button>
               </div>
             </div>
-            
+
             <div class="step" id="step3">
               <h2>Selfie Verification</h2>
               <p>Now let's take a selfie to match with your document photo.</p>
@@ -984,20 +983,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 <button class="button" onclick="nextStep(3, 4)">Continue</button>
               </div>
             </div>
-            
+
             <div class="step" id="step4">
               <h2>Processing Your Verification</h2>
               <p class="center">Please wait while we process your identity verification...</p>
               <div class="center">
                 <div class="success-icon" id="loading">⏳</div>
               </div>
-              
+
               <script>
                 // Simulate a successful verification after a short delay
                 setTimeout(function() {
                   document.getElementById('loading').innerHTML = "✅";
                   document.getElementById('step4').innerHTML += '<h3 class="center">Verification Successful!</h3><p class="center">Your identity has been verified successfully.</p><div class="center"><button class="button" onclick="completeVerification()">Return to Application</button></div>';
-                  
+
                   // Send a simulated webhook notification to our application
                   fetch('/api/kyc/webhook', {
                     method: 'POST',
@@ -1022,7 +1021,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               </script>
             </div>
           </div>
-          
+
           <script>
             // Update progress bar as user moves through steps
             function nextStep(current, next) {
@@ -1030,7 +1029,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               document.getElementById('step' + next).classList.add('active');
               document.getElementById('progress').style.width = (next * 25) + '%';
             }
-            
+
             // Redirect back to the application when verification is complete
             function completeVerification() {
               window.opener ? window.opener.postMessage('verification_complete', '*') : null;
@@ -1705,11 +1704,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               timestamp: new Date().toISOString()
             })
           });
-          
+
           if (!signatureResponse.ok) {
             throw new Error(`Thanks Roger API error: ${signatureResponse.status} ${signatureResponse.statusText}`);
           }
-          
+
           const data = await signatureResponse.json();
           if (!data.success) {
             throw new Error(`Signature submission failed: ${data.message || 'Unknown error'}`);
@@ -2830,7 +2829,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Fetch the asset report data from database using the assetReportId
         const assetReports = await storage.getAssetReportsByAssetReportId(assetReportId);
-        
+
         if (!assetReports || assetReports.length === 0) {
           return res.status(404).json({
             success: false,
@@ -2839,10 +2838,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         const assetReportData = assetReports[0];
-        
+
         // Retrieve the actual asset report from Plaid
         const assetReport = await plaidService.getAssetReport(assetReportData.assetReportToken);
-        
+
         // Create a log entry
         await storage.createLog({
           level: "info",
@@ -2853,7 +2852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             assetReportId,
           }),
         });
-        
+
         // Return success response with the real asset report data
         res.json({
           success: true,
@@ -3087,7 +3086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount the admin reports routers
   apiRouter.use("/admin/reports", reportsRouter);
   apiRouter.use("/admin", adminReportsRouter);
-  
+
   // Mount the API router
   app.use("/api", apiRouter);
 
