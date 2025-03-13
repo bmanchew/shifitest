@@ -1,44 +1,42 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { toast } from "@/hooks/use-toast";
 
-// Helper function for API requests
-export async function apiRequest(
-  endpoint: string,
-  options: RequestInit = {}
-) {
-  try {
-    const response = await fetch(endpoint, {
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-      ...options,
-    });
-
-    // Clone the response before reading its body
-    const responseClone = response.clone();
-
-    // Check if the response is OK
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || `HTTP error! status: ${response.status}`);
-    }
-
-    // Try to parse as JSON, fall back to text if that fails
+async function throwIfResNotOk(res: Response) {
+  if (!res.ok) {
     try {
-      return await responseClone.json();
+      // First try to parse as JSON (most of our API endpoints return JSON errors)
+      const errorData = await res.json();
+      const errorMessage =
+        errorData.message || errorData.error || JSON.stringify(errorData);
+      throw new Error(`${res.status}: ${errorMessage}`);
     } catch (e) {
-      return await responseClone.text();
+      // If parsing as JSON fails, fall back to plain text
+      const text = (await res.text()) || res.statusText;
+      throw new Error(`${res.status}: ${text}`);
     }
-  } catch (error) {
-    console.error("API request error:", error);
-    toast({
-      title: "Error",
-      description: error instanceof Error ? error.message : "Something went wrong",
-      variant: "destructive",
-    });
-    throw error;
   }
+}
+
+export async function apiRequest<T = Response>(
+  method: string,
+  url: string,
+  data?: unknown | undefined,
+): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    headers: data ? { "Content-Type": "application/json" } : {},
+    body: data ? JSON.stringify(data) : undefined,
+    credentials: "include",
+  });
+
+  await throwIfResNotOk(res);
+
+  // If T is Response (the default), just return the response object
+  if (method === "HEAD" || method === "DELETE" || res.status === 204) {
+    return res as unknown as T;
+  }
+
+  // Otherwise, parse as JSON
+  return (await res.json()) as T;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
@@ -47,15 +45,16 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await apiRequest(queryKey[0] as string, {
+    const res = await fetch(queryKey[0] as string, {
       credentials: "include",
     });
 
-    if (unauthorizedBehavior === "returnNull" && (res as Response).status === 401) {
+    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
     }
 
-    return res;
+    await throwIfResNotOk(res);
+    return await res.json();
   };
 
 export const queryClient = new QueryClient({
