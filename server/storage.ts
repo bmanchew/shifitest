@@ -630,3 +630,23 @@ export class DatabaseStorage implements IStorage {
 
 // Initialize with DatabaseStorage instead of MemStorage
 export const storage = new DatabaseStorage();
+
+  async getCompletedKycVerificationsByUserId(userId: number): Promise<ApplicationProgress[]> {
+    if (!userId) return [];
+    
+    // Find all KYC steps that are completed for this user across all contracts
+    const completedKyc = await db.query.applicationProgress.findMany({
+      where: (ap, { eq, and }) => and(
+        eq(ap.step, "kyc"),
+        eq(ap.completed, true)
+      ),
+      with: {
+        contract: {
+          where: (c, { eq }) => eq(c.customerId, userId)
+        }
+      }
+    });
+    
+    // Filter out any records where the contract join failed
+    return completedKyc.filter(item => item.contract != null);
+  }

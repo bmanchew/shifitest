@@ -1019,17 +1019,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the user has already completed KYC verification
-      const existingKycVerifications = await db.query.applicationProgress.findMany({
-        where: (ap, { eq, and }) => and(
-          eq(ap.step, "kyc"),
-          eq(ap.completed, true)
-        ),
-        with: {
-          contract: {
-            where: (c, { eq }) => eq(c.customerId, contract.customerId)
-          }
-        }
-      });
+      const existingKycVerifications = await storage.getCompletedKycVerificationsByUserId(contract.customerId);
       
       // If user has already completed KYC in any contract, return success
       if (existingKycVerifications.length > 0) {
