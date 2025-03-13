@@ -101,55 +101,97 @@ export default function Application() {
             description: "Your identity has been successfully verified.",
           });
 
-          // Get the KYC progress for this contract
-          const kycProgressResponse = await apiRequest<{
-            id: number;
-            contractId: number;
-            step: string;
-            completed: boolean;
-            data: string | null;
-          }>("GET", `/api/application-progress/kyc/${verifyContractId}`);
+          try {
+            // Get the KYC progress for this contract
+            const kycProgressResponse = await apiRequest<{
+              id: number;
+              contractId: number;
+              step: string;
+              completed: boolean;
+              data: string | null;
+            }>("GET", `/api/application-progress/kyc/${verifyContractId}`);
 
-          if (kycProgressResponse && !kycProgressResponse.completed) {
-            // If not already marked as completed, mark it complete
-            console.log("Marking KYC as completed from redirect handler");
-            await apiRequest(
-              "PATCH",
-              `/api/application-progress/${kycProgressResponse.id}`,
-              {
-                completed: true,
+            if (!kycProgressResponse || !kycProgressResponse.id) {
+              // Create a new KYC progress record if one doesn't exist
+              console.log("No KYC progress record found, creating one...");
+              const newProgress = await apiRequest("POST", "/api/application-progress", {
+                contractId: verifyContractId,
+                step: "kyc",
+                completed: true, // Already completed since we're in the redirect handler
                 data: JSON.stringify({
                   verifiedAt: new Date().toISOString(),
                   status: "approved",
-                  completedVia: "redirect",
+                  completedVia: "redirect_new_record",
                 }),
-              },
-            );
+              });
+              
+              console.log("Created new KYC progress record:", newProgress);
+            } else if (!kycProgressResponse.completed) {
+              // If not already marked as completed, mark it complete
+              console.log("Marking KYC as completed from redirect handler");
+              await apiRequest(
+                "PATCH",
+                `/api/application-progress/${kycProgressResponse.id}`,
+                {
+                  completed: true,
+                  data: JSON.stringify({
+                    verifiedAt: new Date().toISOString(),
+                    status: "approved",
+                    completedVia: "redirect",
+                  }),
+                },
+              );
+            }
 
             // Refresh contract data
             await refetch();
-          }
+            
+            // Wait for contract data to load before updating steps
+            setTimeout(() => {
+              // Add KYC to completed steps if not already there
+              setCompletedSteps((prev) => {
+                if (!prev.includes("kyc")) {
+                  return [...prev, "kyc"];
+                }
+                return prev;
+              });
 
-          // Wait for contract data to load before updating steps
-          setTimeout(() => {
-            // Add KYC to completed steps if not already there
+              // Move to the next step if currently on KYC
+              if (currentStep === "kyc") {
+                console.log("Moving from KYC step to bank step");
+                setCurrentStep("bank");
+              }
+
+              setIsHandlingVerification(false);
+            }, 1000); // Longer delay for more reliability
+          } catch (progressError) {
+            console.error("Error handling progress record:", progressError);
+            
+            // Still try to move forward even if there was an error
             setCompletedSteps((prev) => {
               if (!prev.includes("kyc")) {
                 return [...prev, "kyc"];
               }
               return prev;
             });
-
-            // Move to the next step if currently on KYC
+            
             if (currentStep === "kyc") {
+              console.log("Moving from KYC step to bank step despite error");
               setCurrentStep("bank");
             }
-
+            
             setIsHandlingVerification(false);
-          }, 500);
+          }
         } catch (error) {
           console.error("Error handling verification redirect:", error);
           setIsHandlingVerification(false);
+          
+          // Show error toast
+          toast({
+            title: "Verification Error",
+            description: "There was a problem processing your verification. Please try again.",
+            variant: "destructive",
+          });
         }
       };
 

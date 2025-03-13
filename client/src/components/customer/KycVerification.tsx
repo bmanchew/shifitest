@@ -32,8 +32,12 @@ export default function KycVerification({
   useEffect(() => {
     if (!sessionId || step !== "verifying_external") return;
 
+    console.log("Starting verification status polling for session:", sessionId, "contract:", contractId);
+
     const checkVerificationStatus = async () => {
       try {
+        console.log("Checking verification status...");
+        
         // Get the current KYC progress for this contract
         const kycProgressResponse = await apiRequest<{
           id: number;
@@ -43,24 +47,61 @@ export default function KycVerification({
           data: string | null;
         }>("GET", `/api/application-progress/kyc/${contractId}`);
 
+        console.log("Verification status check response:", kycProgressResponse);
+
         if (kycProgressResponse?.completed) {
           console.log("Verification completed, detected via polling");
+          
+          // Make sure progress is properly updated
+          try {
+            // Update progress with more information even if it's already marked complete
+            await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+              completed: true,
+              data: JSON.stringify({
+                verifiedAt: new Date().toISOString(),
+                status: "approved",
+                method: "remote_verification_polling",
+                sessionId,
+                updatedAt: new Date().toISOString()
+              }),
+            });
+            
+            console.log("Progress record updated during polling");
+          } catch (updateError) {
+            console.error("Error updating progress record during polling:", updateError);
+          }
+          
+          // Update UI state
           setStep("complete");
+          
+          // Close verification window if it's open
+          if (verificationWindowRef.current && !verificationWindowRef.current.closed) {
+            verificationWindowRef.current.close();
+          }
+          
           // Wait a moment then move to next step
-          setTimeout(onComplete, 2000);
+          console.log("Scheduling transition to next step...");
+          setTimeout(() => {
+            console.log("Moving to next step now");
+            onComplete();
+          }, 3000); // Longer delay for more reliability
         }
       } catch (error) {
         console.error("Error checking verification status:", error);
       }
     };
 
-    // Check every 5 seconds
+    // Check immediately on mount
+    checkVerificationStatus();
+    
+    // Then check every 5 seconds
     const intervalId = setInterval(checkVerificationStatus, 5000);
 
     return () => {
       clearInterval(intervalId);
+      console.log("Stopped verification polling");
     };
-  }, [sessionId, step, contractId, onComplete]);
+  }, [sessionId, step, contractId, progressId, onComplete]);
 
   // Start the verification process
   const startVerification = async () => {
