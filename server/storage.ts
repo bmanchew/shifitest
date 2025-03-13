@@ -626,10 +626,9 @@ export class DatabaseStorage implements IStorage {
 
     return result[0];
   }
-}
 
-// Method to get completed KYC verifications by user ID
-async getCompletedKycVerificationsByUserId(userId: number): Promise<ApplicationProgress[]> {
+  // Method to get completed KYC verifications by user ID
+  async getCompletedKycVerificationsByUserId(userId: number): Promise<ApplicationProgress[]> {
     if (!userId) return [];
     
     // Find all KYC steps that are completed for this user across all contracts
