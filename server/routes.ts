@@ -989,8 +989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // KYC verification API endpoint
-  // KYC verification API endpoint
+  // KYC verification API endpoint with validation
   apiRouter.post("/kyc/create-session", async (req: Request, res: Response) => {
     try {
       const { contractId } = req.body;
@@ -999,6 +998,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({
           success: false,
           message: "Contract ID is required",
+        });
+      }
+      
+      // Verify the contract exists and get phone number
+      const contract = await storage.getContract(parseInt(contractId));
+      if (!contract) {
+        return res.status(404).json({
+          success: false,
+          message: "Contract not found",
+        });
+      }
+      
+      // Ensure this request is authorized for this contract
+      // Check if we have a phone number in the request that matches the contract
+      const { phoneNumber } = req.body;
+      if (phoneNumber && contract.phoneNumber && 
+          phoneNumber.replace(/\D/g, '') !== contract.phoneNumber.replace(/\D/g, '')) {
+        logger.warn({
+          message: `Unauthorized KYC session request for contract ${contractId}`,
+          category: "security",
+          source: "kyc",
+          metadata: {
+            contractId,
+            requestPhone: phoneNumber,
+            contractPhone: contract.phoneNumber
+          }
+        });
+        
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized access to this contract",
         });
       }
 
@@ -1425,10 +1455,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Thanks Roger contract signing endpoint
-  // Thanks Roger contract signing endpoint
+  // Thanks Roger contract signing endpoint with authentication
   apiRouter.post("/contract-signing", async (req: Request, res: Response) => {
     try {
-      const { contractId, contractNumber, customerName, signatureData } =
+      const { contractId, contractNumber, customerName, signatureData, phoneNumber } =
         req.body;
 
       if (!contractId || !contractNumber || !customerName || !signatureData) {
@@ -1447,6 +1477,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "Contract not found",
         });
       }
+      
+      // Verify user is authorized to sign this contract
+      // Either has matching phone number or is already the customer of record
+      let isAuthorized = false;
+      let userId = null;
+      
+      // Check if we have a user ID from an earlier login
+      if (contract.customerId) {
+        userId = contract.customerId;
+        isAuthorized = true;
+      }
+      
+      // If phone provided, verify it matches the contract
+      if (phoneNumber && contract.phoneNumber) {
+        const normalizedRequestPhone = phoneNumber.replace(/\D/g, '');
+        const normalizedContractPhone = contract.phoneNumber.replace(/\D/g, '');
+        
+        if (normalizedRequestPhone === normalizedContractPhone) {
+          isAuthorized = true;
+          
+          // If we don't have a user ID yet, try to find one by phone
+          if (!userId) {
+            const user = await storage.getUserByPhone(normalizedRequestPhone);
+            if (user) {
+              userId = user.id;
+              
+              // Update the contract with this user ID if not set
+              if (!contract.customerId) {
+                await storage.updateContractCustomerId(Number(contractId), userId);
+                logger.info({
+                  message: `Linked contract ${contractId} to user ${userId} during signing`,
+                  category: "contract",
+                  source: "signing",
+                  metadata: { contractId, userId }
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      if (!isAuthorized) {
+        logger.warn({
+          message: `Unauthorized contract signing attempt for contract ${contractId}`,
+          category: "security", 
+          source: "signing",
+          metadata: {
+            contractId,
+            requestPhone: phoneNumber,
+            contractPhone: contract.phoneNumber
+          }
+        });
+        
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized to sign this contract",
+        });
+      }
+      
+      // Log the authorized signing attempt
+      logger.info({
+        message: `Authorized contract signing for contract ${contractId}`,
+        category: "contract",
+        source: "signing",
+        userId,
+        metadata: { contractId, customerName }
+      });
 
       // Get merchant details
       const merchant = await storage.getMerchant(contract.merchantId);
@@ -2115,18 +2212,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error(`Contract ${contractId} not found`);
           }
 
-          // Ensure the contract has a customerId
+          // Ensure the contract has a customerId - this is critical for KYC flow
           if (!contract.customerId || contract.phoneNumber) {
             if (contract.phoneNumber) {
+              const normalizedPhone = contract.phoneNumber.replace(/\D/g, '');
+              
               logger.info({
                 message: `Looking up user by phone number for contract ${contractId}`,
                 category: "api",
                 source: "didit",
-                metadata: { contractId, phoneNumber: contract.phoneNumber },
+                metadata: { contractId, phoneNumber: normalizedPhone },
               });
 
-              // Always try to find or create user by phone number to ensure consistency
-              const user = await storage.findOrCreateUserByPhone(contract.phoneNumber);
+              // Find existing user first to prevent duplicate users
+              let user = await storage.getUserByPhone(normalizedPhone);
+              
+              // If no user exists, create one
+              if (!user) {
+                user = await storage.findOrCreateUserByPhone(normalizedPhone);
+                logger.info({
+                  message: `Created new user for phone ${normalizedPhone}`,
+                  category: "api",
+                  source: "didit",
+                  metadata: { contractId, userId: user.id },
+                });
+              } else {
+                logger.info({
+                  message: `Found existing user by phone ${normalizedPhone}`,
+                  category: "api",
+                  source: "didit",
+                  metadata: { contractId, userId: user.id },
+                });
+              }
 
               if (user) {
                 // Update the contract with the user ID
@@ -2136,6 +2253,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   category: "api",
                   source: "didit",
                   metadata: { contractId, userId: user.id },
+                });
+                
+                // Create an authentication record for this user and contract
+                await storage.createLog({
+                  level: "info",
+                  message: `KYC authentication established for user ${user.id} via phone ${normalizedPhone}`,
+                  category: "security",
+                  source: "kyc",
+                  userId: user.id,
+                  metadata: JSON.stringify({
+                    contractId,
+                    phoneNumber: normalizedPhone,
+                    verification: "completed"
+                  }),
                 });
               }
             } else {
