@@ -1004,6 +1004,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // KYC verification status checking endpoint
+  apiRouter.post("/kyc/check-status", async (req: Request, res: Response) => {
+    try {
+      const { customerId, contractId, phoneNumber } = req.body;
+      
+      if (!customerId && !phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: "Either customer ID or phone number is required",
+        });
+      }
+      
+      // First, check if the customer has completed KYC verification
+      let existingVerifications = [];
+      
+      if (customerId) {
+        existingVerifications = await storage.getCompletedKycVerificationsByUserId(Number(customerId));
+        logger.info({
+          message: `Checking KYC status for customer ${customerId}`,
+          category: "api",
+          source: "kyc",
+          metadata: {
+            customerId,
+            contractId,
+            phoneNumber,
+            existingVerifications: existingVerifications.length
+          }
+        });
+      }
+      
+      // If no verifications found by user ID but we have a phone number, try that
+      if (existingVerifications.length === 0 && phoneNumber) {
+        // Find user by phone number
+        const normalizedPhone = phoneNumber.replace(/\D/g, '');
+        
+        // Try to find a user with this phone number
+        const userWithPhone = await storage.getUserByPhone(normalizedPhone);
+        
+        if (userWithPhone) {
+          // If found, check for verifications with that user ID
+          existingVerifications = await storage.getCompletedKycVerificationsByUserId(userWithPhone.id);
+          
+          logger.info({
+            message: `Found user by phone, checking KYC status`,
+            category: "api",
+            source: "kyc",
+            metadata: {
+              phoneNumber,
+              normalizedPhone,
+              foundUserId: userWithPhone.id,
+              existingVerifications: existingVerifications.length
+            }
+          });
+        }
+      }
+      
+      // If we found completed KYC verifications, return that information
+      if (existingVerifications.length > 0) {
+        logger.info({
+          message: `Found existing KYC verification for request`,
+          category: "api", 
+          source: "kyc",
+          metadata: {
+            customerId,
+            phoneNumber,
+            existingVerifications: existingVerifications.length,
+            verificationDetails: existingVerifications.map(v => ({
+              contractId: v.contractId,
+              completed: v.completed,
+              step: v.step
+            }))
+          }
+        });
+        
+        return res.json({
+          success: true,
+          alreadyVerified: true,
+          message: "Identity already verified in our system",
+          verificationCount: existingVerifications.length
+        });
+      }
+      
+      // No existing verifications found
+      return res.json({
+        success: true,
+        alreadyVerified: false,
+        message: "Identity verification required"
+      });
+      
+    } catch (error) {
+      logger.error({
+        message: `Error checking KYC status: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "kyc",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to check verification status",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // KYC verification API endpoint with validation
   apiRouter.post("/kyc/create-session", async (req: Request, res: Response) => {
     try {
