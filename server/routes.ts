@@ -20,6 +20,7 @@ import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
 import contractsRouter from "./routes/contracts";
+import customersRouter from "./routes/customers";
 
 function objectMetadata<T>(data: T): string {
   if (!data) return JSON.stringify({});
@@ -1000,7 +1001,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "Contract ID is required",
         });
       }
-      
+
       // Verify the contract exists and get associated user
       const contract = await storage.getContract(parseInt(contractId));
       if (!contract) {
@@ -1009,7 +1010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "Contract not found",
         });
       }
-      
+
       // Ensure we have a customer ID associated with the contract
       if (!contract.customerId) {
         return res.status(400).json({
@@ -1017,10 +1018,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "No customer associated with this contract",
         });
       }
-      
+
       // Check if the user has already completed KYC verification
       const existingKycVerifications = await storage.getCompletedKycVerificationsByUserId(contract.customerId);
-      
+
       // If user has already completed KYC in any contract, return success
       if (existingKycVerifications.length > 0) {
         logger.info({
@@ -1033,7 +1034,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             existingVerifications: existingKycVerifications.length
           }
         });
-        
+
         // Return success with the existing verification data
         return res.json({
           success: true,
@@ -1042,11 +1043,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: contract.customerId
         });
       }
-      
+
       // Ensure this request is authorized for this contract
       // Check if we have a phone number in the request that matches the contract
       const { phoneNumber } = req.body;
-      
+
       // Log phone number info for debugging
       logger.info({
         message: `Phone number validation check for KYC session request`,
@@ -1061,7 +1062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           contractPhoneNormalized: contract.phoneNumber ? contract.phoneNumber.replace(/\D/g, '') : null
         }
       });
-      
+
       if (phoneNumber && contract.phoneNumber && 
           phoneNumber.replace(/\D/g, '') !== contract.phoneNumber.replace(/\D/g, '')) {
         logger.warn({
@@ -1077,7 +1078,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             contractPhoneNormalized: contract.phoneNumber.replace(/\D/g, '')
           }
         });
-        
+
         return res.status(403).json({
           success: false,
           message: "Unauthorized access to this contract. Phone number mismatch.",
@@ -1147,7 +1148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Capture detailed error information
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : 'No stack trace';
-      
+
       logger.error({
         message: `Failed to create KYC verification session: ${errorMessage}`,
         category: "api",
@@ -1538,32 +1539,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "Contract not found",
         });
       }
-      
+
       // Verify user is authorized to sign this contract
       // Either has matching phone number or is already the customer of record
       let isAuthorized = false;
       let userId = null;
-      
+
       // Check if we have a user ID from an earlier login
       if (contract.customerId) {
         userId = contract.customerId;
         isAuthorized = true;
       }
-      
+
       // If phone provided, verify it matches the contract
       if (phoneNumber && contract.phoneNumber) {
         const normalizedRequestPhone = phoneNumber.replace(/\D/g, '');
         const normalizedContractPhone = contract.phoneNumber.replace(/\D/g, '');
-        
+
         if (normalizedRequestPhone === normalizedContractPhone) {
           isAuthorized = true;
-          
+
           // If we don't have a user ID yet, try to find one by phone
           if (!userId) {
             const user = await storage.getUserByPhone(normalizedRequestPhone);
             if (user) {
               userId = user.id;
-              
+
               // Update the contract with this user ID if not set
               if (!contract.customerId) {
                 await storage.updateContractCustomerId(Number(contractId), userId);
@@ -1578,7 +1579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       if (!isAuthorized) {
         logger.warn({
           message: `Unauthorized contract signing attempt for contract ${contractId}`,
@@ -1590,13 +1591,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             contractPhone: contract.phoneNumber
           }
         });
-        
+
         return res.status(403).json({
           success: false,
           message: "Unauthorized to sign this contract",
         });
       }
-      
+
       // Log the authorized signing attempt
       logger.info({
         message: `Authorized contract signing for contract ${contractId}`,
@@ -1910,7 +1911,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Update the signing progress with the local signature data
         if (signingProgressId) {
-          await storage.updateApplicationProgressCompletion(
+          awaitstorage.updateApplicationProgressCompletion(
             signingProgressId,
             true, // Mark as completed
             JSON.stringify({
@@ -2277,7 +2278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!contract.customerId || contract.phoneNumber) {
             if (contract.phoneNumber) {
               const normalizedPhone = contract.phoneNumber.replace(/\D/g, '');
-              
+
               logger.info({
                 message: `Looking up user by phone number for contract ${contractId}`,
                 category: "api",
@@ -2287,7 +2288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
               // Find existing user first to prevent duplicate users
               let user = await storage.getUserByPhone(normalizedPhone);
-              
+
               // If no user exists, create one
               if (!user) {
                 user = await storage.findOrCreateUserByPhone(normalizedPhone);
@@ -2315,7 +2316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   source: "didit",
                   metadata: { contractId, userId: user.id },
                 });
-                
+
                 // Create an authentication record for this user and contract
                 await storage.createLog({
                   level: "info",
@@ -2917,7 +2918,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } catch (error) {
         logger.error({
-          message: `Failed to exchange Plaid public token: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Failed toexchange Plaid public token: ${error instanceof Error ? error.message : String(error)}`,
           category: "api",
           source: "plaid",
           metadata: {
@@ -3112,7 +3113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           return res.status(50).json({
             success: false,
-message: "Failed to process bank information",
+            message: "Failed to process bank information",
           });
         }
 
@@ -3682,6 +3683,9 @@ message: "Failed to process bank information",
 
   // Mount the contracts router
   apiRouter.use("/contracts", contractsRouter);
+
+  // Mount the customers router
+  apiRouter.use("/customers", customersRouter);
 
   // Mount the API router
   app.use("/api", apiRouter);
