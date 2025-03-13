@@ -98,85 +98,95 @@ export default function KycVerification({
       const contractResponse = await apiRequest<any>("GET", `/api/contracts/${contractId}`);
       const phoneNumber = contractResponse?.contract?.phoneNumber;
 
-      const sessionResponse = await apiRequest<{
-        success: boolean;
-        alreadyVerified?: boolean;
-        userId?: number;
-        message?: string;
-        session?: {
-          session_id: string;
-          session_url: string;
-        };
-      }>("POST", "/api/kyc/create-session", {
-        contractId,
-        phoneNumber,
-      });
+      try {
+        const sessionResponse = await apiRequest<{
+          success: boolean;
+          alreadyVerified?: boolean;
+          userId?: number;
+          message?: string;
+          session?: {
+            session_id: string;
+            session_url: string;
+          };
+        }>("POST", "/api/kyc/create-session", {
+          contractId,
+          phoneNumber,
+        });
 
-      if (!sessionResponse || !sessionResponse.success) {
-        throw new Error("Failed to create verification session");
-      }
-
-      // Check if the user is already verified
-      if (sessionResponse.alreadyVerified) {
-        console.log("User already verified:", sessionResponse.message);
-        setAlreadyVerified(true);
-        setUserId(sessionResponse.userId || null);
-
-        // Mark the KYC step as completed in the UI
-        setStep("complete");
-
-        // Mark the KYC step as completed in the backend if it's not already
-        if (!kycProgressResponse.completed) {
-          await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
-            completed: true,
-            data: JSON.stringify({
-              verified: true,
-              verifiedAt: new Date().toISOString(),
-              completedVia: "existing_verification",
-              userId: sessionResponse.userId,
-              message: sessionResponse.message,
-            }),
-          });
+        if (!sessionResponse || !sessionResponse.success) {
+          throw new Error("Failed to create verification session");
         }
 
-        // Wait a moment then move to next step
-        setTimeout(onComplete, 1000);
+        // Check if the user is already verified
+        if (sessionResponse.alreadyVerified) {
+          console.log("User already verified:", sessionResponse.message);
+          setAlreadyVerified(true);
+          setUserId(sessionResponse.userId || null);
+
+          // Mark the KYC step as completed in the UI
+          setStep("complete");
+
+          // Mark the KYC step as completed in the backend if it's not already
+          if (!kycProgressResponse.completed) {
+            await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
+              completed: true,
+              data: JSON.stringify({
+                verified: true,
+                verifiedAt: new Date().toISOString(),
+                completedVia: "existing_verification",
+                userId: sessionResponse.userId,
+                message: sessionResponse.message,
+              }),
+            });
+          }
+
+          // Wait a moment then move to next step
+          setTimeout(onComplete, 1000);
+          setIsLoading(false);
+          return;
+        }
+
+        // Regular flow - user needs to be verified
+        const { session } = sessionResponse;
+        setSessionId(session.session_id);
+
+        // Open verification URL in a new window or redirect
+        console.log("Opening verification URL:", session.session_url);
+        setVerificationUrl(session.session_url);
+
+        // Update UI state
+        setStep("verifying_external");
+
+        // Open verification in new window/tab or iframe
+        if (window.innerWidth > 768) {
+          verificationWindowRef.current = window.open(
+            session.session_url,
+            "didit_verification",
+            "width=500,height=700"
+          );
+        } else {
+          // On mobile, redirect to the verification URL (full screen)
+          window.location.href = session.session_url;
+        }
+
         setIsLoading(false);
-        return;
+      } catch (innerError) {
+        console.error("Error in session creation:", innerError);
+        toast({
+          title: "Verification Session Error",
+          description: innerError instanceof Error ? innerError.message : String(innerError),
+          variant: "destructive",
+        });
+        setIsLoading(false);
       }
-
-      // Regular flow - user needs to be verified
-      const { session } = sessionResponse;
-      setSessionId(session.session_id);
-
-      // Open verification URL in a new window or redirect
-      console.log("Opening verification URL:", session.session_url);
-      setVerificationUrl(session.session_url);
-
-      // Update UI state
-      setStep("verifying_external");
-
-      // Open verification in new window/tab or iframe
-      if (window.innerWidth > 768) {
-        verificationWindowRef.current = window.open(
-          session.session_url,
-          "didit_verification",
-          "width=500,height=700"
-        );
-      } else {
-        // On mobile, redirect to the verification URL (full screen)
-        window.location.href = session.session_url;
-      }
-
-      setIsLoading(false);
     } catch (error) {
       console.error("Error starting verification:", error);
       toast({
         title: "Verification Error",
-        description:
-          "Could not start the identity verification process. Please try again.",
+        description: error instanceof Error ? error.message : String(error),
         variant: "destructive",
       });
+    } finally {
       setIsLoading(false);
     }
   };
@@ -294,9 +304,9 @@ export default function KycVerification({
               </div>
               <h2 className="text-xl font-semibold">Verification Complete</h2>
               <p className="text-sm text-gray-600">
-                {alreadyVerified 
-              ? "Your identity has already been verified in our system. No additional verification needed."
-              : "Your identity has been successfully verified. You may now proceed with your application."}
+                {alreadyVerified
+                  ? "Your identity has already been verified in our system. No additional verification needed."
+                  : "Your identity has been successfully verified. You may now proceed with your application."}
               </p>
               <p className="text-sm text-green-500 font-medium">
                 Moving to the next step automatically...

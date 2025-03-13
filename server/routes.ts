@@ -1046,6 +1046,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure this request is authorized for this contract
       // Check if we have a phone number in the request that matches the contract
       const { phoneNumber } = req.body;
+      
+      // Log phone number info for debugging
+      logger.info({
+        message: `Phone number validation check for KYC session request`,
+        category: "api",
+        source: "kyc",
+        metadata: {
+          contractId,
+          userId: contract.customerId,
+          requestPhone: phoneNumber,
+          contractPhone: contract.phoneNumber,
+          requestPhoneNormalized: phoneNumber ? phoneNumber.replace(/\D/g, '') : null,
+          contractPhoneNormalized: contract.phoneNumber ? contract.phoneNumber.replace(/\D/g, '') : null
+        }
+      });
+      
       if (phoneNumber && contract.phoneNumber && 
           phoneNumber.replace(/\D/g, '') !== contract.phoneNumber.replace(/\D/g, '')) {
         logger.warn({
@@ -1056,13 +1072,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             contractId,
             userId: contract.customerId,
             requestPhone: phoneNumber,
-            contractPhone: contract.phoneNumber
+            contractPhone: contract.phoneNumber,
+            requestPhoneNormalized: phoneNumber.replace(/\D/g, ''),
+            contractPhoneNormalized: contract.phoneNumber.replace(/\D/g, '')
           }
         });
         
         return res.status(403).json({
           success: false,
-          message: "Unauthorized access to this contract",
+          message: "Unauthorized access to this contract. Phone number mismatch.",
         });
       }
 
@@ -1126,18 +1144,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         session: sessionData,
       });
     } catch (error) {
+      // Capture detailed error information
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : 'No stack trace';
+      
       logger.error({
-        message: `Failed to create KYC verification session: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to create KYC verification session: ${errorMessage}`,
         category: "api",
         source: "didit",
         metadata: {
-          error: error instanceof Error ? error.stack : String(error),
+          contractId,
+          phoneNumber: req.body.phoneNumber,
+          error: errorStack,
+          errorDetails: JSON.stringify(error)
         },
       });
 
+      // Return a more informative error message
       res.status(500).json({
         success: false,
-        message: "Failed to create verification session",
+        message: `Failed to create verification session: ${errorMessage}`,
+        details: process.env.NODE_ENV === 'production' ? undefined : errorStack
       });
     }
   });
