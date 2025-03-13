@@ -673,11 +673,31 @@ export class DatabaseStorage implements IStorage {
       const userContracts = await this.getContractsByCustomerId(userId);
       
       if (!userContracts || userContracts.length === 0) {
-        return [];
+        // Also check if there are contracts with matching phone numbers but different user IDs
+        // This helps with linking verifications for users with multiple accounts
+        const user = await this.getUser(userId);
+        if (user && user.phone) {
+          const normalizedPhone = user.phone.replace(/\D/g, '');
+          // Find contracts with this phone number
+          const phoneContracts = await db
+            .select()
+            .from(contracts)
+            .where(eq(contracts.phoneNumber, normalizedPhone));
+            
+          if (phoneContracts && phoneContracts.length > 0) {
+            // Add these contracts to our list
+            userContracts.push(...phoneContracts);
+          }
+        }
+        
+        // If still no contracts found, return empty array
+        if (userContracts.length === 0) {
+          return [];
+        }
       }
       
-      // Extract contract IDs
-      const contractIds = userContracts.map(contract => contract.id);
+      // Extract contract IDs, ensuring no duplicates
+      const contractIds = [...new Set(userContracts.map(contract => contract.id))];
       
       // Find all KYC steps that are completed for any of the user's contracts
       const completedKyc = await db

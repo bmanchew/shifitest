@@ -99,11 +99,13 @@ export default function KycVerification({
       const phoneNumber = contractResponse?.contract?.phoneNumber;
 
       try {
+        console.log("Making request to create KYC session with contractId:", contractId);
         const sessionResponse = await apiRequest<{
           success: boolean;
           alreadyVerified?: boolean;
           userId?: number;
           message?: string;
+          verificationCount?: number;
           session?: {
             session_id: string;
             session_url: string;
@@ -113,15 +115,27 @@ export default function KycVerification({
           phoneNumber,
         });
 
+        console.log("KYC session response:", sessionResponse);
+
         if (!sessionResponse || !sessionResponse.success) {
           throw new Error("Failed to create verification session");
         }
 
         // Check if the user is already verified
         if (sessionResponse.alreadyVerified) {
-          console.log("User already verified:", sessionResponse.message);
+          console.log("User already verified:", sessionResponse.message, 
+            "Verification count:", sessionResponse.verificationCount);
+          
           setAlreadyVerified(true);
           setUserId(sessionResponse.userId || null);
+          
+          // Show success message with toast
+          toast({
+            title: "Identity Already Verified",
+            description: sessionResponse.message || 
+              "Your identity has already been verified in a previous application.",
+            variant: "success",
+          });
 
           // Mark the KYC step as completed in the UI
           setStep("complete");
@@ -136,6 +150,7 @@ export default function KycVerification({
                 completedVia: "existing_verification",
                 userId: sessionResponse.userId,
                 message: sessionResponse.message,
+                existingVerificationCount: sessionResponse.verificationCount
               }),
             });
           }

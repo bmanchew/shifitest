@@ -1031,7 +1031,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           metadata: {
             contractId,
             userId: contract.customerId,
-            existingVerifications: existingKycVerifications.length
+            existingVerifications: existingKycVerifications.length,
+            verificationDetails: existingKycVerifications.map(v => ({
+              contractId: v.contractId,
+              completed: v.completed,
+              step: v.step
+            }))
           }
         });
 
@@ -1041,8 +1046,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "kyc"
         );
 
+        // If no progress record exists for this contract, create one
+        if (!kycProgress) {
+          // Create a new KYC progress record for this contract
+          const newProgress = await storage.createApplicationProgress({
+            contractId: parseInt(contractId),
+            step: "kyc",
+            completed: true,
+            data: JSON.stringify({
+              verified: true,
+              verifiedAt: new Date().toISOString(),
+              completedVia: "existing_verification",
+              userId: contract.customerId,
+              message: "Verification recognized from previous contract",
+              originalVerificationContractId: existingKycVerifications[0].contractId
+            })
+          });
+          
+          logger.info({
+            message: `Created new completed KYC progress record for contract ${contractId}`,
+            category: "api",
+            source: "didit",
+            metadata: {
+              contractId,
+              userId: contract.customerId,
+              progressId: newProgress.id
+            }
+          });
+          
+          // Advance the contract to the next step if still on kyc
+          if (contract.currentStep === "kyc") {
+            await storage.updateContractStep(parseInt(contractId), "bank");
+          }
+        }
         // If we have a progress record but it's not marked as completed, update it
-        if (kycProgress && !kycProgress.completed) {
+        else if (!kycProgress.completed) {
           await storage.updateApplicationProgress(kycProgress.id, {
             completed: true,
             data: JSON.stringify({
@@ -1050,7 +1088,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               verifiedAt: new Date().toISOString(),
               completedVia: "existing_verification",
               userId: contract.customerId,
-              message: "Verification recognized from previous contract"
+              message: "Verification recognized from previous contract",
+              originalVerificationContractId: existingKycVerifications[0].contractId
             })
           });
 
@@ -1065,7 +1104,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           success: true,
           alreadyVerified: true,
           message: "User has already completed KYC verification",
-          userId: contract.customerId
+          userId: contract.customerId,
+          verificationCount: existingKycVerifications.length
         });
       }
 
