@@ -631,21 +631,34 @@ export class DatabaseStorage implements IStorage {
   async getCompletedKycVerificationsByUserId(userId: number): Promise<ApplicationProgress[]> {
     if (!userId) return [];
     
-    // Find all KYC steps that are completed for this user across all contracts
-    const completedKyc = await db.query.applicationProgress.findMany({
-      where: (ap, { eq, and }) => and(
-        eq(ap.step, "kyc"),
-        eq(ap.completed, true)
-      ),
-      with: {
-        contract: {
-          where: (c, { eq }) => eq(c.customerId, userId)
-        }
+    try {
+      // Get all contracts for this user
+      const userContracts = await this.getContractsByCustomerId(userId);
+      
+      if (!userContracts || userContracts.length === 0) {
+        return [];
       }
-    });
-    
-    // Filter out any records where the contract join failed
-    return completedKyc.filter(item => item.contract != null);
+      
+      // Extract contract IDs
+      const contractIds = userContracts.map(contract => contract.id);
+      
+      // Find all KYC steps that are completed for any of the user's contracts
+      const completedKyc = await db
+        .select()
+        .from(applicationProgress)
+        .where(
+          and(
+            eq(applicationProgress.step, "kyc"),
+            eq(applicationProgress.completed, true),
+            inArray(applicationProgress.contractId, contractIds)
+          )
+        );
+      
+      return completedKyc;
+    } catch (error) {
+      console.error(`Error getting completed KYC verifications for user ${userId}:`, error);
+      return [];
+    }
   }
 }
 

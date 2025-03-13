@@ -1022,7 +1022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if the user has already completed KYC verification
       const existingKycVerifications = await storage.getCompletedKycVerificationsByUserId(contract.customerId);
 
-      // If user has already completed KYC in any contract, return success
+      // If user has already completed KYC in any contract, mark this contract's KYC as completed too
       if (existingKycVerifications.length > 0) {
         logger.info({
           message: `User ${contract.customerId} has already completed KYC, skipping verification`,
@@ -1034,6 +1034,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
             existingVerifications: existingKycVerifications.length
           }
         });
+
+        // Get existing KYC progress for this contract
+        const kycProgress = await storage.getApplicationProgressByContractIdAndStep(
+          parseInt(contractId),
+          "kyc"
+        );
+
+        // If we have a progress record but it's not marked as completed, update it
+        if (kycProgress && !kycProgress.completed) {
+          await storage.updateApplicationProgress(kycProgress.id, {
+            completed: true,
+            data: JSON.stringify({
+              verified: true,
+              verifiedAt: new Date().toISOString(),
+              completedVia: "existing_verification",
+              userId: contract.customerId,
+              message: "Verification recognized from previous contract"
+            })
+          });
+
+          // After marking KYC as complete, advance the contract to the next step if still on kyc
+          if (contract.currentStep === "kyc") {
+            await storage.updateContractStep(parseInt(contractId), "bank");
+          }
+        }
 
         // Return success with the existing verification data
         return res.json({
