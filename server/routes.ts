@@ -980,8 +980,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: "api",
         source: "twilio",
         message: `Failed to send SMS: ${error instanceof Error ? error.message : String(error)}`,
-        metadata: JSON.stringify{
-          error: error instanceof Error ? error.stack : null,
+        metadata: JSON.stringify({
+          error: error instanceof Error ? errorstack : null,
         }),
       });
 
@@ -2920,7 +2920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           return res.status(50).json({
             success: false,
-            message: "Failed to process bank information",
+message: "Failed to process bank information",
           });
         }
 
