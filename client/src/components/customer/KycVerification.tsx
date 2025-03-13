@@ -38,7 +38,67 @@ export default function KycVerification({
       try {
         console.log("Checking verification status...");
         
-        // Get the current KYC progress for this contract
+        // First, try to check the KYC status directly through the verification status endpoint
+        // This more reliably checks the completed status across different verification methods
+        try {
+          const statusResponse = await apiRequest<{
+            success: boolean;
+            alreadyVerified?: boolean;
+            message?: string;
+          }>("POST", "/api/kyc/check-status", {
+            contractId,
+            customerId: null, // Let the server determine the customer ID from the contract
+            phoneNumber: null // Let the server determine the phone from the contract
+          });
+          
+          console.log("KYC status check response:", statusResponse);
+          
+          if (statusResponse?.success && statusResponse?.alreadyVerified) {
+            console.log("Verification completed per status check");
+            
+            // Update progress with complete status
+            try {
+              await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+                completed: true,
+                data: JSON.stringify({
+                  verifiedAt: new Date().toISOString(),
+                  status: "approved",
+                  method: "status_verification_polling",
+                  sessionId,
+                  updatedAt: new Date().toISOString(),
+                  message: statusResponse.message
+                }),
+              });
+              
+              console.log("Progress record updated during polling via status check");
+              
+              // Update UI state
+              setStep("complete");
+              
+              // Close verification window if it's open
+              if (verificationWindowRef.current && !verificationWindowRef.current.closed) {
+                verificationWindowRef.current.close();
+              }
+              
+              // Wait a moment then move to next step
+              console.log("Scheduling transition to next step via status check...");
+              setTimeout(() => {
+                console.log("Moving to next step now");
+                onComplete();
+              }, 3000); // Longer delay for more reliability
+              
+              return; // Exit early after finding verified status
+            } catch (updateError) {
+              console.error("Error updating progress record during status check polling:", updateError);
+              // Continue to fallback method below
+            }
+          }
+        } catch (statusError) {
+          console.error("Error checking KYC status directly:", statusError);
+          // Continue to fallback method below
+        }
+        
+        // Get the current KYC progress for this contract (fallback method)
         const kycProgressResponse = await apiRequest<{
           id: number;
           contractId: number;
@@ -47,10 +107,10 @@ export default function KycVerification({
           data: string | null;
         }>("GET", `/api/application-progress/kyc/${contractId}`);
 
-        console.log("Verification status check response:", kycProgressResponse);
+        console.log("KYC progress check response:", kycProgressResponse);
 
         if (kycProgressResponse?.completed) {
-          console.log("Verification completed, detected via polling");
+          console.log("Verification completed, detected via progress polling");
           
           // Make sure progress is properly updated
           try {
@@ -410,16 +470,29 @@ export default function KycVerification({
           // Update UI state
           setStep("verifying_external");
   
-          // Open verification in new window/tab or iframe
-          if (window.innerWidth > 768) {
-            verificationWindowRef.current = window.open(
+          // For both desktop and mobile, open verification in new window
+          // This prevents losing application state when verification completes
+          try {
+            console.log("Opening verification URL in new window:", session.session_url);
+            const newWindow = window.open(
               session.session_url,
               "didit_verification",
-              "width=500,height=700"
+              window.innerWidth > 768 
+                ? "width=500,height=700" 
+                : "_blank"
             );
-          } else {
-            // On mobile, redirect to the verification URL (full screen)
-            window.location.href = session.session_url;
+            
+            // Save reference to the window
+            verificationWindowRef.current = newWindow;
+            
+            // Check if window was actually opened (could be blocked by popup blockers)
+            if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+              console.warn("Verification window may have been blocked by popup blocker");
+              // Don't redirect, just show a message (handled in UI)
+            }
+          } catch (windowError) {
+            console.error("Error opening verification window:", windowError);
+            // Error will be shown in the UI
           }
         } else {
           throw new Error("Session data is missing from the response");
@@ -527,12 +600,22 @@ export default function KycVerification({
               <Button
                 onClick={() => {
                   if (verificationUrl) {
+                    const isMobile = window.innerWidth <= 768;
                     const newWindow = window.open(
                       verificationUrl,
-                      "_blank",
-                      "width=500,height=600",
+                      "didit_verification",
+                      isMobile ? "_blank" : "width=500,height=600"
                     );
                     verificationWindowRef.current = newWindow;
+                    
+                    // Check if window was blocked
+                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                      toast({
+                        title: "Popup Blocked",
+                        description: "Please enable popups for this site to complete verification.",
+                        variant: "destructive"
+                      });
+                    }
                   }
                 }}
                 disabled={!verificationUrl}

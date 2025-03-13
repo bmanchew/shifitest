@@ -1008,53 +1008,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
   apiRouter.post("/kyc/check-status", async (req: Request, res: Response) => {
     try {
       const { customerId, contractId, phoneNumber } = req.body;
+      let userIdToCheck = customerId ? Number(customerId) : null;
+      let phoneToCheck = phoneNumber;
+
+      // If contractId is provided but no customerId/phoneNumber, first get the contract data
+      if (contractId && (!customerId && !phoneNumber)) {
+        try {
+          // Get contract information to extract customerId and phoneNumber
+          const contract = await storage.getContract(parseInt(String(contractId)));
+          
+          if (contract) {
+            logger.info({
+              message: `Checking KYC status using contract data`,
+              category: "api",
+              source: "internal",
+              metadata: {
+                contractId,
+                extractedCustomerId: contract.customerId,
+                extractedPhoneNumber: contract.phoneNumber
+              }
+            });
+            
+            userIdToCheck = contract.customerId;
+            phoneToCheck = contract.phoneNumber;
+          }
+        } catch (contractError) {
+          logger.error({
+            message: `Error fetching contract for KYC status check: ${contractError instanceof Error ? contractError.message : String(contractError)}`,
+            category: "api",
+            source: "internal",
+            metadata: {
+              contractId,
+              error: contractError instanceof Error ? contractError.stack : String(contractError)
+            }
+          });
+        }
+      }
       
-      if (!customerId && !phoneNumber) {
+      // Check if we have any identification info
+      if (!userIdToCheck && !phoneToCheck && !contractId) {
         return res.status(400).json({
           success: false,
-          message: "Either customer ID or phone number is required",
+          message: "Either customer ID, phone number, or contract ID is required",
         });
       }
       
       // First, check if the customer has completed KYC verification
       let existingVerifications = [];
       
-      if (customerId) {
-        existingVerifications = await storage.getCompletedKycVerificationsByUserId(Number(customerId));
+      if (userIdToCheck) {
+        existingVerifications = await storage.getCompletedKycVerificationsByUserId(userIdToCheck);
         logger.info({
-          message: `Checking KYC status for customer ${customerId}`,
+          message: `Checking KYC status for customer ${userIdToCheck}`,
           category: "api",
-          source: "kyc",
+          source: "internal",
           metadata: {
-            customerId,
+            userIdToCheck,
             contractId,
-            phoneNumber,
+            phoneToCheck,
             existingVerifications: existingVerifications.length
           }
         });
       }
       
       // If no verifications found by user ID but we have a phone number, try that
-      if (existingVerifications.length === 0 && phoneNumber) {
-        // Find user by phone number
-        const normalizedPhone = phoneNumber.replace(/\D/g, '');
-        
-        // Try to find a user with this phone number
-        const userWithPhone = await storage.getUserByPhone(normalizedPhone);
-        
-        if (userWithPhone) {
-          // If found, check for verifications with that user ID
-          existingVerifications = await storage.getCompletedKycVerificationsByUserId(userWithPhone.id);
+      if (existingVerifications.length === 0 && phoneToCheck) {
+        try {
+          // Find user by phone number
+          const normalizedPhone = phoneToCheck.replace(/\D/g, '');
           
-          logger.info({
-            message: `Found user by phone, checking KYC status`,
+          // Try to find a user with this phone number
+          const userWithPhone = await storage.getUserByPhone(normalizedPhone);
+          
+          if (userWithPhone) {
+            // If found, check for verifications with that user ID
+            existingVerifications = await storage.getCompletedKycVerificationsByUserId(userWithPhone.id);
+            
+            logger.info({
+              message: `Found user by phone, checking KYC status`,
+              category: "api",
+              source: "internal",
+              metadata: {
+                phoneToCheck,
+                normalizedPhone,
+                foundUserId: userWithPhone.id,
+                existingVerifications: existingVerifications.length
+              }
+            });
+          }
+        } catch (phoneError) {
+          logger.error({
+            message: `Error checking user by phone: ${phoneError instanceof Error ? phoneError.message : String(phoneError)}`,
             category: "api",
-            source: "kyc",
+            source: "internal",
             metadata: {
-              phoneNumber,
-              normalizedPhone,
-              foundUserId: userWithPhone.id,
-              existingVerifications: existingVerifications.length
+              phoneToCheck,
+              error: phoneError instanceof Error ? phoneError.stack : String(phoneError)
             }
           });
         }
@@ -1065,10 +1114,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         logger.info({
           message: `Found existing KYC verification for request`,
           category: "api", 
-          source: "kyc",
+          source: "internal",
           metadata: {
-            customerId,
-            phoneNumber,
+            userIdToCheck,
+            phoneToCheck,
+            contractId,
             existingVerifications: existingVerifications.length,
             verificationDetails: existingVerifications.map(v => ({
               contractId: v.contractId,
@@ -1097,7 +1147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       logger.error({
         message: `Error checking KYC status: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
-        source: "kyc",
+        source: "internal",
         metadata: {
           error: error instanceof Error ? error.stack : String(error)
         }
