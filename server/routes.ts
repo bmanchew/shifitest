@@ -3686,6 +3686,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Mount the customers router
   apiRouter.use("/customers", customersRouter);
+  
+  // Get contract by phone number
+  apiRouter.get("/contracts/by-phone/:phoneNumber", async (req: Request, res: Response) => {
+    try {
+      const { phoneNumber } = req.params;
+      
+      if (!phoneNumber) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Phone number is required" 
+        });
+      }
+      
+      // Normalize the phone number
+      const normalizedPhone = phoneNumber.replace(/\D/g, '');
+      
+      // Find contracts with this phone number
+      const allContracts = await storage.getAllContracts();
+      const matchingContracts = allContracts.filter(contract => {
+        if (!contract.phoneNumber) return false;
+        return contract.phoneNumber.replace(/\D/g, '') === normalizedPhone;
+      });
+      
+      if (matchingContracts.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "No contracts found with this phone number"
+        });
+      }
+      
+      // Return the most recent contract
+      const contract = matchingContracts.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )[0];
+      
+      return res.json({
+        success: true,
+        contract,
+        message: "Contract found successfully"
+      });
+    } catch (error) {
+      console.error("Error finding contract by phone:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  });
 
   // Mount the API router
   app.use("/api", apiRouter);
