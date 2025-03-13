@@ -107,7 +107,11 @@ export default function KycVerification({
   const startVerification = async () => {
     try {
       setIsLoading(true);
+      console.log("Starting verification for contract:", contractId, "with progress ID:", progressId);
 
+      // If progressId is provided but is zero, check for an existing record or create one
+      let effectiveProgressId = progressId;
+      
       // Get the current KYC progress for this contract
       const kycProgressResponse = await apiRequest<{
         id: number;
@@ -116,6 +120,8 @@ export default function KycVerification({
         completed: boolean;
         data: string | null;
       }>("GET", `/api/application-progress/kyc/${contractId}`);
+
+      console.log("KYC progress response:", kycProgressResponse);
 
       // If no KYC progress exists, create one
       if (!kycProgressResponse || !kycProgressResponse.id) {
@@ -128,27 +134,42 @@ export default function KycVerification({
               contractId: contractId,
               step: "kyc",
               completed: false,
-              data: null,
+              data: JSON.stringify({
+                startedAt: new Date().toISOString(),
+                attempts: 1
+              }),
             }
           );
           console.log("Created new KYC progress with ID:", newProgress?.id);
           if (!newProgress || !newProgress.id) {
             throw new Error("Failed to create KYC progress record");
           }
-          var kycProgressId = newProgress.id;
+          effectiveProgressId = newProgress.id;
         } catch (createError) {
           console.error("Error creating KYC progress:", createError);
           throw new Error("Could not create KYC progress for this contract");
         }
       } else {
-        var kycProgressId = kycProgressResponse.id;
+        effectiveProgressId = kycProgressResponse.id;
+        console.log("Using existing KYC progress ID:", effectiveProgressId);
       }
 
       // If verification is already completed, go to the next step
-      if (kycProgressResponse.completed) {
+      if (kycProgressResponse?.completed) {
         console.log("KYC already completed for this contract, moving to next step");
         setStep("complete");
-        setTimeout(onComplete, 1000);
+        
+        // Update contract step in the backend to ensure proper progression
+        try {
+          await apiRequest("PATCH", `/api/contracts/${contractId}/step`, {
+            step: "bank",  // Force next step to be bank
+          });
+          console.log("Updated contract step to 'bank'");
+        } catch (stepUpdateError) {
+          console.error("Failed to update contract step:", stepUpdateError);
+        }
+        
+        setTimeout(onComplete, 1500);
         setIsLoading(false);
         return;
       }
@@ -203,7 +224,7 @@ export default function KycVerification({
 
           // Mark the KYC step as completed in the backend if it's not already
           if (!kycProgressResponse.completed) {
-            await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
+            await apiRequest("PATCH", `/api/application-progress/${effectiveProgressId}`, {
               completed: true,
               data: JSON.stringify({
                 verified: true,

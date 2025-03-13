@@ -388,6 +388,21 @@ export default function Application() {
 
   // Render different content based on current step
   const renderStepContent = () => {
+    // Check if this step is already completed
+    const isCurrentStepCompleted = completedSteps.includes(currentStep);
+    console.log("Current step:", currentStep, "Completed:", isCurrentStepCompleted, "Completed steps:", completedSteps);
+    
+    // If already completed, move to the next step automatically
+    if (isCurrentStepCompleted && currentStep !== "completed") {
+      console.log("Step already completed, moving to next...");
+      const nextStep = getNextStep(currentStep);
+      
+      // Use setTimeout to avoid immediate state update during render
+      setTimeout(() => {
+        setCurrentStep(nextStep);
+      }, 100);
+    }
+    
     switch (currentStep) {
       case "terms":
         return (
