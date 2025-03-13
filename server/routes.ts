@@ -1001,12 +1001,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Verify the contract exists and get phone number
+      // Verify the contract exists and get associated user
       const contract = await storage.getContract(parseInt(contractId));
       if (!contract) {
         return res.status(404).json({
           success: false,
           message: "Contract not found",
+        });
+      }
+      
+      // Ensure we have a customer ID associated with the contract
+      if (!contract.customerId) {
+        return res.status(400).json({
+          success: false,
+          message: "No customer associated with this contract",
+        });
+      }
+      
+      // Check if the user has already completed KYC verification
+      const existingKycVerifications = await db.query.applicationProgress.findMany({
+        where: (ap, { eq, and }) => and(
+          eq(ap.step, "kyc"),
+          eq(ap.completed, true)
+        ),
+        with: {
+          contract: {
+            where: (c, { eq }) => eq(c.customerId, contract.customerId)
+          }
+        }
+      });
+      
+      // If user has already completed KYC in any contract, return success
+      if (existingKycVerifications.length > 0) {
+        logger.info({
+          message: `User ${contract.customerId} has already completed KYC, skipping verification`,
+          category: "api",
+          source: "didit",
+          metadata: {
+            contractId,
+            userId: contract.customerId,
+            existingVerifications: existingKycVerifications.length
+          }
+        });
+        
+        // Return success with the existing verification data
+        return res.json({
+          success: true,
+          alreadyVerified: true,
+          message: "User has already completed KYC verification",
+          userId: contract.customerId
         });
       }
       
@@ -1021,6 +1064,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           source: "kyc",
           metadata: {
             contractId,
+            userId: contract.customerId,
             requestPhone: phoneNumber,
             contractPhone: contract.phoneNumber
           }

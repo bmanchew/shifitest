@@ -82,7 +82,7 @@ export default function KycVerification({
 
       // If verification is already completed, go to the next step
       if (kycProgressResponse.completed) {
-        console.log("KYC already completed, moving to next step");
+        console.log("KYC already completed for this contract, moving to next step");
         setStep("complete");
         setTimeout(onComplete, 1000);
         setIsLoading(false);
@@ -92,7 +92,10 @@ export default function KycVerification({
       // Call our API endpoint to create a DiDit verification session
       const response = await apiRequest<{
         success: boolean;
-        session: {
+        alreadyVerified?: boolean;
+        message?: string;
+        userId?: number;
+        session?: {
           session_id: string;
           session_url?: string;
           url?: string;
@@ -102,8 +105,33 @@ export default function KycVerification({
         contractId,
       });
 
-      if (!response?.success || !response.session) {
+      if (!response?.success) {
         throw new Error("Failed to create verification session");
+      }
+
+      // If the user has already been verified elsewhere
+      if (response.alreadyVerified) {
+        console.log("User has already been verified in another contract");
+        
+        // Update the current contract's KYC progress to show it's completed
+        await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
+          completed: true,
+          data: JSON.stringify({
+            verificationCompleted: new Date().toISOString(),
+            alreadyVerified: true,
+            userId: response.userId
+          }),
+        });
+        
+        // Mark as complete and continue to next step
+        setStep("complete");
+        setTimeout(onComplete, 1000);
+        setIsLoading(false);
+        return;
+      }
+
+      if (!response.session) {
+        throw new Error("No session data returned from API");
       }
 
       const { session } = response;
