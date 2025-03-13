@@ -723,7 +723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Find or create a user for this phone number
       // First normalize the phone number to a standard format (remove non-digits)
       const normalizedPhone = phoneNumber.replace(/\D/g, '');
-      
+
       let customer = await storage.getUserByPhone(normalizedPhone);
 
       // If user doesn't exist, create a new one
@@ -980,7 +980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: "api",
         source: "twilio",
         message: `Failed to send SMS: ${error instanceof Error ? error.message : String(error)}`,
-        metadata: JSON.stringify({
+        metadata: JSON.stringify{
           error: error instanceof Error ? error.stack : null,
         }),
       });
@@ -1898,7 +1898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           if (!signatureResponse.ok) {
-            throw new Error(`Thanks Roger API error: ${signatureResponse.status} ${signatureResponse.statusText}`);
+            throw new Error(`Thanks Roger API error: ${signatureResponse.status} ${`signatureResponse.statusText}`);
           }
 
           const data = await signatureResponse.json();
@@ -1911,7 +1911,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               `Simulating successful Thanks Roger API call for contract ${contractId} signature`,
             );
           } catch (signingError) {
-            console.errorerror("Thanks Roger API error:", signingError);
+            console.error("Thanks Roger API error:", signingError);
             throw signingError;
           }
         }
@@ -2116,8 +2116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Ensure the contract has a customerId
-          if (!contract.customerId) {
-            // If contract doesn't have a customerId, try to find a user by phone number
+          if (!contract.customerId || contract.phoneNumber) {
             if (contract.phoneNumber) {
               logger.info({
                 message: `Looking up user by phone number for contract ${contractId}`,
@@ -2126,7 +2125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 metadata: { contractId, phoneNumber: contract.phoneNumber },
               });
 
-              // Find or create user by phone number
+              // Always try to find or create user by phone number to ensure consistency
               const user = await storage.findOrCreateUserByPhone(contract.phoneNumber);
 
               if (user) {
@@ -2193,7 +2192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 try {
                   // First check if we have a customerId on the contract
                   let userIdToUpdate = updatedContract.customerId;
-                  
+
                   // If no customerId but we have a phone number, find or create a user
                   if (!userIdToUpdate && updatedContract.phoneNumber) {
                     logger.info({
@@ -2202,15 +2201,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       source: "didit",
                       metadata: { contractId: updatedContract.id }
                     });
-                    
+
                     // Find or create user by phone number
                     const user = await storage.findOrCreateUserByPhone(updatedContract.phoneNumber);
-                    
+
                     if (user) {
                       // Update the contract with the user ID
                       await storage.updateContractCustomerId(updatedContract.id, user.id);
                       userIdToUpdate = user.id;
-                      
+
                       logger.info({
                         message: `Linked contract ${updatedContract.id} to user ${user.id} by phone ${updatedContract.phoneNumber}`,
                         category: "api",
@@ -2219,7 +2218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       });
                     }
                   }
-                  
+
                   // Now update the user name if we have a user ID
                   if (userIdToUpdate) {
                     // Update user's name based on KYC verification
@@ -2228,7 +2227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       customerDetails.first_name,
                       customerDetails.last_name
                     );
-                    
+
                     logger.info({
                       message: `Updated user ${userIdToUpdate} name information from KYC data`,
                       category: "api",
@@ -2919,7 +2918,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
           });
 
-          return res.status(500).json({
+          return res.status(50).json({
             success: false,
             message: "Failed to process bank information",
           });

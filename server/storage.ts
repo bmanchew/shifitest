@@ -84,18 +84,18 @@ export class DatabaseStorage implements IStorage {
   async getUserByPhone(phone: string): Promise<User | undefined> {
     // Normalize phone number by removing non-digits
     const normalizedPhone = phone.replace(/\D/g, '');
-    
+
     // Try to find user by normalized phone or original format
     const [user] = await db.select().from(users).where(
       eq(users.phone, normalizedPhone)
     );
-    
+
     // If not found with normalized, try original format as fallback
     if (!user && normalizedPhone !== phone) {
       const [originalUser] = await db.select().from(users).where(eq(users.phone, phone));
       return originalUser || undefined;
     }
-    
+
     return user || undefined;
   }
 
@@ -107,7 +107,7 @@ export class DatabaseStorage implements IStorage {
   async findOrCreateUserByPhone(phone: string): Promise<User> {
     // Normalize phone number by removing non-digits
     const normalizedPhone = phone.replace(/\D/g, '');
-    
+
     // First, try to find the user by normalized phone
     const existingUser = await this.getUserByPhone(normalizedPhone);
     if (existingUser) {
@@ -116,7 +116,7 @@ export class DatabaseStorage implements IStorage {
         await db.update(users)
           .set({ phone: normalizedPhone })
           .where(eq(users.id, existingUser.id));
-          
+
         // Return the updated user
         return { ...existingUser, phone: normalizedPhone };
       }
