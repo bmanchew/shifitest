@@ -76,11 +76,32 @@ export default function KycVerification({
         data: string | null;
       }>("GET", `/api/application-progress/kyc/${contractId}`);
 
+      // If no KYC progress exists, create one
       if (!kycProgressResponse || !kycProgressResponse.id) {
-        throw new Error("Could not find KYC progress for this contract");
+        console.log("Creating new KYC progress for contract:", contractId);
+        try {
+          const newProgress = await apiRequest<{ id: number }>(
+            "POST",
+            "/api/application-progress", 
+            {
+              contractId: contractId,
+              step: "kyc",
+              completed: false,
+              data: null,
+            }
+          );
+          console.log("Created new KYC progress with ID:", newProgress?.id);
+          if (!newProgress || !newProgress.id) {
+            throw new Error("Failed to create KYC progress record");
+          }
+          var kycProgressId = newProgress.id;
+        } catch (createError) {
+          console.error("Error creating KYC progress:", createError);
+          throw new Error("Could not create KYC progress for this contract");
+        }
+      } else {
+        var kycProgressId = kycProgressResponse.id;
       }
-
-      const kycProgressId = kycProgressResponse.id;
 
       // If verification is already completed, go to the next step
       if (kycProgressResponse.completed) {
@@ -134,7 +155,6 @@ export default function KycVerification({
             title: "Identity Already Verified",
             description: sessionResponse.message || 
               "Your identity has already been verified in a previous application.",
-            variant: "success",
           });
 
           // Mark the KYC step as completed in the UI
@@ -162,26 +182,31 @@ export default function KycVerification({
         }
 
         // Regular flow - user needs to be verified
-        const { session } = sessionResponse;
-        setSessionId(session.session_id);
-
-        // Open verification URL in a new window or redirect
-        console.log("Opening verification URL:", session.session_url);
-        setVerificationUrl(session.session_url);
-
-        // Update UI state
-        setStep("verifying_external");
-
-        // Open verification in new window/tab or iframe
-        if (window.innerWidth > 768) {
-          verificationWindowRef.current = window.open(
-            session.session_url,
-            "didit_verification",
-            "width=500,height=700"
-          );
+        if (sessionResponse.session) {
+          // Use non-null assertion since we've already checked the session exists
+          const session = sessionResponse.session!;
+          setSessionId(session.session_id);
+  
+          // Open verification URL in a new window or redirect
+          console.log("Opening verification URL:", session.session_url);
+          setVerificationUrl(session.session_url);
+  
+          // Update UI state
+          setStep("verifying_external");
+  
+          // Open verification in new window/tab or iframe
+          if (window.innerWidth > 768) {
+            verificationWindowRef.current = window.open(
+              session.session_url,
+              "didit_verification",
+              "width=500,height=700"
+            );
+          } else {
+            // On mobile, redirect to the verification URL (full screen)
+            window.location.href = session.session_url;
+          }
         } else {
-          // On mobile, redirect to the verification URL (full screen)
-          window.location.href = session.session_url;
+          throw new Error("Session data is missing from the response");
         }
 
         setIsLoading(false);

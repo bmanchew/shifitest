@@ -770,13 +770,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phoneNumber: normalizedPhone
       });
 
-      // Create application progress for this contract
-      await storage.createApplicationProgress({
-        contractId: contract.id,
-        step: "terms",
-        completed: false,
-        data: null,
-      });
+      // Create application progress for all steps of this contract
+      const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
+      
+      for (const step of applicationSteps) {
+        await storage.createApplicationProgress({
+          contractId: contract.id,
+          step: step as any,
+          completed: false,
+          data: null,
+        });
+        
+        // Log the creation of each step
+        console.log(`Created application progress for contract ${contract.id}, step ${step}`);
+      }
 
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
@@ -921,13 +928,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phoneNumber: phoneNumber, // Store the phone number directly in the contract
       });
 
-      // Create application progress for this contract
-      const newProgress = await storage.createApplicationProgress({
-        contractId: newContract.id,
-        step: "terms",
-        completed: false,
-        data: null,
-      });
+      // Create application progress for all steps of this contract
+      const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
+      
+      for (const step of applicationSteps) {
+        await storage.createApplicationProgress({
+          contractId: newContract.id,
+          step: step as any,
+          completed: false,
+          data: null,
+        });
+        
+        // Log the creation of each step
+        console.log(`Created application progress for contract ${newContract.id}, step ${step}`);
+      }
 
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
