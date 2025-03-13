@@ -629,7 +629,17 @@ export class DatabaseStorage implements IStorage {
 }
 
 // Initialize with DatabaseStorage instead of MemStorage
-async getCompletedKycVerificationsByUserId(userId: number): Promise<ApplicationProgress[]> {
+}
+
+export class DatabaseStorage implements IStorage {
+  // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    // ... existing method implementations ...
+  }
+  
+  // ... other method implementations ...
+  
+  async getCompletedKycVerificationsByUserId(userId: number): Promise<ApplicationProgress[]> {
     if (!userId) return [];
     
     // Find all KYC steps that are completed for this user across all contracts
