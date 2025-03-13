@@ -82,7 +82,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.phone, phone));
+    // Normalize phone number by removing non-digits
+    const normalizedPhone = phone.replace(/\D/g, '');
+    
+    // Try to find user by normalized phone or original format
+    const [user] = await db.select().from(users).where(
+      eq(users.phone, normalizedPhone)
+    );
+    
+    // If not found with normalized, try original format as fallback
+    if (!user && normalizedPhone !== phone) {
+      const [originalUser] = await db.select().from(users).where(eq(users.phone, phone));
+      return originalUser || undefined;
+    }
+    
     return user || undefined;
   }
 
@@ -92,21 +105,33 @@ export class DatabaseStorage implements IStorage {
   }
 
   async findOrCreateUserByPhone(phone: string): Promise<User> {
-    // First, try to find the user by phone
-    const existingUser = await this.getUserByPhone(phone);
+    // Normalize phone number by removing non-digits
+    const normalizedPhone = phone.replace(/\D/g, '');
+    
+    // First, try to find the user by normalized phone
+    const existingUser = await this.getUserByPhone(normalizedPhone);
     if (existingUser) {
+      // If the phone in the database is not normalized, update it
+      if (existingUser.phone !== normalizedPhone) {
+        await db.update(users)
+          .set({ phone: normalizedPhone })
+          .where(eq(users.id, existingUser.id));
+          
+        // Return the updated user
+        return { ...existingUser, phone: normalizedPhone };
+      }
       return existingUser;
     }
 
     // If not found, create a new user with temporary data
     // The user can update these fields later during the application process
-    const tempEmail = `temp_${phone.replace(/\D/g, '')}@shifi.com`;
+    const tempEmail = `temp_${normalizedPhone}@shifi.com`;
     const newUser: InsertUser = {
       email: tempEmail,
       password: Math.random().toString(36).substring(2, 15), // temporary password
-      phone: phone,
+      phone: normalizedPhone,
       role: 'customer',
-      name: `Customer ${phone}`,
+      name: `Customer ${normalizedPhone}`,
     };
 
     return await this.createUser(newUser);

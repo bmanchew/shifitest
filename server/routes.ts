@@ -721,20 +721,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const monthlyPayment = financedAmount / termMonths;
 
       // Find or create a user for this phone number
-      let customer = await storage.getUserByPhone(phoneNumber);
+      // First normalize the phone number to a standard format (remove non-digits)
+      const normalizedPhone = phoneNumber.replace(/\D/g, '');
+      
+      let customer = await storage.getUserByPhone(normalizedPhone);
 
       // If user doesn't exist, create a new one
       if (!customer) {
-        customer = await storage.findOrCreateUserByPhone(phoneNumber);
+        customer = await storage.findOrCreateUserByPhone(normalizedPhone);
         logger.info({
-          message: `Created new user for phone number ${phoneNumber}`,
+          message: `Created new user for phone number ${normalizedPhone}`,
           category: "api",
           source: "application",
           metadata: JSON.stringify({ userId: customer.id })
         });
       } else {
         logger.info({
-          message: `Found existing user for phone number ${phoneNumber}`,
+          message: `Found existing user for phone number ${normalizedPhone}`,
           category: "api",
           source: "application",
           metadata: JSON.stringify({ userId: customer.id })
@@ -763,7 +766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         monthlyPayment,
         status: "pending",
         currentStep: "terms",
-        phoneNumber: phoneNumber
+        phoneNumber: normalizedPhone
       });
 
       // Create application progress for this contract
@@ -2185,25 +2188,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 await storage.updateContractStep(parseInt(contractId), "bank");
               }
 
-              // Update user information if we have customer details and a customerId
-              if (updatedContract && updatedContract.customerId && (customerDetails.first_name || customerDetails.last_name)) {
+              // Update user information if we have customer details
+              if (updatedContract && (customerDetails.first_name || customerDetails.last_name)) {
                 try {
-                  // Update user's name based on KYC verification
-                  await storage.updateUserName(
-                    updatedContract.customerId,
-                    customerDetails.first_name,
-                    customerDetails.last_name
-                  );
-                  logger.info({
-                    message: `Updated user ${updatedContract.customerId} name information from KYC data`,
-                    category: "api",
-                    source: "didit",
-                    metadata: { 
-                      userId: updatedContract.customerId,
-                      firstName: customerDetails.first_name,
-                      lastName: customerDetails.last_name
-                    },
-                  });
+                  // First check if we have a customerId on the contract
+                  let userIdToUpdate = updatedContract.customerId;
+                  
+                  // If no customerId but we have a phone number, find or create a user
+                  if (!userIdToUpdate && updatedContract.phoneNumber) {
+                    logger.info({
+                      message: `No customer ID found, looking up by phone ${updatedContract.phoneNumber}`,
+                      category: "api",
+                      source: "didit",
+                      metadata: { contractId: updatedContract.id }
+                    });
+                    
+                    // Find or create user by phone number
+                    const user = await storage.findOrCreateUserByPhone(updatedContract.phoneNumber);
+                    
+                    if (user) {
+                      // Update the contract with the user ID
+                      await storage.updateContractCustomerId(updatedContract.id, user.id);
+                      userIdToUpdate = user.id;
+                      
+                      logger.info({
+                        message: `Linked contract ${updatedContract.id} to user ${user.id} by phone ${updatedContract.phoneNumber}`,
+                        category: "api",
+                        source: "didit",
+                        metadata: { contractId: updatedContract.id, userId: user.id }
+                      });
+                    }
+                  }
+                  
+                  // Now update the user name if we have a user ID
+                  if (userIdToUpdate) {
+                    // Update user's name based on KYC verification
+                    await storage.updateUserName(
+                      userIdToUpdate,
+                      customerDetails.first_name,
+                      customerDetails.last_name
+                    );
+                    
+                    logger.info({
+                      message: `Updated user ${userIdToUpdate} name information from KYC data`,
+                      category: "api",
+                      source: "didit",
+                      metadata: { 
+                        userId: userIdToUpdate,
+                        firstName: customerDetails.first_name,
+                        lastName: customerDetails.last_name
+                      },
+                    });
+                  } else {
+                    logger.warn({
+                      message: `Could not find user to update with KYC data for contract ${updatedContract.id}`,
+                      category: "api",
+                      source: "didit",
+                      metadata: { contractId: updatedContract.id }
+                    });
+                  }
                 } catch (userUpdateError) {
                   logger.error({
                     message: `Error updating user information: ${userUpdateError instanceof Error ? userUpdateError.message : String(userUpdateError)}`,
@@ -2211,6 +2254,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     source: "didit",
                     metadata: {
                       userId: updatedContract.customerId,
+                      contractId: updatedContract.id,
                       error: userUpdateError instanceof Error ? userUpdateError.stack : null,
                     },
                   });
