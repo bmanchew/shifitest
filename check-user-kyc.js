@@ -1,6 +1,6 @@
 
 // Script to check KYC status for a specific user ID
-const { storage } = require('./server/storage');
+import { storage } from './server/storage.js';
 
 async function checkUserKycStatus(userId) {
   try {

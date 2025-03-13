@@ -10,7 +10,7 @@ import {
   complaintsData, ComplaintsData, InsertComplaintsData
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, SQL } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -40,8 +40,11 @@ export interface IStorage {
   // Application Progress operations
   getApplicationProgress(id: number): Promise<ApplicationProgress | undefined>;
   getApplicationProgressByContractId(contractId: number): Promise<ApplicationProgress[]>;
+  getApplicationProgressByContractIdAndStep(contractId: number, step: string): Promise<ApplicationProgress | null>;
   createApplicationProgress(progress: InsertApplicationProgress): Promise<ApplicationProgress>;
   updateApplicationProgressCompletion(id: number, completed: boolean, data?: string): Promise<ApplicationProgress | undefined>;
+  updateApplicationProgress(progressId: number, data: Partial<ApplicationProgress>): Promise<ApplicationProgress | null>;
+  getCompletedKycVerificationsByUserId(userId: number): Promise<ApplicationProgress[]>;
 
   // Log operations
   createLog(log: InsertLog): Promise<Log>;
@@ -286,6 +289,40 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return updatedProgress;
+  }
+  
+  // Method to get specific application progress step by contract ID and step
+  async getApplicationProgressByContractIdAndStep(
+    contractId: number,
+    step: string
+  ): Promise<ApplicationProgress | null> {
+    const progress = await db.query.applicationProgress.findFirst({
+      where: and(
+        eq(applicationProgress.contractId, contractId),
+        eq(applicationProgress.step, step as any)
+      ),
+    });
+
+    return progress || null;
+  }
+  
+  // Method to update application progress with any data
+  async updateApplicationProgress(
+    progressId: number,
+    data: Partial<ApplicationProgress>
+  ): Promise<ApplicationProgress | null> {
+    try {
+      const result = await db
+        .update(applicationProgress)
+        .set(data)
+        .where(eq(applicationProgress.id, progressId))
+        .returning();
+        
+      return result[0] || null;
+    } catch (error) {
+      console.error('Error updating application progress:', error);
+      return null;
+    }
   }
 
   // Log methods
