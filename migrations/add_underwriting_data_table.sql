@@ -1,5 +1,11 @@
 -- Add underwriting_data table
-CREATE TYPE IF NOT EXISTS public.credit_tier AS ENUM ('tier1', 'tier2', 'tier3', 'declined');
+-- First check if the enum type exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'credit_tier') THEN
+        CREATE TYPE public.credit_tier AS ENUM ('tier1', 'tier2', 'tier3', 'declined');
+    END IF;
+END$$;
 
 CREATE TABLE IF NOT EXISTS public.underwriting_data (
   id SERIAL PRIMARY KEY,
