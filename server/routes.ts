@@ -21,6 +21,7 @@ import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
 import contractsRouter from "./routes/contracts";
 import customersRouter from "./routes/customers";
+import underwritingRouter from "./routes/underwriting";
 
 function objectMetadata<T>(data: T): string {
   if (!data) return JSON.stringify({});
