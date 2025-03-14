@@ -1740,11 +1740,27 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       // Extract webhook signature from headers for verification
       const webhookSignature = req.headers["x-signature"] as string;
       const webhookTimestamp = req.headers["x-timestamp"] as string;
-
+  
       // Get the webhook secret from environment variables
       const webhookSecret = process.env.DIDIT_WEBHOOK_SECRET_KEY;
-
-      // Log the receipt of webhook
+  
+      // Log the complete webhook data for debugging
+      logger.info({
+        message: `DiDit Webhook - Complete Data`,
+        category: "api",
+        source: "didit",
+        metadata: {
+          fullBody: req.body,
+          headers: {
+            signature: webhookSignature,
+            timestamp: webhookTimestamp,
+            contentType: req.headers['content-type'],
+            userAgent: req.headers['user-agent']
+          }
+        },
+      });
+  
+      // Log the receipt of webhook (original log)
       logger.info({
         message: `Received DiDit webhook event`,
         category: "api",
@@ -1755,22 +1771,22 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           body: req.body,
         },
       });
-
+  
       // Verify the webhook signature if we have the secret
       let isVerified = false;
-
+  
       if (webhookSecret && webhookSignature && req.body) {
         try {
           // Store the raw body for signature verification
           const rawBody = JSON.stringify(req.body);
-
+  
           // Create HMAC signature using the webhook secret
           const hmac = crypto.createHmac("sha256", webhookSecret);
           const expectedSignature = hmac.update(rawBody).digest("hex");
-
+  
           // Verify the signature
           isVerified = expectedSignature === webhookSignature;
-
+  
           logger.info({
             message: `DiDit webhook signature verification: ${isVerified ? "success" : "failed"}`,
             category: "api",
@@ -1780,7 +1796,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               receivedSignature: webhookSignature,
             },
           });
-
+  
           // Verify the timestamp is recent (within 5 minutes)
           if (isVerified && webhookTimestamp) {
             const currentTime = Math.floor(Date.now() / 1000);
@@ -1811,11 +1827,11 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           isVerified = false;
         }
       }
-
+  
       // Extract key information from the webhook
       const { event_type, session_id, status, decision, vendor_data } =
         req.body;
-
+  
       // Parse vendor_data to extract contractId
       let contractId = null;
       try {
@@ -1831,7 +1847,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           metadata: { vendor_data },
         });
       }
-
+  
       logger.info({
         message: `Processing DiDit webhook for contract ${contractId}, session ${session_id}`,
         category: "api",
@@ -1843,7 +1859,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           isVerified,
         },
       });
-
+  
       if (!contractId) {
         logger.warn({
           message: "Missing contractId in DiDit webhook vendor_data",
@@ -1856,7 +1872,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           message: "Webhook received but no contractId found",
         });
       }
-
+  
       // Handle verification.completed event
       if (
         event_type === "verification.completed" ||
@@ -1872,38 +1888,39 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
             contractId,
             status,
             decisionStatus: decision?.status,
+            decisionDetails: decision, // Log complete decision object
           },
         });
-
+  
         // Check if verification was approved
         const isApproved =
           decision?.status === "approved" ||
           status === "Approved" ||
           status === "approved" ||
           status === "completed";
-
+  
         try {
           // Get the contract to find the associated customer
           const contract = await storage.getContract(parseInt(contractId));
           if (!contract) {
             throw new Error(`Contract ${contractId} not found`);
           }
-
+  
           // Ensure the contract has a customerId - this is critical for KYC flow
           if (!contract.customerId || contract.phoneNumber) {
             if (contract.phoneNumber) {
               const normalizedPhone = contract.phoneNumber.replace(/\D/g, '');
-
+  
               logger.info({
                 message: `Looking up user by phone number for contract ${contractId}`,
                 category: "api",
                 source: "didit",
                 metadata: { contractId, phoneNumber: normalizedPhone },
               });
-
+  
               // Find existing user first to prevent duplicate users
               let user = await storage.getUserByPhone(normalizedPhone);
-
+  
               // If no user exists, create one
               if (!user) {
                 user = await storage.findOrCreateUserByPhone(normalizedPhone);
@@ -1921,7 +1938,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   metadata: { contractId, userId: user.id },
                 });
               }
-
+  
               if (user) {
                 // Update the contract with the user ID
                 await storage.updateContractCustomerId(parseInt(contractId), user.id);
@@ -1931,13 +1948,13 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   source: "didit",
                   metadata: { contractId, userId: user.id },
                 });
-
+  
                 // Create an authentication record for this user and contract
                 await storage.createLog({
                   level: "info",
                   message: `KYC authentication established for user ${user.id} via phone ${normalizedPhone}`,
                   category: "security",
-                  source: "kyc",
+                  source: "didit", // Changed from "kyc" to "didit"
                   userId: user.id,
                   metadata: JSON.stringify({
                     contractId,
@@ -1955,7 +1972,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               });
             }
           }
-
+  
           // Find the KYC step in the application progress
           const applicationProgress =
             await storage.getApplicationProgressByContractId(
@@ -1964,12 +1981,23 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           const kycStep = applicationProgress.find(
             (step) => step.step === "kyc",
           );
-
+  
           if (kycStep) {
             if (isApproved) {
               // Get any customer details from the verification if available
               const customerDetails = decision?.kyc || {};
-
+  
+              // Log the customer details
+              logger.info({
+                message: `DiDit customer details for contract ${contractId}`,
+                category: "api",
+                source: "didit",
+                metadata: {
+                  contractId,
+                  customerDetails,
+                },
+              });
+  
               // Mark the KYC step as completed
               await storage.updateApplicationProgressCompletion(
                 kycStep.id,
@@ -1986,21 +2014,29 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   completedVia: "webhook",
                 }),
               );
-
+  
               // Get the updated contract info after potential user assignment
               const updatedContract = await storage.getContract(parseInt(contractId));
-
+  
               // Move the contract to the next step
               if (updatedContract && updatedContract.currentStep === "kyc") {
                 await storage.updateContractStep(parseInt(contractId), "bank");
+                
+                // Log step advancement
+                logger.info({
+                  message: `Advanced contract ${contractId} from KYC to bank step`,
+                  category: "contract",
+                  source: "didit",
+                  metadata: { contractId, previousStep: "kyc", newStep: "bank" },
+                });
               }
-
+  
               // Update user information if we have customer details
               if (updatedContract && (customerDetails.first_name || customerDetails.last_name)) {
                 try {
                   // First check if we have a customerId on the contract
                   let userIdToUpdate = updatedContract.customerId;
-
+  
                   // If no customerId but we have a phone number, find or create a user
                   if (!userIdToUpdate && updatedContract.phoneNumber) {
                     logger.info({
@@ -2009,15 +2045,15 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                       source: "didit",
                       metadata: { contractId: updatedContract.id }
                     });
-
+  
                     // Find or create user by phone number
                     const user = await storage.findOrCreateUserByPhone(updatedContract.phoneNumber);
-
+  
                     if (user) {
                       // Update the contract with the user ID
                       await storage.updateContractCustomerId(updatedContract.id, user.id);
                       userIdToUpdate = user.id;
-
+  
                       logger.info({
                         message: `Linked contract ${updatedContract.id} to user ${user.id} by phone ${updatedContract.phoneNumber}`,
                         category: "api",
@@ -2026,7 +2062,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                       });
                     }
                   }
-
+  
                   // Now update the user name if we have a user ID
                   if (userIdToUpdate) {
                     // Update user's name based on KYC verification
@@ -2035,7 +2071,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                       customerDetails.first_name,
                       customerDetails.last_name
                     );
-
+  
                     logger.info({
                       message: `Updated user ${userIdToUpdate} name information from KYC data`,
                       category: "api",
@@ -2067,10 +2103,11 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   });
                 }
               }
-
+  
               logger.info({
                 message: `KYC verification approved for contract ${contractId}`,
                 category: "contract",
+                source: "didit", // Added source to maintain consistency
                 metadata: { 
                   contractId, 
                   kycStepId: kycStep.id,
@@ -2090,10 +2127,11 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   reason: "Verification declined or incomplete",
                 }),
               );
-
+  
               logger.warn({
                 message: `KYC verification failed for contract ${contractId}`,
                 category: "contract",
+                source: "didit", // Added source to maintain consistency
                 metadata: {
                   contractId,
                   kycStepId: kycStep.id,
@@ -2105,6 +2143,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
             logger.error({
               message: `Could not find KYC step for contract ${contractId}`,
               category: "contract",
+              source: "didit", // Added source to maintain consistency
               metadata: { contractId, applicationProgress },
             });
           }
@@ -2135,7 +2174,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           metadata: { sessionId: session_id, contractId },
         });
       }
-
+  
       // Always respond with 200 OK to acknowledge receipt of the webhook
       return res.status(200).json({ status: "success" });
     } catch (error) {
@@ -2147,7 +2186,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           error: error instanceof Error ? error.stack : null,
         },
       });
-
+  
       // Always return 200 to prevent DiDit from retrying (prevents duplicate processing)
       return res.status(200).json({
         status: "error",
@@ -2155,7 +2194,6 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
     }
   });
-
   // API Key verification endpoints
   apiRouter.get("/verify-api-keys", async (req: Request, res: Response) => {
     try {

@@ -1,284 +1,297 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { ShieldCheck, Check } from "lucide-react";
 
-/**
- * KYC Verification Component
- * Handles both states of KYC verification:
- * 1. Not yet verified - Shows verification button
- * 2. Already verified - Shows verified status
- */
-const KYCVerification = ({
+interface KycVerificationProps {
+  contractId: number;
+  progressId: number;
+  onComplete: () => void;
+  onBack: () => void;
+}
+
+export default function KycVerification({
   contractId,
-  phoneNumber,
-  onVerificationComplete,
-}) => {
-  const [loading, setLoading] = useState(true);
-  const [kycStatus, setKycStatus] = useState({
-    alreadyVerified: false,
-    verificationInProgress: false,
-    kycData: null,
-    error: null,
-  });
+  progressId,
+  onComplete,
+  onBack,
+}: KycVerificationProps) {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [step, setStep] = useState<
+    "instructions" | "verifying_external" | "complete"
+  >("instructions");
+  const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const verificationWindowRef = useRef<Window | null>(null);
 
-  // Function to check KYC status
-  const checkKycStatus = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch("/api/kyc/check-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ contractId, phoneNumber }),
-      });
+  // Check verification status periodically when waiting for external verification
+  useEffect(() => {
+    if (!sessionId || step !== "verifying_external") return;
 
-      const data = await response.json();
+    const checkVerificationStatus = async () => {
+      try {
+        // Get the current KYC progress for this contract
+        const kycProgressResponse = await apiRequest<{
+          id: number;
+          contractId: number;
+          step: string;
+          completed: boolean;
+          data: string | null;
+        }>("GET", `/api/application-progress/kyc/${contractId}`);
 
-      if (data.success) {
-        // If KYC is already verified, get the KYC progress data
-        if (data.alreadyVerified) {
-          await getKycProgress();
+        if (kycProgressResponse?.completed) {
+          console.log("Verification completed, detected via polling");
+          setStep("complete");
+          // Wait a moment then move to next step
+          setTimeout(onComplete, 2000);
         }
-
-        setKycStatus((prevState) => ({
-          ...prevState,
-          alreadyVerified: data.alreadyVerified,
-          error: null,
-        }));
-      } else {
-        throw new Error(data.message || "Failed to check KYC status");
+      } catch (error) {
+        console.error("Error checking verification status:", error);
       }
-    } catch (error) {
-      console.error("Error checking KYC status:", error);
-      setKycStatus((prevState) => ({
-        ...prevState,
-        error: error.message,
-      }));
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  // Function to fetch KYC progress data
-  const getKycProgress = async () => {
-    try {
-      const response = await fetch(
-        `/api/application-progress/kyc/${contractId}`,
-      );
-      if (response.ok) {
-        const kycData = await response.json();
-        setKycStatus((prevState) => ({
-          ...prevState,
-          kycData,
-          // Only consider verification complete if kycData shows completed = true
-          alreadyVerified: kycData.completed === true,
-        }));
+    // Check every 5 seconds
+    const intervalId = setInterval(checkVerificationStatus, 5000);
 
-        // If KYC is completed, notify parent component
-        if (onVerificationComplete) {
-          // First notify parent of completion
-          onVerificationComplete(kycData);
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [sessionId, step, contractId, onComplete]);
 
-          // Then start Plaid flow if verification is complete
-          if (kycData.completed) {
-            // Allow UI to update before proceeding
-            setTimeout(() => {
-              window.location.href = `/apply/${contractId}/plaid`;
-            }, 1000);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching KYC progress:", error);
-    }
-  };
-
-  // Function to start verification process
+  // Start the verification process
   const startVerification = async () => {
     try {
-      setKycStatus((prevState) => ({
-        ...prevState,
-        verificationInProgress: true,
-        error: null,
-      }));
+      setIsLoading(true);
 
-      const response = await fetch("/api/kyc/create-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ contractId, phoneNumber }),
+      // Get the current KYC progress for this contract
+      const kycProgressResponse = await apiRequest<{
+        id: number;
+        contractId: number;
+        step: string;
+        completed: boolean;
+        data: string | null;
+      }>("GET", `/api/application-progress/kyc/${contractId}`);
+
+      if (!kycProgressResponse || !kycProgressResponse.id) {
+        throw new Error("Could not find KYC progress for this contract");
+      }
+
+      const kycProgressId = kycProgressResponse.id;
+
+      // If verification is already completed, go to the next step
+      if (kycProgressResponse.completed) {
+        console.log("KYC already completed, moving to next step");
+        setStep("complete");
+        setTimeout(onComplete, 1000);
+        setIsLoading(false);
+        return;
+      }
+
+      // Call our API endpoint to create a DiDit verification session
+      const response = await apiRequest<{
+        success: boolean;
+        session: {
+          session_id: string;
+          session_url?: string;
+          url?: string;
+          status: string;
+        };
+      }>("POST", "/api/kyc/create-session", {
+        contractId,
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        if (data.alreadyVerified) {
-          // If already verified from another contract, just update our status
-          await forceCompleteVerification();
-        } else if (data.session?.session_url) {
-          // Open verification in a new window
-          const verificationWindow = window.open(
-            data.session.session_url,
-            "_blank",
-            "width=600,height=800",
-          );
-
-          // Handle window closing or verification completing
-          const checkWindowClosed = setInterval(async () => {
-            if (!verificationWindow || verificationWindow.closed) {
-              clearInterval(checkWindowClosed);
-
-              // After window closes, wait briefly then check status again
-              setTimeout(async () => {
-                await checkKycStatus();
-                await getKycProgress();
-
-                setKycStatus((prevState) => ({
-                  ...prevState,
-                  verificationInProgress: false,
-                }));
-              }, 2000);
-            }
-          }, 1000);
-        }
-      } else {
-        throw new Error(
-          data.message || "Failed to create verification session",
-        );
+      if (!response?.success || !response.session) {
+        throw new Error("Failed to create verification session");
       }
+
+      const { session } = response;
+
+      // Get the verification URL from either url or session_url property
+      const sessionUrl = session.url || session.session_url;
+
+      if (!sessionUrl) {
+        throw new Error("No verification URL provided in session response");
+      }
+
+      // Store the session ID and URL
+      setSessionId(session.session_id);
+      setVerificationUrl(sessionUrl);
+
+      // Update application progress to track that verification has started
+      await apiRequest("PATCH", `/api/application-progress/${kycProgressId}`, {
+        completed: false,
+        data: JSON.stringify({
+          verificationStarted: new Date().toISOString(),
+          sessionId: session.session_id,
+          sessionUrl: sessionUrl,
+        }),
+      });
+
+      // Show verification in progress
+      setStep("verifying_external");
+
+      // Open the verification URL in a new window
+      console.log("Opening verification URL:", sessionUrl);
+      const verificationWindow = window.open(
+        sessionUrl,
+        "_blank",
+        "width=500,height=600",
+      );
+
+      // Check if the window opened successfully
+      if (
+        !verificationWindow ||
+        verificationWindow.closed ||
+        typeof verificationWindow.closed === "undefined"
+      ) {
+        toast({
+          title: "Popup Blocked",
+          description:
+            "Please allow popups for this site and try again, or click the button below to open verification.",
+          variant: "destructive",
+        });
+      } else {
+        verificationWindowRef.current = verificationWindow;
+      }
+
+      setIsLoading(false);
     } catch (error) {
       console.error("Error starting verification:", error);
-      setKycStatus((prevState) => ({
-        ...prevState,
-        verificationInProgress: false,
-        error: error.message,
-      }));
+      toast({
+        title: "Verification Error",
+        description:
+          "Could not start the identity verification process. Please try again.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
     }
   };
-
-  // Function to manually force completion of verification (for debugging or admin use)
-  const forceCompleteVerification = async () => {
-    try {
-      const response = await fetch(
-        `/api/application-progress/kyc/${contractId}`,
-      );
-      if (response.ok) {
-        const kycData = await response.json();
-
-        // Mark KYC as completed
-        const updateResponse = await fetch(
-          `/api/application-progress/${kycData.id}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              completed: true,
-              data: JSON.stringify({
-                verified: true,
-                verifiedAt: new Date().toISOString(),
-                forcedCompletion: true,
-              }),
-            }),
-          },
-        );
-
-        if (updateResponse.ok) {
-          const updatedKycData = await updateResponse.json();
-          setKycStatus((prevState) => ({
-            ...prevState,
-            alreadyVerified: true,
-            kycData: updatedKycData,
-            verificationInProgress: false,
-          }));
-
-          // Update contract step to next step
-          await fetch(`/api/contracts/${contractId}/step`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              step: "bank",
-            }),
-          });
-
-          // Notify parent component
-          if (onVerificationComplete) {
-            onVerificationComplete(updatedKycData);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error forcing verification completion:", error);
-    }
-  };
-
-  // Check KYC status on component mount
-  useEffect(() => {
-    checkKycStatus();
-    getKycProgress();
-
-    // Set up polling to check status periodically (every 5 seconds)
-    const statusPoll = setInterval(() => {
-      if (!kycStatus.alreadyVerified && !kycStatus.verificationInProgress) {
-        getKycProgress();
-      }
-    }, 5000);
-
-    return () => clearInterval(statusPoll);
-  }, [contractId]);
-
-  // Render differently based on verification status
-  if (loading) {
-    return (
-      <div className="kyc-verification loading">
-        <p>Checking verification status...</p>
-      </div>
-    );
-  }
-
-  if (kycStatus.alreadyVerified) {
-    return (
-      <div className="kyc-verification verified">
-        <div className="success-icon">✓</div>
-        <h3>Identity Verified</h3>
-        <p>Your identity has been successfully verified.</p>
-        {onVerificationComplete && (
-          <button
-            onClick={() => onVerificationComplete(kycStatus.kycData)}
-            className="btn btn-primary"
-          >
-            Continue to Next Step
-          </button>
-        )}
-      </div>
-    );
-  }
 
   return (
-    <div className="kyc-verification">
-      <h3>Identity Verification Required</h3>
-      <p>We need to verify your identity to proceed with your application.</p>
+    <div className="flex flex-col items-center space-y-6 max-w-lg mx-auto">
+      {/* Instructions Step */}
+      {step === "instructions" && (
+        <div className="w-full space-y-6">
+          <div className="bg-primary/5 rounded-lg p-6 border border-primary/20">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-primary/10 rounded-full">
+                <ShieldCheck className="h-6 w-6 text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold">Identity Verification</h2>
+            </div>
 
-      {kycStatus.error && (
-        <div className="error-message">
-          <p>Error: {kycStatus.error}</p>
+            <p className="text-sm text-gray-600 mb-4">
+              We need to verify your identity before proceeding with your
+              financing application. This process is secure and typically takes
+              less than 2 minutes.
+            </p>
+
+            <div className="space-y-3 mb-4">
+              <div className="flex items-start space-x-3">
+                <div className="p-1 bg-primary/10 rounded-full mt-0.5">
+                  <Check className="h-4 w-4 text-primary" />
+                </div>
+                <p className="text-sm">
+                  You'll need a valid government-issued ID (driver's license,
+                  passport, or national ID)
+                </p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="p-1 bg-primary/10 rounded-full mt-0.5">
+                  <Check className="h-4 w-4 text-primary" />
+                </div>
+                <p className="text-sm">
+                  You'll need to take a photo of your face to match with your ID
+                </p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="p-1 bg-primary/10 rounded-full mt-0.5">
+                  <Check className="h-4 w-4 text-primary" />
+                </div>
+                <p className="text-sm">
+                  This verification is provided by DiDit, our secure identity
+                  verification partner
+                </p>
+              </div>
+            </div>
+
+            <div className="flex space-x-2 pt-4">
+              <Button variant="outline" onClick={onBack}>
+                Back
+              </Button>
+              <Button onClick={startVerification} disabled={isLoading}>
+                {isLoading ? "Starting Verification..." : "Start Verification"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
-      <button
-        onClick={startVerification}
-        disabled={kycStatus.verificationInProgress}
-        className="btn btn-primary"
-      >
-        {kycStatus.verificationInProgress
-          ? "Verification in Progress..."
-          : "Start Verification"}
-      </button>
+      {/* External Verification Step */}
+      {step === "verifying_external" && (
+        <div className="w-full space-y-6">
+          <div className="bg-primary/5 rounded-lg p-6 border border-primary/20 text-center">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="p-4 bg-primary/10 rounded-full">
+                <ShieldCheck className="h-10 w-10 text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold">Identity Verification</h2>
+              <p className="text-sm text-gray-600">
+                We've opened the verification page in a new window. Please
+                complete the verification process there.
+              </p>
+              <p className="text-sm text-gray-600">
+                If the verification window was blocked or you closed it, you can
+                open it again with the button below.
+              </p>
+              <Button
+                onClick={() => {
+                  if (verificationUrl) {
+                    const newWindow = window.open(
+                      verificationUrl,
+                      "_blank",
+                      "width=500,height=600",
+                    );
+                    verificationWindowRef.current = newWindow;
+                  }
+                }}
+                disabled={!verificationUrl}
+              >
+                Open Verification Window
+              </Button>
+              <div className="border-t border-gray-200 w-full pt-4 mt-4">
+                <p className="text-sm text-gray-500">
+                  After completing verification, you'll be automatically
+                  redirected back to continue your application.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Step */}
+      {step === "complete" && (
+        <div className="w-full space-y-6">
+          <div className="bg-primary/5 rounded-lg p-6 border border-primary/20 text-center">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="p-4 bg-green-100 rounded-full">
+                <Check className="h-10 w-10 text-green-500" />
+              </div>
+              <h2 className="text-xl font-semibold">Verification Complete</h2>
+              <p className="text-sm text-gray-600">
+                Your identity has been successfully verified. You may now
+                proceed with your application.
+              </p>
+              <p className="text-sm text-green-500 font-medium">
+                Moving to the next step automatically...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
-
-export default KYCVerification;
+}
