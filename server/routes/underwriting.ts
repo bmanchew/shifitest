@@ -77,10 +77,10 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
     logger.error({
       message: `Error fetching underwriting data: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
-      metadata: JSON.stringify({
+      metadata: {
         contractId: req.params.contractId,
         error: error instanceof Error ? error.stack : null
-      })
+      }
     });
     
     res.status(500).json({
@@ -125,33 +125,31 @@ underwritingRouter.get("/user/:userId", async (req: Request, res: Response) => {
     }
     
     // Filter data based on role
-    let filteredData = underwritingData;
-    if (role !== 'admin') {
-      filteredData = underwritingData.map(data => {
-        // Extract only the fields that should be visible to merchants and customers
-        const { 
-          id, 
-          userId, 
-          contractId, 
-          creditTier, 
-          creditScore,
-          totalPoints,
-          createdAt, 
-          updatedAt 
-        } = data;
-        
-        return { 
-          id, 
-          userId, 
-          contractId, 
-          creditTier, 
-          creditScore,
-          totalPoints,
-          createdAt, 
-          updatedAt 
-        };
-      });
-    }
+    const filteredData = role === 'admin' ? underwritingData : underwritingData.map(data => ({
+      id: data.id,
+      userId: data.userId,
+      contractId: data.contractId,
+      creditTier: data.creditTier,
+      creditScore: data.creditScore,
+      totalPoints: data.totalPoints,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      // Including all required fields with null values for type safety
+      annualIncome: null,
+      annualIncomePoints: null,
+      employmentHistoryMonths: null,
+      employmentHistoryPoints: null,
+      creditScorePoints: null,
+      dtiRatio: null,
+      dtiRatioPoints: null,
+      housingStatus: null,
+      housingPaymentHistory: null,
+      housingStatusPoints: null,
+      delinquencyHistory: null,
+      delinquencyPoints: null,
+      rawPreFiData: null,
+      rawPlaidData: null
+    }));
     
     // Return the data
     res.json({
@@ -163,10 +161,10 @@ underwritingRouter.get("/user/:userId", async (req: Request, res: Response) => {
     logger.error({
       message: `Error fetching underwriting data: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
-      metadata: JSON.stringify({
+      metadata: {
         userId: req.params.userId,
         error: error instanceof Error ? error.stack : null
-      })
+      }
     });
     
     res.status(500).json({
@@ -225,10 +223,10 @@ underwritingRouter.post("/process/:contractId", async (req: Request, res: Respon
     logger.error({
       message: `Error processing underwriting: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
-      metadata: JSON.stringify({
+      metadata: {
         contractId: req.params.contractId,
         error: error instanceof Error ? error.stack : null
-      })
+      }
     });
     
     res.status(500).json({

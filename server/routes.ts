@@ -3918,6 +3918,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   apiRouter.use("/admin/reports", reportsRouter);
   apiRouter.use("/admin", adminReportsRouter);
 
+  // Mount the underwriting router
+  apiRouter.use("/underwriting", underwritingRouter);
+
   // Mount the contracts router
   apiRouter.use("/contracts", contractsRouter);
 
