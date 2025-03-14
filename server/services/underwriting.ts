@@ -104,13 +104,22 @@ export class UnderwritingService {
       // Get user data to retrieve KYC info
       const userData = await this.getUserData(userId);
       
-      if (!userData || !userData.ssn || !userData.firstName || !userData.lastName || !userData.dob) {
+      if (!userData || !userData.ssn || !userData.firstName || !userData.lastName || !userData.dob || !userData.address) {
+        const missingFields = [];
+        if (!userData) missingFields.push('userData');
+        if (!userData?.ssn) missingFields.push('ssn');
+        if (!userData?.firstName) missingFields.push('firstName');
+        if (!userData?.lastName) missingFields.push('lastName');
+        if (!userData?.dob) missingFields.push('dob');
+        if (!userData?.address) missingFields.push('address');
+        
         logger.error({
           message: `Missing required KYC data for user ${userId}`,
           category: 'underwriting',
-          userId
+          userId,
+          missingFields
         });
-        throw new Error('Missing required KYC data for credit check');
+        throw new Error(`Missing required KYC data for credit check: ${missingFields.join(', ')}`);
       }
       
       // Call the Pre-Fi API to get real credit data
@@ -120,12 +129,20 @@ export class UnderwritingService {
         userData.lastName,
         userData.dob,
         {
-          street: userData.address?.street,
-          city: userData.address?.city,
-          state: userData.address?.state,
-          zip: userData.address?.zip
+          street: userData.address.street,
+          city: userData.address.city,
+          state: userData.address.state,
+          zip: userData.address.zip
         }
       );
+
+      logger.info({
+        message: 'Successfully retrieved PreFi credit report',
+        category: 'underwriting',
+        userId,
+        hasData: !!creditReport,
+        creditScore: creditReport?.creditScore
+      });
       
       return {
         creditScore: creditReport.creditScore,
