@@ -194,8 +194,7 @@ export class UnderwritingService {
         }
       });
 
-      // Wait for the asset report to be ready (this might take a few seconds)
-      // In a production environment, you might want to implement a webhook or polling
+      // Wait for the asset report to be ready with retries
       logger.info({
         message: `Created Plaid asset report, waiting for processing`,
         category: 'underwriting',
@@ -203,13 +202,29 @@ export class UnderwritingService {
         assetReportToken: assetReportResponse.assetReportToken,
       });
 
-      // Add a small delay to ensure the report is processed
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      let retries = 0;
+      let analysis = null;
+      while (retries < 5) {
+        try {
+          analysis = await plaidService.analyzeAssetReportForUnderwriting(
+            assetReportResponse.assetReportToken
+          );
+          if (analysis) break;
+        } catch (error) {
+          logger.warn({
+            message: `Attempt ${retries + 1} to get asset report failed, retrying...`,
+            category: 'underwriting',
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay between retries
+          retries++;
+        }
+      }
 
-      // Analyze the asset report for underwriting
-      const analysis = await plaidService.analyzeAssetReportForUnderwriting(
-        assetReportResponse.assetReportToken
-      );
+      if (!analysis) {
+        throw new Error('Failed to generate Plaid asset report after multiple retries');
+      }
 
       logger.info({
         message: `Analyzed Plaid asset report for underwriting`,
@@ -236,16 +251,14 @@ export class UnderwritingService {
         error: error instanceof Error ? error.stack : null,
       });
       
-      // Return default values in case of error
-      // In production, you might want to fail the underwriting process
-      return {
-        income: 0,
-        employmentMonths: 0,
-        dtiRatio: 0,
-        housingStatus: 'unknown',
-        housingPaymentHistoryMonths: 0,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      // Fail the underwriting process if we can't get valid Plaid data
+      logger.error({
+        message: `Critical error getting Plaid data for underwriting`,
+        category: 'underwriting',
+        userId,
+        error: error instanceof Error ? error.stack : String(error),
+      });
+      throw new Error('Failed to retrieve required financial data from Plaid');
     }
   }
   
