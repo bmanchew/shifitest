@@ -237,3 +237,31 @@ underwritingRouter.post("/process/:contractId", async (req: Request, res: Respon
 });
 
 export default underwritingRouter;
+underwritingRouter.post("/prefi-check", async (req: Request, res: Response) => {
+  try {
+    const { userId, ssn, firstName, lastName, dob, address } = req.body;
+    
+    const creditReport = await preFiService.getCreditReport(
+      ssn,
+      firstName, 
+      lastName,
+      dob,
+      address
+    );
+
+    return res.json({
+      success: true,
+      data: creditReport
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error running PreFi check`,
+      category: 'underwriting',
+      error: error instanceof Error ? error.stack : String(error)
+    });
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
