@@ -646,6 +646,157 @@ class PlaidService {
       return false;
     }
   }
+
+  /**
+   * Analyze asset report data for underwriting purposes
+   * Extracts key financial metrics used in credit decisioning
+   */
+  async analyzeAssetReportForUnderwriting(assetReportToken: string): Promise<any> {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    try {
+      logger.info({
+        message: "Analyzing Plaid asset report for underwriting",
+        category: "api",
+        source: "plaid",
+        metadata: { assetReportToken },
+      });
+
+      // Fetch the asset report with insights for better analysis
+      const assetReport = await this.getAssetReport(assetReportToken, true);
+      const report = assetReport.report;
+
+      if (!report || !report.items || report.items.length === 0) {
+        throw new Error("Asset report contains no items");
+      }
+
+      // Extract key financial metrics
+      const accounts = report.items.flatMap(item => item.accounts || []);
+      
+      // Calculate income estimate (monthly income * 12)
+      const incomeStreams = report.items
+        .flatMap(item => item.income_streams || [])
+        .filter(stream => stream.confidence > 0.5);
+      
+      const monthlyIncome = incomeStreams.reduce((sum, stream) => sum + (stream.monthly_income || 0), 0);
+      const annualIncome = monthlyIncome * 12;
+      
+      // Extract employment data from income streams
+      const employmentMonths = Math.max(
+        ...incomeStreams.map(stream => stream.days / 30),
+        0
+      );
+      
+      // Calculate debt-to-income ratio
+      const totalDebt = accounts
+        .filter(account => account.type === 'loan' || account.type === 'credit')
+        .reduce((sum, account) => {
+          // For credit accounts, use balance as debt
+          if (account.type === 'credit') {
+            return sum + (account.balances.current || 0);
+          }
+          
+          // For loan accounts, use outstanding balance
+          return sum + (account.balances.current || 0);
+        }, 0);
+      
+      const dtiRatio = monthlyIncome > 0 ? totalDebt / (monthlyIncome * 12) : 0;
+      
+      // Analyze housing status
+      const housingAccount = accounts.find(account => 
+        account.name.toLowerCase().includes('mortgage') || 
+        account.name.toLowerCase().includes('rent') ||
+        account.subtype === 'mortgage'
+      );
+      
+      let housingStatus = 'unknown';
+      let paymentHistoryMonths = 0;
+      
+      if (housingAccount) {
+        if (housingAccount.subtype === 'mortgage') {
+          housingStatus = 'mortgage';
+        } else if (housingAccount.name.toLowerCase().includes('rent')) {
+          housingStatus = 'rent';
+        }
+        
+        // Estimate payment history from transaction data
+        const paymentCount = report.items
+          .flatMap(item => item.transactions || [])
+          .filter(transaction => 
+            transaction.name.toLowerCase().includes('mortgage') || 
+            transaction.name.toLowerCase().includes('rent')
+          ).length;
+          
+        paymentHistoryMonths = Math.min(Math.ceil(paymentCount), 24); // Cap at 24 months
+      }
+      
+      // Construct the analysis object with all metrics
+      const analysis = {
+        income: {
+          annualIncome,
+          monthlyIncome,
+          incomeStreams: incomeStreams.length,
+          confidence: incomeStreams.length > 0 
+            ? incomeStreams.reduce((sum, stream) => sum + stream.confidence, 0) / incomeStreams.length
+            : 0
+        },
+        employment: {
+          employmentMonths,
+          hasStableIncome: employmentMonths >= 12 && monthlyIncome > 0
+        },
+        debt: {
+          totalDebt,
+          dtiRatio
+        },
+        housing: {
+          housingStatus,
+          paymentHistoryMonths,
+          hasStableHousing: paymentHistoryMonths >= 6
+        },
+        accounts: {
+          totalAccounts: accounts.length,
+          loansCount: accounts.filter(account => account.type === 'loan').length,
+          creditCount: accounts.filter(account => account.type === 'credit').length,
+          depository: accounts.filter(account => account.type === 'depository').length,
+        },
+        balances: {
+          totalBalance: accounts.reduce((sum, account) => sum + (account.balances.current || 0), 0),
+          availableFunds: accounts
+            .filter(account => account.type === 'depository')
+            .reduce((sum, account) => sum + (account.balances.available || 0), 0)
+        }
+      };
+      
+      logger.info({
+        message: "Completed Plaid asset report analysis for underwriting",
+        category: "api",
+        source: "plaid",
+        metadata: { 
+          analysisMetrics: {
+            income: analysis.income.annualIncome,
+            dti: analysis.debt.dtiRatio,
+            employmentMonths: analysis.employment.employmentMonths
+          }
+        },
+      });
+      
+      return analysis;
+    } catch (error) {
+      logger.error({
+        message: `Failed to analyze asset report: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          assetReportToken,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+      
+      throw error;
+    }
+  }
 }
 
 export const plaidService = new PlaidService();
