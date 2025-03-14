@@ -142,10 +142,10 @@ export class DatabaseStorage implements IStorage {
     return newUser;
   }
 
-  async findOrCreateUserByPhone(phone: string): Promise<User> {
+  async findOrCreateUserByPhone(phone: string, email?: string): Promise<User> {
     // Normalize phone number by removing non-digits
     const normalizedPhone = phone.replace(/\D/g, '');
-
+  
     // First, try to find the user by normalized phone
     const existingUser = await this.getUserByPhone(normalizedPhone);
     if (existingUser) {
@@ -154,16 +154,30 @@ export class DatabaseStorage implements IStorage {
         await db.update(users)
           .set({ phone: normalizedPhone })
           .where(eq(users.id, existingUser.id));
-
-        // Return the updated user
+  
+        // Return the updated user with updated phone
         return { ...existingUser, phone: normalizedPhone };
       }
+      
+      // If email is provided and user has a default email, update it
+      if (email && existingUser.email && existingUser.email.includes('@shifi.com')) {
+        await db.update(users)
+          .set({ email })
+          .where(eq(users.id, existingUser.id));
+          
+        // Return the user with updated email
+        return { ...existingUser, email };
+      }
+      
       return existingUser;
     }
-
-    // If not found, create a new user with temporary data
-    // The user can update these fields later during the application process
-    const tempEmail = `temp_${normalizedPhone}@shifi.com`;
+  
+    // If not found, create a new user with provided email or generate a unique one
+    // Generate a unique temporary email with timestamp to avoid collisions
+    const timestamp = Date.now();
+    const tempEmail = email || `temp_${normalizedPhone}_${timestamp}@shifi.com`;
+    
+    // Create the new user
     const newUser: InsertUser = {
       email: tempEmail,
       password: Math.random().toString(36).substring(2, 15), // temporary password
@@ -171,7 +185,7 @@ export class DatabaseStorage implements IStorage {
       role: 'customer',
       name: `Customer ${normalizedPhone}`,
     };
-
+  
     return await this.createUser(newUser);
   }
 

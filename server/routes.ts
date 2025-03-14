@@ -610,54 +610,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+
   // Add this route to handle creation of application progress items
-  apiRouter.post(
-    "/application-progress",
-    async (req: Request, res: Response) => {
-      try {
-        const { contractId, step, completed, data } = req.body;
-
-        if (!contractId || !step) {
-          return res.status(400).json({
-            message: "Contract ID and step are required",
-          });
-        }
-
-        // Verify the contract exists
-        const contract = await storage.getContract(parseInt(contractId));
-        if (!contract) {
-          return res.status(404).json({
-            message: "Contract not found",
-          });
-        }
-
-        // Create the application progress item
-        const progressItem = await storage.createApplicationProgress({
-          contractId: parseInt(contractId),
-          step: step,
-          completed: !!completed,
-          data: data || null,
-        });
-
-        // Log the creation
-        await storage.createLog({
-          level: "info",
-          category: "contract",
-          message: `Application progress created for contract ${contractId}, step ${step}`,
-          metadata: JSON.stringify({
-            contractId,
-            step,
-            completed: !!completed,
-          }),
-        });
-
-        res.status(201).json(progressItem);
-      } catch (error) {
-        console.error("Create application progress error:", error);
-        res.status(500).json({ message: "Internal server error" });
-      }
-    },
-  );
+apiRouter.post("/application-progress", async (req: Request, res: Response) => {
+  try {
+    const { contractId, step, completed, data } = req.body;
+    
+    if (!contractId || !step) {
+      return res.status(400).json({ 
+        message: "Contract ID and step are required" 
+      });
+    }
+    
+    // Verify the contract exists
+    const contract = await storage.getContract(parseInt(contractId));
+    if (!contract) {
+      return res.status(404).json({ 
+        message: "Contract not found" 
+      });
+    }
+    
+    // Create the application progress item
+    const progressItem = await storage.createApplicationProgress({
+      contractId: parseInt(contractId),
+      step: step,
+      completed: !!completed,
+      data: data || null
+    });
+    
+    // Log the creation
+    await storage.createLog({
+      level: "info",
+      category: "contract",
+      message: `Application progress created for contract ${contractId}, step ${step}`,
+      metadata: JSON.stringify({ 
+        contractId, 
+        step, 
+        completed: !!completed 
+      })
+    });
+    
+    res.status(201).json(progressItem);
+  } catch (error) {
+    console.error("Create application progress error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
   // Log routes
   apiRouter.get("/logs", async (req: Request, res: Response) => {
@@ -681,161 +679,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
-
-  // Application sending endpoint (alias for send-sms)
-  apiRouter.post("/send-application", async (req: Request, res: Response) => {
-    // Forward to send-sms endpoint with appropriate parameter mapping
+  // Log routes
+  apiRouter.get("/logs", async (req: Request, res: Response) => {
     try {
-      const { phoneNumber, customerName, amount, term } = req.body;
+      const { userId } = req.query;
 
-      // Log the incoming request
-      logger.info({
-        message: `Processing send-application request`,
-        category: "api",
-        source: "application",
-        metadata: JSON.stringify({ 
-          phoneNumber, 
-          customerName,
-          amount 
-        })
-      });
-
-      // Prepare data for the SMS endpoint
-      const smsData = {
-        phoneNumber,
-        merchantId: req.body.merchantId || 1, // Default to merchant ID 1 if not provided
-        amount
-      };
-
-      // Call the SMS sending logic
-      const result = await twilioService.sendSMS({
-        to: phoneNumber,
-        body: `You've been invited to apply for financing of $${amount}. Visit our application to continue.`
-      });
-
-      // Create a contract for this financing request
-      const contractNumber = generateContractNumber();
-      const termMonths = term || 24; // Use provided term or default to 24 months
-      const interestRate = 0; // 0% APR
-      const downPaymentPercent = 15; // 15% down payment
-      const downPayment = amount * (downPaymentPercent / 100);
-      const financedAmount = amount - downPayment;
-      const monthlyPayment = financedAmount / termMonths;
-
-      // Find or create a user for this phone number
-      // First normalize the phone number to a standard format (remove non-digits)
-      const normalizedPhone = phoneNumber.replace(/\D/g, '');
-
-      let customer = await storage.getUserByPhone(normalizedPhone);
-
-      // If user doesn't exist, create a new one
-      if (!customer) {
-        customer = await storage.findOrCreateUserByPhone(normalizedPhone);
-        logger.info({
-          message: `Created new user for phone number ${normalizedPhone}`,
-          category: "api",
-          source: "application",
-          metadata: JSON.stringify({ userId: customer.id })
-        });
+      let logs;
+      if (userId) {
+        const id = parseInt(userId as string);
+        if (isNaN(id)) {
+          return res.status(400).json({ message: "Invalid user ID format" });
+        }
+        logs = await storage.getLogsByUserId(id);
       } else {
-        logger.info({
-          message: `Found existing user for phone number ${normalizedPhone}`,
-          category: "api",
-          source: "application",
-          metadata: JSON.stringify({ userId: customer.id })
-        });
+        logs = await storage.getLogs();
       }
 
-      // Update customer name if provided
-      if (customerName && customer) {
-        const nameParts = customerName.trim().split(' ');
-        const firstName = nameParts[0];
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-
-        await storage.updateUserName(customer.id, firstName, lastName);
-      }
-
-      // Create a new contract
-      const contract = await storage.createContract({
-        contractNumber,
-        merchantId: smsData.merchantId,
-        customerId: customer.id,
-        amount,
-        downPayment,
-        financedAmount,
-        termMonths,
-        interestRate,
-        monthlyPayment,
-        status: "pending",
-        currentStep: "terms",
-        phoneNumber: normalizedPhone
-      });
-
-      // Create application progress for all steps of this contract
-      const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
-      
-      for (const step of applicationSteps) {
-        await storage.createApplicationProgress({
-          contractId: contract.id,
-          step: step as any,
-          completed: false,
-          data: null,
-        });
-        
-        // Log the creation of each step
-        console.log(`Created application progress for contract ${contract.id}, step ${step}`);
-      }
-
-      // Get the application base URL from Replit
-      const replitDomain = getAppDomain();
-      const applicationUrl = `https://${replitDomain}/apply/${contract.id}`;
-
-      // Create log for application creation
-      await storage.createLog({
-        level: "info",
-        category: "api",
-        source: "application",
-        message: `Application created for ${phoneNumber}`,
-        metadata: JSON.stringify({
-          contractId: contract.id,
-          amount,
-          customerName,
-          applicationUrl
-        }),
-      });
-
-      res.json({ 
-        success: true, 
-        message: "Application sent successfully", 
-        contractId: contract.id,
-        applicationUrl
-      });
+      res.json(logs);
     } catch (error) {
-      console.error("Send application error:", error);
-
-      // Create error log
-      await storage.createLog({
-        level: "error",
-        category: "api",
-        source: "application",
-        message: `Failed to send application: ${error instanceof Error ? error.message : String(error)}`,
-        metadata: JSON.stringify({
-          error: error instanceof Error ? error.stack : null,
-        }),
-      });
-
-      res.status(500).json({ success: false, message: "Internal server error" });
+      console.error("Get logs error:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
-  // SMS endpoint using Twilio API
+  
   apiRouter.post("/send-sms", async (req: Request, res: Response) => {
     try {
       // Check if this is a test SMS from admin panel
       if (req.body.phone && req.body.isTest) {
         // This is a test request from the admin API verification
         console.log(`Processing test SMS to ${req.body.phone}`);
-
+  
         // Create test log entry
         await storage.createLog({
           level: "info",
@@ -844,13 +718,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: `Test SMS to ${req.body.phone}`,
           metadata: JSON.stringify(req.body),
         });
-
+  
         // Send a real test message via Twilio service
         const testResult = await twilioService.sendSMS({
           to: req.body.phone,
           body: "This is a test message from ShiFi. Your API verification was successful.",
         });
-
+  
         // Return appropriate response
         return res.json({
           success: true,
@@ -863,22 +737,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: testResult.isSimulated ? "simulated" : "delivered",
         });
       }
-
+  
       // Regular SMS flow
-      const { phoneNumber, merchantId, amount } = req.body;
-
+      const { phoneNumber, merchantId, amount, email } = req.body;
+  
       if (!phoneNumber || !merchantId || !amount) {
         return res.status(400).json({
           message: "Phone number, merchant ID, and amount are required",
         });
       }
-
+  
       // Get merchant
       const merchant = await storage.getMerchant(parseInt(merchantId));
       if (!merchant) {
         return res.status(404).json({ message: "Merchant not found" });
       }
-
+  
       // Create a contract for this financing request
       const contractNumber = generateContractNumber();
       const termMonths = 24; // Fixed term
@@ -887,7 +761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const downPayment = amount * (downPaymentPercent / 100);
       const financedAmount = amount - downPayment;
       const monthlyPayment = financedAmount / termMonths;
-
+  
       console.log("Creating contract with:", {
         contractNumber,
         merchantId,
@@ -898,21 +772,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         interestRate,
         monthlyPayment,
       });
-
-      // Find or create a user for this phone number
-      let customer = await storage.getUserByPhone(phoneNumber);
-
-      // If user doesn't exist, create a new one
-      if (!customer) {
-        customer = await storage.findOrCreateUserByPhone(phoneNumber);
-        logger.info({
-          message: `Created new user for phone number ${phoneNumber}`,
-          category: "api", 
-          source: "twilio",
-          metadata: JSON.stringify({ userId: customer.id })
-        });
-      }
-
+  
+      // Find or create a user for this phone number, passing in the email
+      const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
+      
+      logger.info({
+        message: `User for contract: ${customer.id}`,
+        category: "api", 
+        source: "twilio",
+        metadata: JSON.stringify({ 
+          userId: customer.id,
+          email: customer.email,
+          phone: customer.phone 
+        })
+      });
+  
       // Create a new contract
       const newContract = await storage.createContract({
         contractNumber,
@@ -928,7 +802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentStep: "terms",
         phoneNumber: phoneNumber, // Store the phone number directly in the contract
       });
-
+  
       // Create application progress for all steps of this contract
       const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
       
@@ -943,21 +817,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Log the creation of each step
         console.log(`Created application progress for contract ${newContract.id}, step ${step}`);
       }
-
+  
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
-
+  
       // Prepare the SMS message
       const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
-
+  
       try {
         // Send SMS using our Twilio service
         const result = await twilioService.sendSMS({
           to: phoneNumber,
           body: messageText,
         });
-
+  
         if (result.isSimulated) {
           console.log(`Simulated SMS to ${phoneNumber}: ${messageText}`);
         } else if (result.success) {
@@ -972,7 +846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Twilio service error:", twilioError);
         throw twilioError;
       }
-
+  
       // Create log for SMS sending
       await storage.createLog({
         level: "info",
@@ -983,13 +857,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           merchantId,
           amount,
           contractId: newContract.id,
+          customerEmail: customer.email
         }),
       });
-
-      res.json({ success: true, message: "SMS sent successfully" });
+  
+      res.json({ 
+        success: true, 
+        message: "SMS sent successfully",
+        contractId: newContract.id,
+        applicationUrl
+      });
     } catch (error) {
       console.error("Send SMS error:", error);
-
+  
       // Create error log
       await storage.createLog({
         level: "error",
@@ -997,14 +877,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         source: "twilio",
         message: `Failed to send SMS: ${error instanceof Error ? error.message : String(error)}`,
         metadata: JSON.stringify({
-          error: error instanceof Error ? errorstack : null,
+          error: error instanceof Error ? error.stack : null,
         }),
       });
-
+  
       res.status(500).json({ message: "Internal server error" });
     }
   });
-
   // KYC verification status checking endpoint
   apiRouter.post("/kyc/check-status", async (req: Request, res: Response) => {
     try {
@@ -1174,154 +1053,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Verify the contract exists and get associated user
-      const contract = await storage.getContract(parseInt(contractId));
-      if (!contract) {
-        return res.status(404).json({
-          success: false,
-          message: "Contract not found",
-        });
-      }
-
-      // Ensure we have a customer ID associated with the contract
-      if (!contract.customerId) {
-        return res.status(400).json({
-          success: false,
-          message: "No customer associated with this contract",
-        });
-      }
-
-      // Check if the user has already completed KYC verification
-      const existingKycVerifications = await storage.getCompletedKycVerificationsByUserId(contract.customerId);
-
-      // If user has already completed KYC in any contract, mark this contract's KYC as completed too
-      if (existingKycVerifications.length > 0) {
-        logger.info({
-          message: `User ${contract.customerId} has already completed KYC, skipping verification`,
-          category: "api",
-          source: "didit",
-          metadata: {
-            contractId,
-            userId: contract.customerId,
-            existingVerifications: existingKycVerifications.length,
-            verificationDetails: existingKycVerifications.map(v => ({
-              contractId: v.contractId,
-              completed: v.completed,
-              step: v.step
-            }))
-          }
-        });
-
-        // Get existing KYC progress for this contract
-        const kycProgress = await storage.getApplicationProgressByContractIdAndStep(
-          parseInt(contractId),
-          "kyc"
-        );
-
-        // If no progress record exists for this contract, create one
-        if (!kycProgress) {
-          // Create a new KYC progress record for this contract
-          const newProgress = await storage.createApplicationProgress({
-            contractId: parseInt(contractId),
-            step: "kyc",
-            completed: true,
-            data: JSON.stringify({
-              verified: true,
-              verifiedAt: new Date().toISOString(),
-              completedVia: "existing_verification",
-              userId: contract.customerId,
-              message: "Verification recognized from previous contract",
-              originalVerificationContractId: existingKycVerifications[0].contractId
-            })
-          });
-          
-          logger.info({
-            message: `Created new completed KYC progress record for contract ${contractId}`,
-            category: "api",
-            source: "didit",
-            metadata: {
-              contractId,
-              userId: contract.customerId,
-              progressId: newProgress.id
-            }
-          });
-          
-          // Advance the contract to the next step if still on kyc
-          if (contract.currentStep === "kyc") {
-            await storage.updateContractStep(parseInt(contractId), "bank");
-          }
-        }
-        // If we have a progress record but it's not marked as completed, update it
-        else if (!kycProgress.completed) {
-          await storage.updateApplicationProgress(kycProgress.id, {
-            completed: true,
-            data: JSON.stringify({
-              verified: true,
-              verifiedAt: new Date().toISOString(),
-              completedVia: "existing_verification",
-              userId: contract.customerId,
-              message: "Verification recognized from previous contract",
-              originalVerificationContractId: existingKycVerifications[0].contractId
-            })
-          });
-
-          // After marking KYC as complete, advance the contract to the next step if still on kyc
-          if (contract.currentStep === "kyc") {
-            await storage.updateContractStep(parseInt(contractId), "bank");
-          }
-        }
-
-        // Return success with the existing verification data
-        return res.json({
-          success: true,
-          alreadyVerified: true,
-          message: "User has already completed KYC verification",
-          userId: contract.customerId,
-          verificationCount: existingKycVerifications.length
-        });
-      }
-
-      // Ensure this request is authorized for this contract
-      // Check if we have a phone number in the request that matches the contract
-      const { phoneNumber } = req.body;
-
-      // Log phone number info for debugging
-      logger.info({
-        message: `Phone number validation check for KYC session request`,
-        category: "api",
-        source: "kyc",
-        metadata: {
-          contractId,
-          userId: contract.customerId,
-          requestPhone: phoneNumber,
-          contractPhone: contract.phoneNumber,
-          requestPhoneNormalized: phoneNumber ? phoneNumber.replace(/\D/g, '') : null,
-          contractPhoneNormalized: contract.phoneNumber ? contract.phoneNumber.replace(/\D/g, '') : null
-        }
-      });
-
-      if (phoneNumber && contract.phoneNumber && 
-          phoneNumber.replace(/\D/g, '') !== contract.phoneNumber.replace(/\D/g, '')) {
-        logger.warn({
-          message: `Unauthorized KYC session request for contract ${contractId}`,
-          category: "security",
-          source: "kyc",
-          metadata: {
-            contractId,
-            userId: contract.customerId,
-            requestPhone: phoneNumber,
-            contractPhone: contract.phoneNumber,
-            requestPhoneNormalized: phoneNumber.replace(/\D/g, ''),
-            contractPhoneNormalized: contract.phoneNumber.replace(/\D/g, '')
-          }
-        });
-
-        return res.status(403).json({
-          success: false,
-          message: "Unauthorized access to this contract. Phone number mismatch.",
-        });
-      }
-
       // Get the domain for callback URLs
       const domain = getAppDomain();
 
@@ -1382,188 +1113,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         session: sessionData,
       });
     } catch (error) {
-      // Capture detailed error information
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : 'No stack trace';
-
       logger.error({
-        message: `Failed to create KYC verification session: ${errorMessage}`,
-        category: "api",
-        source: "didit",
-        metadata: {
-          contractId,
-          phoneNumber: req.body.phoneNumber,
-          error: errorStack,
-          errorDetails: JSON.stringify(error)
-        },
-      });
-
-      // Return a more informative error message
-      res.status(500).json({
-        success: false,
-        message: `Failed to create verification session: ${errorMessage}`,
-        details: process.env.NODE_ENV === 'production' ? undefined : errorStack
-      });
-    }
-  });
-
-  // DiDit mock KYC verification UI - this simulates the DiDit verification page
-  apiRouter.get("/mock/didit-kyc", async (req: Request, res: Response) => {
-    try {
-      const { sessionId, contractId } = req.query;
-
-      if (!sessionId || !contractId) {
-        return res.status(400).send("Missing required parameters");
-      }
-
-      // Get the application URL for messaging back to the parent window
-      const appUrl = `https://${getAppDomain()}`;
-
-      // Log access to the mock verification page
-      logger.info({
-        message: `Accessing mock DiDit verification page`,
-        category: "api",
-        source: "didit",
-        metadata: {
-          sessionId: String(sessionId),
-          contractId: String(contractId),
-          appUrl,
-        },
-      });
-
-      // Return an HTML page that simulates the DiDit KYC verification UI
-      res.setHeader("Content-Type", "text/html");
-      return res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>DiDit Verification</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; color: #333; }
-            .container { max-width: 800px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(to right, #4776E6, #8E54E9); color: white; padding: 20px; text-align: center; }
-            .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
-            .step { display: none; padding: 20px; }
-            .step.active { display: block; }
-            .button { background: linear-gradient(to right, #4776E6, #8E54E9); border: none; color: white; padding: 10px 20px; 
-                      border-radius: 4px; font-size: 16px; cursor: pointer; margin-top: 20px; }
-            .center { text-align: center; }
-            .success-icon { font-size: 48px; color: #4CAF50; margin: 20px 0; }
-            .progress-bar { height: 5px; background: #eee; margin: 20px 0; }
-            .progress-bar-inner { height: 100%; background: linear-gradient(to right, #4776E6, #8E54E9); width: 0; transition: width 0.3s; }
-            .image-capture { border: 2px dashed #ccc; padding: 20px; text-align: center; margin: 15px 0; }
-            .help-text { font-size: 14px; color: #666; margin: 5px 0; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo">DiDit Identity Verification</div>
-            <div>Contract #${contractId} | Session ID: ${sessionId}</div></div>
-          <div class="container">
-            <div class="progress-bar">
-              <div class="progress-bar-inner" id="progress"></div>
-            </div>
-
-            <div class="step active" id="step1">
-              <h2>Welcome to DiDit Identity Verification</h2>
-              <p>We'll guide you through a simple identity verification process to confirm you are who you say you are.</p>
-              <p>You'll need to:</p>
-              <ol>
-                <li>Take a photo of your ID document (passport, driver's license, or ID card)</li>
-                <li>Take a selfie to match with your document photo</li>
-              </ol>
-              <p>This should take less than 2 minutes to complete.</p>
-              <div class="center">
-                <button class="button" onclick="nextStep(1, 2)">Start Verification</button>
-              </div>
-            </div>
-
-            <div class="step" id="step2">
-              <h2>Document Verification</h2>
-              <p>Please take a clear photo of your identification document.</p>
-              <div class="image-capture">
-                <p><strong>Upload or capture your ID document</strong></p>
-                <p class="help-text">Make sure all text is clearly visible and not blurry</p>
-                <input type="file" accept="image/*" capture="environment" id="docImage">
-              </div>
-              <div class="center">
-                <button class="button" onclick="nextStep(2, 3)">Continue</button>
-              </div>
-            </div>
-
-            <div class="step" id="step3">
-              <h2>Selfie Verification</h2>
-              <p>Now let's take a selfie to match with your document photo.</p>
-              <div class="image-capture">
-                <p><strong>Take a selfie</strong></p>
-                <p class="help-text">Make sure your face is clearly visible with good lighting</p>
-                <input type="file" accept="image/*" capture="user" id="selfieImage">
-              </div>
-              <div class="center">
-                <button class="button" onclick="nextStep(3, 4)">Continue</button>
-              </div>
-            </div>
-
-            <div class="step" id="step4">
-              <h2>Processing Your Verification</h2>
-              <p class="center">Please wait while we process your identity verification...</p>
-              <div class="center">
-                <div class="success-icon" id="loading">⏳</div>
-              </div>
-
-              <script>
-                // Simulate a successful verification after a short delay
-                setTimeout(function() {
-                  document.getElementById('loading').innerHTML = "✅";
-                  document.getElementById('step4').innerHTML += '<h3 class="center">Verification Successful!</h3><p class="center">Your identity has been verified successfully.</p><div class="center"><button class="button" onclick="completeVerification()">Return to Application</button></div>';
-
-                  // Send a simulated webhook notification to our application
-                  fetch('/api/kyc/webhook', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      event_type: 'verification.completed',
-                      session_id: '${sessionId}',
-                      status: 'approved',
-                      decision: {
-                        status: 'approved'
-                      },
-                      vendor_data: '${contractId}',
-                      customer_details: {
-                        first_name: 'John',
-                        last_name: 'Doe'
-                      }
-                    })
-                  });
-                }, 3000);
-              </script>
-            </div>
-          </div>
-
-          <script>
-            // Update progress bar as user moves through steps
-            function nextStep(current, next) {
-              document.getElementById('step' + current).classList.remove('active');
-              document.getElementById('step' + next).classList.add('active');
-              document.getElementById('progress').style.width = (next * 25) + '%';
-            }
-
-            // Redirect back to the application when verification is complete
-            function completeVerification() {
-              window.opener ? window.opener.postMessage('verification_complete', '*') : null;
-              window.parent.postMessage('verification_complete', '*');
-              window.location.href = '/customer/application';
-            }
-          </script>
-        </body>
-      </html>
-      `);
-    } catch (error) {
-      logger.error({
-        message: `Error serving mock DiDit verification page: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to create KYC verification session: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         source: "didit",
         metadata: {
@@ -1571,187 +1122,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      res.status(500).send("An error occurred");
+      res.status(500).json({
+        success: false,
+        message: "Failed to create verification session",
+      });
     }
   });
 
-  // DiDit KYC - Legacy test endpoint - for admin API verification
-  apiRouter.post("/mock/didit-kyc", async (req: Request, res: Response) => {
-    try {
-      // Check if this is a test request from the admin panel
-      if (req.body.firstName && req.body.lastName && req.body.email) {
-        // This is a test request from the admin API verification
-        console.log("Processing test KYC verification request");
-
-        // Create test log entry
-        await storage.createLog({
-          level: "info",
-          category: "api",
-          source: "didit",
-          message: `Test KYC verification for ${req.body.firstName} ${req.body.lastName}`,
-          metadata: JSON.stringify(req.body),
-        });
-
-        // Return success for test with DiDit-like response format
-        const sessionId =
-          "session_" + Math.random().toString(36).substring(2, 15);
-        return res.json({
-          status: "completed",
-          session_id: sessionId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          decision: {
-            status: "approved",
-            verification_result: "pass",
-            reason: "All verification checks passed successfully",
-            score: 0.95,
-            verification_id:
-              "vid_" + Math.floor(10000000 + Math.random() * 90000000),
-          },
-          customer_details: {
-            first_name: req.body.firstName,
-            last_name: req.body.lastName,
-            email: req.body.email,
-            dob: req.body.dob || "1990-01-01",
-            address: {
-              line1: "123 Main St",
-              city: "New York",
-              state: "NY",
-              postal_code: "10001",
-              country: "US",
-            },
-          },
-        });
-      }
-
-      // Regular contract flow
-      const { contractId, documentImage, selfieImage } = req.body;
-
-      if (!contractId || !documentImage || !selfieImage) {
-        return res.status(400).json({
-          status: "error",
-          error_code: "missing_required_fields",
-          error_message:
-            "Contract ID, document image, and selfie image are required",
-          request_id: "req_" + Math.random().toString(36).substring(2, 15),
-        });
-      }
-
-      // Get the domain for callback URLs
-      const domain = getAppDomain();
-      const callbackUrl = `https://${domain}/api/kyc/webhook`;
-
-      let sessionData = null;
-
-      // Check if DiDit service is initialized with credentials
-      if (diditService.isInitialized()) {
-        try {
-          // Use our DiDit service to create a real verification session
-          console.log("Using DiDit service for KYC verification");
-
-          // Create verification session
-          sessionData = await diditService.createVerificationSession({
-            contractId,
-            callbackUrl,
-            allowedDocumentTypes: ["passport", "driving_license", "id_card"],
-            allowedChecks: ["ocr", "face", "document_liveness", "aml"],
-            requiredFields: [
-              "first_name",
-              "last_name",
-              "date_of_birth",
-              "document_number",
-            ],
-          });
-
-          if (sessionData) {
-            console.log(
-              `DiDit verification session created: ${sessionData.session_id}`,
-            );
-          } else {
-            console.warn(
-              "Could not create DiDit verification session, falling back to simulation",
-            );
-          }
-        } catch (diditError) {
-          console.error("DiDit API error:", diditError);
-          // Log the error but continue with simulation
-          await storage.createLog({
-            level: "error",
-            category: "api",
-            source: "didit",
-            message: `Failed to create verification session: ${diditError instanceof Error ? diditError.message : String(diditError)}`,
-            metadata: JSON.stringify({
-              contractId,
-              error:
-                diditError instanceof Error
-                  ? diditError.stack
-                  : String(diditError),
-            }),
-          });
-        }
-      } else {
-        console.warn(
-          "DiDit service not initialized, falling back to simulation",
-        );
-      }
-
-      // Create log for KYC verification
-      await storage.createLog({
-        level: "info",
-        category: "api",
-        source: "didit",
-        message: `KYC verification for contract ${contractId}`,
-        metadata: JSON.stringify({ contractId }),
-      });
-
-      // Generate a unique session ID in UUID format
-      const sessionId =
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15);
-
-      // If we have a real session from DiDit, use that data
-      if (sessionData) {
-        // Return the real session data from DiDit
-        res.json(sessionData);
-      } else {
-        // Simulate successful API response with proper DiDit format matching their documentation
-        setTimeout(() => {
-          const response = {
-            session_id: sessionId,
-            session_number: Math.floor(10000 + Math.random() * 90000),
-            session_url: `https://verify.didit.me/session/${sessionId}`,
-            vendor_data: contractId.toString(),
-            callback: `https://${getAppDomain()}/api/kyc/webhook`,
-            features: "OCR + FACE + AML",
-            created_at: new Date().toISOString(),
-            status: "created",
-            expires_at: new Date(
-              Date.now() + 24 * 60 * 60 * 1000,
-            ).toISOString(), // 24 hours from now
-          };
-
-          res.json(response);
-        }, 1000); // Simulate API delay
-      }
-    } catch (error) {
-      console.error("KYC verification error:", error);
-
-      // Create error log
-      await storage.createLog({
-        level: "error",
-        category: "api",
-        source: "didit",
-        message: `Failed KYC verification: ${error instanceof Error ? error.message : String(error)}`,
-        metadata: JSON.stringify({
-          error: error instanceof Error ? error.stack : null,
-        }),
-      });
-
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
+ 
 
   // Thanks Roger contract signing endpoint
   // Thanks Roger contract signing endpoint with authentication
