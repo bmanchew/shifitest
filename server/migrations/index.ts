@@ -1,4 +1,3 @@
-
 import { migrateName } from "./name-to-first-last-name";
 import { logger } from "../services/logger";
 
@@ -8,9 +7,9 @@ export async function runMigrations() {
       message: "Starting database migrations",
       category: "system",
     });
-    
+
     await migrateName();
-    
+
     logger.info({
       message: "Database migrations completed successfully",
       category: "system",

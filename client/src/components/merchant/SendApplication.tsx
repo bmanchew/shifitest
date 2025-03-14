@@ -23,6 +23,7 @@ export default function SendApplication() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState(""); // New state for email
   const [amount, setAmount] = useState("");
   const [showCalculator, setShowCalculator] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -72,6 +73,7 @@ export default function SendApplication() {
         },
         body: JSON.stringify({
           phoneNumber,
+          email, // Include email in the request
           merchantId,
           amount: parseFloat(amount),
         }),
@@ -93,6 +95,7 @@ export default function SendApplication() {
 
       // Reset form fields
       setPhoneNumber("");
+      setEmail(""); // Reset email field
       setAmount("");
       setShowCalculator(false);
     } catch (error) {
@@ -150,6 +153,22 @@ export default function SendApplication() {
                 />
                 <p className="text-xs text-muted-foreground">
                   The customer will receive a text message with a link to apply
+                </p>
+              </div>
+
+              {/* New Email Field */}
+              <div className="grid gap-2">
+                <Label htmlFor="customer-email">Customer Email</Label>
+                <Input
+                  id="customer-email"
+                  type="email"
+                  placeholder="customer@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-10"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional: The customer will also receive an email with the application
                 </p>
               </div>
 
