@@ -1,6 +1,8 @@
 // End-to-end test script for the underwriting API
-const axios = require('axios');
-const baseUrl = 'http://localhost:3000/api';
+import axios from 'axios';
+// Use the current hostname which will work in Replit
+const hostname = window?.location?.hostname || (typeof location !== 'undefined' ? location.hostname : 'localhost');
+const baseUrl = `https://${hostname}/api`;
 
 // Constants
 const API_ENDPOINT = `${baseUrl}/underwriting`;
