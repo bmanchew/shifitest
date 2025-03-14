@@ -8,7 +8,7 @@ class PreFiService {
   
   constructor() {
     this.apiKey = process.env.PREFI_API_KEY || '';
-    this.apiBaseUrl = 'https://api.prefi.com/v2'; // Replace with actual API base URL
+    this.apiBaseUrl = 'https://pre-fi.com/api/v2';
     
     if (!this.apiKey) {
       logger.warn({
