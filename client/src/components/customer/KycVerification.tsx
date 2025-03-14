@@ -74,8 +74,17 @@ const KYCVerification = ({
         }));
 
         // If KYC is completed, notify parent component
-        if (kycData.completed && onVerificationComplete) {
+        if (onVerificationComplete) {
+          // First notify parent of completion
           onVerificationComplete(kycData);
+
+          // Then start Plaid flow if verification is complete
+          if (kycData.completed) {
+            // Allow UI to update before proceeding
+            setTimeout(() => {
+              window.location.href = `/apply/${contractId}/plaid`;
+            }, 1000);
+          }
         }
       }
     } catch (error) {
