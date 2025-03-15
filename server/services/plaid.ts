@@ -61,6 +61,19 @@ interface PlaidPlatformPaymentParams {
   metadata?: Record<string, string>;
 }
 
+// Custom types for Plaid API responses
+export interface PlaidOriginator {
+  originator_id: string;
+  company_name: string;
+  status: string;
+  created_at: string;
+  // Add other properties as needed
+}
+
+export interface PlaidDetailedOriginator extends PlaidOriginator {
+  // Additional fields for detailed originator
+}
+
 class PlaidService {
   private client: PlaidApi | null = null;
   private initialized = false;

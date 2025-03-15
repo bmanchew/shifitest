@@ -3628,9 +3628,12 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       const merchants = await storage.getAllMerchants();
       
       // Get all Plaid merchants from our database
-      const existingPlaidMerchants = await storage.getPlaidMerchantsByStatus('pending')
-        .concat(await storage.getPlaidMerchantsByStatus('in_progress'))
-        .concat(await storage.getPlaidMerchantsByStatus('completed'));
+      const pendingMerchants = await storage.getPlaidMerchantsByStatus('pending');
+      const inProgressMerchants = await storage.getPlaidMerchantsByStatus('in_progress');
+      const completedMerchants = await storage.getPlaidMerchantsByStatus('completed');
+      
+      // Combine all merchants into one array
+      const existingPlaidMerchants = [...pendingMerchants, ...inProgressMerchants, ...completedMerchants];
       
       const syncResults = {
         success: true,
@@ -3643,8 +3646,11 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         details: [] as any[],
       };
       
+      // Import PlaidOriginator type
+      const { PlaidOriginator } = await import('./services/plaid');
+      
       // Process each originator from Plaid
-      for (const originator of plaidOriginators) {
+      for (const originator of plaidOriginators as PlaidOriginator[]) {
         try {
           // Check if we already have this originator in our database
           const existingRecord = existingPlaidMerchants.find(
