@@ -3551,6 +3551,109 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
     }
   });
+  
+  // Get merchant onboarding status
+  apiRouter.get("/plaid/merchant/:merchantId/onboarding-status", async (req: Request, res: Response) => {
+    try {
+      const { merchantId } = req.params;
+      
+      if (!merchantId) {
+        return res.status(400).json({
+          success: false,
+          message: "merchantId is required"
+        });
+      }
+      
+      // Import storage to get merchant details
+      const { storage } = await import('./storage');
+      
+      // Get the plaid merchant record
+      const plaidMerchant = await storage.getPlaidMerchantByMerchantId(parseInt(merchantId));
+      
+      if (!plaidMerchant) {
+        return res.status(404).json({
+          success: false,
+          message: "Plaid merchant not found"
+        });
+      }
+      
+      // If we have an originatorId, get the real-time status from Plaid
+      if (plaidMerchant.originatorId) {
+        try {
+          const status = await plaidService.getMerchantOnboardingStatus(plaidMerchant.originatorId);
+          
+          logger.info({
+            message: `Retrieved Plaid merchant onboarding status for merchant ${merchantId}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              merchantId,
+              originatorId: plaidMerchant.originatorId,
+              status: status.status
+            }
+          });
+          
+          return res.json({
+            success: true,
+            merchantId: parseInt(merchantId),
+            onboardingStatus: status.status,
+            originatorId: status.originatorId,
+            originatorName: status.originatorName,
+            createdAt: status.createdAt,
+            updatedAt: plaidMerchant.updatedAt,
+            hasBankAccountLinked: !!plaidMerchant.accountId
+          });
+        } catch (error) {
+          // If we get an error from Plaid, return the stored status
+          logger.warn({
+            message: `Failed to get real-time status from Plaid, returning stored status: ${error instanceof Error ? error.message : String(error)}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              merchantId,
+              originatorId: plaidMerchant.originatorId,
+              storedStatus: plaidMerchant.onboardingStatus
+            }
+          });
+          
+          return res.json({
+            success: true,
+            merchantId: parseInt(merchantId),
+            onboardingStatus: plaidMerchant.onboardingStatus,
+            originatorId: plaidMerchant.originatorId,
+            updatedAt: plaidMerchant.updatedAt,
+            hasBankAccountLinked: !!plaidMerchant.accountId,
+            fromStoredData: true
+          });
+        }
+      } else {
+        // If no originatorId, return the stored status
+        return res.json({
+          success: true,
+          merchantId: parseInt(merchantId),
+          onboardingStatus: plaidMerchant.onboardingStatus,
+          updatedAt: plaidMerchant.updatedAt,
+          hasBankAccountLinked: !!plaidMerchant.accountId,
+          fromStoredData: true
+        });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error getting merchant onboarding status: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          merchantId: req.params.merchantId,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+      
+      return res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Failed to get merchant onboarding status"
+      });
+    }
+  });
 
   // Create merchant onboarding link
   apiRouter.post("/plaid/merchant/onboarding", async (req: Request, res: Response) => {
