@@ -1167,6 +1167,15 @@ class PlaidService {
       
       for (const merchant of onboardedMerchants) {
         try {
+          if (!merchant.accessToken) {
+            logger.warn({
+              message: `Merchant ${merchant.merchantId} has no access token`,
+              category: "api",
+              source: "plaid",
+            });
+            continue;
+          }
+
           // Check if the merchant's accounts are still active
           const accountsResponse = await this.client.accountsGet({
             access_token: merchant.accessToken
@@ -1180,14 +1189,21 @@ class PlaidService {
           );
           
           if (hasTransferCapability) {
-            activeMerchants.push({
+            // Create merchant object with only required fields and TypeScript safety
+            const merchantData: any = {
               merchantId: merchant.merchantId,
               plaidMerchantId: merchant.id,
-              accessToken: merchant.accessToken,
-              accountId: merchant.accountId,
-              defaultFundingAccount: merchant.defaultFundingAccount,
-              institutionName: merchant.institutionName
-            });
+              accessToken: merchant.accessToken || '', 
+              accountId: merchant.accountId || '',
+              defaultFundingAccount: merchant.defaultFundingAccount || ''
+            };
+            
+            // Add institutionName if available
+            if ('institutionName' in merchant) {
+              merchantData.institutionName = merchant.institutionName;
+            }
+            
+            activeMerchants.push(merchantData);
           }
         } catch (error) {
           // If we get an error checking this merchant, log it but continue with others

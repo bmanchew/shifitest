@@ -3519,6 +3519,39 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
   });
 
   // Plaid Platform Payments Routes
+  // Get active merchants that can use Plaid for transfers
+  apiRouter.get("/plaid/active-merchants", async (req: Request, res: Response) => {
+    try {
+      // Get merchants who are active and have completed onboarding with Plaid
+      const activeMerchants = await plaidService.getActivePlaidMerchants();
+      
+      logger.info({
+        message: `Retrieved ${activeMerchants.length} active Plaid merchants`,
+        category: "api",
+        source: "plaid",
+      });
+      
+      return res.json({
+        success: true,
+        merchants: activeMerchants
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error getting active Plaid merchants: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+      
+      return res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Failed to get active merchants"
+      });
+    }
+  });
+
   // Create merchant onboarding link
   apiRouter.post("/plaid/merchant/onboarding", async (req: Request, res: Response) => {
     try {
