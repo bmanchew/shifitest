@@ -3518,6 +3518,172 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     }
   });
 
+  // Plaid Platform Payments Routes
+  // Create merchant onboarding link
+  apiRouter.post("/plaid/merchant/onboarding", async (req: Request, res: Response) => {
+    try {
+      const { merchantId, legalName, email, redirectUri } = req.body;
+
+      if (!merchantId || !legalName || !email) {
+        return res.status(400).json({
+          success: false,
+          message: "merchantId, legalName, and email are required",
+        });
+      }
+
+      const result = await plaidService.createMerchantOnboardingLink({
+        merchantId: parseInt(merchantId),
+        legalName,
+        email,
+        redirectUri,
+      });
+
+      // If the merchant is already onboarded, return that info
+      if (result.alreadyOnboarded) {
+        return res.status(200).json({
+          success: true,
+          message: "Merchant already onboarded",
+          data: result
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      console.error("Error creating merchant onboarding link:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  // Complete merchant onboarding
+  apiRouter.post("/plaid/merchant/complete-onboarding", async (req: Request, res: Response) => {
+    try {
+      const { merchantId, publicToken, accountId } = req.body;
+
+      if (!merchantId || !publicToken || !accountId) {
+        return res.status(400).json({
+          success: false,
+          message: "merchantId, publicToken, and accountId are required",
+        });
+      }
+
+      const result = await plaidService.completeMerchantOnboarding(
+        parseInt(merchantId),
+        publicToken,
+        accountId
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      console.error("Error completing merchant onboarding:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  // Create platform payment
+  apiRouter.post("/plaid/payment/platform", async (req: Request, res: Response) => {
+    try {
+      const { merchantId, contractId, amount, description, routeToShifi, metadata } = req.body;
+
+      if (!merchantId || !contractId || !amount || !description) {
+        return res.status(400).json({
+          success: false,
+          message: "merchantId, contractId, amount, and description are required",
+        });
+      }
+
+      const result = await plaidService.createPlatformPayment({
+        merchantId: parseInt(merchantId),
+        contractId: parseInt(contractId),
+        amount: parseFloat(amount),
+        description,
+        routeToShifi: Boolean(routeToShifi),
+        metadata,
+      });
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      console.error("Error creating platform payment:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  // Check platform payment status
+  apiRouter.get("/plaid/payment/:transferId/status", async (req: Request, res: Response) => {
+    try {
+      const { transferId } = req.params;
+
+      if (!transferId) {
+        return res.status(400).json({
+          success: false,
+          message: "transferId is required",
+        });
+      }
+
+      const result = await plaidService.checkPlatformPaymentStatus(transferId);
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      console.error("Error checking platform payment status:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  // Plaid merchant webhook endpoint for notifications
+  apiRouter.post("/plaid/merchant-webhook", async (req: Request, res: Response) => {
+    try {
+      const { webhook_type, webhook_code, merchant_id } = req.body;
+
+      logger.info({
+        message: `Received Plaid merchant webhook: ${webhook_type}/${webhook_code}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          webhook_type,
+          webhook_code,
+          merchant_id,
+        },
+      });
+
+      // Will need to handle different webhook types and codes
+      // For now, just acknowledge receipt
+      res.status(200).json({
+        success: true,
+        message: "Webhook received"
+      });
+    } catch (error) {
+      console.error("Error processing Plaid merchant webhook:", error);
+      // Still return 200 to acknowledge receipt to Plaid, even if we had an error processing
+      res.status(200).json({
+        success: true,
+        message: "Webhook received but encountered an error during processing"
+      });
+    }
+  });
+
   // Mount the API router
   app.use("/api", apiRouter);
 
