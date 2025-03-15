@@ -1,0 +1,89 @@
+# ShiFi Payment Processing Workflow with Plaid Platform Payments
+
+This document outlines the process for handling payments from merchant customers within the ShiFi platform, detailing the routing of funds based on whether a contract is purchased by the ShiFi Fund. It leverages Plaid's Platform Payments feature to facilitate seamless transactions.
+
+## Overview
+
+When a merchant initiates a payment, the destination of the funds depends on the status of the associated contract:
+
+- **Contract Purchased by ShiFi Fund**: Funds are routed directly to the ShiFi Fund's account.
+- **Contract Not Purchased by ShiFi Fund**: Funds are deposited into the merchant's account.
+
+Plaid's Platform Payments enables ShiFi to manage these transactions efficiently by onboarding merchants (end-customers) and facilitating fund transfers on their behalf.
+
+## Integration with Plaid Platform Payments
+
+Plaid's Platform Payments allows platforms like ShiFi to onboard end-customers and manage payments between them and their users. The integration involves the following steps:
+
+1. **Onboarding End-Customers**: Merchants are onboarded to the ShiFi platform using Plaid's Know Your Business (KYB) solution.
+2. **Linking Bank Accounts**: Merchants link their bank accounts to the ShiFi platform using Plaid Link, ensuring secure and verified connections.
+3. **Authorizing and Creating Transfers**: ShiFi initiates transfers on behalf of merchants, directing funds based on contract status.
+
+### 1. Onboarding End-Customers
+
+ShiFi must onboard merchants as end-customers using Plaid's KYB solution, which includes an out-of-the-box onboarding UI.
+
+**Process**:
+
+- **Create an End-Customer**: Call `/partner/customer/create` with `auth` specified, followed by `/partner/customer/enable`.
+- **Obtain Onboarding URL**: Call `/transfer/questionnaire/create` to generate a unique onboarding URL for the merchant.
+- **Merchant Completes Onboarding**: The merchant uses the onboarding URL to provide business details and agree to Plaid's terms.
+- **Check Onboarding Status**: Use `/transfer/originator/get` to monitor the merchant's onboarding status.
+
+**Reference**: [Plaid Transfer: Platform Payments - Onboarding End Customers](https://plaid.com/docs/transfer/platform-payments/#onboarding-end-customers)
+
+### 2. Linking Bank Accounts
+
+Once onboarded, merchants link their bank accounts through Plaid Link.
+
+**Process**:
+
+- **Initialize Link**: ShiFi generates a `link_token` by calling `/link/token/create` with the `transfer` product specified.
+- **Launch Link**: The merchant completes the Link flow, selecting and authenticating their bank account.
+- **Exchange Tokens**: Upon successful linking, ShiFi exchanges the `public_token` for an `access_token` using `/item/public_token/exchange`.
+
+**Reference**: [Plaid Transfer: Linking Accounts](https://plaid.com/docs/transfer/creating-transfers/)
+
+### 3. Authorizing and Creating Transfers
+
+ShiFi initiates transfers on behalf of merchants, specifying the `originator_client_id` to indicate the merchant for whom the transfer is being made.
+
+**Process**:
+
+- **Create Authorization**: Call `/transfer/authorization/create` with details such as `access_token`, `account_id`, `type` (credit or debit), `network` (ACH, RTP, FedNow), `amount`, and `originator_client_id`.
+- **Execute Transfer**: Call `/transfer/create` with the `authorization_id` obtained from the previous step.
+
+**Reference**: [Plaid Transfer API: Creating Transfers](https://plaid.com/docs/api/products/transfer/#transfercreate)
+
+## Routing Logic Based on Contract Status
+
+The destination of the funds is determined by the contract's purchase status:
+
+- **Contract Purchased by ShiFi Fund**:
+  - **Destination Account**: ShiFi Fund's bank account.
+  - **Process**: Funds are transferred from the merchant's account to the ShiFi Fund's account.
+
+- **Contract Not Purchased by ShiFi Fund**:
+  - **Destination Account**: Merchant's bank account.
+  - **Process**: Funds are transferred from the payer's account to the merchant's account.
+
+**Implementation**:
+
+- **Determine Contract Status**: Before initiating a transfer, check the contract's purchase status.
+- **Set Destination Account**: Based on the status, set the appropriate destination account details in the transfer authorization and creation requests.
+
+## Facilitator Fees
+
+ShiFi can collect fees per transfer by specifying the `facilitator_fee` parameter in `/transfer/create`. This fee is allocated to ShiFi's platform ledger balance.
+
+**Reference**: [Plaid Transfer: Platform Payments - Collecting Fees as a Platform](https://plaid.com/docs/transfer/platform-payments/#collecting-fees-as-a-platform)
+
+## Sample Application
+
+For a practical example of integrating Plaid Transfer, refer to Plaid's Transfer Quickstart application, which demonstrates the end-to-end flow of setting up and executing transfers.
+
+**Repository**: [Plaid Transfer Quickstart](https://github.com/plaid/transfer-quickstart)
+
+---
+
+By following the outlined processes and leveraging Plaid's Platform Payments, ShiFi can efficiently manage and route payments based on contract statuses, ensuring accurate and timely fund distribution. 
