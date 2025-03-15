@@ -54,6 +54,7 @@ interface PlaidPlatformPaymentParams {
   contractId: number;
   description: string;
   routeToShifi: boolean;
+  facilitatorFee?: number; // Optional fee that ShiFi collects as platform
   metadata?: Record<string, string>;
 }
 
@@ -1023,7 +1024,7 @@ class PlaidService {
     const { storage } = await import('../storage');
 
     try {
-      const { amount, merchantId, contractId, description, routeToShifi, metadata } = params;
+      const { amount, merchantId, contractId, description, routeToShifi, facilitatorFee, metadata } = params;
 
       logger.info({
         message: `Creating Plaid platform payment for contract ${contractId}`,
@@ -1068,17 +1069,26 @@ class PlaidService {
       }
       
       // Create a transfer intent
-      const transferIntentRequest: TransferIntentCreateRequest = {
+      const transferIntentRequest: any = {
         amount: amount.toString(),
         description,
         account_id: destination,
         user: {
           legal_name: `Contract ${contractId}`,
         },
-        mode: routeToShifi ? "PAYMENT" : "DISBURSEMENT",
-        ach_class: "ppd",
+        mode: routeToShifi ? "PAYMENT" : "DISBURSEMENT", // TransferIntentCreateMode needs casting in some versions of the SDK
+        ach_class: "ppd", // ACHClass needs casting in some versions of the SDK
         funding_account_id: destination,
       };
+      
+      // Add facilitator fee if provided (fee that ShiFi collects as a platform)
+      if (facilitatorFee && facilitatorFee > 0) {
+        // Since we're using the Plaid SDK, we'll need to cast to 'any' to add this property
+        // because it might not be in the TypeScript type definition yet
+        (transferIntentRequest as any).facilitator_fee = {
+          amount: facilitatorFee.toString()
+        };
+      }
       
       // Create the transfer intent
       const intentResponse = await this.client.transferIntentCreate(transferIntentRequest);
@@ -1093,6 +1103,7 @@ class PlaidService {
         type: routeToShifi ? "credit" : "debit",
         status: intentResponse.data.transfer_intent.status,
         routedToShifi: routeToShifi,
+        facilitatorFee: facilitatorFee,
         metadata: metadata ? JSON.stringify(metadata) : undefined
       });
 
