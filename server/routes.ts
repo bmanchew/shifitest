@@ -3595,6 +3595,172 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     }
   });
   
+  // Sync all Plaid merchants with our database
+  apiRouter.post("/plaid/merchants/sync", async (req: Request, res: Response) => {
+    try {
+      if (!plaidService.isInitialized()) {
+        return res.status(500).json({
+          success: false,
+          message: "Plaid service not initialized"
+        });
+      }
+      
+      // Import storage to handle merchant data
+      const { storage } = await import('./storage');
+      
+      logger.info({
+        message: "Starting Plaid merchant synchronization",
+        category: "api",
+        source: "plaid",
+      });
+      
+      // Get all originators from Plaid
+      const originatorListResponse = await plaidService.getClient().transferOriginatorList({});
+      const plaidOriginators = originatorListResponse.data.originators || [];
+      
+      logger.info({
+        message: `Retrieved ${plaidOriginators.length} originators from Plaid for synchronization`,
+        category: "api",
+        source: "plaid",
+      });
+      
+      // Get all merchants from our database
+      const merchants = await storage.getAllMerchants();
+      
+      // Get all Plaid merchants from our database
+      const existingPlaidMerchants = await storage.getPlaidMerchantsByStatus('pending')
+        .concat(await storage.getPlaidMerchantsByStatus('in_progress'))
+        .concat(await storage.getPlaidMerchantsByStatus('completed'));
+      
+      const syncResults = {
+        success: true,
+        total: plaidOriginators.length,
+        matched: 0,
+        new: 0,
+        updated: 0,
+        skipped: 0,
+        errors: 0,
+        details: [] as any[],
+      };
+      
+      // Process each originator from Plaid
+      for (const originator of plaidOriginators) {
+        try {
+          // Check if we already have this originator in our database
+          const existingRecord = existingPlaidMerchants.find(
+            pm => pm.originatorId === originator.originator_id
+          );
+          
+          if (existingRecord) {
+            // Update the existing record
+            syncResults.matched++;
+            
+            // Update status if different
+            if (existingRecord.onboardingStatus !== originator.status.toLowerCase()) {
+              await storage.updatePlaidMerchant(existingRecord.id, {
+                onboardingStatus: originator.status.toLowerCase() as any,
+                plaidData: JSON.stringify(originator),
+                updatedAt: new Date()
+              });
+              
+              syncResults.updated++;
+              syncResults.details.push({
+                originatorId: originator.originator_id,
+                merchantId: existingRecord.merchantId,
+                action: "updated",
+                status: originator.status
+              });
+            } else {
+              syncResults.skipped++;
+              syncResults.details.push({
+                originatorId: originator.originator_id,
+                merchantId: existingRecord.merchantId,
+                action: "skipped",
+                status: originator.status
+              });
+            }
+          } else {
+            // This is a new originator not in our database
+            // Try to match with merchant by name
+            const matchedMerchant = merchants.find(m => 
+              originator.company_name && 
+              m.name.toLowerCase().includes(originator.company_name.toLowerCase())
+            );
+            
+            if (matchedMerchant) {
+              // Create new Plaid merchant record linked to this merchant
+              const newPlaidMerchant = await storage.createPlaidMerchant({
+                merchantId: matchedMerchant.id,
+                originatorId: originator.originator_id,
+                onboardingStatus: originator.status.toLowerCase() as any,
+                plaidData: JSON.stringify(originator),
+                updatedAt: new Date()
+              });
+              
+              syncResults.new++;
+              syncResults.details.push({
+                originatorId: originator.originator_id,
+                merchantId: matchedMerchant.id,
+                action: "created",
+                status: originator.status,
+                matchedBy: "name"
+              });
+            } else {
+              // No match found, log this for manual review
+              syncResults.skipped++;
+              syncResults.details.push({
+                originatorId: originator.originator_id,
+                companyName: originator.company_name,
+                action: "skipped",
+                status: originator.status,
+                reason: "no matching merchant found"
+              });
+            }
+          }
+        } catch (error) {
+          logger.error({
+            message: `Error syncing Plaid originator ${originator.originator_id}: ${error instanceof Error ? error.message : String(error)}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              originatorId: originator.originator_id,
+              error: error instanceof Error ? error.stack : null,
+            },
+          });
+          
+          syncResults.errors++;
+          syncResults.details.push({
+            originatorId: originator.originator_id,
+            action: "error",
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+      
+      logger.info({
+        message: `Completed Plaid merchant synchronization: ${syncResults.matched} matched, ${syncResults.new} new, ${syncResults.updated} updated, ${syncResults.errors} errors`,
+        category: "api",
+        source: "plaid",
+      });
+      
+      return res.json(syncResults);
+    } catch (error) {
+      logger.error({
+        message: `Error syncing Plaid merchants: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+      
+      return res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Failed to sync merchants with Plaid"
+      });
+    }
+  });
+  
   // Get merchant onboarding status
   apiRouter.get("/plaid/merchant/:merchantId/onboarding-status", async (req: Request, res: Response) => {
     try {

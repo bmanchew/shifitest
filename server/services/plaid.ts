@@ -1191,6 +1191,27 @@ class PlaidService {
       if (plaidMerchant.onboardingStatus !== 'completed') {
         throw new Error(`Merchant ${merchantId} has not completed Plaid onboarding`);
       }
+      
+      // Determine routing destination based on:
+      // 1. The explicit routeToShifi parameter (which overrides contract status)
+      // 2. If the contract is owned by ShiFi (purchased)
+      
+      // If routeToShifi is explicitly set to true, we'll route to ShiFi regardless of contract status
+      // Otherwise, check if the contract has been purchased by ShiFi
+      const shouldRouteToShifi = routeToShifi || (contract.purchasedByShifi === true);
+      
+      logger.info({
+        message: `Determining payment routing for contract ${contractId}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          contractId,
+          merchantId,
+          routeToShifiParameter: routeToShifi,
+          contractPurchasedByShifi: contract.purchasedByShifi,
+          finalRouting: shouldRouteToShifi ? "ShiFi" : "Merchant",
+        },
+      });
 
       // Determine the destination account based on routing flag
       const destination = routeToShifi 

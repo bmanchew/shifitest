@@ -62,6 +62,7 @@ export const contracts = pgTable("contracts", {
   monthlyPayment: doublePrecision("monthly_payment").notNull(),
   status: contractStatusEnum("status").notNull().default('pending'),
   currentStep: applicationStepEnum("current_step").notNull().default('terms'),
+  purchasedByShifi: boolean("purchased_by_shifi").notNull().default(false), // Whether contract has been purchased by ShiFi Fund
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
   phoneNumber: text("phone_number"), // Store customer phone number directly in contract
