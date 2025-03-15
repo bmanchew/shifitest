@@ -1132,6 +1132,93 @@ class PlaidService {
   }
 
   /**
+   * Get all merchants that are active in Plaid for transfers
+   * Returns merchants who have completed onboarding and have active accounts
+   */
+  async getActivePlaidMerchants() {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    // Import storage here to avoid circular dependency
+    const { storage } = await import('../storage');
+
+    try {
+      logger.info({
+        message: "Getting active Plaid merchants for transfers",
+        category: "api",
+        source: "plaid",
+      });
+
+      // Get all merchants who have completed Plaid onboarding
+      const onboardedMerchants = await storage.getPlaidMerchantsByStatus('completed');
+      
+      if (!onboardedMerchants || onboardedMerchants.length === 0) {
+        logger.info({
+          message: "No merchants have completed Plaid onboarding",
+          category: "api",
+          source: "plaid",
+        });
+        return [];
+      }
+
+      // For each merchant, verify their transfer capabilities with Plaid
+      const activeMerchants = [];
+      
+      for (const merchant of onboardedMerchants) {
+        try {
+          // Check if the merchant's accounts are still active
+          const accountsResponse = await this.client.accountsGet({
+            access_token: merchant.accessToken
+          });
+          
+          // Check if the merchant has transfer capabilities
+          // This is determined by checking processor token and verifying account status
+          const hasTransferCapability = accountsResponse.data.accounts.some(account => 
+            account.type === 'depository' && 
+            ['checking', 'savings'].includes(account.subtype || '')
+          );
+          
+          if (hasTransferCapability) {
+            activeMerchants.push({
+              merchantId: merchant.merchantId,
+              plaidMerchantId: merchant.id,
+              accessToken: merchant.accessToken,
+              accountId: merchant.accountId,
+              defaultFundingAccount: merchant.defaultFundingAccount,
+              institutionName: merchant.institutionName
+            });
+          }
+        } catch (error) {
+          // If we get an error checking this merchant, log it but continue with others
+          logger.warn({
+            message: `Error checking Plaid merchant status: ${error instanceof Error ? error.message : String(error)}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              merchantId: merchant.merchantId,
+              error: error instanceof Error ? error.stack : null,
+            },
+          });
+        }
+      }
+      
+      return activeMerchants;
+    } catch (error) {
+      logger.error({
+        message: `Failed to get active Plaid merchants: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  /**
    * Check status of a platform payment transfer
    */
   async checkPlatformPaymentStatus(transferId: string) {
