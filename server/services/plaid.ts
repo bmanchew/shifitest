@@ -18,6 +18,9 @@ import {
   BankTransferType,
   TransferIntentGet,
   PaymentInitiationConsentCreateRequest,
+  TransferOriginatorGetRequest,
+  TransferOriginatorCreateRequest,
+  TransferQuestionnaireCreateRequest,
 } from "plaid";
 import { logger } from "./logger";
 
