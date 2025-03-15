@@ -10,6 +10,14 @@ import {
   TransferType,
   TransferNetwork,
   AssetReportCreateRequest,
+  PaymentInitiationRecipientCreateRequest,
+  PaymentInitiationPaymentCreateRequest,
+  TransferAuthorizationCreateRequest,
+  TransferIntentCreateRequest,
+  BankTransferNetwork,
+  BankTransferType,
+  TransferIntentGet,
+  PaymentInitiationConsentCreateRequest,
 } from "plaid";
 import { logger } from "./logger";
 
@@ -30,6 +38,22 @@ interface PlaidTransferParams {
   achClass?: string;
   userId?: string;
   customerId?: string;
+  metadata?: Record<string, string>;
+}
+
+interface PlaidMerchantOnboardingParams {
+  merchantId: number;
+  legalName: string;
+  email: string;
+  redirectUri?: string;
+}
+
+interface PlaidPlatformPaymentParams {
+  amount: number;
+  merchantId: number;
+  contractId: number;
+  description: string;
+  routeToShifi: boolean;
   metadata?: Record<string, string>;
 }
 
@@ -798,6 +822,351 @@ class PlaidService {
         },
       });
       
+      throw error;
+    }
+  }
+
+  /**
+   * Create a merchant onboarding link for Plaid Platform Payments
+   */
+  async createMerchantOnboardingLink(params: PlaidMerchantOnboardingParams) {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    // Import storage here to avoid circular dependency
+    const { storage } = await import('../storage');
+
+    try {
+      const { merchantId, legalName, email, redirectUri } = params;
+      
+      logger.info({
+        message: `Creating Plaid merchant onboarding link for merchant ${merchantId}`,
+        category: "api",
+        source: "plaid",
+        metadata: { merchantId, legalName },
+      });
+
+      // First check if there's already a merchant in our database
+      const existingPlaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+      
+      // If merchant already exists with completed status, return error
+      if (existingPlaidMerchant && existingPlaidMerchant.onboardingStatus === 'completed') {
+        return {
+          merchantId: existingPlaidMerchant.merchantId,
+          plaidCustomerId: existingPlaidMerchant.plaidCustomerId,
+          onboardingStatus: existingPlaidMerchant.onboardingStatus,
+          alreadyOnboarded: true
+        };
+      }
+      
+      // Create a unique client user ID for the merchant
+      const clientUserId = `merchant-${merchantId}-${Date.now()}`;
+      
+      // Set up user for link token
+      const user = {
+        client_user_id: clientUserId,
+        legal_name: legalName,
+        email_address: email
+      };
+      
+      // Create link token with payment_initiation product
+      const request: LinkTokenCreateRequest = {
+        user,
+        client_name: "ShiFi Financial",
+        products: [Products.PaymentInitiation, Products.Auth, Products.Transfer],
+        country_codes: [CountryCode.Us],
+        language: "en",
+        webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/merchant-webhook`,
+      };
+
+      // Add optional redirect URI if provided
+      if (redirectUri) {
+        request.redirect_uri = redirectUri;
+      }
+      
+      const response = await this.client.linkTokenCreate(request);
+      
+      logger.info({
+        message: `Created Plaid merchant onboarding link for merchant ${merchantId}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          merchantId,
+          linkToken: response.data.link_token,
+          expiration: response.data.expiration,
+        },
+      });
+
+      // Store or update the plaid merchant record
+      let plaidMerchantRecord;
+      if (existingPlaidMerchant) {
+        // Update existing record
+        plaidMerchantRecord = await storage.updatePlaidMerchant(existingPlaidMerchant.id, {
+          onboardingStatus: 'in_progress',
+          onboardingUrl: response.data.link_token
+        });
+      } else {
+        // Create new record
+        plaidMerchantRecord = await storage.createPlaidMerchant({
+          merchantId,
+          onboardingStatus: 'in_progress',
+          onboardingUrl: response.data.link_token,
+        });
+      }
+
+      return {
+        merchantId,
+        linkToken: response.data.link_token,
+        expiration: response.data.expiration,
+        plaidMerchantId: plaidMerchantRecord.id
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to create Plaid merchant onboarding link: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          merchantId: params.merchantId,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Complete merchant onboarding after Plaid Link flow
+   */
+  async completeMerchantOnboarding(merchantId: number, publicToken: string, accountId: string) {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    // Import storage here to avoid circular dependency
+    const { storage } = await import('../storage');
+
+    try {
+      logger.info({
+        message: `Completing Plaid merchant onboarding for merchant ${merchantId}`,
+        category: "api",
+        source: "plaid",
+        metadata: { merchantId, accountId },
+      });
+
+      // First, exchange the public token for an access token
+      const { accessToken, itemId } = await this.exchangePublicToken(publicToken);
+      
+      // Get the merchant from our database
+      const merchant = await storage.getMerchant(merchantId);
+      if (!merchant) {
+        throw new Error(`Merchant with ID ${merchantId} not found`);
+      }
+      
+      // Get plaid merchant record or create if not exists
+      let plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+      
+      if (!plaidMerchant) {
+        // Create new record if one doesn't exist yet
+        plaidMerchant = await storage.createPlaidMerchant({
+          merchantId,
+          onboardingStatus: 'in_progress',
+          accessToken,
+          accountId,
+        });
+      } else {
+        // Update existing record
+        plaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
+          accessToken,
+          accountId,
+          defaultFundingAccount: accountId
+        });
+      }
+      
+      // Mark onboarding as complete
+      const updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
+        onboardingStatus: 'completed'
+      });
+
+      return {
+        merchantId,
+        plaidMerchantId: updatedPlaidMerchant.id,
+        status: updatedPlaidMerchant.onboardingStatus,
+        accessToken,
+        accountId
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to complete Plaid merchant onboarding: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          merchantId,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Create a platform payment transfer - route funds between customers and merchants or ShiFi
+   */
+  async createPlatformPayment(params: PlaidPlatformPaymentParams) {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    // Import storage here to avoid circular dependency
+    const { storage } = await import('../storage');
+
+    try {
+      const { amount, merchantId, contractId, description, routeToShifi, metadata } = params;
+
+      logger.info({
+        message: `Creating Plaid platform payment for contract ${contractId}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          amount,
+          merchantId,
+          contractId,
+          routeToShifi
+        },
+      });
+
+      // Get the contract to check ownership
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        throw new Error(`Contract with ID ${contractId} not found`);
+      }
+
+      // Verify contract belongs to the merchant
+      if (contract.merchantId !== merchantId) {
+        throw new Error(`Contract ${contractId} does not belong to merchant ${merchantId}`);
+      }
+
+      // Get Plaid merchant data
+      const plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+      if (!plaidMerchant) {
+        throw new Error(`Merchant ${merchantId} is not onboarded with Plaid`);
+      }
+      
+      if (plaidMerchant.onboardingStatus !== 'completed') {
+        throw new Error(`Merchant ${merchantId} has not completed Plaid onboarding`);
+      }
+
+      // Determine the destination account based on routing flag
+      const destination = routeToShifi 
+        ? process.env.SHIFI_PLAID_ACCOUNT_ID 
+        : plaidMerchant.defaultFundingAccount || plaidMerchant.accountId;
+      
+      if (!destination) {
+        throw new Error("No destination account available for transfer");
+      }
+      
+      // Create a transfer intent
+      const transferIntentRequest: TransferIntentCreateRequest = {
+        amount: amount.toString(),
+        description,
+        account_id: destination,
+        user: {
+          legal_name: `Contract ${contractId}`,
+        },
+        mode: routeToShifi ? "PAYMENT" : "DISBURSEMENT",
+        ach_class: "ppd",
+        funding_account_id: destination,
+      };
+      
+      // Create the transfer intent
+      const intentResponse = await this.client.transferIntentCreate(transferIntentRequest);
+      
+      // Record the transfer in our database
+      const transferRecord = await storage.createPlaidTransfer({
+        contractId,
+        merchantId,
+        transferId: intentResponse.data.transfer_intent.id,
+        amount,
+        description,
+        type: routeToShifi ? "credit" : "debit",
+        status: intentResponse.data.transfer_intent.status,
+        routedToShifi: routeToShifi,
+        metadata: metadata ? JSON.stringify(metadata) : undefined
+      });
+
+      return {
+        transferId: intentResponse.data.transfer_intent.id,
+        status: intentResponse.data.transfer_intent.status,
+        amount,
+        routedToShifi: routeToShifi,
+        transferRecordId: transferRecord.id
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to create Plaid platform payment: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          contractId: params.contractId,
+          merchantId: params.merchantId,
+          amount: params.amount,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Check status of a platform payment transfer
+   */
+  async checkPlatformPaymentStatus(transferId: string) {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    // Import storage here to avoid circular dependency
+    const { storage } = await import('../storage');
+
+    try {
+      logger.info({
+        message: `Checking Plaid platform payment status for transfer ${transferId}`,
+        category: "api",
+        source: "plaid",
+      });
+
+      // Get transfer from Plaid
+      const response = await this.client.transferIntentGet({
+        transfer_intent_id: transferId
+      });
+
+      const status = response.data.transfer_intent.status;
+      
+      // Update status in our database
+      const transferRecord = await storage.getPlaidTransferById(parseInt(transferId));
+      if (transferRecord) {
+        await storage.updatePlaidTransferStatus(transferRecord.id, status);
+      }
+
+      return {
+        transferId,
+        status,
+        requiresAttention: ['failed', 'returned'].includes(status.toLowerCase())
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to check Plaid platform payment status: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          transferId,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
       throw error;
     }
   }
