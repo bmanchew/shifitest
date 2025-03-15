@@ -864,6 +864,13 @@ export class DatabaseStorage implements IStorage {
     const [plaidMerchant] = await db.select().from(plaidMerchants).where(eq(plaidMerchants.merchantId, merchantId));
     return plaidMerchant || undefined;
   }
+  
+  async getPlaidMerchantByOriginatorId(originatorId: string): Promise<PlaidMerchant | undefined> {
+    if (!originatorId) return undefined;
+    
+    const [plaidMerchant] = await db.select().from(plaidMerchants).where(eq(plaidMerchants.originatorId, originatorId));
+    return plaidMerchant || undefined;
+  }
 
   async createPlaidMerchant(data: InsertPlaidMerchant): Promise<PlaidMerchant> {
     const [newPlaidMerchant] = await db.insert(plaidMerchants).values(data).returning();
