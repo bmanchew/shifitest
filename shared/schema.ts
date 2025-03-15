@@ -10,6 +10,7 @@ export const logLevelEnum = pgEnum('log_level', ['debug', 'info', 'warn', 'error
 export const logCategoryEnum = pgEnum('log_category', ['system', 'user', 'api', 'payment', 'security', 'contract']);
 export const logSourceEnum = pgEnum('log_source', ['internal', 'twilio', 'didit', 'plaid', 'thanksroger', 'prefi']);
 export const creditTierEnum = pgEnum('credit_tier', ['tier1', 'tier2', 'tier3', 'declined']);
+export const onboardingStatusEnum = pgEnum('onboarding_status', ['pending', 'in_progress', 'completed', 'rejected']);
 
 // Users
 export const users = pgTable("users", {
@@ -267,3 +268,56 @@ export const insertMerchantPerformanceSchema = createInsertSchema(merchantPerfor
 
 export type MerchantPerformance = typeof merchantPerformance.$inferSelect;
 export type InsertMerchantPerformance = z.infer<typeof insertMerchantPerformanceSchema>;
+
+// Plaid Platform Payment data for merchants
+export const plaidMerchants = pgTable("plaid_merchants", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull().unique(),
+  plaidCustomerId: text("plaid_customer_id"), // The ID assigned by Plaid for this merchant
+  originatorId: text("originator_id"), // The originator ID from Plaid
+  onboardingStatus: onboardingStatusEnum("onboarding_status").notNull().default('pending'),
+  onboardingUrl: text("onboarding_url"), // The URL for the merchant to complete onboarding
+  questionnaireId: text("questionnaire_id"), // The ID of the onboarding questionnaire 
+  plaidData: text("plaid_data"), // JSON stringified Plaid merchant data
+  accessToken: text("access_token"), // The Plaid access token for this merchant
+  accountId: text("account_id"), // The primary bank account ID for this merchant
+  defaultFundingAccount: text("default_funding_account"), // The default account for payments
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertPlaidMerchantSchema = createInsertSchema(plaidMerchants).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PlaidMerchant = typeof plaidMerchants.$inferSelect;
+export type InsertPlaidMerchant = z.infer<typeof insertPlaidMerchantSchema>;
+
+// Plaid Transfers table to track payments
+export const plaidTransfers = pgTable("plaid_transfers", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id").references(() => contracts.id),
+  merchantId: integer("merchant_id").references(() => merchants.id),
+  transferId: text("transfer_id").notNull(), // The transfer ID from Plaid
+  originatorId: text("originator_id"), // The originator ID for this transfer
+  amount: doublePrecision("amount").notNull(),
+  description: text("description"),
+  type: text("type").notNull(), // credit or debit
+  status: text("status").notNull(),
+  routedToShifi: boolean("routed_to_shifi").notNull().default(false), // Whether this was routed to ShiFi fund
+  facilitatorFee: doublePrecision("facilitator_fee"), // Fee collected by ShiFi
+  metadata: text("metadata"), // JSON stringified additional data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertPlaidTransferSchema = createInsertSchema(plaidTransfers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PlaidTransfer = typeof plaidTransfers.$inferSelect;
+export type InsertPlaidTransfer = z.infer<typeof insertPlaidTransferSchema>;
