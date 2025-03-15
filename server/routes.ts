@@ -616,13 +616,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 apiRouter.post("/application-progress", async (req: Request, res: Response) => {
   try {
     const { contractId, step, completed, data } = req.body;
-    
+
     if (!contractId || !step) {
       return res.status(400).json({ 
         message: "Contract ID and step are required" 
       });
     }
-    
+
     // Verify the contract exists
     const contract = await storage.getContract(parseInt(contractId));
     if (!contract) {
@@ -630,7 +630,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         message: "Contract not found" 
       });
     }
-    
+
     // Create the application progress item
     const progressItem = await storage.createApplicationProgress({
       contractId: parseInt(contractId),
@@ -638,7 +638,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       completed: !!completed,
       data: data || null
     });
-    
+
     // Log the creation
     await storage.createLog({
       level: "info",
@@ -650,7 +650,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         completed: !!completed 
       })
     });
-    
+
     res.status(201).json(progressItem);
   } catch (error) {
     console.error("Create application progress error:", error);
@@ -703,14 +703,14 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     }
   });
 
-  
+
   apiRouter.post("/send-sms", async (req: Request, res: Response) => {
     try {
       // Check if this is a test SMS from admin panel
       if (req.body.phone && req.body.isTest) {
         // This is a test request from the admin API verification
         console.log(`Processing test SMS to ${req.body.phone}`);
-  
+
         // Create test log entry
         await storage.createLog({
           level: "info",
@@ -719,13 +719,13 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           message: `Test SMS to ${req.body.phone}`,
           metadata: JSON.stringify(req.body),
         });
-  
+
         // Send a real test message via Twilio service
         const testResult = await twilioService.sendSMS({
           to: req.body.phone,
           body: "This is a test message from ShiFi. Your API verification was successful.",
         });
-  
+
         // Return appropriate response
         return res.json({
           success: true,
@@ -738,22 +738,22 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           status: testResult.isSimulated ? "simulated" : "delivered",
         });
       }
-  
+
       // Regular SMS flow
       const { phoneNumber, merchantId, amount, email } = req.body;
-  
+
       if (!phoneNumber || !merchantId || !amount) {
         return res.status(400).json({
           message: "Phone number, merchant ID, and amount are required",
         });
       }
-  
+
       // Get merchant
       const merchant = await storage.getMerchant(parseInt(merchantId));
       if (!merchant) {
         return res.status(404).json({ message: "Merchant not found" });
       }
-  
+
       // Create a contract for this financing request
       const contractNumber = generateContractNumber();
       const termMonths = 24; // Fixed term
@@ -762,7 +762,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       const downPayment = amount * (downPaymentPercent / 100);
       const financedAmount = amount - downPayment;
       const monthlyPayment = financedAmount / termMonths;
-  
+
       console.log("Creating contract with:", {
         contractNumber,
         merchantId,
@@ -773,10 +773,10 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         interestRate,
         monthlyPayment,
       });
-  
+
       // Find or create a user for this phone number, passing in the email
       const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
-      
+
       logger.info({
         message: `User for contract: ${customer.id}`,
         category: "api", 
@@ -787,7 +787,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           phone: customer.phone 
         })
       });
-  
+
       // Create a new contract
       const newContract = await storage.createContract({
         contractNumber,
@@ -803,10 +803,10 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         currentStep: "terms",
         phoneNumber: phoneNumber, // Store the phone number directly in the contract
       });
-  
+
       // Create application progress for all steps of this contract
       const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
-      
+
       for (const step of applicationSteps) {
         await storage.createApplicationProgress({
           contractId: newContract.id,
@@ -814,25 +814,25 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           completed: false,
           data: null,
         });
-        
+
         // Log the creation of each step
         console.log(`Created application progress for contract ${newContract.id}, step ${step}`);
       }
-  
+
       // Get the application base URL from Replit
       const replitDomain = getAppDomain();
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
-  
+
       // Prepare the SMS message
       const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
-  
+
       try {
         // Send SMS using our Twilio service
         const result = await twilioService.sendSMS({
           to: phoneNumber,
           body: messageText,
         });
-  
+
         if (result.isSimulated) {
           console.log(`Simulated SMS to ${phoneNumber}: ${messageText}`);
         } else if (result.success) {
@@ -847,7 +847,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         console.error("Twilio service error:", twilioError);
         throw twilioError;
       }
-  
+
       // Create log for SMS sending
       await storage.createLog({
         level: "info",
@@ -861,7 +861,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           customerEmail: customer.email
         }),
       });
-  
+
       res.json({ 
         success: true, 
         message: "SMS sent successfully",
@@ -870,7 +870,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
     } catch (error) {
       console.error("Send SMS error:", error);
-  
+
       // Create error log
       await storage.createLog({
         level: "error",
@@ -881,8 +881,12 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           error: error instanceof Error ? error.stack : null,
         }),
       });
-  
-      res.status(500).json({ message: "Internal server error" });
+
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to send application",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
   // KYC verification status checking endpoint
@@ -897,7 +901,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         try {
           // Get contract information to extract customerId and phoneNumber
           const contract = await storage.getContract(parseInt(String(contractId)));
-          
+
           if (contract) {
             logger.info({
               message: `Checking KYC status using contract data`,
@@ -909,7 +913,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 extractedPhoneNumber: contract.phoneNumber
               }
             });
-            
+
             userIdToCheck = contract.customerId;
             phoneToCheck = contract.phoneNumber;
           }
@@ -925,7 +929,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           });
         }
       }
-      
+
       // Check if we have any identification info
       if (!userIdToCheck && !phoneToCheck && !contractId) {
         return res.status(400).json({
@@ -933,10 +937,10 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           message: "Either customer ID, phone number, or contract ID is required",
         });
       }
-      
+
       // First, check if the customer has completed KYC verification
       let existingVerifications = [];
-      
+
       if (userIdToCheck) {
         existingVerifications = await storage.getCompletedKycVerificationsByUserId(userIdToCheck);
         logger.info({
@@ -951,20 +955,20 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           }
         });
       }
-      
+
       // If no verifications found by user ID but we have a phone number, try that
       if (existingVerifications.length === 0 && phoneToCheck) {
         try {
           // Find user by phone number
           const normalizedPhone = phoneToCheck.replace(/\D/g, '');
-          
+
           // Try to find a user with this phone number
           const userWithPhone = await storage.getUserByPhone(normalizedPhone);
-          
+
           if (userWithPhone) {
             // If found, check for verifications with that user ID
             existingVerifications = await storage.getCompletedKycVerificationsByUserId(userWithPhone.id);
-            
+
             logger.info({
               message: `Found user by phone, checking KYC status`,
               category: "api",
@@ -974,8 +978,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 normalizedPhone,
                 foundUserId: userWithPhone.id,
                 existingVerifications: existingVerifications.length
-              }
-            });
+              }            });
           }
         } catch (phoneError) {
           logger.error({
@@ -989,7 +992,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           });
         }
       }
-      
+
       // If we found completed KYC verifications, return that information
       if (existingVerifications.length > 0) {
         logger.info({
@@ -1008,7 +1011,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
             }))
           }
         });
-        
+
         return res.json({
           success: true,
           alreadyVerified: true,
@@ -1016,14 +1019,14 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           verificationCount: existingVerifications.length
         });
       }
-      
+
       // No existing verifications found
       return res.json({
         success: true,
         alreadyVerified: false,
         message: "Identity verification required"
       });
-      
+
     } catch (error) {
       logger.error({
         message: `Error checking KYC status: ${error instanceof Error ? error.message : String(error)}`,
@@ -1033,7 +1036,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           error: error instanceof Error ? error.stack : String(error)
         }
       });
-      
+
       return res.status(500).json({
         success: false,
         message: "Failed to check verification status",
@@ -1130,7 +1133,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     }
   });
 
- 
+
 
   // Thanks Roger contract signing endpoint
   // Thanks Roger contract signing endpoint with authentication
@@ -1741,10 +1744,10 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       // Extract webhook signature from headers for verification
       const webhookSignature = req.headers["x-signature"] as string;
       const webhookTimestamp = req.headers["x-timestamp"] as string;
-  
+
       // Get the webhook secret from environment variables
       const webhookSecret = process.env.DIDIT_WEBHOOK_SECRET_KEY;
-  
+
       // Log the complete webhook data for debugging
       logger.info({
         message: `DiDit Webhook - Complete Data`,
@@ -1760,7 +1763,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           }
         },
       });
-  
+
       // Log the receipt of webhook (original log)
       logger.info({
         message: `Received DiDit webhook event`,
@@ -1772,22 +1775,22 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           body: req.body,
         },
       });
-  
+
       // Verify the webhook signature if we have the secret
       let isVerified = false;
-  
+
       if (webhookSecret && webhookSignature && req.body) {
         try {
           // Store the raw body for signature verification
           const rawBody = JSON.stringify(req.body);
-  
+
           // Create HMAC signature using the webhook secret
           const hmac = crypto.createHmac("sha256", webhookSecret);
           const expectedSignature = hmac.update(rawBody).digest("hex");
-  
+
           // Verify the signature
           isVerified = expectedSignature === webhookSignature;
-  
+
           logger.info({
             message: `DiDit webhook signature verification: ${isVerified ? "success" : "failed"}`,
             category: "api",
@@ -1797,7 +1800,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               receivedSignature: webhookSignature,
             },
           });
-  
+
           // Verify the timestamp is recent (within 5 minutes)
           if (isVerified && webhookTimestamp) {
             const currentTime = Math.floor(Date.now() / 1000);
@@ -1828,11 +1831,11 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           isVerified = false;
         }
       }
-  
+
       // Extract key information from the webhook
       const { event_type, session_id, status, decision, vendor_data } =
         req.body;
-  
+
       // Parse vendor_data to extract contractId
       let contractId = null;
       try {
@@ -1848,7 +1851,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           metadata: { vendor_data },
         });
       }
-  
+
       logger.info({
         message: `Processing DiDit webhook for contract ${contractId}, session ${session_id}`,
         category: "api",
@@ -1860,7 +1863,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           isVerified,
         },
       });
-  
+
       if (!contractId) {
         logger.warn({
           message: "Missing contractId in DiDit webhook vendor_data",
@@ -1873,7 +1876,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           message: "Webhook received but no contractId found",
         });
       }
-  
+
       // Handle verification.completed event
       if (
         event_type === "verification.completed" ||
@@ -1892,36 +1895,36 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
             decisionDetails: decision, // Log complete decision object
           },
         });
-  
+
         // Check if verification was approved
         const isApproved =
           decision?.status === "approved" ||
           status === "Approved" ||
           status === "approved" ||
           status === "completed";
-  
+
         try {
           // Get the contract to find the associated customer
           const contract = await storage.getContract(parseInt(contractId));
           if (!contract) {
             throw new Error(`Contract ${contractId} not found`);
           }
-  
+
           // Ensure the contract has a customerId - this is critical for KYC flow
           if (!contract.customerId || contract.phoneNumber) {
             if (contract.phoneNumber) {
               const normalizedPhone = contract.phoneNumber.replace(/\D/g, '');
-  
+
               logger.info({
                 message: `Looking up user by phone number for contract ${contractId}`,
                 category: "api",
                 source: "didit",
                 metadata: { contractId, phoneNumber: normalizedPhone },
               });
-  
+
               // Find existing user first to prevent duplicate users
               let user = await storage.getUserByPhone(normalizedPhone);
-  
+
               // If no user exists, create one
               if (!user) {
                 user = await storage.findOrCreateUserByPhone(normalizedPhone);
@@ -1939,7 +1942,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   metadata: { contractId, userId: user.id },
                 });
               }
-  
+
               if (user) {
                 // Update the contract with the user ID
                 await storage.updateContractCustomerId(parseInt(contractId), user.id);
@@ -1949,7 +1952,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   source: "didit",
                   metadata: { contractId, userId: user.id },
                 });
-  
+
                 // Create an authentication record for this user and contract
                 await storage.createLog({
                   level: "info",
@@ -1973,7 +1976,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               });
             }
           }
-  
+
           // Find the KYC step in the application progress
           const applicationProgress =
             await storage.getApplicationProgressByContractId(
@@ -1982,12 +1985,12 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           const kycStep = applicationProgress.find(
             (step) => step.step === "kyc",
           );
-  
+
           if (kycStep) {
             if (isApproved) {
               // Get any customer details from the verification if available
               const customerDetails = decision?.kyc || {};
-  
+
               // Log the customer details
               logger.info({
                 message: `DiDit customer details for contract ${contractId}`,
@@ -1998,7 +2001,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   customerDetails,
                 },
               });
-  
+
               // Mark the KYC step as completed
               await storage.updateApplicationProgressCompletion(
                 kycStep.id,
@@ -2015,14 +2018,14 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   completedVia: "webhook",
                 }),
               );
-  
+
               // Get the updated contract info after potential user assignment
               const updatedContract = await storage.getContract(parseInt(contractId));
-  
+
               // Move the contract to the next step
               if (updatedContract && updatedContract.currentStep === "kyc") {
                 await storage.updateContractStep(parseInt(contractId), "bank");
-                
+
                 // Log step advancement
                 logger.info({
                   message: `Advanced contract ${contractId} from KYC to bank step`,
@@ -2031,20 +2034,20 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   metadata: { contractId, previousStep: "kyc", newStep: "bank" },
                 });
               }
-  
+
               // ===== BEGIN PREFI INTEGRATION =====
               // If we have a user associated with the contract, send pre-qualification request
               if (updatedContract && updatedContract.customerId) {
                 try {
                   // Get user data
                   const user = await storage.getUser(updatedContract.customerId);
-                  
+
                   if (user) {
                     // Get customer IP from request if available, or use a default
                     const ipAddress = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
-                    
+
                     console.log(`Initiating Pre-Fi pre-qualification for user ${user.id} after successful KYC verification`);
-                    
+
                     // Send pre-qualification request
                     const prequalResult = await preFiService.preQualifyUser({
                       firstName: user.firstName || customerDetails.first_name || '',
@@ -2054,10 +2057,10 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                       userId: user.id,
                       contractId: updatedContract.id
                     }, ipAddress.toString());
-                    
+
                     // Console log the full response
                     console.log('COMPLETE PRE-FI RESPONSE:', JSON.stringify(prequalResult, null, 2));
-                    
+
                     // Log structured success info
                     if (prequalResult && prequalResult.Status === 'Success') {
                       logger.info({
@@ -2073,7 +2076,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                           dataPerfection: prequalResult.DataPerfection
                         }
                       });
-                      
+
                       // At this point, you would normally store the result in your database
                       // But as requested, we're just logging for now
                     }
@@ -2081,7 +2084,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 } catch (prequalError) {
                   // Log error but don't fail the webhook processing
                   console.error('Pre-Fi pre-qualification error:', prequalError);
-                  
+
                   logger.error({
                     message: `Error during Pre-Fi pre-qualification after KYC: ${prequalError instanceof Error ? prequalError.message : String(prequalError)}`,
                     category: "api",
@@ -2095,13 +2098,13 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 }
               }
               // ===== END PREFI INTEGRATION =====
-  
+
               // Update user information if we have customer details
               if (updatedContract && (customerDetails.first_name || customerDetails.last_name)) {
                 try {
                   // First check if we have a customerId on the contract
                   let userIdToUpdate = updatedContract.customerId;
-  
+
                   // If no customerId but we have a phone number, find or create a user
                   if (!userIdToUpdate && updatedContract.phoneNumber) {
                     logger.info({
@@ -2110,15 +2113,15 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                       source: "didit",
                       metadata: { contractId: updatedContract.id }
                     });
-  
+
                     // Find or create user by phone number
                     const user = await storage.findOrCreateUserByPhone(updatedContract.phoneNumber);
-  
+
                     if (user) {
                       // Update the contract with the user ID
                       await storage.updateContractCustomerId(updatedContract.id, user.id);
                       userIdToUpdate = user.id;
-  
+
                       logger.info({
                         message: `Linked contract ${updatedContract.id} to user ${user.id} by phone ${updatedContract.phoneNumber}`,
                         category: "api",
@@ -2127,7 +2130,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                       });
                     }
                   }
-  
+
                   // Now update the user name if we have a user ID
                   if (userIdToUpdate) {
                     // Update user's name based on KYC verification
@@ -2136,7 +2139,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                       customerDetails.first_name,
                       customerDetails.last_name
                     );
-  
+
                     logger.info({
                       message: `Updated user ${userIdToUpdate} name information from KYC data`,
                       category: "api",
@@ -2168,7 +2171,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   });
                 }
               }
-  
+
               logger.info({
                 message: `KYC verification approved for contract ${contractId}`,
                 category: "contract",
@@ -2192,7 +2195,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   reason: "Verification declined or incomplete",
                 }),
               );
-  
+
               logger.warn({
                 message: `KYC verification failed for contract ${contractId}`,
                 category: "contract",
@@ -2239,7 +2242,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           metadata: { sessionId: session_id, contractId },
         });
       }
-  
+
       // Always respond with 200 OK to acknowledge receipt of the webhook
       return res.status(200).json({ status: "success" });
     } catch (error) {
@@ -2251,7 +2254,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           error: error instanceof Error ? error.stack : null,
         },
       });
-  
+
       // Always return 200 to prevent DiDit from retrying (prevents duplicate processing)
       return res.status(200).json({
         status: "error",
@@ -2259,7 +2262,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
     }
   });
-  
+
   // API Key verification endpoints
   apiRouter.get("/verify-api-keys", async (req: Request, res: Response) => {
     try {
@@ -2780,7 +2783,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
             message: "Contract ID, amount, access token and account ID are required",
           });
         }
-        
+
         // Create the transfer using Plaid service
         const transferResult = await plaidService.createTransfer({
           accessToken,
@@ -3041,8 +3044,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         await storage.createLog({
           level: "error",
           category: "api",
-          source: "plaid",
-          message: `Failed to create asset report: ${error instanceof Error ? error.message : String(error)}`,
+          source: "plaid",message: `Failed to create asset report: ${error instanceof Error ? error.message : String(error)}`,
           metadata: JSON.stringify({
             error: error instanceof Error ? error.stack : null,
           }),
@@ -3256,7 +3258,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 source: "plaid",
                 metadata: { itemId: item_id, accountId: account_id, status }
               });
-              
+
               if (status === "MANUALLY_VERIFIED") {
                 // Update application progress for the associated contract
                 const contract = await storage.getContractByPlaidItemId(item_id);
@@ -3469,41 +3471,41 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
 
   // Mount the customers router
   apiRouter.use("/customers", customersRouter);
-  
+
   // Get contract by phone number
   apiRouter.get("/contracts/by-phone/:phoneNumber", async (req: Request, res: Response) => {
     try {
       const { phoneNumber } = req.params;
-      
+
       if (!phoneNumber) {
         return res.status(400).json({ 
           success: false, 
           message: "Phone number is required" 
         });
       }
-      
+
       // Normalize the phone number
       const normalizedPhone = phoneNumber.replace(/\D/g, '');
-      
+
       // Find contracts with this phone number
       const allContracts = await storage.getAllContracts();
       const matchingContracts = allContracts.filter(contract => {
         if (!contract.phoneNumber) return false;
         return contract.phoneNumber.replace(/\D/g, '') === normalizedPhone;
       });
-      
+
       if (matchingContracts.length === 0) {
         return res.status(404).json({
           success: false,
           message: "No contracts found with this phone number"
         });
       }
-      
+
       // Return the most recent contract
       const contract = matchingContracts.sort((a, b) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )[0];
-      
+
       return res.json({
         success: true,
         contract,
@@ -3524,13 +3526,13 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     try {
       // Get merchants who are active and have completed onboarding with Plaid
       const activeMerchants = await plaidService.getActivePlaidMerchants();
-      
+
       logger.info({
         message: `Retrieved ${activeMerchants.length} active Plaid merchants`,
         category: "api",
         source: "plaid",
       });
-      
+
       return res.json({
         success: true,
         merchants: activeMerchants
@@ -3544,14 +3546,14 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           error: error instanceof Error ? error.stack : null,
         },
       });
-      
+
       return res.status(500).json({ 
         success: false, 
         error: error instanceof Error ? error.message : "Failed to get active merchants"
       });
     }
   });
-  
+
   // TEST ENDPOINT: Get raw originators directly from Plaid API
   apiRouter.get("/plaid/test/originators", async (req: Request, res: Response) => {
     try {
@@ -3561,17 +3563,17 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           message: "Plaid service not initialized"
         });
       }
-      
+
       // Direct call to Plaid API to test connection and response
       const originatorListResponse = await plaidService.getClient().transferOriginatorList({});
       const plaidOriginators = originatorListResponse.data.originators || [];
-      
+
       logger.info({
         message: `TEST: Retrieved ${plaidOriginators.length} originators directly from Plaid API`,
         category: "api",
         source: "plaid",
       });
-      
+
       return res.json({
         success: true,
         count: plaidOriginators.length,
@@ -3587,14 +3589,14 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           error: error instanceof Error ? error.stack : null,
         },
       });
-      
+
       return res.status(500).json({ 
         success: false, 
         error: error instanceof Error ? error.message : "Failed to get originators from Plaid API"
       });
     }
   });
-  
+
   // Sync all Plaid merchants with our database
   apiRouter.post("/plaid/merchants/sync", async (req: Request, res: Response) => {
     try {
@@ -3604,37 +3606,37 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           message: "Plaid service not initialized"
         });
       }
-      
+
       // Import storage to handle merchant data
       const { storage } = await import('./storage');
-      
+
       logger.info({
         message: "Starting Plaid merchant synchronization",
         category: "api",
         source: "plaid",
       });
-      
+
       // Get all originators from Plaid
       const originatorListResponse = await plaidService.getClient().transferOriginatorList({});
       const plaidOriginators = originatorListResponse.data.originators || [];
-      
+
       logger.info({
         message: `Retrieved ${plaidOriginators.length} originators from Plaid for synchronization`,
         category: "api",
         source: "plaid",
       });
-      
+
       // Get all merchants from our database
       const merchants = await storage.getAllMerchants();
-      
+
       // Get all Plaid merchants from our database
       const pendingMerchants = await storage.getPlaidMerchantsByStatus('pending');
       const inProgressMerchants = await storage.getPlaidMerchantsByStatus('in_progress');
       const completedMerchants = await storage.getPlaidMerchantsByStatus('completed');
-      
+
       // Combine all merchants into one array
       const existingPlaidMerchants = [...pendingMerchants, ...inProgressMerchants, ...completedMerchants];
-      
+
       const syncResults = {
         success: true,
         total: plaidOriginators.length,
@@ -3645,7 +3647,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         errors: 0,
         details: [] as any[],
       };
-      
+
       // Process each originator from Plaid with proper type definition
       type PlaidOriginator = {
         originator_id: string;
@@ -3653,7 +3655,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         status: string;
         created_at: string;
       };
-      
+
       // Cast each originator to our custom type to handle Plaid's API response format
       for (const originator of plaidOriginators as unknown as PlaidOriginator[]) {
         try {
@@ -3661,11 +3663,11 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           const existingRecord = existingPlaidMerchants.find(
             pm => pm.originatorId === originator.originator_id
           );
-          
+
           if (existingRecord) {
             // Update the existing record
             syncResults.matched++;
-            
+
             // Update status if different
             if (existingRecord.onboardingStatus !== originator.status.toLowerCase()) {
               await storage.updatePlaidMerchant(existingRecord.id, {
@@ -3673,7 +3675,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 plaidData: JSON.stringify(originator)
                 // updatedAt is handled automatically by the database
               });
-              
+
               syncResults.updated++;
               syncResults.details.push({
                 originatorId: originator.originator_id,
@@ -3697,7 +3699,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               originator.company_name && 
               m.name.toLowerCase().includes(originator.company_name.toLowerCase())
             );
-            
+
             if (matchedMerchant) {
               // Create new Plaid merchant record linked to this merchant
               const newPlaidMerchant = await storage.createPlaidMerchant({
@@ -3707,7 +3709,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 plaidData: JSON.stringify(originator)
                 // updatedAt is handled automatically by the database
               });
-              
+
               syncResults.new++;
               syncResults.details.push({
                 originatorId: originator.originator_id,
@@ -3730,12 +3732,12 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                     status: originator.status
                   }
                 });
-                
+
                 // Create merchant record for originator if needed
                 const sanitizedCompanyName = originator.company_name ? 
                   originator.company_name.substring(0, 100) : // Ensure name fits in DB field
                   `Plaid Merchant ${originator.originator_id.substring(0, 8)}`;
-                
+
                 // Create a merchant record to track this Plaid originator
                 const newMerchant = await storage.createMerchant({
                   name: sanitizedCompanyName,
@@ -3745,7 +3747,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                   // We'll set the integration status in the PlaidMerchant record
                   // Merchant type will be determined by the schema
                 });
-                
+
                 if (newMerchant) {
                   // Create the plaid merchant record linked to our new merchant
                   const newPlaidMerchant = await storage.createPlaidMerchant({
@@ -3754,7 +3756,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                     onboardingStatus: originator.status.toLowerCase() as any,
                     plaidData: JSON.stringify(originator)
                   });
-                  
+
                   syncResults.new++;
                   syncResults.details.push({
                     originatorId: originator.originator_id,
@@ -3791,7 +3793,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               error: error instanceof Error ? error.stack : null,
             },
           });
-          
+
           syncResults.errors++;
           syncResults.details.push({
             originatorId: originator.originator_id,
@@ -3800,13 +3802,13 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           });
         }
       }
-      
+
       logger.info({
         message: `Completed Plaid merchant synchronization: ${syncResults.matched} matched, ${syncResults.new} new, ${syncResults.updated} updated, ${syncResults.errors} errors`,
         category: "api",
         source: "plaid",
       });
-      
+
       return res.json(syncResults);
     } catch (error) {
       logger.error({
@@ -3817,44 +3819,44 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           error: error instanceof Error ? error.stack : null,
         },
       });
-      
+
       return res.status(500).json({ 
         success: false, 
         error: error instanceof Error ? error.message : "Failed to sync merchants with Plaid"
       });
     }
   });
-  
+
   // Get merchant onboarding status
   apiRouter.get("/plaid/merchant/:merchantId/onboarding-status", async (req: Request, res: Response) => {
     try {
       const { merchantId } = req.params;
-      
+
       if (!merchantId) {
         return res.status(400).json({
           success: false,
           message: "merchantId is required"
         });
       }
-      
+
       // Import storage to get merchant details
       const { storage } = await import('./storage');
-      
+
       // Get the plaid merchant record
       const plaidMerchant = await storage.getPlaidMerchantByMerchantId(parseInt(merchantId));
-      
+
       if (!plaidMerchant) {
         return res.status(404).json({
           success: false,
           message: "Plaid merchant not found"
         });
       }
-      
+
       // If we have an originatorId, get the real-time status from Plaid
       if (plaidMerchant.originatorId) {
         try {
           const status = await plaidService.getMerchantOnboardingStatus(plaidMerchant.originatorId);
-          
+
           logger.info({
             message: `Retrieved Plaid merchant onboarding status for merchant ${merchantId}`,
             category: "api",
@@ -3865,7 +3867,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               status: status.status
             }
           });
-          
+
           return res.json({
             success: true,
             merchantId: parseInt(merchantId),
@@ -3888,7 +3890,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               storedStatus: plaidMerchant.onboardingStatus
             }
           });
-          
+
           return res.json({
             success: true,
             merchantId: parseInt(merchantId),
@@ -3920,7 +3922,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           error: error instanceof Error ? error.stack : null,
         },
       });
-      
+
       return res.status(500).json({ 
         success: false, 
         error: error instanceof Error ? error.message : "Failed to get merchant onboarding status"
