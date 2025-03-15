@@ -31,6 +31,7 @@ export interface IStorage {
   // Plaid Platform Merchant operations
   getPlaidMerchant(id: number): Promise<PlaidMerchant | undefined>;
   getPlaidMerchantByMerchantId(merchantId: number): Promise<PlaidMerchant | undefined>;
+  getPlaidMerchantByOriginatorId(originatorId: string): Promise<PlaidMerchant | undefined>;
   createPlaidMerchant(data: InsertPlaidMerchant): Promise<PlaidMerchant>;
   updatePlaidMerchant(id: number, data: Partial<InsertPlaidMerchant>): Promise<PlaidMerchant | undefined>;
   getPlaidMerchantsByStatus(status: string): Promise<PlaidMerchant[]>;

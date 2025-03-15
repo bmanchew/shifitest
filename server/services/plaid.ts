@@ -1275,23 +1275,106 @@ class PlaidService {
         source: "plaid",
       });
 
-      // Get all merchants who have completed Plaid onboarding
-      const onboardedMerchants = await storage.getPlaidMerchantsByStatus('completed');
+      // First, use the /transfer/originator/list endpoint to get all merchants from Plaid
+      const originatorsResponse = await this.client.transferOriginatorList({});
+      const plaidOriginators = originatorsResponse.data.originators || [];
       
-      if (!onboardedMerchants || onboardedMerchants.length === 0) {
+      logger.info({
+        message: `Retrieved ${plaidOriginators.length} originators from Plaid API`,
+        category: "api",
+        source: "plaid",
+      });
+      
+      if (plaidOriginators.length === 0) {
         logger.info({
-          message: "No merchants have completed Plaid onboarding",
+          message: "No merchants found in Plaid platform",
           category: "api",
           source: "plaid",
         });
         return [];
       }
-
-      // For each merchant, verify their transfer capabilities with Plaid
+      
+      // Map the Plaid originators to our merchant data structure
       const activeMerchants = [];
+      
+      for (const originator of plaidOriginators) {
+        try {
+          // Only include active originators
+          if (originator.status !== 'active') {
+            logger.info({
+              message: `Skipping non-active originator: ${originator.originator_id} with status ${originator.status}`,
+              category: "api",
+              source: "plaid",
+            });
+            continue;
+          }
+          
+          // Try to find this originator in our database to get the merchant ID
+          const plaidMerchant = await storage.getPlaidMerchantByOriginatorId(originator.originator_id);
+          
+          const merchantData: any = {
+            originatorId: originator.originator_id,
+            originatorName: originator.company_name,
+            status: originator.status,
+            createdAt: originator.created_at,
+          };
+          
+          // If we have this originator in our database, add the merchant details
+          if (plaidMerchant) {
+            merchantData.merchantId = plaidMerchant.merchantId;
+            merchantData.plaidMerchantId = plaidMerchant.id;
+            merchantData.accessToken = plaidMerchant.accessToken || '';
+            merchantData.accountId = plaidMerchant.accountId || '';
+            merchantData.defaultFundingAccount = plaidMerchant.defaultFundingAccount || '';
+            
+            // Get the merchant details from our database
+            const merchant = await storage.getMerchant(plaidMerchant.merchantId);
+            if (merchant) {
+              merchantData.merchantName = merchant.name;
+              merchantData.merchantEmail = merchant.email;
+            }
+          } else {
+            // If we don't have this originator in our database, log it
+            logger.warn({
+              message: `Found originator in Plaid that is not in our database: ${originator.originator_id}`,
+              category: "api",
+              source: "plaid",
+              metadata: {
+                originatorId: originator.originator_id,
+                companyName: originator.company_name,
+              },
+            });
+            
+            // Include it in our results anyway since it's an active originator in Plaid
+            merchantData.plaidOnly = true;
+          }
+          
+          activeMerchants.push(merchantData);
+        } catch (error) {
+          // If we get an error processing this originator, log it but continue with others
+          logger.warn({
+            message: `Error processing Plaid originator: ${error instanceof Error ? error.message : String(error)}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              originatorId: originator.originator_id,
+              error: error instanceof Error ? error.stack : null,
+            },
+          });
+        }
+      }
+      
+      // As a fallback, also check our database for any merchants that may not be returned by Plaid API
+      // This helps handle any potential sync issues between our database and Plaid
+      const onboardedMerchants = await storage.getPlaidMerchantsByStatus('completed');
       
       for (const merchant of onboardedMerchants) {
         try {
+          // Skip if we already have this merchant in our results
+          if (merchant.originatorId && activeMerchants.some(m => m.originatorId === merchant.originatorId)) {
+            continue;
+          }
+          
           if (!merchant.accessToken) {
             logger.warn({
               message: `Merchant ${merchant.merchantId} has no access token`,
@@ -1307,25 +1390,28 @@ class PlaidService {
           });
           
           // Check if the merchant has transfer capabilities
-          // This is determined by checking processor token and verifying account status
           const hasTransferCapability = accountsResponse.data.accounts.some(account => 
             account.type === 'depository' && 
             ['checking', 'savings'].includes(account.subtype || '')
           );
           
           if (hasTransferCapability) {
-            // Create merchant object with only required fields and TypeScript safety
+            // Create merchant object with only required fields
             const merchantData: any = {
               merchantId: merchant.merchantId,
               plaidMerchantId: merchant.id,
+              originatorId: merchant.originatorId,
               accessToken: merchant.accessToken || '', 
               accountId: merchant.accountId || '',
-              defaultFundingAccount: merchant.defaultFundingAccount || ''
+              defaultFundingAccount: merchant.defaultFundingAccount || '',
+              fromDatabaseOnly: true
             };
             
-            // Add institutionName if available
-            if ('institutionName' in merchant) {
-              merchantData.institutionName = merchant.institutionName;
+            // Get the merchant details from our database
+            const merchantDetails = await storage.getMerchant(merchant.merchantId);
+            if (merchantDetails) {
+              merchantData.merchantName = merchantDetails.name;
+              merchantData.merchantEmail = merchantDetails.email;
             }
             
             activeMerchants.push(merchantData);
@@ -1333,7 +1419,7 @@ class PlaidService {
         } catch (error) {
           // If we get an error checking this merchant, log it but continue with others
           logger.warn({
-            message: `Error checking Plaid merchant status: ${error instanceof Error ? error.message : String(error)}`,
+            message: `Error checking database merchant status: ${error instanceof Error ? error.message : String(error)}`,
             category: "api",
             source: "plaid",
             metadata: {

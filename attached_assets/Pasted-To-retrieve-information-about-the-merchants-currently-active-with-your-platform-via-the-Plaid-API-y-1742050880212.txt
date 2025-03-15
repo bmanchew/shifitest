@@ -1,0 +1,63 @@
+To retrieve information about the merchants currently active with your platform via the Plaid API, you can utilize the `/transfer/originator/list` endpoint. This endpoint provides a list of all originators (merchants) associated with your platform, along with their onboarding statuses.
+
+**Endpoint:** `/transfer/originator/list`
+
+**Request Example:**
+
+
+```javascript
+const axios = require('axios');
+
+const listOriginators = async () => {
+  try {
+    const response = await axios.post('https://sandbox.plaid.com/transfer/originator/list', {
+      client_id: 'YOUR_CLIENT_ID',
+      secret: 'YOUR_SECRET',
+    });
+    return response.data.originators;
+  } catch (error) {
+    console.error('Error fetching originators:', error.response.data);
+  }
+};
+```
+
+
+**Response Example:**
+
+
+```json
+{
+  "originators": [
+    {
+      "originator_client_id": "merchant_123",
+      "status": "ACTIVE",
+      "created_at": "2025-01-15T12:34:56Z",
+      "updated_at": "2025-02-20T08:22:10Z",
+      "name": "Merchant A",
+      "email": "contact@merchantA.com"
+    },
+    {
+      "originator_client_id": "merchant_456",
+      "status": "PENDING",
+      "created_at": "2025-03-01T09:15:30Z",
+      "updated_at": "2025-03-05T14:10:45Z",
+      "name": "Merchant B",
+      "email": "info@merchantB.com"
+    }
+    // More originators...
+  ],
+  "request_id": "abc123"
+}
+```
+
+
+**Key Fields:**
+
+- `originator_client_id`: A unique identifier for the merchant within your platform.
+- `status`: The onboarding status of the merchant (e.g., `ACTIVE`, `PENDING`).
+- `created_at`: Timestamp indicating when the merchant was created.
+- `updated_at`: Timestamp indicating the last update to the merchant's information.
+- `name`: The name of the merchant.
+- `email`: The contact email of the merchant.
+
+By calling this endpoint, you can obtain a comprehensive list of merchants associated with your platform, along with their current statuses and relevant details. This approach ensures you have up-to-date information about your merchants without the need to re-onboard them. 
