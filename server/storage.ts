@@ -7,7 +7,9 @@ import {
   underwritingData,
   assetReports, AssetReport, InsertAssetReport,
   portfolioMonitoring, PortfolioMonitoring, InsertPortfolioMonitoring,
-  complaintsData, ComplaintsData, InsertComplaintsData
+  complaintsData, ComplaintsData, InsertComplaintsData,
+  plaidMerchants, PlaidMerchant, InsertPlaidMerchant,
+  plaidTransfers, PlaidTransfer, InsertPlaidTransfer
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like } from "drizzle-orm";
@@ -25,6 +27,20 @@ export interface IStorage {
   getMerchantByUserId(userId: number): Promise<Merchant | undefined>;
   getAllMerchants(): Promise<Merchant[]>;
   createMerchant(merchant: InsertMerchant): Promise<Merchant>;
+  
+  // Plaid Platform Merchant operations
+  getPlaidMerchant(id: number): Promise<PlaidMerchant | undefined>;
+  getPlaidMerchantByMerchantId(merchantId: number): Promise<PlaidMerchant | undefined>;
+  createPlaidMerchant(data: InsertPlaidMerchant): Promise<PlaidMerchant>;
+  updatePlaidMerchant(id: number, data: Partial<InsertPlaidMerchant>): Promise<PlaidMerchant | undefined>;
+  getPlaidMerchantsByStatus(status: string): Promise<PlaidMerchant[]>;
+  
+  // Plaid Transfer operations
+  createPlaidTransfer(transfer: InsertPlaidTransfer): Promise<PlaidTransfer>;
+  getPlaidTransferById(id: number): Promise<PlaidTransfer | undefined>;
+  getPlaidTransfersByContractId(contractId: number): Promise<PlaidTransfer[]>;
+  getPlaidTransfersByMerchantId(merchantId: number): Promise<PlaidTransfer[]>;
+  updatePlaidTransferStatus(id: number, status: string): Promise<PlaidTransfer | undefined>;
 
   // Contract operations
   getContract(id: number): Promise<Contract | undefined>;
@@ -834,6 +850,84 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error getting completed KYC verifications for user ${userId}:`, error);
       return [];
+    }
+  }
+
+  // Plaid Platform Merchant methods
+  async getPlaidMerchant(id: number): Promise<PlaidMerchant | undefined> {
+    const [plaidMerchant] = await db.select().from(plaidMerchants).where(eq(plaidMerchants.id, id));
+    return plaidMerchant || undefined;
+  }
+
+  async getPlaidMerchantByMerchantId(merchantId: number): Promise<PlaidMerchant | undefined> {
+    const [plaidMerchant] = await db.select().from(plaidMerchants).where(eq(plaidMerchants.merchantId, merchantId));
+    return plaidMerchant || undefined;
+  }
+
+  async createPlaidMerchant(data: InsertPlaidMerchant): Promise<PlaidMerchant> {
+    const [newPlaidMerchant] = await db.insert(plaidMerchants).values(data).returning();
+    return newPlaidMerchant;
+  }
+
+  async updatePlaidMerchant(id: number, data: Partial<InsertPlaidMerchant>): Promise<PlaidMerchant | undefined> {
+    try {
+      // Add updatedAt timestamp
+      const updateData = {
+        ...data,
+        updatedAt: new Date()
+      };
+
+      const [updatedPlaidMerchant] = await db
+        .update(plaidMerchants)
+        .set(updateData)
+        .where(eq(plaidMerchants.id, id))
+        .returning();
+
+      return updatedPlaidMerchant;
+    } catch (error) {
+      console.error(`Error updating Plaid merchant ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getPlaidMerchantsByStatus(status: string): Promise<PlaidMerchant[]> {
+    return await db.select().from(plaidMerchants).where(eq(plaidMerchants.onboardingStatus, status as any));
+  }
+
+  // Plaid Transfer methods
+  async createPlaidTransfer(transfer: InsertPlaidTransfer): Promise<PlaidTransfer> {
+    const [newTransfer] = await db.insert(plaidTransfers).values(transfer).returning();
+    return newTransfer;
+  }
+
+  async getPlaidTransferById(id: number): Promise<PlaidTransfer | undefined> {
+    const [transfer] = await db.select().from(plaidTransfers).where(eq(plaidTransfers.id, id));
+    return transfer || undefined;
+  }
+
+  async getPlaidTransfersByContractId(contractId: number): Promise<PlaidTransfer[]> {
+    return await db.select().from(plaidTransfers).where(eq(plaidTransfers.contractId, contractId));
+  }
+
+  async getPlaidTransfersByMerchantId(merchantId: number): Promise<PlaidTransfer[]> {
+    return await db.select().from(plaidTransfers).where(eq(plaidTransfers.merchantId, merchantId));
+  }
+
+  async updatePlaidTransferStatus(id: number, status: string): Promise<PlaidTransfer | undefined> {
+    try {
+      const [updatedTransfer] = await db
+        .update(plaidTransfers)
+        .set({ 
+          status,
+          updatedAt: new Date()
+        })
+        .where(eq(plaidTransfers.id, id))
+        .returning();
+
+      return updatedTransfer;
+    } catch (error) {
+      console.error(`Error updating Plaid transfer status for ${id}:`, error);
+      return undefined;
     }
   }
 }
