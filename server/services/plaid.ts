@@ -140,6 +140,10 @@ class PlaidService {
         country_codes: [CountryCode.Us],
         language: "en",
         webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
+        auth: {
+          same_day_microdeposits_enabled: true,
+          sms_microdeposits_verification_enabled: true
+        }
       };
 
       // Add optional redirect URI if provided

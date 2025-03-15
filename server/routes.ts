@@ -3218,6 +3218,39 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
 
       // Handle different webhook types
       switch (webhook_type) {
+        case "AUTH":
+          switch (webhook_code) {
+            case "SMS_MICRODEPOSITS_VERIFICATION":
+              const { status, item_id, account_id } = req.body;
+              logger.info({
+                message: `Received micro-deposits verification webhook: ${status}`,
+                category: "api",
+                source: "plaid",
+                metadata: { itemId: item_id, accountId: account_id, status }
+              });
+              
+              if (status === "MANUALLY_VERIFIED") {
+                // Update application progress for the associated contract
+                const contract = await storage.getContractByPlaidItemId(item_id);
+                if (contract) {
+                  const progress = await storage.getApplicationProgressByContractId(contract.id);
+                  const bankStep = progress.find(p => p.step === "bank");
+                  if (bankStep) {
+                    await storage.updateApplicationProgressCompletion(
+                      bankStep.id,
+                      true,
+                      JSON.stringify({
+                        verifiedByMicrodeposits: true,
+                        verifiedAt: new Date().toISOString(),
+                        verificationMethod: "sms"
+                      })
+                    );
+                  }
+                }
+              }
+              break;
+          }
+          break;
         case "TRANSACTIONS":
           // Handle transaction webhooks
           switch (webhook_code) {
