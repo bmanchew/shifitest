@@ -134,6 +134,14 @@ class PlaidService {
   isInitialized(): boolean {
     return this.initialized && this.client !== null;
   }
+  
+  // Method to expose the Plaid client for test endpoints only
+  getClient(): PlaidApi {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+    return this.client;
+  }
 
   /**
    * Create a link token for Plaid Link

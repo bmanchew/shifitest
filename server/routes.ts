@@ -3552,6 +3552,49 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     }
   });
   
+  // TEST ENDPOINT: Get raw originators directly from Plaid API
+  apiRouter.get("/plaid/test/originators", async (req: Request, res: Response) => {
+    try {
+      if (!plaidService.isInitialized()) {
+        return res.status(500).json({
+          success: false,
+          message: "Plaid service not initialized"
+        });
+      }
+      
+      // Direct call to Plaid API to test connection and response
+      const originatorListResponse = await plaidService.getClient().transferOriginatorList({});
+      const plaidOriginators = originatorListResponse.data.originators || [];
+      
+      logger.info({
+        message: `TEST: Retrieved ${plaidOriginators.length} originators directly from Plaid API`,
+        category: "api",
+        source: "plaid",
+      });
+      
+      return res.json({
+        success: true,
+        count: plaidOriginators.length,
+        originators: plaidOriginators,
+        plaidResponse: originatorListResponse.data
+      });
+    } catch (error) {
+      logger.error({
+        message: `TEST: Error getting originators directly from Plaid: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+      
+      return res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Failed to get originators from Plaid API"
+      });
+    }
+  });
+  
   // Get merchant onboarding status
   apiRouter.get("/plaid/merchant/:merchantId/onboarding-status", async (req: Request, res: Response) => {
     try {
