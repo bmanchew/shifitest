@@ -2772,14 +2772,42 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     "/plaid/create-transfer",
     async (req: Request, res: Response) => {
       try {
-        const { contractId, amount, description } = req.body;
+        const { contractId, amount, description, accessToken, accountId } = req.body;
 
-        if (!contractId || !amount) {
+        if (!contractId || !amount || !accessToken || !accountId) {
           return res.status(400).json({
             success: false,
-            message: "Contract ID and amount are required",
+            message: "Contract ID, amount, access token and account ID are required",
           });
         }
+        
+        // Create the transfer using Plaid service
+        const transferResult = await plaidService.createTransfer({
+          accessToken,
+          accountId,
+          amount,
+          description: description || `Payment for contract ${contractId}`,
+        });
+
+        // Store transfer info in database
+        await storage.createLog({
+          level: "info",
+          category: "payment",
+          source: "plaid",
+          message: `Transfer created for contract ${contractId}`,
+          metadata: JSON.stringify({
+            contractId,
+            amount,
+            transferId: transferResult.transferId,
+            status: transferResult.status
+          })
+        });
+
+        res.json({
+          success: true,
+          transferId: transferResult.transferId,
+          status: transferResult.status
+        });
 
         // Get contract details
         const contract = await storage.getContract(parseInt(contractId));
