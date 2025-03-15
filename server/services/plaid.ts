@@ -943,7 +943,7 @@ class PlaidService {
   /**
    * Complete merchant onboarding after Plaid Link flow
    */
-  async completeMerchantOnboarding(merchantId: number, publicToken: string, accountId: string) {
+  async completeMerchantOnboarding(merchantId: number, publicToken: string, accountId: string, originatorId?: string, questionnaireId?: string) {
     if (!this.isInitialized() || !this.client) {
       throw new Error("Plaid client not initialized");
     }
@@ -956,7 +956,7 @@ class PlaidService {
         message: `Completing Plaid merchant onboarding for merchant ${merchantId}`,
         category: "api",
         source: "plaid",
-        metadata: { merchantId, accountId },
+        metadata: { merchantId, accountId, originatorId, questionnaireId },
       });
 
       // First, exchange the public token for an access token
@@ -978,17 +978,82 @@ class PlaidService {
           onboardingStatus: 'in_progress',
           accessToken,
           accountId,
+          originatorId,
+          questionnaireId
         });
       } else {
         // Update existing record
         plaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
           accessToken,
           accountId,
-          defaultFundingAccount: accountId
+          defaultFundingAccount: accountId,
+          originatorId,
+          questionnaireId
         });
       }
       
-      // Mark onboarding as complete
+      // If we have an originatorId, check the status with Plaid
+      if (originatorId) {
+        try {
+          const originatorStatus = await this.getMerchantOnboardingStatus(originatorId);
+          
+          // Log the status we received from Plaid
+          logger.info({
+            message: `Received originator status from Plaid: ${originatorStatus.status}`,
+            category: "api",
+            source: "plaid",
+            metadata: { 
+              merchantId,
+              originatorId,
+              status: originatorStatus.status 
+            }
+          });
+          
+          // Only mark as completed if Plaid says it's active
+          // Otherwise keep it as in_progress
+          if (originatorStatus.status.toLowerCase() === 'active') {
+            // Mark onboarding as complete
+            const updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
+              onboardingStatus: 'completed'
+            });
+            
+            return {
+              merchantId,
+              plaidMerchantId: updatedPlaidMerchant.id,
+              status: updatedPlaidMerchant.onboardingStatus,
+              accessToken,
+              accountId,
+              originatorId,
+              originatorStatus: originatorStatus.status
+            };
+          } else {
+            // Originator exists but isn't active yet
+            return {
+              merchantId,
+              plaidMerchantId: plaidMerchant.id,
+              status: 'in_progress',
+              accessToken,
+              accountId,
+              originatorId,
+              originatorStatus: originatorStatus.status
+            };
+          }
+        } catch (originatorError) {
+          // Log error but continue - we'll mark as in_progress
+          logger.warn({
+            message: `Failed to check originator status with Plaid: ${originatorError instanceof Error ? originatorError.message : String(originatorError)}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              merchantId,
+              originatorId,
+              error: originatorError instanceof Error ? originatorError.stack : null,
+            },
+          });
+        }
+      }
+      
+      // Mark onboarding as complete (this is the original behavior if we don't have an originatorId)
       const updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
         onboardingStatus: 'completed'
       });
@@ -998,7 +1063,8 @@ class PlaidService {
         plaidMerchantId: updatedPlaidMerchant.id,
         status: updatedPlaidMerchant.onboardingStatus,
         accessToken,
-        accountId
+        accountId,
+        originatorId
       };
     } catch (error) {
       logger.error({
@@ -1007,6 +1073,62 @@ class PlaidService {
         source: "plaid",
         metadata: {
           merchantId,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Check the onboarding status of a merchant with Plaid using /transfer/originator/get
+   */
+  async getMerchantOnboardingStatus(originatorId: string) {
+    if (!this.isInitialized() || !this.client) {
+      throw new Error("Plaid client not initialized");
+    }
+
+    try {
+      logger.info({
+        message: `Checking Plaid merchant onboarding status for originator ${originatorId}`,
+        category: "api",
+        source: "plaid",
+        metadata: { originatorId },
+      });
+
+      // Create request for transfer/originator/get
+      const request: TransferOriginatorGetRequest = {
+        originator_id: originatorId,
+      };
+
+      const response = await this.client.transferOriginatorGet(request);
+
+      logger.info({
+        message: `Retrieved Plaid merchant onboarding status for originator ${originatorId}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          originatorId,
+          status: response.data.originator.status,
+          requestId: response.data.request_id,
+        },
+      });
+
+      return {
+        originatorId: response.data.originator.originator_id,
+        originatorName: response.data.originator.company_name,
+        status: response.data.originator.status,
+        createdAt: response.data.originator.created_at,
+        requestId: response.data.request_id,
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to check Plaid merchant onboarding status: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          originatorId,
           error: error instanceof Error ? error.stack : null,
         },
       });
