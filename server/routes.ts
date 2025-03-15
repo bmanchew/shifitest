@@ -3646,11 +3646,16 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         details: [] as any[],
       };
       
-      // Import PlaidOriginator type
-      const { PlaidOriginator } = await import('./services/plaid');
+      // Process each originator from Plaid with proper type definition
+      type PlaidOriginator = {
+        originator_id: string;
+        company_name: string;
+        status: string;
+        created_at: string;
+      };
       
-      // Process each originator from Plaid
-      for (const originator of plaidOriginators as PlaidOriginator[]) {
+      // Cast each originator to our custom type to handle Plaid's API response format
+      for (const originator of plaidOriginators as unknown as PlaidOriginator[]) {
         try {
           // Check if we already have this originator in our database
           const existingRecord = existingPlaidMerchants.find(
@@ -3665,8 +3670,8 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
             if (existingRecord.onboardingStatus !== originator.status.toLowerCase()) {
               await storage.updatePlaidMerchant(existingRecord.id, {
                 onboardingStatus: originator.status.toLowerCase() as any,
-                plaidData: JSON.stringify(originator),
-                updatedAt: new Date()
+                plaidData: JSON.stringify(originator)
+                // updatedAt is handled automatically by the database
               });
               
               syncResults.updated++;
@@ -3699,8 +3704,8 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 merchantId: matchedMerchant.id,
                 originatorId: originator.originator_id,
                 onboardingStatus: originator.status.toLowerCase() as any,
-                plaidData: JSON.stringify(originator),
-                updatedAt: new Date()
+                plaidData: JSON.stringify(originator)
+                // updatedAt is handled automatically by the database
               });
               
               syncResults.new++;
@@ -3712,15 +3717,68 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 matchedBy: "name"
               });
             } else {
-              // No match found, log this for manual review
-              syncResults.skipped++;
-              syncResults.details.push({
-                originatorId: originator.originator_id,
-                companyName: originator.company_name,
-                action: "skipped",
-                status: originator.status,
-                reason: "no matching merchant found"
-              });
+              // No match found by name, create a placeholder merchant for tracking
+              try {
+                // Log the unmatched originator
+                logger.warn({
+                  message: `Unmatched Plaid originator: ${originator.company_name} (${originator.originator_id})`,
+                  category: "api",
+                  source: "plaid",
+                  metadata: {
+                    originatorId: originator.originator_id,
+                    companyName: originator.company_name,
+                    status: originator.status
+                  }
+                });
+                
+                // Create merchant record for originator if needed
+                const sanitizedCompanyName = originator.company_name ? 
+                  originator.company_name.substring(0, 100) : // Ensure name fits in DB field
+                  `Plaid Merchant ${originator.originator_id.substring(0, 8)}`;
+                
+                // Create a merchant record to track this Plaid originator
+                const newMerchant = await storage.createMerchant({
+                  name: sanitizedCompanyName,
+                  contactName: "Imported from Plaid",
+                  email: "imported@plaidmerchant.example", // Placeholder email
+                  phone: "",
+                  // We'll set the integration status in the PlaidMerchant record
+                  // Merchant type will be determined by the schema
+                });
+                
+                if (newMerchant) {
+                  // Create the plaid merchant record linked to our new merchant
+                  const newPlaidMerchant = await storage.createPlaidMerchant({
+                    merchantId: newMerchant.id,
+                    originatorId: originator.originator_id,
+                    onboardingStatus: originator.status.toLowerCase() as any,
+                    plaidData: JSON.stringify(originator)
+                  });
+                  
+                  syncResults.new++;
+                  syncResults.details.push({
+                    originatorId: originator.originator_id,
+                    merchantId: newMerchant.id,
+                    companyName: sanitizedCompanyName,
+                    action: "auto_created",
+                    status: originator.status
+                  });
+                } else {
+                  // Failed to create merchant record
+                  throw new Error("Failed to create merchant record");
+                }
+              } catch (error) {
+                // Failed to handle the unmatched originator
+                syncResults.skipped++;
+                syncResults.details.push({
+                  originatorId: originator.originator_id,
+                  companyName: originator.company_name,
+                  action: "skipped",
+                  status: originator.status,
+                  reason: "no matching merchant found and auto-creation failed",
+                  error: error instanceof Error ? error.message : String(error)
+                });
+              }
             }
           }
         } catch (error) {
