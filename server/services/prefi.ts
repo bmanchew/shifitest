@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { logger } from './logger';
 
@@ -61,6 +60,170 @@ class PreFiService {
         }
       });
       throw error;
+    }
+  }
+  
+  /**
+   * Send user data to Pre-Fi for pre-qualification after successful KYC verification
+   * 
+   * @param userData User data from database or KYC verification
+   * @param ipAddress IP address of the user when they consented (required by Pre-Fi)
+   * @returns Pre-qualification results from Pre-Fi API
+   */
+  async preQualifyUser(userData: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    contractId?: number;
+    userId?: number;
+  }, ipAddress: string) {
+    try {
+      if (!this.apiKey) {
+        throw new Error('Pre-Fi API key not configured');
+      }
+      
+      // Validate required fields
+      if (!userData.firstName || !userData.lastName || !userData.email || !userData.phone) {
+        throw new Error('Missing required user data for pre-qualification');
+      }
+      
+      // Format phone number (remove any non-digits)
+      const formattedPhone = userData.phone.replace(/\D/g, '');
+      
+      // Format the date exactly as the PreFi API expects
+      const now = new Date();
+      // Format like: "2024-10-16T09:50:38-0700"
+      // Get timezone offset in minutes
+      const tzOffset = now.getTimezoneOffset();
+      const tzOffsetHours = Math.abs(Math.floor(tzOffset / 60)).toString().padStart(2, '0');
+      const tzOffsetMinutes = Math.abs(tzOffset % 60).toString().padStart(2, '0');
+      const tzSign = tzOffset > 0 ? '-' : '+';
+      
+      // Format the date parts
+      const year = now.getFullYear();
+      const month = (now.getMonth() + 1).toString().padStart(2, '0');
+      const day = now.getDate().toString().padStart(2, '0');
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const seconds = now.getSeconds().toString().padStart(2, '0');
+      
+      // Assemble the date string in the required format
+      const consentDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${tzSign}${tzOffsetHours}${tzOffsetMinutes}`;
+      
+      // Prepare the request payload according to Pre-Fi API documentation
+      const requestPayload = {
+        FirstName: userData.firstName,
+        LastName: userData.lastName,
+        Email: userData.email,
+        Phone: formattedPhone,
+        ConsentDate: consentDate, // Using the exact format from the Postman example
+        ConsentIP: ipAddress || '127.0.0.1', // Use provided IP or default
+      };
+      
+      // Log the request being sent
+      console.log('Sending Pre-Fi pre-qualification request:', JSON.stringify(requestPayload, null, 2));
+      
+      logger.info({
+        message: "Sending pre-qualification request to Pre-Fi API",
+        category: "api",
+        source: "prefi",
+        metadata: {
+          userId: userData.userId,
+          contractId: userData.contractId,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          email: userData.email,
+          requestPayload: requestPayload
+        }
+      });
+      
+      // Call Pre-Fi API
+      const response = await axios.post(
+        `${this.apiBaseUrl}/pre-qualification`,
+        requestPayload,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      // Log the full response
+      console.log('Pre-Fi API Response:', JSON.stringify(response.data, null, 2));
+      
+      // Log success response
+      logger.info({
+        message: "Received pre-qualification response from Pre-Fi API",
+        category: "api",
+        source: "prefi",
+        metadata: {
+          userId: userData.userId,
+          contractId: userData.contractId,
+          responseStatus: response.data.Status,
+          responseCode: response.data.Code,
+          offersCount: response.data.Offers?.length || 0,
+          fullResponse: response.data // Log the entire response
+        }
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error in Pre-Fi pre-qualification:', error);
+      
+      logger.error({
+        message: "Error sending pre-qualification request to Pre-Fi API",
+        category: "api",
+        source: "prefi",
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error),
+          userId: userData.userId,
+          contractId: userData.contractId,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          errorDetails: error instanceof Error ? error.message : String(error)
+        }
+      });
+      throw error;
+    }
+  }
+  
+  /**
+   * Check if Pre-Fi API is accessible and account is authorized
+   * @returns Whether the API connection is valid
+   */
+  async ping(): Promise<boolean> {
+    try {
+      if (!this.apiKey) {
+        return false;
+      }
+      
+      const response = await axios.get(
+        `${this.apiBaseUrl}/ping`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+          }
+        }
+      );
+      
+      // Log ping response
+      console.log('Pre-Fi Ping Response:', JSON.stringify(response.data, null, 2));
+      
+      return response.data?.Status === 'Success';
+    } catch (error) {
+      console.error('Error pinging Pre-Fi API:', error);
+      
+      logger.error({
+        message: "Error pinging Pre-Fi API",
+        category: "api",
+        source: "prefi",
+        metadata: { 
+          error: error instanceof Error ? error.stack : String(error),
+        }
+      });
+      return false;
     }
   }
   

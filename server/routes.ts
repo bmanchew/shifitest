@@ -15,6 +15,7 @@ import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
 import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
+import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
@@ -2031,6 +2032,70 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
                 });
               }
   
+              // ===== BEGIN PREFI INTEGRATION =====
+              // If we have a user associated with the contract, send pre-qualification request
+              if (updatedContract && updatedContract.customerId) {
+                try {
+                  // Get user data
+                  const user = await storage.getUser(updatedContract.customerId);
+                  
+                  if (user) {
+                    // Get customer IP from request if available, or use a default
+                    const ipAddress = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+                    
+                    console.log(`Initiating Pre-Fi pre-qualification for user ${user.id} after successful KYC verification`);
+                    
+                    // Send pre-qualification request
+                    const prequalResult = await preFiService.preQualifyUser({
+                      firstName: user.firstName || customerDetails.first_name || '',
+                      lastName: user.lastName || customerDetails.last_name || '',
+                      email: user.email || '',
+                      phone: updatedContract.phoneNumber || user.phone || '',
+                      userId: user.id,
+                      contractId: updatedContract.id
+                    }, ipAddress.toString());
+                    
+                    // Console log the full response
+                    console.log('COMPLETE PRE-FI RESPONSE:', JSON.stringify(prequalResult, null, 2));
+                    
+                    // Log structured success info
+                    if (prequalResult && prequalResult.Status === 'Success') {
+                      logger.info({
+                        message: `Pre-qualification successful for user ${user.id}`,
+                        category: "underwriting",
+                        source: "prefi",
+                        metadata: {
+                          userId: user.id,
+                          contractId: updatedContract.id,
+                          offersCount: prequalResult.Offers?.length || 0,
+                          // More detailed logging
+                          offers: prequalResult.Offers,
+                          dataPerfection: prequalResult.DataPerfection
+                        }
+                      });
+                      
+                      // At this point, you would normally store the result in your database
+                      // But as requested, we're just logging for now
+                    }
+                  }
+                } catch (prequalError) {
+                  // Log error but don't fail the webhook processing
+                  console.error('Pre-Fi pre-qualification error:', prequalError);
+                  
+                  logger.error({
+                    message: `Error during Pre-Fi pre-qualification after KYC: ${prequalError instanceof Error ? prequalError.message : String(prequalError)}`,
+                    category: "api",
+                    source: "prefi",
+                    metadata: {
+                      contractId: updatedContract.id,
+                      userId: updatedContract.customerId,
+                      error: prequalError instanceof Error ? prequalError.stack : null
+                    }
+                  });
+                }
+              }
+              // ===== END PREFI INTEGRATION =====
+  
               // Update user information if we have customer details
               if (updatedContract && (customerDetails.first_name || customerDetails.last_name)) {
                 try {
@@ -2194,6 +2259,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
     }
   });
+  
   // API Key verification endpoints
   apiRouter.get("/verify-api-keys", async (req: Request, res: Response) => {
     try {
