@@ -367,6 +367,13 @@ export default function Application() {
     }
   };
 
+  // Navigate to dashboard after completion
+  const navigateToDashboard = () => {
+    if (contractData?.contract.id) {
+      window.location.href = `/dashboard/${contractData.contract.id}`;
+    }
+  };
+
   // Handle going back to the previous step
   const handleGoBack = () => {
     if (!contractData) return;
@@ -376,6 +383,13 @@ export default function Application() {
       setCurrentStep(steps[currentIndex - 1].id);
     }
   };
+
+  // Handle completion of all steps
+  useEffect(() => {
+    if (currentStep === "completed" && contractData?.contract.id) {
+      navigateToDashboard();
+    }
+  }, [currentStep, contractData]);
 
   // If still loading contract data, show loading state
   if (!contractData) {
