@@ -5,7 +5,7 @@ import { z } from "zod";
 // Enums
 export const userRoleEnum = pgEnum('user_role', ['admin', 'merchant', 'customer']);
 export const contractStatusEnum = pgEnum('contract_status', ['pending', 'active', 'completed', 'declined', 'cancelled']);
-export const applicationStepEnum = pgEnum('application_step', ['terms', 'kyc', 'bank', 'payment', 'signing', 'completed']);
+export const applicationStepEnum = pgEnum('application_step', ['terms', 'kyc', 'bank', 'bank_pending', 'payment', 'signing', 'completed']);
 export const logLevelEnum = pgEnum('log_level', ['debug', 'info', 'warn', 'error', 'critical']);
 export const logCategoryEnum = pgEnum('log_category', ['system', 'user', 'api', 'payment', 'security', 'contract']);
 export const logSourceEnum = pgEnum('log_source', ['internal', 'twilio', 'didit', 'plaid', 'thanksroger', 'prefi']);
