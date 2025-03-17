@@ -114,17 +114,21 @@ export default function Application() {
             if (!kycProgressResponse || !kycProgressResponse.id) {
               // Create a new KYC progress record if one doesn't exist
               console.log("No KYC progress record found, creating one...");
-              const newProgress = await apiRequest("POST", "/api/application-progress", {
-                contractId: verifyContractId,
-                step: "kyc",
-                completed: true, // Already completed since we're in the redirect handler
-                data: JSON.stringify({
-                  verifiedAt: new Date().toISOString(),
-                  status: "approved",
-                  completedVia: "redirect_new_record",
-                }),
-              });
-              
+              const newProgress = await apiRequest(
+                "POST",
+                "/api/application-progress",
+                {
+                  contractId: verifyContractId,
+                  step: "kyc",
+                  completed: true, // Already completed since we're in the redirect handler
+                  data: JSON.stringify({
+                    verifiedAt: new Date().toISOString(),
+                    status: "approved",
+                    completedVia: "redirect_new_record",
+                  }),
+                },
+              );
+
               console.log("Created new KYC progress record:", newProgress);
             } else if (!kycProgressResponse.completed) {
               // If not already marked as completed, mark it complete
@@ -145,7 +149,7 @@ export default function Application() {
 
             // Refresh contract data
             await refetch();
-            
+
             // Wait for contract data to load before updating steps
             setTimeout(() => {
               // Add KYC to completed steps if not already there
@@ -166,7 +170,7 @@ export default function Application() {
             }, 1000); // Longer delay for more reliability
           } catch (progressError) {
             console.error("Error handling progress record:", progressError);
-            
+
             // Still try to move forward even if there was an error
             setCompletedSteps((prev) => {
               if (!prev.includes("kyc")) {
@@ -174,22 +178,23 @@ export default function Application() {
               }
               return prev;
             });
-            
+
             if (currentStep === "kyc") {
               console.log("Moving from KYC step to bank step despite error");
               setCurrentStep("bank");
             }
-            
+
             setIsHandlingVerification(false);
           }
         } catch (error) {
           console.error("Error handling verification redirect:", error);
           setIsHandlingVerification(false);
-          
+
           // Show error toast
           toast({
             title: "Verification Error",
-            description: "There was a problem processing your verification. Please try again.",
+            description:
+              "There was a problem processing your verification. Please try again.",
             variant: "destructive",
           });
         }
@@ -390,19 +395,26 @@ export default function Application() {
   const renderStepContent = () => {
     // Check if this step is already completed
     const isCurrentStepCompleted = completedSteps.includes(currentStep);
-    console.log("Current step:", currentStep, "Completed:", isCurrentStepCompleted, "Completed steps:", completedSteps);
-    
+    console.log(
+      "Current step:",
+      currentStep,
+      "Completed:",
+      isCurrentStepCompleted,
+      "Completed steps:",
+      completedSteps,
+    );
+
     // If already completed, move to the next step automatically
     if (isCurrentStepCompleted && currentStep !== "completed") {
       console.log("Step already completed, moving to next...");
       const nextStep = getNextStep(currentStep);
-      
+
       // Use setTimeout to avoid immediate state update during render
       setTimeout(() => {
         setCurrentStep(nextStep);
       }, 100);
     }
-    
+
     switch (currentStep) {
       case "terms":
         return (
