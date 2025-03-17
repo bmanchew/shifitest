@@ -862,6 +862,39 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         }),
       });
 
+      // After successful SMS, initiate NLPearl call if configured
+      if (nlpearlService.isInitialized()) {
+        try {
+          await nlpearlService.initiateApplicationCall(
+            phoneNumber,
+            applicationUrl,
+            merchant.name
+          );
+
+          logger.info({
+            message: "Initiated NLPearl call for application",
+            category: "api",
+            source: "nlpearl",
+            metadata: {
+              contractId: newContract.id,
+              phoneNumber,
+              merchantName: merchant.name
+            }
+          });
+        } catch (nlpearlError) {
+          // Log error but don't fail the response since SMS was sent
+          logger.error({
+            message: `Failed to initiate NLPearl call: ${nlpearlError instanceof Error ? nlpearlError.message : String(nlpearlError)}`,
+            category: "api",
+            source: "nlpearl",
+            metadata: {
+              contractId: newContract.id,
+              error: nlpearlError instanceof Error ? nlpearlError.stack : String(nlpearlError)
+            }
+          });
+        }
+      }
+
       res.json({ 
         success: true, 
         message: "SMS sent successfully",
