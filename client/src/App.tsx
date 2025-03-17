@@ -70,6 +70,9 @@ function App() {
             </>
           )}
 
+          {/* Admin routes */}
+          <Route path="/admin/contracts/:contractId" component={ContractDetails} />
+
           {/* Public customer routes */}
           <Route path="/offer/:contractId" component={CustomerContractOffer} />
           <Route path="/apply/:contractId?" component={CustomerApplication} />
