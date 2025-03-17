@@ -240,7 +240,7 @@ class PlaidService {
   }
 
   /**
-   * Exchange a public token for an access token
+   * Exchange a public token for an ACCESS TOKEN
    */
   async exchangePublicToken(publicToken: string) {
     if (!this.isInitialized() || !this.client) {
