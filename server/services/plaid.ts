@@ -170,7 +170,7 @@ class PlaidService {
         clientUserId,
         userName,
         userEmail,
-        products = [Products.Auth, Products.Transactions],
+        products = [Products.Auth, Products.Transactions,Products.Assets],
         redirectUri,
       } = params;
 

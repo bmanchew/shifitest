@@ -2521,6 +2521,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
 
   // Exchange public token for access token and store it
 // Exchange public token for access token and store it
+// Exchange public token for access token and store it
 apiRouter.post(
   "/plaid/set-access-token",
   async (req: Request, res: Response) => {
@@ -2576,6 +2577,9 @@ apiRouter.post(
       // For example:
       // await db.insert(bankAccounts).values(bankInfo);
 
+      // Initialize asset report data variable to null - IMPORTANT!
+      let assetReportData = null;
+
       // If contract ID is provided, update the contract's bank step
       if (contractId) {
         // Find the bank step in the application progress
@@ -2595,8 +2599,7 @@ apiRouter.post(
             (account) => account.account_id === selectedAccount.account_id,
           );
 
-          // Create Asset Report for deeper financial analysis
-          let assetReportData = null;
+          // Create Asset Report only if we have contractId - make sure to use a proper client_user_id
           try {
             logger.info({
               message: "Creating Asset Report after successful bank connection",
@@ -2608,6 +2611,9 @@ apiRouter.post(
             // Request 90 days of transaction data
             const daysRequested = 90;
             
+            // Use contractId for client_user_id to ensure it's always defined
+            const client_user_id = `contract-${contractId}`;
+            
             // Create the asset report
             const assetReportResponse = await plaidService.createAssetReport(
               accessToken,
@@ -2616,7 +2622,7 @@ apiRouter.post(
                 client_report_id: `contract-${contractId}-${Date.now()}`,
                 webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
                 user: {
-                  client_user_id: userId ? userId.toString() : contractId.toString()
+                  client_user_id: client_user_id
                 }
               }
             );
@@ -2632,6 +2638,7 @@ apiRouter.post(
               }
             );
             
+            // Set asset report data
             assetReportData = {
               assetReportId: assetReportResponse.assetReportId,
               assetReportRequested: true,
@@ -2659,6 +2666,8 @@ apiRouter.post(
                 error: assetReportError instanceof Error ? assetReportError.stack : null
               }
             });
+            
+            // Keep assetReportData as null, don't throw the error
           }
 
           // Mark the bank step as completed - include asset report info if created
@@ -2690,7 +2699,7 @@ apiRouter.post(
         }
       }
 
-      // Create a log entry
+      // Create a log entry - safely check if assetReportData exists
       await storage.createLog({
         level: "info",
         category: "api",
