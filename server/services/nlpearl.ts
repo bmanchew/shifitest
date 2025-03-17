@@ -1,25 +1,24 @@
-
-import axios from 'axios';
-import { logger } from './logger';
+import axios from "axios";
+import { logger } from "./logger";
 
 export class NLPearlService {
   private readonly accountId: string;
   private readonly apiKey: string;
-  private readonly baseUrl = 'https://api.nlpearl.ai/v1';
+  private readonly baseUrl = "https://api.nlpearl.ai/v1";
 
   constructor() {
-    this.accountId = process.env.NLPEARL_ACCOUNT_ID || '';
-    this.apiKey = process.env.NLPEARL_API_KEY || '';
+    this.accountId = process.env.NLPEARL_ACCOUNT_ID || "";
+    this.apiKey = process.env.NLPEARL_API_KEY || "";
 
     if (!this.accountId || !this.apiKey) {
       logger.warn({
-        message: 'NLPearl service not properly configured',
-        category: 'service',
-        source: 'nlpearl',
+        message: "NLPearl service not properly configured",
+        category: "service",
+        source: "nlpearl",
         metadata: {
           hasAccountId: !!this.accountId,
-          hasApiKey: !!this.apiKey
-        }
+          hasApiKey: !!this.apiKey,
+        },
       });
     }
   }
@@ -32,135 +31,55 @@ export class NLPearlService {
     return `Bearer ${this.accountId}:${this.apiKey}`;
   }
 
-  async initiateApplicationCall(phoneNumber: string, applicationUrl: string, merchantName: string) {
+  async initiateApplicationCall(
+    phoneNumber: string,
+    applicationUrl: string,
+    merchantName: string,
+  ) {
     try {
       if (!this.isInitialized()) {
-        throw new Error('NLPearl service not properly configured');
+        throw new Error("NLPearl service not properly configured");
       }
 
-      const response = await axios.post(`${this.baseUrl}/calls/initiate`, {
-        phone_number: phoneNumber,
-        context: {
-          merchant_name: merchantName,
-          application_url: applicationUrl
+      const response = await axios.post(
+        `${this.baseUrl}/calls/initiate`,
+        {
+          phone_number: phoneNumber,
+          context: {
+            merchant_name: merchantName,
+            application_url: applicationUrl,
+          },
+          flow_id: "application_walkthrough", // You'll need to create this flow in NLPearl dashboard
         },
-        flow_id: 'application_walkthrough'  // You'll need to create this flow in NLPearl dashboard
-      }, {
-        headers: {
-          'Authorization': this.getAuthHeader(),
-          'Content-Type': 'application/json'
-        }
-      });
+        {
+          headers: {
+            Authorization: this.getAuthHeader(),
+            "Content-Type": "application/json",
+          },
+        },
+      );
 
       logger.info({
-        message: 'NLPearl call initiated',
-        category: 'service',
-        source: 'nlpearl',
+        message: "NLPearl call initiated",
+        category: "service",
+        source: "nlpearl",
         metadata: {
           phoneNumber,
-          callId: response.data.call_id
-        }
+          callId: response.data.call_id,
+        },
       });
 
       return response.data;
     } catch (error) {
       logger.error({
         message: `Failed to initiate NLPearl call: ${error instanceof Error ? error.message : String(error)}`,
-        category: 'service',
-        source: 'nlpearl',
+        category: "service",
+        source: "nlpearl",
         metadata: {
-          error: error instanceof Error ? error.stack : String(error)
-        }
-      });
-      throw error;
-    }
-  }
-}
-
-export const nlpearlService = new NLPearlService();
-import axios from 'axios';
-import { logger } from './logger';
-
-export class NLPearlService {
-  private apiKey: string;
-  private accountId: string;
-  private baseUrl = 'https://api.nlpearl.ai/v1';
-  private initialized = false;
-
-  constructor() {
-    this.apiKey = process.env.NLPEARL_API_KEY || '';
-    this.accountId = process.env.NLPEARL_ACCOUNT_ID || '';
-    this.initialized = !!(this.apiKey && this.accountId);
-
-    if (this.initialized) {
-      logger.info({
-        message: 'NLPearl service initialized',
-        category: 'service',
-        source: 'nlpearl'
-      });
-    } else {
-      logger.warn({
-        message: 'NLPearl service not initialized - missing credentials',
-        category: 'service',
-        source: 'nlpearl'
-      });
-    }
-  }
-
-  isInitialized(): boolean {
-    return this.initialized;
-  }
-
-  private getAuthToken(): string {
-    return `Bearer ${this.accountId}:${this.apiKey}`;
-  }
-
-  async initiateApplicationCall(phoneNumber: string, applicationUrl: string, merchantName: string): Promise<any> {
-    if (!this.initialized) {
-      throw new Error('NLPearl service not initialized');
-    }
-
-    try {
-      const response = await axios.post(`${this.baseUrl}/calls/initiate`, {
-        phone_number: phoneNumber,
-        context: {
-          merchant_name: merchantName,
-          application_url: applicationUrl
+          error: error instanceof Error ? error.stack : String(error),
         },
-        template: 'financing_application'
-      }, {
-        headers: {
-          'Authorization': this.getAuthToken(),
-          'Content-Type': 'application/json'
-        }
-      });
-
-      logger.info({
-        message: 'NLPearl call initiated successfully',
-        category: 'api',
-        source: 'nlpearl',
-        metadata: {
-          phoneNumber,
-          merchantName,
-          callId: response.data.call_id
-        }
-      });
-
-      return response.data;
-    } catch (error) {
-      logger.error({
-        message: `Failed to initiate NLPearl call: ${error instanceof Error ? error.message : String(error)}`,
-        category: 'api',
-        source: 'nlpearl',
-        metadata: {
-          phoneNumber,
-          merchantName,
-          error: error instanceof Error ? error.stack : String(error)
-        }
       });
       throw error;
     }
   }
 }
-
-export const nlpearlService = new NLPearlService();
