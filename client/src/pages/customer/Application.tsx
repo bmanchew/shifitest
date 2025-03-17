@@ -369,9 +369,11 @@ export default function Application() {
 
   // Navigate to dashboard after completion
   const navigateToDashboard = () => {
-    if (contractData?.contract.id) {
-      window.location.href = `/dashboard/${contractData.contract.id}`;
+    if (!contractData || !contractData.contract) {
+      console.error('Contract data not available for dashboard redirect');
+      return;
     }
+    window.location.href = `/dashboard/${contractData.contract.id}`;
   };
 
   // Handle going back to the previous step
@@ -386,7 +388,7 @@ export default function Application() {
 
   // Handle completion of all steps
   useEffect(() => {
-    if (currentStep === "completed" && contractData?.contract.id) {
+    if (currentStep === "completed" && contractData && contractData.contract) {
       navigateToDashboard();
     }
   }, [currentStep, contractData]);
