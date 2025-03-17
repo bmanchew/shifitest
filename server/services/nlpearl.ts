@@ -78,3 +78,89 @@ export class NLPearlService {
 }
 
 export const nlpearlService = new NLPearlService();
+import axios from 'axios';
+import { logger } from './logger';
+
+export class NLPearlService {
+  private apiKey: string;
+  private accountId: string;
+  private baseUrl = 'https://api.nlpearl.ai/v1';
+  private initialized = false;
+
+  constructor() {
+    this.apiKey = process.env.NLPEARL_API_KEY || '';
+    this.accountId = process.env.NLPEARL_ACCOUNT_ID || '';
+    this.initialized = !!(this.apiKey && this.accountId);
+
+    if (this.initialized) {
+      logger.info({
+        message: 'NLPearl service initialized',
+        category: 'service',
+        source: 'nlpearl'
+      });
+    } else {
+      logger.warn({
+        message: 'NLPearl service not initialized - missing credentials',
+        category: 'service',
+        source: 'nlpearl'
+      });
+    }
+  }
+
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  private getAuthToken(): string {
+    return `Bearer ${this.accountId}:${this.apiKey}`;
+  }
+
+  async initiateApplicationCall(phoneNumber: string, applicationUrl: string, merchantName: string): Promise<any> {
+    if (!this.initialized) {
+      throw new Error('NLPearl service not initialized');
+    }
+
+    try {
+      const response = await axios.post(`${this.baseUrl}/calls/initiate`, {
+        phone_number: phoneNumber,
+        context: {
+          merchant_name: merchantName,
+          application_url: applicationUrl
+        },
+        template: 'financing_application'
+      }, {
+        headers: {
+          'Authorization': this.getAuthToken(),
+          'Content-Type': 'application/json'
+        }
+      });
+
+      logger.info({
+        message: 'NLPearl call initiated successfully',
+        category: 'api',
+        source: 'nlpearl',
+        metadata: {
+          phoneNumber,
+          merchantName,
+          callId: response.data.call_id
+        }
+      });
+
+      return response.data;
+    } catch (error) {
+      logger.error({
+        message: `Failed to initiate NLPearl call: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'nlpearl',
+        metadata: {
+          phoneNumber,
+          merchantName,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      throw error;
+    }
+  }
+}
+
+export const nlpearlService = new NLPearlService();
