@@ -16,6 +16,9 @@ import { diditService } from "./services/didit";
 import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
+import { NLPearlService } from './services/nlpearl';
+
+const nlpearlService = new NLPearlService();
 import { logger } from "./services/logger";
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
