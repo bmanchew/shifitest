@@ -2520,155 +2520,228 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
   );
 
   // Exchange public token for access token and store it
-  apiRouter.post(
-    "/plaid/set-access-token",
-    async (req: Request, res: Response) => {
-      try {
-        const { publicToken, userId, contractId } = req.body;
+// Exchange public token for access token and store it
+apiRouter.post(
+  "/plaid/set-access-token",
+  async (req: Request, res: Response) => {
+    try {
+      const { publicToken, userId, contractId } = req.body;
 
-        if (!publicToken) {
-          return res.status(400).json({
-            success: false,
-            message: "Public token is required",
-          });
-        }
-
-        if (!userId && !contractId) {
-          return res.status(400).json({
-            success: false,
-            message: "Either userId or contractId is required",
-          });
-        }
-
-        logger.info({
-          message: "Exchanging Plaid public token",
-          category: "api",
-          source: "plaid",
-          metadata: { userId, contractId },
-        });
-
-        // Exchange public token for access token
-        const exchangeResponse =
-          await plaidService.exchangePublicToken(publicToken);
-
-        // Get accounts and bank account details (routing, account numbers)
-        const authData = await plaidService.getAuth(
-          exchangeResponse.accessToken,
-        );
-
-        // Store the access token and item ID in your database
-        // In a real app, never return the access token to the client
-
-        // Create a record of the user's bank information
-        const bankInfo = {
-          userId: userId ? parseInt(userId) : null,
-          contractId: contractId ? parseInt(contractId) : null,
-          accessToken: exchangeResponse.accessToken, // This should be encrypted in a real app
-          itemId: exchangeResponse.itemId,
-          accounts: authData.accounts,
-          accountNumbers: authData.numbers,
-          createdAt: new Date(),
-        };
-
-        // In a real app, store this in your database
-        // For example:
-        // await db.insert(bankAccounts).values(bankInfo);
-
-        // If contract ID is provided, update the contract's bank step
-        if (contractId) {
-          // Find the bank step in the application progress
-          const applicationProgress =
-            await storage.getApplicationProgressByContractId(
-              parseInt(contractId),
-            );
-          const bankStep = applicationProgress.find(
-            (step) => step.step === "bank",
-          );
-
-          if (bankStep) {
-            // Store the selected account ID and relevant bank information
-            // For demo, we'll use the first account
-            const selectedAccount = authData.accounts[0];
-            const accountNumbers = authData.numbers.ach.find(
-              (account) => account.account_id === selectedAccount.account_id,
-            );
-
-            // Mark the bank step as completed
-            await storage.updateApplicationProgressCompletion(
-              bankStep.id,
-              true, // Completed
-              JSON.stringify({
-                verified: true,
-                completedAt: new Date().toISOString(),
-                itemId: exchangeResponse.itemId,
-                accountId: selectedAccount.account_id,
-                accountName: selectedAccount.name,
-                accountMask: selectedAccount.mask,
-                accountType: selectedAccount.type,
-                accountSubtype: selectedAccount.subtype,
-                routingNumber: accountNumbers?.routing,
-                accountNumber: accountNumbers?.account,
-              }),
-            );
-
-            // Move the contract to the next step if currently on bank step
-            const contract = await storage.getContract(parseInt(contractId));
-            if (contract && contract.currentStep === "bank") {
-              await storage.updateContractStep(parseInt(contractId), "payment");
-            }
-          }
-        }
-
-        // Create a log entry
-        await storage.createLog({
-          level: "info",
-          category: "api",
-          source: "plaid",
-          message: `Bank account linked successfully`,
-          userId: userId ? parseInt(userId) : null,
-          metadata: JSON.stringify({
-            contractId,
-            itemId: exchangeResponse.itemId,
-            accountsCount: authData.accounts.length,
-          }),
-        });
-
-        // Return success response with account information
-        // Do NOT include the access token in the response
-        res.json({
-          success: true,
-          accounts: authData.accounts,
-          itemId: exchangeResponse.itemId,
-          message: "Bank account linked successfully",
-        });
-      } catch (error) {
-        logger.error({
-          message: `Failed toexchange Plaid public token: ${error instanceof Error ? error.message : String(error)}`,
-          category: "api",
-          source: "plaid",
-          metadata: {
-            error: error instanceof Error ? error.stack : null,
-          },
-        });
-
-        // Create error log
-        await storage.createLog({
-          level: "error",
-          category: "api",
-          source: "plaid",
-          message: `Failed to link bank account: ${error instanceof Error ? error.message : String(error)}`,
-          metadata: JSON.stringify({
-            error: error instanceof Error ? error.stack : null,
-          }),
-        });
-
-        res.status(500).json({
+      if (!publicToken) {
+        return res.status(400).json({
           success: false,
-          message: "Failed to link bank account",
+          message: "Public token is required",
         });
       }
-    },
-  );
+
+      if (!userId && !contractId) {
+        return res.status(400).json({
+          success: false,
+          message: "Either userId or contractId is required",
+        });
+      }
+
+      logger.info({
+        message: "Exchanging Plaid public token",
+        category: "api",
+        source: "plaid",
+        metadata: { userId, contractId },
+      });
+
+      // Exchange public token for access token
+      const exchangeResponse =
+        await plaidService.exchangePublicToken(publicToken);
+      
+      const accessToken = exchangeResponse.accessToken;
+      const itemId = exchangeResponse.itemId;
+
+      // Get accounts and bank account details (routing, account numbers)
+      const authData = await plaidService.getAuth(accessToken);
+
+      // Store the access token and item ID in your database
+      // In a real app, never return the access token to the client
+
+      // Create a record of the user's bank information
+      const bankInfo = {
+        userId: userId ? parseInt(userId) : null,
+        contractId: contractId ? parseInt(contractId) : null,
+        accessToken: accessToken, // This should be encrypted in a real app
+        itemId: itemId,
+        accounts: authData.accounts,
+        accountNumbers: authData.numbers,
+        createdAt: new Date(),
+      };
+
+      // In a real app, store this in your database
+      // For example:
+      // await db.insert(bankAccounts).values(bankInfo);
+
+      // If contract ID is provided, update the contract's bank step
+      if (contractId) {
+        // Find the bank step in the application progress
+        const applicationProgress =
+          await storage.getApplicationProgressByContractId(
+            parseInt(contractId),
+          );
+        const bankStep = applicationProgress.find(
+          (step) => step.step === "bank",
+        );
+
+        if (bankStep) {
+          // Store the selected account ID and relevant bank information
+          // For demo, we'll use the first account
+          const selectedAccount = authData.accounts[0];
+          const accountNumbers = authData.numbers.ach.find(
+            (account) => account.account_id === selectedAccount.account_id,
+          );
+
+          // Create Asset Report for deeper financial analysis
+          let assetReportData = null;
+          try {
+            logger.info({
+              message: "Creating Asset Report after successful bank connection",
+              category: "api",
+              source: "plaid",
+              metadata: { contractId, userId, accessToken: "redacted" },
+            });
+            
+            // Request 90 days of transaction data
+            const daysRequested = 90;
+            
+            // Create the asset report
+            const assetReportResponse = await plaidService.createAssetReport(
+              accessToken,
+              daysRequested,
+              {
+                client_report_id: `contract-${contractId}-${Date.now()}`,
+                webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
+                user: {
+                  client_user_id: userId ? userId.toString() : contractId.toString()
+                }
+              }
+            );
+            
+            // Store the asset report token in database
+            await storage.storeAssetReportToken(
+              parseInt(contractId),
+              assetReportResponse.assetReportToken,
+              assetReportResponse.assetReportId,
+              {
+                userId: userId ? parseInt(userId) : undefined,
+                daysRequested
+              }
+            );
+            
+            assetReportData = {
+              assetReportId: assetReportResponse.assetReportId,
+              assetReportRequested: true,
+              assetReportStatus: 'pending'
+            };
+            
+            logger.info({
+              message: "Successfully created Asset Report",
+              category: "api",
+              source: "plaid",
+              metadata: { 
+                contractId, 
+                assetReportId: assetReportResponse.assetReportId 
+              }
+            });
+          } catch (assetReportError) {
+            // Log error but don't fail the main flow
+            logger.error({
+              message: `Error creating Asset Report: ${assetReportError instanceof Error ? assetReportError.message : String(assetReportError)}`,
+              category: "api",
+              source: "plaid",
+              metadata: {
+                contractId,
+                userId,
+                error: assetReportError instanceof Error ? assetReportError.stack : null
+              }
+            });
+          }
+
+          // Mark the bank step as completed - include asset report info if created
+          const bankData = {
+            verified: true,
+            completedAt: new Date().toISOString(),
+            itemId: itemId,
+            accountId: selectedAccount.account_id,
+            accountName: selectedAccount.name,
+            accountMask: selectedAccount.mask,
+            accountType: selectedAccount.type,
+            accountSubtype: selectedAccount.subtype,
+            routingNumber: accountNumbers?.routing,
+            accountNumber: accountNumbers?.account,
+            ...(assetReportData || {}) // Add asset report data if available
+          };
+
+          await storage.updateApplicationProgressCompletion(
+            bankStep.id,
+            true, // Completed
+            JSON.stringify(bankData),
+          );
+
+          // Move the contract to the next step if currently on bank step
+          const contract = await storage.getContract(parseInt(contractId));
+          if (contract && contract.currentStep === "bank") {
+            await storage.updateContractStep(parseInt(contractId), "payment");
+          }
+        }
+      }
+
+      // Create a log entry
+      await storage.createLog({
+        level: "info",
+        category: "api",
+        source: "plaid",
+        message: `Bank account linked successfully${assetReportData ? " with Asset Report" : ""}`,
+        userId: userId ? parseInt(userId) : null,
+        metadata: JSON.stringify({
+          contractId,
+          itemId: exchangeResponse.itemId,
+          accountsCount: authData.accounts.length,
+          assetReportCreated: !!assetReportData
+        }),
+      });
+
+      // Return success response with account information
+      // Do NOT include the access token in the response
+      res.json({
+        success: true,
+        accounts: authData.accounts,
+        itemId: exchangeResponse.itemId,
+        message: "Bank account linked successfully",
+        assetReportCreated: !!assetReportData
+      });
+    } catch (error) {
+      logger.error({
+        message: `Failed to exchange Plaid public token: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      // Create error log
+      await storage.createLog({
+        level: "error",
+        category: "api",
+        source: "plaid",
+        message: `Failed to link bank account: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: JSON.stringify({
+          error: error instanceof Error ? error.stack : null,
+        }),
+      });
+
+      res.status(500).json({
+        success: false,
+        message: "Failed to link bank account",
+      });
+    }
+  },
+);
 
   // Get account info for a specific user
   apiRouter.get("/plaid/accounts", async (req: Request, res: Response) => {
@@ -3234,233 +3307,404 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
   );
 
   // Plaid webhook handler
-  apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
-    try {
-      const { webhook_type, webhook_code, item_id } = req.body;
+ // Plaid webhook handler
+apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
+  try {
+    const { webhook_type, webhook_code, item_id } = req.body;
 
-      logger.info({
-        message: `Received Plaid webhook`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          webhookType: webhook_type,
-          webhookCode: webhook_code,
-          itemId: item_id,
-        },
-      });
+    logger.info({
+      message: `Received Plaid webhook`,
+      category: "api",
+      source: "plaid",
+      metadata: {
+        webhookType: webhook_type,
+        webhookCode: webhook_code,
+        itemId: item_id,
+        body: req.body
+      },
+    });
 
-      // Handle different webhook types
-      switch (webhook_type) {
-        case "AUTH":
-          switch (webhook_code) {
-            case "SMS_MICRODEPOSITS_VERIFICATION":
-              const { status, item_id, account_id } = req.body;
-              logger.info({
-                message: `Received micro-deposits verification webhook: ${status}`,
-                category: "api",
-                source: "plaid",
-                metadata: { itemId: item_id, accountId: account_id, status }
-              });
+    // Handle different webhook types
+    switch (webhook_type) {
+      case "AUTH":
+        switch (webhook_code) {
+          case "SMS_MICRODEPOSITS_VERIFICATION":
+            const { status, item_id, account_id } = req.body;
+            logger.info({
+              message: `Received micro-deposits verification webhook: ${status}`,
+              category: "api",
+              source: "plaid",
+              metadata: { itemId: item_id, accountId: account_id, status }
+            });
 
-              if (status === "MANUALLY_VERIFIED") {
-                // Update application progress for the associated contract
-                const contract = await storage.getContractByPlaidItemId(item_id);
-                if (contract) {
-                  const progress = await storage.getApplicationProgressByContractId(contract.id);
-                  const bankStep = progress.find(p => p.step === "bank");
-                  if (bankStep) {
-                    await storage.updateApplicationProgressCompletion(
-                      bankStep.id,
-                      true,
-                      JSON.stringify({
-                        verifiedByMicrodeposits: true,
-                        verifiedAt: new Date().toISOString(),
-                        verificationMethod: "sms"
-                      })
-                    );
-                  }
+            if (status === "MANUALLY_VERIFIED") {
+              // Update application progress for the associated contract
+              const contract = await storage.getContractByPlaidItemId(item_id);
+              if (contract) {
+                const progress = await storage.getApplicationProgressByContractId(contract.id);
+                const bankStep = progress.find(p => p.step === "bank");
+                if (bankStep) {
+                  await storage.updateApplicationProgressCompletion(
+                    bankStep.id,
+                    true,
+                    JSON.stringify({
+                      verifiedByMicrodeposits: true,
+                      verifiedAt: new Date().toISOString(),
+                      verificationMethod: "sms"
+                    })
+                  );
                 }
               }
-              break;
-          }
-          break;
-        case "TRANSACTIONS":
-          // Handle transaction webhooks
-          switch (webhook_code) {
-            case "INITIAL_UPDATE":
-              logger.info({
-                message: "Initial transaction update received",
-                category: "api",
-                source: "plaid",
-                metadata: { itemId: item_id },
-              });
-              break;
-            case "HISTORICAL_UPDATE":
-              logger.info({
-                message: "Historical transaction update received",
-                category: "api",
-                source: "plaid",
-                metadata: { itemId: item_id },
-              });
-              break;
-            case "DEFAULT_UPDATE":
-              logger.info({
-                message: "Default transaction update received",
-                category: "api",
-                source: "plaid",
-                metadata: { itemId: item_id },
-              });
-              break;
-            case "TRANSACTIONS_REMOVED":
-              logger.info({
-                message: "Transactions removed notification received",
-                category: "api",
-                source: "plaid",
-                metadata: { itemId: item_id },
-              });
-              break;
-          }
-          break;
+            }
+            break;
+        }
+        break;
+      case "TRANSACTIONS":
+        // Handle transaction webhooks
+        switch (webhook_code) {
+          case "INITIAL_UPDATE":
+            logger.info({
+              message: "Initial transaction update received",
+              category: "api",
+              source: "plaid",
+              metadata: { itemId: item_id },
+            });
+            break;
+          case "HISTORICAL_UPDATE":
+            logger.info({
+              message: "Historical transaction update received",
+              category: "api",
+              source: "plaid",
+              metadata: { itemId: item_id },
+            });
+            break;
+          case "DEFAULT_UPDATE":
+            logger.info({
+              message: "Default transaction update received",
+              category: "api",
+              source: "plaid",
+              metadata: { itemId: item_id },
+            });
+            break;
+          case "TRANSACTIONS_REMOVED":
+            logger.info({
+              message: "Transactions removed notification received",
+              category: "api",
+              source: "plaid",
+              metadata: { itemId: item_id },
+            });
+            break;
+        }
+        break;
 
-        case "ITEM":
-          // Handle item webhooks
-          switch (webhook_code) {
-            case "ERROR":
-              logger.warn({
-                message: "Item error received",
+      case "ITEM":
+        // Handle item webhooks
+        switch (webhook_code) {
+          case "ERROR":
+            logger.warn({
+              message: "Item error received",
+              category: "api",
+              source: "plaid",
+              metadata: {
+                itemId: item_id,
+                error: req.body.error,
+              },
+            });
+            break;
+          case "PENDING_EXPIRATION":
+            logger.warn({
+              message: "Item pending expiration",
+              category: "api",
+              source: "plaid",
+              metadata: { itemId: item_id },
+            });
+            break;
+          case "USER_PERMISSION_REVOKED":
+            logger.warn({
+              message: "User permission revoked",
+              category: "api",
+              source: "plaid",
+              metadata: { itemId: item_id },
+            });
+            break;
+        }
+        break;
+
+      case "ASSETS":
+        // Handle assets webhooks
+        const assetReportId = req.body.asset_report_id;
+        const reportType = req.body.report_type; // FULL or FAST
+        
+        logger.info({
+          message: `Assets webhook received: ${webhook_code}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            assetReportId,
+            webhookCode: webhook_code,
+            reportType,
+            itemId: item_id,
+          },
+        });
+
+        if (webhook_code === "PRODUCT_READY") {
+          // Find the asset report in our database
+          const assetReports = await storage.getAssetReportsByAssetReportId(assetReportId);
+          
+          if (assetReports && assetReports.length > 0) {
+            const assetReport = assetReports[0];
+            
+            try {
+              // Update the status
+              await storage.updateAssetReportStatus(assetReport.id, 'ready');
+              
+              // Get the asset report data - include insights for better analysis
+              const assetReportData = await plaidService.getAssetReport(assetReport.assetReportToken, true);
+
+              console.log("Asset Report data:", assetReportData);
+              
+              // Analyze the asset report for underwriting
+              const analysis = await plaidService.analyzeAssetReportForUnderwriting(assetReport.assetReportToken);
+              
+              // Store the analysis with the asset report
+              await storage.updateAssetReportStatus(assetReport.id, 'analyzed', JSON.stringify(analysis));
+              
+              // If we have a contract ID, update the bank step with the analysis
+              if (assetReport.contractId) {
+                const applicationProgress = await storage.getApplicationProgressByContractId(assetReport.contractId);
+                const bankStep = applicationProgress.find(step => step.step === "bank");
+                
+                if (bankStep && bankStep.data) {
+                  try {
+                    const bankData = JSON.parse(bankStep.data);
+                    
+                    // Add asset report analysis to existing bank data
+                    const updatedBankData = {
+                      ...bankData,
+                      assetReportStatus: 'ready',
+                      assetReportAnalysisDate: new Date().toISOString(),
+                      assetReportAnalysis: analysis
+                    };
+                    
+                    await storage.updateApplicationProgressCompletion(
+                      bankStep.id,
+                      true, // keep as completed
+                      JSON.stringify(updatedBankData)
+                    );
+                    
+                    logger.info({
+                      message: `Updated bank step with Asset Report analysis for contract ${assetReport.contractId}`,
+                      category: "api",
+                      source: "plaid",
+                      metadata: {
+                        contractId: assetReport.contractId,
+                        bankStepId: bankStep.id,
+                        assetReportId
+                      }
+                    });
+                  } catch (parseError) {
+                    logger.error({
+                      message: `Failed to parse bank data: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+                      category: "api",
+                      source: "plaid",
+                      metadata: {
+                        contractId: assetReport.contractId,
+                        bankData: bankStep.data,
+                      }
+                    });
+                  }
+                }
+                
+                // Log that we've received and analyzed the asset report
+                await storage.createLog({
+                  level: "info",
+                  category: "underwriting",
+                  source: "plaid",
+                  message: `Asset Report analysis complete for contract ${assetReport.contractId}`,
+                  userId: assetReport.userId || null,
+                  metadata: JSON.stringify({
+                    contractId: assetReport.contractId,
+                    assetReportId: assetReportId,
+                    monthlyIncome: analysis.income.monthlyIncome,
+                    annualIncome: analysis.income.annualIncome,
+                    dtiRatio: analysis.debt.dtiRatio,
+                    employmentMonths: analysis.employment.employmentMonths,
+                    totalAccounts: analysis.accounts.totalAccounts,
+                    availableFunds: analysis.balances.availableFunds
+                  })
+                });
+              } else {
+                // If there's no contract ID, just log that we processed the report
+                logger.info({
+                  message: `Asset Report ready with no associated contract`,
+                  category: "api",
+                  source: "plaid",
+                  metadata: {
+                    assetReportId,
+                    userId: assetReport.userId
+                  }
+                });
+              }
+            } catch (error) {
+              logger.error({
+                message: `Error processing Asset Report webhook: ${error instanceof Error ? error.message : String(error)}`,
                 category: "api",
                 source: "plaid",
                 metadata: {
-                  itemId: item_id,
-                  error: req.body.error,
-                },
+                  assetReportId,
+                  error: error instanceof Error ? error.stack : null
+                }
               });
-              break;
-            case "PENDING_EXPIRATION":
-              logger.warn({
-                message: "Item pending expiration",
-                category: "api",
-                source: "plaid",
-                metadata: { itemId: item_id },
-              });
-              break;
-            case "USER_PERMISSION_REVOKED":
-              logger.warn({
-                message: "User permission revoked",
-                category: "api",
-                source: "plaid",
-                metadata: { itemId: item_id },
-              });
-              break;
+            }
+          } else {
+            logger.warn({
+              message: `Received webhook for unknown Asset Report ID`,
+              category: "api",
+              source: "plaid",
+              metadata: { assetReportId }
+            });
           }
-          break;
-
-        case "AUTH":
-          // Handle auth webhooks
-          logger.info({
-            message: `Auth webhook received: ${webhook_code}`,
-            category: "api",
-            source: "plaid",
-            metadata: { itemId: item_id },
-          });
-          break;
-
-        case "ASSETS":
-          // Handle assets webhooks
-          logger.info({
-            message: `Assets webhook received: ${webhook_code}`,
+        } else if (webhook_code === "ERROR") {
+          // Handle error case
+          logger.error({
+            message: "Received error webhook for Asset Report",
             category: "api",
             source: "plaid",
             metadata: {
-              itemId: item_id,
-              assetReportId: req.body.asset_report_id,
-            },
+              assetReportId,
+              error: req.body.error
+            }
           });
-          break;
-
-        case "INCOME":
-          // Handle income webhooks
-          logger.info({
-            message: `Income webhook received: ${webhook_code}`,
-            category: "api",
-            source: "plaid",
-            metadata: { itemId: item_id },
-          });
-          break;
-
-        case "TRANSFER":
-          // Handle transfer webhooks
-          switch (webhook_code) {
-            case "TRANSFER_CREATED":
-              logger.info({
-                message: "Transfer created",
-                category: "payment",
-                source: "plaid",
-                metadata: {
-                  itemId: item_id,
-                  transferId: req.body.transfer_id,
-                },
-              });
-              break;
-            case "TRANSFER_FAILED":
-              logger.warn({
-                message: "Transfer failed",
-                category: "payment",
-                source: "plaid",
-                metadata: {
-                  itemId: item_id,
-                  transferId: req.body.transfer_id,
-                  failureReason: req.body.failure_reason,
-                },
-              });
-              break;
-            case "TRANSFER_COMPLETED":
-              logger.info({
-                message: "Transfer completed",
-                category: "payment",
-                source: "plaid",
-                metadata: {
-                  itemId: item_id,
-                  transferId: req.body.transfer_id,
-                },
-              });
-              break;
+          
+          // Find the asset report in our database and update the status
+          const assetReports = await storage.getAssetReportsByAssetReportId(assetReportId);
+          if (assetReports && assetReports.length > 0) {
+            const assetReport = assetReports[0];
+            
+            // Update asset report status to error
+            await storage.updateAssetReportStatus(assetReport.id, 'error', JSON.stringify(req.body.error));
+            
+            // If we have a contract ID, update the bank step with the error
+            if (assetReport.contractId) {
+              const applicationProgress = await storage.getApplicationProgressByContractId(assetReport.contractId);
+              const bankStep = applicationProgress.find(step => step.step === "bank");
+              
+              if (bankStep && bankStep.data) {
+                try {
+                  const bankData = JSON.parse(bankStep.data);
+                  
+                  // Add asset report error to existing bank data
+                  const updatedBankData = {
+                    ...bankData,
+                    assetReportStatus: 'error',
+                    assetReportError: req.body.error
+                  };
+                  
+                  await storage.updateApplicationProgressCompletion(
+                    bankStep.id,
+                    true, // keep as completed
+                    JSON.stringify(updatedBankData)
+                  );
+                } catch (parseError) {
+                  logger.error({
+                    message: `Failed to parse bank data: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+                    category: "api",
+                    source: "plaid",
+                    metadata: {
+                      contractId: assetReport.contractId,
+                      bankData: bankStep.data,
+                    }
+                  });
+                }
+              }
+            }
           }
-          break;
+        }
+        break;
 
-        default:
-          logger.info({
-            message: `Unhandled Plaid webhook type: ${webhook_type}`,
-            category: "api",
-            source: "plaid",
-            metadata: {
-              webhookType: webhook_type,
-              webhookCode: webhook_code,
-              itemId: item_id,
-            },
-          });
-      }
+      case "INCOME":
+        // Handle income webhooks
+        logger.info({
+          message: `Income webhook received: ${webhook_code}`,
+          category: "api",
+          source: "plaid",
+          metadata: { itemId: item_id },
+        });
+        break;
 
-      // Always return a 200 status to acknowledge receipt of the webhook
-      res.status(200).json({ received: true });
-    } catch (error) {
-      logger.error({
-        message: `Error processing Plaid webhook: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          error: error instanceof Error ? error.stack : null,
-          body: req.body,
-        },
-      });
+      case "TRANSFER":
+        // Handle transfer webhooks
+        switch (webhook_code) {
+          case "TRANSFER_CREATED":
+            logger.info({
+              message: "Transfer created",
+              category: "payment",
+              source: "plaid",
+              metadata: {
+                itemId: item_id,
+                transferId: req.body.transfer_id,
+              },
+            });
+            break;
+          case "TRANSFER_FAILED":
+            logger.warn({
+              message: "Transfer failed",
+              category: "payment",
+              source: "plaid",
+              metadata: {
+                itemId: item_id,
+                transferId: req.body.transfer_id,
+                failureReason: req.body.failure_reason,
+              },
+            });
+            break;
+          case "TRANSFER_COMPLETED":
+            logger.info({
+              message: "Transfer completed",
+              category: "payment",
+              source: "plaid",
+              metadata: {
+                itemId: item_id,
+                transferId: req.body.transfer_id,
+              },
+            });
+            break;
+        }
+        break;
 
-      // Still return 200 to acknowledge receipt
-      res.status(200).json({
-        received: true,
-        error: "Error processing webhook",
-      });
+      default:
+        logger.info({
+          message: `Unhandled Plaid webhook type: ${webhook_type}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            webhookType: webhook_type,
+            webhookCode: webhook_code,
+            itemId: item_id,
+          },
+        });
     }
-  });
+
+    // Always return a 200 status to acknowledge receipt of the webhook
+    res.status(200).json({ received: true });
+  } catch (error) {
+    logger.error({
+      message: `Error processing Plaid webhook: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "plaid",
+      metadata: {
+        error: error instanceof Error ? error.stack : null,
+        body: req.body,
+      },
+    });
+
+    // Still return 200 to acknowledge receipt
+    res.status(200).json({
+      received: true,
+      error: "Error processing webhook",
+    });
+  }
+});
 
   // Mount the admin reports routers
   apiRouter.use("/admin/reports", reportsRouter);
