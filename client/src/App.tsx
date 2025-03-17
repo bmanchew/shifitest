@@ -4,6 +4,7 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 import { useAuth } from "@/hooks/use-auth";
 import { Suspense, lazy } from "react";
+import Portfolio from "@/pages/admin/Portfolio"; // Import Portfolio component
 
 // Admin pages
 const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
@@ -39,49 +40,59 @@ function LoadingFallback() {
 function App() {
   const { user, isLoading } = useAuth();
 
+  if (isLoading) {
+    return <LoadingFallback />;
+  }
+
   return (
     <Suspense fallback={<LoadingFallback />}>
-      {isLoading ? (
-        <LoadingFallback />
-      ) : (
-        <Switch>
-          {!user && <Route path="/" component={Login} />}
+      <Switch>
+        {/* Public routes */}
+        {!user && <Route path="/" component={Login} />}
 
-          {user && user.role === "admin" && (
-            <>
-              <Route path="/" component={AdminDashboard} />
-              <Route path="/admin" component={AdminDashboard} />
-              <Route path="/admin/dashboard" component={AdminDashboard} />
-              <Route path="/admin/merchants" component={AdminMerchants} />
-              <Route path="/admin/contracts" component={AdminContracts} />
-              <Route path="/admin/logs" component={AdminLogs} />
-              <Route path="/admin/settings" component={AdminSettings} />
-            </>
-          )}
+        {/* Customer public routes */}
+        <Route path="/offer/:contractId" component={CustomerContractOffer} />
+        <Route path="/apply/:contractId" component={CustomerApplication} />
+        <Route path="/apply" component={CustomerApplication} />
+        <Route
+          path="/customer/application/:contractId"
+          component={CustomerApplication}
+        />
+        <Route
+          path="/customer/contract-lookup"
+          component={lazy(() => import("@/pages/customer/ContractLookup"))}
+        />
+        <Route path="/dashboard/:contractId" component={CustomerDashboard} />
 
-          {user && user.role === "merchant" && (
-            <>
-              <Route path="/" component={MerchantDashboard} />
-              <Route path="/merchant" component={MerchantDashboard} />
-              <Route path="/merchant/dashboard" component={MerchantDashboard} />
-              <Route path="/merchant/contracts" component={MerchantContracts} />
-              <Route path="/merchant/reports" component={MerchantReports} />
-              <Route path="/merchant/settings" component={MerchantSettings} />
-            </>
-          )}
+        {/* Admin routes */}
+        {user && user.role === "admin" && (
+          <>
+            <Route path="/" component={AdminDashboard} />
+            <Route path="/admin" component={AdminDashboard} />
+            <Route path="/admin/dashboard" component={AdminDashboard} />
+            <Route path="/admin/merchants" component={AdminMerchants} />
+            <Route path="/admin/contracts" component={AdminContracts} />
+            <Route path="/admin/logs" component={AdminLogs} />
+            <Route path="/admin/settings" component={AdminSettings} />
+            <Route path="/admin/portfolio" component={Portfolio} />
+          </>
+        )}
 
-          {/* Admin routes */}
-          <Route path="/admin/contracts/:contractId" component={ContractDetails} />
+        {/* Merchant routes */}
+        {user && user.role === "merchant" && (
+          <>
+            <Route path="/" component={MerchantDashboard} />
+            <Route path="/merchant" component={MerchantDashboard} />
+            <Route path="/merchant/dashboard" component={MerchantDashboard} />
+            <Route path="/merchant/contracts" component={MerchantContracts} />
+            <Route path="/merchant/reports" component={MerchantReports} />
+            <Route path="/merchant/settings" component={MerchantSettings} />
+          </>
+        )}
 
-          {/* Public customer routes */}
-          <Route path="/offer/:contractId" component={CustomerContractOffer} />
-          <Route path="/apply/:contractId?" component={CustomerApplication} />
-          <Route path="/customer/application" component={CustomerApplication} />
-          <Route path="/dashboard/:contractId" component={CustomerDashboard} />
-
-          <Route component={NotFound} />
-        </Switch>
-      )}
+        {/* Catch-all route */}
+        <Route component={NotFound} />
+      </Switch>
       <Toaster />
     </Suspense>
   );
