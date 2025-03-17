@@ -511,6 +511,7 @@ class PlaidService {
       };
 
       const response = await this.client.assetReportCreate(request);
+      console.log("Asset Report Create Response:", JSON.stringify(response.data, null, 2));
 
       logger.info({
         message: "Created Plaid asset report",
