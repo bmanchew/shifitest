@@ -1,0 +1,476 @@
+docs;
+create;
+const daysRequested = 90;
+const options = {
+  clientreportid: '123',
+  webhook: 'https://www.example.com',
+  user: {
+    clientuserid: '7f57eb3d2a9j6480121fx361',
+    first_name: 'Jane',
+    middle_name: 'Leah',
+    last_name: 'Doe',
+    ssn: '123-45-6789',
+    phone_number: '(555) 123-4567',
+    email: 'jane.doe@example.com',
+  },
+};
+const request: AssetReportCreateRequest = {
+  access_tokens: [accessToken],
+  days_requested,
+  options,
+};
+// accessTokens is an array of Item access tokens.
+// Note that the assets product must be enabled for all Items.
+// All fields on the options object are optional.
+try {
+  const response = await plaidClient.assetReportCreate(request);
+  const assetReportId = response.data.assetreportid;
+  const assetReportToken = response.data.assetreporttoken;
+} catch (error) {
+  // handle error
+}
+
+
+get;
+
+/asset_report/get
+Retrieve an Asset Report
+The /assetreport/get endpoint retrieves the Asset Report in JSON format. Before calling /assetreport/get, you must first create the Asset Report using /assetreport/create (or filter an Asset Report using /assetreport/filter) and then wait for the PRODUCT_READY webhook to fire, indicating that the Report is ready to be retrieved.
+By default, an Asset Report includes transaction descriptions as returned by the bank, as opposed to parsed and categorized by Plaid. You can also receive cleaned and categorized transactions, as well as additional insights like merchant name or location information. We call this an Asset Report with Insights. An Asset Report with Insights provides transaction category, location, and merchant information in addition to the transaction strings provided in a standard Asset Report. To retrieve an Asset Report with Insights, call /assetreport/get endpoint with includeinsights set to true.
+For latency-sensitive applications, you can optionally call /assetreport/create with options.addons set to ["fast_assets"]. This will cause Plaid to create two versions of the Asset Report: one with only current and available balance and identity information, and then later on the complete Asset Report. You will receive separate webhooks for each version of the Asset Report.
+
+
+
+const request: request = {
+  assetreporttoken: assetReportToken,
+  include_insights: true,
+};
+try {
+  const response = await plaidClient.assetReportGet(request);
+  const assetReportId = response.data.assetreportid;
+} catch (error) {
+  if (error.data.errorcode == 'PRODUCTNOT_READY') {
+    // Asset report is not ready yet. Try again later
+  } else {
+    // handle error
+  }
+}
+
+also print out the report;{
+  "report": {
+    "assetreportid": "028e8404-a013-4a45-ac9e-002482f9cafc",
+    "clientreportid": "clientreportid_1221",
+    "date_generated": "2023-03-30T18:27:37Z",
+    "days_requested": 90,
+    "items": [
+      {
+        "accounts": [
+          {
+            "account_id": "1qKRXQjk8xUWDJojNwPXTj8gEmR48piqRNye8",
+            "balances": {
+              "available": 43200,
+              "current": 43200,
+              "limit": null,
+              "marginloanamount": null,
+              "isocurrencycode": "USD",
+              "unofficialcurrencycode": null
+            },
+            "days_available": 90,
+            "historical_balances": [
+              {
+                "current": 49050,
+                "date": "2023-03-29",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              },
+              {
+                "current": 49050,
+                "date": "2023-03-28",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              },
+              {
+                "current": 49050,
+                "date": "2023-03-27",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              },
+              {
+                "current": 49050,
+                "date": "2023-03-26",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              },
+              {
+                "current": 49050,
+                "date": "2023-03-25",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              }
+            ],
+            "mask": "4444",
+            "name": "Plaid Money Market",
+            "official_name": "Plaid Platinum Standard 1.85% Interest Money Market",
+            "owners": [
+              {
+                "addresses": [
+                  {
+                    "data": {
+                      "city": "Malakoff",
+                      "country": "US",
+                      "region": "NY",
+                      "street": "2992 Cameron Road",
+                      "postal_code": "14236"
+                    },
+                    "primary": true
+                  },
+                  {
+                    "data": {
+                      "city": "San Matias",
+                      "country": "US",
+                      "region": "CA",
+                      "street": "2493 Leisure Lane",
+                      "postal_code": "93405-2255"
+                    },
+                    "primary": false
+                  }
+                ],
+                "emails": [
+                  {
+                    "data": "accountholder0@example.com",
+                    "primary": true,
+                    "type": "primary"
+                  },
+                  {
+                    "data": "accountholder1@example.com",
+                    "primary": false,
+                    "type": "secondary"
+                  },
+                  {
+                    "data": "extraordinarily.long.email.username.123456@reallylonghostname.com",
+                    "primary": false,
+                    "type": "other"
+                  }
+                ],
+                "names": [
+                  "Alberta Bobbeth Charleson"
+                ],
+                "phone_numbers": [
+                  {
+                    "data": "+1 111-555-3333",
+                    "primary": false,
+                    "type": "home"
+                  },
+                  {
+                    "data": "+1 111-555-4444",
+                    "primary": false,
+                    "type": "work"
+                  },
+                  {
+                    "data": "+1 111-555-5555",
+                    "primary": false,
+                    "type": "mobile"
+                  }
+                ]
+              }
+            ],
+            "ownership_type": null,
+            "subtype": "money market",
+            "transactions": [
+              {
+                "account_id": "1qKRXQjk8xUWDJojNwPXTj8gEmR48piqRNye8",
+                "amount": 5850,
+                "date": "2023-03-30",
+                "isocurrencycode": "USD",
+                "original_description": "ACH Electronic CreditGUSTO PAY 123456",
+                "pending": false,
+                "transaction_id": "gGQgjoeyqBF89PND6K14Sow1wddZBmtLomJ78",
+                "unofficialcurrencycode": null
+              }
+            ],
+            "type": "depository"
+          },
+          {
+            "account_id": "eG7pNLjknrFpWvP7Dkbdf3Pq6GVBPKTaQJK5v",
+            "balances": {
+              "available": 100,
+              "current": 110,
+              "limit": null,
+              "marginloanamount": null,
+              "isocurrencycode": "USD",
+              "unofficialcurrencycode": null
+            },
+            "days_available": 90,
+            "historical_balances": [
+              {
+                "current": 110,
+                "date": "2023-03-29",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              },
+              {
+                "current": -390,
+                "date": "2023-03-28",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              },
+              {
+                "current": -373.67,
+                "date": "2023-03-27",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              },
+              {
+                "current": -284.27,
+                "date": "2023-03-26",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              },
+              {
+                "current": -284.27,
+                "date": "2023-03-25",
+                "isocurrencycode": "USD",
+                "unofficialcurrencycode": null
+              }
+            ],
+            "mask": "0000",
+            "name": "Plaid Checking",
+            "official_name": "Plaid Gold Standard 0% Interest Checking",
+            "owners": [
+              {
+                "addresses": [
+                  {
+                    "data": {
+                      "city": "Malakoff",
+                      "country": "US",
+                      "region": "NY",
+                      "street": "2992 Cameron Road",
+                      "postal_code": "14236"
+                    },
+                    "primary": true
+                  },
+                  {
+                    "data": {
+                      "city": "San Matias",
+                      "country": "US",
+                      "region": "CA",
+                      "street": "2493 Leisure Lane",
+                      "postal_code": "93405-2255"
+                    },
+                    "primary": false
+                  }
+                ],
+                "emails": [
+                  {
+                    "data": "accountholder0@example.com",
+                    "primary": true,
+                    "type": "primary"
+                  },
+                  {
+                    "data": "accountholder1@example.com",
+                    "primary": false,
+                    "type": "secondary"
+                  },
+                  {
+                    "data": "extraordinarily.long.email.username.123456@reallylonghostname.com",
+                    "primary": false,
+                    "type": "other"
+                  }
+                ],
+                "names": [
+                  "Alberta Bobbeth Charleson"
+                ],
+                "phone_numbers": [
+                  {
+                    "data": "+1 111-555-3333",
+                    "primary": false,
+                    "type": "home"
+                  },
+                  {
+                    "data": "+1 111-555-4444",
+                    "primary": false,
+                    "type": "work"
+                  },
+                  {
+                    "data": "+1 111-555-5555",
+                    "primary": false,
+                    "type": "mobile"
+                  }
+                ]
+              }
+            ],
+            "ownership_type": null,
+            "subtype": "checking",
+            "transactions": [
+              {
+                "account_id": "eG7pNLjknrFpWvP7Dkbdf3Pq6GVBPKTaQJK5v",
+                "amount": 89.4,
+                "date": "2023-03-27",
+                "isocurrencycode": "USD",
+                "original_description": "SparkFun",
+                "pending": false,
+                "transaction_id": "4zBRq1Qem4uAPnoyKjJNTRQpQddM4ztlo1PLD",
+                "unofficialcurrencycode": null
+              },
+              {
+                "account_id": "eG7pNLjknrFpWvP7Dkbdf3Pq6GVBPKTaQJK5v",
+                "amount": 12,
+                "date": "2023-03-28",
+                "isocurrencycode": "USD",
+                "original_description": "McDonalds #3322",
+                "pending": false,
+                "transaction_id": "dkjL41PnbKsPral79jpxhMWdW55gkPfBkWpRL",
+                "unofficialcurrencycode": null
+              },
+              {
+                "account_id": "eG7pNLjknrFpWvP7Dkbdf3Pq6GVBPKTaQJK5v",
+                "amount": 4.33,
+                "date": "2023-03-28",
+                "isocurrencycode": "USD",
+                "original_description": "Starbucks",
+                "pending": false,
+                "transaction_id": "a84ZxQaWDAtDL3dRgmazT57K7jjN3WFkNWMDy",
+                "unofficialcurrencycode": null
+              },
+              {
+                "account_id": "eG7pNLjknrFpWvP7Dkbdf3Pq6GVBPKTaQJK5v",
+                "amount": -500,
+                "date": "2023-03-29",
+                "isocurrencycode": "USD",
+                "original_description": "United Airlines ** REFUND **",
+                "pending": false,
+                "transaction_id": "xG9jbv3eMoFWepzB7wQLT3LoLggX5Duy1Gbe5",
+                "unofficialcurrencycode": null
+              }
+            ],
+            "type": "depository"
+          }
+        ],
+        "datelastupdated": "2023-03-30T18:25:26Z",
+        "institutionid": "ins109508",
+        "institution_name": "First Platypus Bank",
+        "item_id": "AZMP7JrGXgtPd3AQMeg7hwMKgk5E8qU1V5ME7"
+      }
+    ],
+    "user": {
+      "clientuserid": "uid_40332",
+      "email": "abcharleston@example.com",
+      "first_name": "Anna",
+      "last_name": "Charleston",
+      "middle_name": "B",
+      "phone_number": "1-415-867-5309",
+      "ssn": "111-22-1234"
+    }
+  },
+  "request_id": "GVzMdiDd8DDAQK4",
+  "warnings": []
+}
+
+webhook docs;
+PRODUCT_READY
+Fired when the Asset Report has been generated and /assetreport/get is ready to be called. If you attempt to retrieve an Asset Report before this webhook has fired, you’ll receive a response with the HTTP status code 400 and a Plaid error code of PRODUCTNOT_READY.
+
+webhook_type
+string
+ASSETS
+webhook_code
+string
+PRODUCT_READY
+assetreportid
+string
+The assetreportid corresponding to the Asset Report the webhook has fired for.
+user_id
+string
+The user_id corresponding to the User ID the webhook has fired for.
+report_type
+string
+Indicates either a Fast Asset Report, which will contain only current identity and balance information, or a Full Asset Report, which will also contain historical balance information and transaction data.
+Possible values: FULL, FAST
+environment
+string
+The Plaid environment the webhook was sent from
+Possible values: sandbox, production
+{
+  "webhook_type": "ASSETS",
+  "webhookcode": "PRODUCTREADY",
+  "assetreportid": "47dfc92b-bba3-4583-809e-ce871b321f05",
+  "report_type": "FULL"
+}
+Was this helpful?
+
+Yes
+
+No
+ERROR
+Fired when Asset Report generation has failed. The resulting error will have an errortype of ASSETREPORT_ERROR.
+
+Collapse all
+webhook_type
+string
+ASSETS
+webhook_code
+string
+ERROR
+error
+object
+Errors are identified by errorcode and categorized by errortype. Use these in preference to HTTP status codes to identify and handle specific errors. HTTP status codes are set and provide the broadest categorization of errors: 4xx codes are for developer- or user-related errors, and 5xx codes are for Plaid-related errors, and the status will be 2xx in non-error cases. An Item with a non-null error object will only be part of an API response when calling /item/get to view Item status. Otherwise, error fields will be null if no error has occurred; if an error has occurred, an error code will be returned instead.
+Hide object
+error_type
+string
+A broad categorization of the error. Safe for programmatic use.
+Possible values: INVALIDREQUEST, INVALIDRESULT, INVALIDINPUT, INSTITUTIONERROR, RATELIMITEXCEEDED, APIERROR, ITEMERROR, ASSETREPORTERROR, RECAPTCHAERROR, OAUTHERROR, PAYMENTERROR, BANKTRANSFERERROR, INCOMEVERIFICATIONERROR, MICRODEPOSITSERROR, SANDBOXERROR, PARTNERERROR, TRANSACTIONSERROR, TRANSACTIONERROR, TRANSFER_ERROR
+error_code
+string
+The particular error code. Safe for programmatic use.
+errorcodereason
+string
+The specific reason for the error code. Currently, reasons are only supported OAuth-based item errors; null will be returned otherwise. Safe for programmatic use.
+Possible values:
+OAUTHINVALIDTOKEN: The user’s OAuth connection to this institution has been invalidated.
+OAUTHCONSENTEXPIRED: The user's access consent for this OAuth connection to this institution has expired.
+OAUTHUSERREVOKED: The user’s OAuth connection to this institution is invalid because the user revoked their connection.
+error_message
+string
+A developer-friendly representation of the error code. This may change over time and is not safe for programmatic use.
+display_message
+string
+A user-friendly representation of the error code. null if the error is not related to user action.
+This may change over time and is not safe for programmatic use.
+request_id
+string
+A unique ID identifying the request, to be used for troubleshooting purposes. This field will be omitted in errors provided by webhooks.
+causes
+array
+In this product, a request can pertain to more than one Item. If an error is returned for such a request, causes will return an array of errors containing a breakdown of these errors on the individual Item level, if any can be identified.
+causes will only be provided for the errortype ASSETREPORT_ERROR. causes will also not be populated inside an error nested within a warning object.
+status
+integer
+The HTTP status code associated with the error. This will only be returned in the response body when the error information is provided via a webhook.
+documentation_url
+string
+The URL of a Plaid documentation page with more information about the error
+suggested_action
+string
+Suggested steps for resolving the error
+assetreportid
+string
+The ID associated with the Asset Report.
+user_id
+string
+The user_id corresponding to the User ID the webhook has fired for.
+environment
+string
+The Plaid environment the webhook was sent from
+Possible values: sandbox, production
+{
+  "webhook_type": "ASSETS",
+  "webhook_code": "ERROR",
+  "assetreportid": "47dfc92b-bba3-4583-809e-ce871b321f05",
+  "error": {
+    "display_message": null,
+    "errorcode": "PRODUCTNOT_ENABLED",
+    "error_message": "the 'assets' product is not enabled for the following access tokens: access-sandbox-fb88b20c-7b74-4197-8d01-0ab122dad0bc. please ensure that 'assets' is included in the 'product' array when initializing Link and create the Item(s) again.",
+    "errortype": "ASSETREPORT_ERROR",
+    "request_id": "m8MDnv9okwxFNBV"
+  }
+}
