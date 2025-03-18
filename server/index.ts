@@ -12,7 +12,10 @@ app.use(express.json());
 const requiredEnvVars = [
   'PLAID_CLIENT_ID', 
   'PLAID_SECRET', 
-  'PREFI_API_KEY'
+  'PREFI_API_KEY',
+  'NLPEARL_ACCOUNT_ID',
+  'NLPEARL_API_KEY',
+  'NLPEARL_CAMPAIGN_ID'
   // The CFPB API is public and doesn't require an API key
 ];
 
