@@ -3511,6 +3511,36 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
         const assetReportId = req.body.asset_report_id;
         const reportType = req.body.report_type; // FULL or FAST
         
+        // Verify webhook signature
+        const webhookSecret = process.env.PLAID_WEBHOOK_SECRET;
+        const webhookSignature = req.headers['plaid-verification'] as string;
+        const payload = JSON.stringify(req.body);
+        
+        if (webhookSecret) {
+          try {
+            const hmac = crypto.createHmac('sha256', webhookSecret);
+            const expectedSignature = hmac.update(payload).digest('hex');
+            
+            if (webhookSignature !== expectedSignature) {
+              logger.warn({
+                message: 'Invalid webhook signature',
+                category: 'security',
+                source: 'plaid',
+                metadata: { assetReportId }
+              });
+              return res.status(401).json({ error: 'Invalid signature' });
+            }
+          } catch (error) {
+            logger.error({
+              message: 'Error verifying webhook signature',
+              category: 'security', 
+              source: 'plaid',
+              metadata: { error }
+            });
+            return res.status(500).json({ error: 'Signature verification failed' });
+          }
+        }
+
         logger.info({
           message: `Assets webhook received: ${webhook_code}`,
           category: "api",
@@ -3642,15 +3672,52 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
           }
         } else if (webhook_code === "ERROR") {
           // Handle error case
+          const error = req.body.error;
           logger.error({
-            message: "Received error webhook for Asset Report",
+            message: "Asset Report generation failed",
             category: "api",
             source: "plaid",
             metadata: {
               assetReportId,
-              error: req.body.error
+              error
             }
           });
+
+          // Update the asset report status in our database
+          const assetReports = await storage.getAssetReportsByAssetReportId(assetReportId);
+          if (assetReports?.length > 0) {
+            const assetReport = assetReports[0];
+            await storage.updateAssetReportStatus(assetReport.id, 'error', JSON.stringify(error));
+
+            // If we have a contract ID, update the bank step with error
+            if (assetReport.contractId) {
+              const applicationProgress = await storage.getApplicationProgressByContractId(assetReport.contractId);
+              const bankStep = applicationProgress.find(step => step.step === "bank");
+              
+              if (bankStep) {
+                try {
+                  const bankData = JSON.parse(bankStep.data || '{}');
+                  await storage.updateApplicationProgressCompletion(
+                    bankStep.id,
+                    false, // Mark as incomplete due to error
+                    JSON.stringify({
+                      ...bankData,
+                      assetReportStatus: 'error',
+                      assetReportError: error,
+                      errorTimestamp: new Date().toISOString()
+                    })
+                  );
+                } catch (parseError) {
+                  logger.error({
+                    message: "Failed to update bank step with asset report error",
+                    category: "api",
+                    source: "plaid",
+                    metadata: { contractId: assetReport.contractId, parseError }
+                  });
+                }
+              }
+            }
+          }
           
           // Find the asset report in our database and update the status
           const assetReports = await storage.getAssetReportsByAssetReportId(assetReportId);
