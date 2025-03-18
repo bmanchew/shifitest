@@ -192,6 +192,14 @@ class PlaidService {
         auth: {
           same_day_microdeposits_enabled: true,
           sms_microdeposits_verification_enabled: true
+        },
+        additional_consented_products: products,
+        required_if_supported_products: products,
+        user_settings: {
+          is_consent_required: true,
+          consent_description: "By continuing, you authorize ShiFi Financial to access your financial data for underwriting and verification purposes.",
+          privacy_policy_uri: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/privacy-policy`,
+          terms_of_service_uri: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/terms`
         }
       };
 
