@@ -186,8 +186,8 @@ class PlaidService {
       // Prepare user object for the request
       const user = {
         client_user_id: clientUserId,
-        legal_name: userName,
-        email: userEmail, // Changed from email_address to email
+        legal_name: userName || 'Customer',
+        email_address: userEmail || `user-${clientUserId}@example.com`
       };
 
       // Prepare request
