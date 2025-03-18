@@ -1,20 +1,8 @@
 // Throw an error if the response is not OK
 export const throwIfResNotOk = async (res: Response) => {
   if (!res.ok) {
-    // Try to get more information about the error from the response body
-    let errorText = '';
-    try {
-      const errorData = await res.clone().json();
-      errorText = errorData.message || JSON.stringify(errorData);
-    } catch (e) {
-      try {
-        errorText = await res.clone().text();
-      } catch (textError) {
-        errorText = `Status: ${res.status}`;
-      }
-    }
-
-    throw new Error(`API error ${res.status}: ${errorText}`);
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error.message || 'Request failed');
   }
   return res;
 };

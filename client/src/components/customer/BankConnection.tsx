@@ -41,14 +41,27 @@ export default function BankConnection({
         const response = await apiRequest<{
           success: boolean;
           linkToken: string;
+          message?: string; // Added to capture error messages from the server
         }>("POST", "/api/plaid/create-link-token", {
           userId: `user-${contractId}`, // Use contract ID as user ID for now
           userName: "Customer", // Optional
           products: ["auth"], // Specify the Plaid products we need
         });
 
-        if (!response.success || !response.linkToken) {
-          throw new Error("Failed to get link token");
+        if (!response.success) {
+          //Improved error handling for 500 errors and other non-success cases
+          const errorMessage = response.message || "Failed to get link token";
+          console.error("Failed to get link token:", errorMessage);
+          toast({
+            title: "Connection Error",
+            description: errorMessage,
+            variant: "destructive",
+          });
+          throw new Error(errorMessage); // Re-throw to handle in the catch block
+        }
+
+        if (!response.linkToken) {
+          throw new Error("Link token missing in response");
         }
 
         setLinkToken(response.linkToken);
@@ -60,6 +73,8 @@ export default function BankConnection({
             "We're having trouble connecting to our payment provider. Please try again later.",
           variant: "destructive",
         });
+        // Reset link token on error
+        setLinkToken(null);
       } finally {
         setIsLoadingToken(false);
       }
