@@ -780,6 +780,25 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       // Find or create a user for this phone number, passing in the email
       const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
 
+      // Initiate NLPearl call first
+      const nlPearlResponse = await nlpearlService.initiateApplicationCall(
+        phoneNumber,
+        applicationUrl,
+        merchantName
+      );
+
+      // Wait for call to be active
+      const isCallActive = await nlpearlService.waitForCallActive(nlPearlResponse.call_id);
+      
+      if (!isCallActive) {
+        logger.warn({
+          message: "NLPearl call did not become active",
+          category: "api",
+          source: "nlpearl",
+          metadata: { callId: nlPearlResponse.call_id }
+        });
+      }
+
       logger.info({
         message: `User for contract: ${customer.id}`,
         category: "api", 
@@ -787,7 +806,9 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         metadata: JSON.stringify({ 
           userId: customer.id,
           email: customer.email,
-          phone: customer.phone 
+          phone: customer.phone,
+          nlPearlCallId: nlPearlResponse.call_id,
+          nlPearlCallActive: isCallActive
         })
       });
 

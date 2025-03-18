@@ -31,6 +31,39 @@ export class NLPearlService {
     return `Bearer ${this.accountId}:${this.apiKey}`;
   }
 
+  private async checkCallStatus(callId: string): Promise<{status: number}> {
+    const response = await axios.get(
+      `${this.baseUrl}/Call/${callId}`,
+      {
+        headers: {
+          Authorization: this.getAuthHeader(),
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return response.data;
+  }
+
+  async waitForCallActive(callId: string, maxAttempts = 10): Promise<boolean> {
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const callStatus = await this.checkCallStatus(callId);
+        if (callStatus.status === 3) { // InProgress
+          return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between checks
+      } catch (error) {
+        logger.error({
+          message: `Failed to check call status: ${error instanceof Error ? error.message : String(error)}`,
+          category: "service",
+          source: "nlpearl",
+          metadata: { callId, attempt: i + 1 }
+        });
+      }
+    }
+    return false;
+  }
+
   async initiateApplicationCall(
     phoneNumber: string,
     applicationUrl: string,
