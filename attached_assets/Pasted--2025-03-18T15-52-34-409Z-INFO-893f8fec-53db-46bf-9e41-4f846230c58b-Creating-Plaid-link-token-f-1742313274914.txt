@@ -1,0 +1,93 @@
+[2025-03-18T15:52:34.409Z] [INFO] [893f8fec-53db-46bf-9e41-4f846230c58b] Creating Plaid link token for user user-147 {
+  correlationId: '893f8fec-53db-46bf-9e41-4f846230c58b',
+  requestId: '8de274b9',
+  metadata: { userId: 'user-147', products: [ 'auth', 'assets' ] }
+}
+3:52:34 PM [express] POST /api/plaid/create-link-token 500 in 48ms :: {"success":false,"message":"Fa…
+[2025-03-18T15:52:34.456Z] [ERROR] [893f8fec-53db-46bf-9e41-4f846230c58b] Failed to create Plaid link token: Request failed with status code 400 {
+  correlationId: '893f8fec-53db-46bf-9e41-4f846230c58b',
+  requestId: '05c1f361',
+  metadata: {
+    userId: 'user-147',
+    error: 'AxiosError: Request failed with status code 400\n' +
+      '    at settle (/home/runner/workspace/node_modules/axios/lib/core/settle.js:19:12)\n' +
+      '    at Unzip.handleStreamEnd (/home/runner/workspace/node_modules/axios/lib/adapters/http.js:599:11)\n' +
+      '    at Unzip.emit (node:events:530:35)\n' +
+      '    at endReadableNT (node:internal/streams/readable:1698:12)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)\n' +
+      '    at Axios.request (/home/runner/workspace/node_modules/axios/lib/core/Axios.js:45:41)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
+      '    at async PlaidService.createLinkToken (/home/runner/workspace/server/services/plaid.ts:220:24)\n' +
+      '    at async <anonymous> (/home/runner/workspace/server/routes.ts:2529:35)'
+  }
+}
+[2025-03-18T15:52:34.456Z] [ERROR] [893f8fec-53db-46bf-9e41-4f846230c58b] Failed to create Plaid link token: Request failed with status code 400 {
+  correlationId: '893f8fec-53db-46bf-9e41-4f846230c58b',
+  requestId: 'ae927025',
+  metadata: {
+    error: 'AxiosError: Request failed with status code 400\n' +
+      '    at settle (/home/runner/workspace/node_modules/axios/lib/core/settle.js:19:12)\n' +
+      '    at Unzip.handleStreamEnd (/home/runner/workspace/node_modules/axios/lib/adapters/http.js:599:11)\n' +
+      '    at Unzip.emit (node:events:530:35)\n' +
+      '    at endReadableNT (node:internal/streams/readable:1698:12)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)\n' +
+      '    at Axios.request (/home/runner/workspace/node_modules/axios/lib/core/Axios.js:45:41)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
+      '    at async PlaidService.createLinkToken (/home/runner/workspace/server/services/plaid.ts:220:24)\n' +
+      '    at async <anonymous> (/home/runner/workspace/server/routes.ts:2529:35)'
+  }
+}
+[2025-03-18T15:52:34.457Z] [INFO] [893f8fec-53db-46bf-9e41-4f846230c58b] POST /api/plaid/create-link-token 500 {
+  correlationId: '893f8fec-53db-46bf-9e41-4f846230c58b',
+  requestId: 'cf9238a2',
+  metadata: {
+    method: 'POST',
+    path: '/api/plaid/create-link-token',
+    params: {},
+    query: {},
+    body: { userId: 'user-147', userName: 'Customer', products: [Object] },
+    responseTime: '47ms'
+  }
+}
+[2025-03-18T15:52:42.477Z] [INFO] [e7592b0b-1e14-4ea2-aa34-40d4cba2ef35] Creating Plaid link token for user user-147 {
+  correlationId: 'e7592b0b-1e14-4ea2-aa34-40d4cba2ef35',
+  requestId: 'd04cd64d',
+  metadata: { userId: 'user-147', products: [ 'auth', 'assets' ] }
+}
+[2025-03-18T15:52:42.477Z] [INFO] [e7592b0b-1e14-4ea2-aa34-40d4cba2ef35] Creating Plaid link token for user user-147 {
+  correlationId: 'e7592b0b-1e14-4ea2-aa34-40d4cba2ef35',
+  requestId: '248aea2b',
+  metadata: { userId: 'user-147', products: [ 'auth', 'assets' ] }
+}
+3:52:42 PM [express] POST /api/plaid/create-link-token 500 in 112ms :: {"success":false,"message":"F…
+[2025-03-18T15:52:42.585Z] [ERROR] [e7592b0b-1e14-4ea2-aa34-40d4cba2ef35] Failed to create Plaid link token: Request failed with status code 400 {
+  correlationId: 'e7592b0b-1e14-4ea2-aa34-40d4cba2ef35',
+  requestId: 'd7b70829',
+  metadata: {
+    userId: 'user-147',
+    error: 'AxiosError: Request failed with status code 400\n' +
+      '    at settle (/home/runner/workspace/node_modules/axios/lib/core/settle.js:19:12)\n' +
+      '    at Unzip.handleStreamEnd (/home/runner/workspace/node_modules/axios/lib/adapters/http.js:599:11)\n' +
+      '    at Unzip.emit (node:events:530:35)\n' +
+      '    at endReadableNT (node:internal/streams/readable:1698:12)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)\n' +
+      '    at Axios.request (/home/runner/workspace/node_modules/axios/lib/core/Axios.js:45:41)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
+      '    at async PlaidService.createLinkToken (/home/runner/workspace/server/services/plaid.ts:220:24)\n' +
+      '    at async <anonymous> (/home/runner/workspace/server/routes.ts:2529:35)'
+  }
+}
+[2025-03-18T15:52:42.586Z] [ERROR] [e7592b0b-1e14-4ea2-aa34-40d4cba2ef35] Failed to create Plaid link token: Request failed with status code 400 {
+  correlationId: 'e7592b0b-1e14-4ea2-aa34-40d4cba2ef35',
+  requestId: '32f3fa82',
+  metadata: {
+    error: 'AxiosError: Request failed with status code 400\n' +
+      '    at settle (/home/runner/workspace/node_modules/axios/lib/core/settle.js:19:12)\n' +
+      '    at Unzip.handleStreamEnd (/home/runner/workspace/node_modules/axios/lib/adapters/http.js:599:11)\n' +
+      '    at Unzip.emit (node:events:530:35)\n' +
+      '    at endReadableNT (node:internal/streams/readable:1698:12)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)\n' +
+      '    at Axios.request (/home/runner/workspace/node_modules/axios/lib/core/Axios.js:45:41)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
+      '    at async PlaidService.createLinkToken (/home/runner/workspace/server/services/plaid.ts:220:24)\n' +
+      '    at async <anonymous> (/home/runner/workspace/server/routes.ts:2529:35)'
