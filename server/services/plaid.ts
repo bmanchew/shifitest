@@ -170,35 +170,25 @@ class PlaidService {
         clientUserId,
         userName,
         userEmail,
-        products = [Products.Auth, Products.Transactions, Products.Assets],
+        products = [Products.Auth, Products.Transactions,Products.Assets],
         redirectUri,
-        accessToken,
       } = params;
-
-      // For existing Items, only request Assets product
-      const requestProducts = accessToken ? [Products.Assets] : products;
-      
-      // Ensure Assets product is included for new Items
-      if (!accessToken && !requestProducts.includes(Products.Assets)) {
-        requestProducts.push(Products.Assets);
-      }
 
       // Prepare user object for the request
       const user = {
         client_user_id: clientUserId,
-        legal_name: userName || 'Customer',
-        email_address: userEmail || `user-${clientUserId}@example.com`
+        legal_name: userName,
+        email_address: userEmail,
       };
 
       // Prepare request
       const request: LinkTokenCreateRequest = {
         user,
         client_name: "ShiFi Financial",
-        products: requestProducts,
+        products: products,
         country_codes: [CountryCode.Us],
         language: "en",
         webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
-        access_token: accessToken,
         auth: {
           same_day_microdeposits_enabled: true,
           sms_microdeposits_verification_enabled: true
@@ -506,15 +496,6 @@ class PlaidService {
     }
 
     try {
-      // First verify assets product is enabled
-      const itemResponse = await this.client.itemGet({
-        access_token: accessToken
-      });
-      
-      if (!itemResponse.data.item.available_products.includes('assets')) {
-        throw new Error('Assets product not enabled for this access token');
-      }
-
       logger.info({
         message: "Creating Plaid asset report",
         category: "api",
@@ -522,21 +503,11 @@ class PlaidService {
         metadata: { daysRequested },
       });
 
-      // Prepare asset report request with webhook and required user info
+      // Prepare asset report request
       const request: AssetReportCreateRequest = {
         access_tokens: [accessToken],
         days_requested: daysRequested,
-        options: {
-          ...options,
-          webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
-          client_report_id: `report-${Date.now()}`,
-          user: {
-            client_user_id: options?.client_user_id || `user-${Date.now()}`,
-            first_name: options?.first_name,
-            last_name: options?.last_name,
-            email: options?.email
-          }
-        }
+        options: options || {},
       };
 
       const response = await this.client.assetReportCreate(request);
