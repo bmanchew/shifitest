@@ -1332,6 +1332,7 @@ class PlaidService {
 
       // First, use the /transfer/originator/list endpoint to get all merchants from Plaid
       const originatorsResponse = await this.client.transferOriginatorList({});
+      console.log("Plaid Originators Response:", JSON.stringify(originatorsResponse.data, null, 2));
       const plaidOriginators = originatorsResponse.data.originators || [];
 
       logger.info({
@@ -1355,9 +1356,9 @@ class PlaidService {
       for (const originator of plaidOriginators) {
         try {
           // Only include active originators
-          if (originator.status !== 'active') {
+          if (originator.transfer_diligence_status !== 'approved') {
             logger.info({
-              message: `Skipping non-active originator: ${originator.originator_id} with status ${originator.status}`,
+              message: `Skipping non-active originator: ${originator.client_id} with status ${originator.transfer_diligence_status}`,
               category: "api",
               source: "plaid",
             });
@@ -1365,10 +1366,10 @@ class PlaidService {
           }
 
           // Try to find this originator in our database to get the merchant ID
-          const plaidMerchant = await storage.getPlaidMerchantByOriginatorId(originator.originator_id);
+          const plaidMerchant = await storage.getPlaidMerchantByOriginatorId(originator.client_id);
 
           const merchantData: any = {
-            originatorId: originator.originator_id,
+            originatorId: originator.client_id,
             originatorName: originator.company_name,
             status: originator.status,
             createdAt: originator.created_at,
