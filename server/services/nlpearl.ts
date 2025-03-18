@@ -84,10 +84,16 @@ export class NLPearlService {
         throw new Error("NLPearl service not properly configured");
       }
 
+      // Normalize phone number to just digits
+      const normalizedPhone = phoneNumber.replace(/\D/g, '');
+      
+      // Format as +1XXXXXXXXXX for US numbers
+      const formattedPhone = `+1${normalizedPhone}`;
+
       const response = await axios.post(
         `${this.baseUrl}/Outbound/${process.env.NLPEARL_CAMPAIGN_ID}/Call`,
         {
-          to: phoneNumber,
+          to: formattedPhone,
           callData: {
             merchant_name: merchantName,
             application_url: applicationUrl,
