@@ -66,6 +66,9 @@ export class NLPearlService {
         metadata: {
           phoneNumber,
           callId: response.data.call_id,
+          requestUrl: `${this.baseUrl}/calls/initiate`,
+          merchantName,
+          applicationUrl
         },
       });
 
