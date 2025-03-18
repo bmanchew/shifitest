@@ -302,3 +302,47 @@ export class UnderwritingService {
 }
 
 export const underwritingService = new UnderwritingService();
+private async processMerchantUnderwriting(merchantId: number): Promise<UnderwritingData | null> {
+    try {
+      // Get Plaid access token for merchant
+      const plaidData = await this.getPlaidData(merchantId);
+      
+      // Create and analyze asset report for 24 months
+      const assetReport = await plaidService.createAssetReport({
+        accessToken: plaidData.accessToken,
+        daysRequested: 730, // 2 years
+        clientReportId: `merchant-verification-${merchantId}-${Date.now()}`
+      });
+
+      const analysis = await plaidService.analyzeAssetReportForUnderwriting(
+        assetReport.assetReportToken
+      );
+
+      // Calculate average monthly revenue
+      const monthlyRevenue = analysis?.income?.monthlyIncome || 0;
+      const monthsOfHistory = analysis?.employment?.employmentMonths || 0;
+
+      // Determine qualification
+      const qualifies = monthlyRevenue >= 100000 && monthsOfHistory >= 24;
+      const creditTier = qualifies ? 'approved' : 'declined';
+
+      // Save merchant underwriting data
+      return await this.saveUnderwritingData({
+        userId: merchantId,
+        creditTier,
+        annualIncome: monthlyRevenue * 12,
+        employmentHistoryMonths: monthsOfHistory,
+        rawPlaidData: JSON.stringify(analysis),
+        isMerchant: true
+      });
+
+    } catch (error) {
+      logger.error({
+        message: `Error in merchant underwriting process: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'underwriting',
+        merchantId,
+        error: error instanceof Error ? error.stack : null
+      });
+      throw error;
+    }
+  }
