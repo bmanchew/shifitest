@@ -23,6 +23,7 @@ import { reportsRouter } from "./routes/admin/reports";
 import contractsRouter from "./routes/contracts";
 import customersRouter from "./routes/customers";
 import underwritingRouter from "./routes/underwriting";
+import merchantRouter from "./routes/merchant";
 
 function objectMetadata<T>(data: T): string {
   if (!data) return JSON.stringify({});
@@ -3471,6 +3472,9 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
 
   // Mount the customers router
   apiRouter.use("/customers", customersRouter);
+
+  // Mount the merchant router
+  apiRouter.use("/merchants", merchantRouter);
 
   // Get contract by phone number
   apiRouter.get("/contracts/by-phone/:phoneNumber", async (req: Request, res: Response) => {
