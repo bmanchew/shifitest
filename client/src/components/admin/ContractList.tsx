@@ -11,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Contract } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -143,10 +143,10 @@ export default function ContractList({ contracts, isLoading }: ContractListProps
                 <TableCell>
                   <Button 
                     size="sm" 
-                    variant="outline"
-                    onClick={() => handleViewDetails(contract.id)}
+                    variant="ghost"
+                    asChild
                   >
-                    View Details
+                    <Link href={`/admin/contracts/${contract.id}`}>View</Link>
                   </Button>
                 </TableCell>
               </TableRow>
