@@ -26,13 +26,16 @@ export default function ContractList({ contracts, isLoading }: ContractListProps
   
   useEffect(() => {
     // Fetch customer data for all contracts
-    const uniqueCustomerIds = Array.from(
-      new Set(
-        contracts
-          .map(contract => contract.customerId)
-          .filter((id): id is number => id !== null && id !== undefined)
-      )
-    );
+    const uniqueCustomerIds: number[] = [];
+    
+    // Extract customer IDs that are not null
+    contracts.forEach(contract => {
+      if (contract.customerId !== null && contract.customerId !== undefined) {
+        if (!uniqueCustomerIds.includes(contract.customerId)) {
+          uniqueCustomerIds.push(contract.customerId);
+        }
+      }
+    });
     
     if (uniqueCustomerIds.length > 0) {
       Promise.all(
