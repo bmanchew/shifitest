@@ -17,6 +17,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Search, Filter } from "lucide-react";
 import { useState } from "react";
+import Link from 'next/link'; // Assuming Next.js Link component
 
 export default function Contracts() {
   const { user } = useAuth();
@@ -66,27 +67,27 @@ export default function Contracts() {
 
   const getCustomerName = (customerId?: number) => {
     if (!customerId) return "Unknown Customer";
-    
+
     // Mock data for the demo
     const mockCustomers: Record<number, { name: string, email: string }> = {
       2: { name: "Sarah Johnson", email: "sarah.j@example.com" },
       3: { name: "Michael Brown", email: "m.brown@example.com" },
       4: { name: "Jennifer Smith", email: "j.smith@example.com" }
     };
-    
+
     return mockCustomers[customerId]?.name || `Customer ${customerId}`;
   };
-  
+
   const getCustomerEmail = (customerId?: number) => {
     if (!customerId) return "";
-    
+
     // Mock data for the demo
     const mockCustomers: Record<number, { name: string, email: string }> = {
       2: { name: "Sarah Johnson", email: "sarah.j@example.com" },
       3: { name: "Michael Brown", email: "m.brown@example.com" },
       4: { name: "Jennifer Smith", email: "j.smith@example.com" }
     };
-    
+
     return mockCustomers[customerId]?.email || "";
   };
 
@@ -145,9 +146,11 @@ export default function Contracts() {
       id: "actions",
       cell: ({ row }) => {
         return (
-          <Button variant="ghost" size="sm">
-            View
-          </Button>
+          <Link href={`/merchant/contracts/${row.original.id}`}>
+            <Button variant="ghost" size="sm">
+              View
+            </Button>
+          </Link>
         );
       },
     },

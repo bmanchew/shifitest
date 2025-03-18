@@ -8,7 +8,7 @@ const ContractRow = ({ row }) => {
       <td>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" asChild>
-            <Link href={`/contracts/${row.original.id}`}>View Details</Link>
+            <Link href={`/admin/contracts/${row.original.id}`}>View Details</Link>
           </Button>
         </div>
       </td>
