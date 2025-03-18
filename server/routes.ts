@@ -3356,6 +3356,34 @@ apiRouter.post(
 
   // Plaid webhook handler
  // Plaid webhook handler
+// Get asset reports for a contract
+apiRouter.get("/plaid/asset-reports/:contractId", async (req: Request, res: Response) => {
+  try {
+    const { contractId } = req.params;
+    const reports = await storage.getAssetReportsByContractId(parseInt(contractId));
+    
+    res.json({
+      success: true,
+      reports: reports.map(report => ({
+        id: report.id,
+        contractId: report.contractId,
+        assetReportId: report.assetReportId,
+        status: report.status,
+        createdAt: report.createdAt,
+        analysisData: report.analysisData ? JSON.parse(report.analysisData) : null
+      }))
+    });
+  } catch (error) {
+    logger.error({
+      message: `Failed to get asset reports: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "plaid",
+      metadata: { error: error instanceof Error ? error.stack : null }
+    });
+    res.status(500).json({ success: false, message: "Failed to get asset reports" });
+  }
+});
+
 apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   try {
     const { webhook_type, webhook_code, item_id } = req.body;
