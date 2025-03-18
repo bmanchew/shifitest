@@ -9,8 +9,11 @@ import { useAuth } from '@/hooks/useAuth';
 import ApplicationStatus from './ApplicationStatus';
 import UnderwritingViewFactory from '../underwriting/UnderwritingViewFactory';
 
-const ContractDetails: React.FC = () => {
-  const { contractId } = useParams<{ contractId: string }>();
+interface ContractDetailsProps {
+  contractId?: string;
+}
+
+const ContractDetails: React.FC<ContractDetailsProps> = ({ contractId }) => {
   const [contract, setContract] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
