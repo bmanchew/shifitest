@@ -26,12 +26,18 @@ export default function ContractList({ contracts, isLoading }: ContractListProps
   
   useEffect(() => {
     // Fetch customer data for all contracts
-    const uniqueCustomerIds = [...new Set(contracts.map(contract => contract.customerId).filter(Boolean))];
+    const uniqueCustomerIds = Array.from(
+      new Set(
+        contracts
+          .map(contract => contract.customerId)
+          .filter((id): id is number => id !== null && id !== undefined)
+      )
+    );
     
     if (uniqueCustomerIds.length > 0) {
       Promise.all(
         uniqueCustomerIds.map(customerId => 
-          fetch(`/api/customers/${customerId}`)
+          fetch(`/api/users/${customerId}`)
             .then(res => res.ok ? res.json() : null)
             .catch(err => {
               console.error(`Error fetching customer ${customerId}:`, err);
@@ -139,7 +145,9 @@ export default function ContractList({ contracts, isLoading }: ContractListProps
                     {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
                   </Badge>
                 </TableCell>
-                <TableCell>{format(new Date(contract.createdAt), "MMM d, yyyy")}</TableCell>
+                <TableCell>
+                  {contract.createdAt ? format(new Date(contract.createdAt), "MMM d, yyyy") : "N/A"}
+                </TableCell>
                 <TableCell>
                   <Button 
                     size="sm" 
