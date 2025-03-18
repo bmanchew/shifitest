@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import LoadingFallback from "./components/LoadingFallback";
 
 // Import pages
-const Login = lazy(() => import("@/pages/auth/Login"));
+const Login = lazy(() => import("@/pages/Login"));
 const CustomerApplication = lazy(() => import("@/pages/customer/Application"));
 const CustomerContractOffer = lazy(() => import("@/pages/customer/ContractOffer"));
 const CustomerDashboard = lazy(() => import("@/pages/customer/Dashboard"));
@@ -14,12 +14,12 @@ const AdminContracts = lazy(() => import("@/pages/admin/Contracts"));
 const AdminLogs = lazy(() => import("@/pages/admin/Logs"));
 const AdminSettings = lazy(() => import("@/pages/admin/Settings"));
 const Portfolio = lazy(() => import("@/pages/admin/Portfolio"));
-const NotFound = lazy(() => import("@/pages/not-found")); //Added from original
-const MerchantSignup = lazy(() => import("@/components/merchant/Signup")); //Added from original
-const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard")); //Added from original
-const MerchantContracts = lazy(() => import("@/pages/merchant/Contracts")); //Added from original
-const MerchantReports = lazy(() => import("@/pages/merchant/Reports")); //Added from original
-const MerchantSettings = lazy(() => import("@/pages/merchant/Settings")); //Added from original
+const NotFound = lazy(() => import("@/pages/not-found"));
+const MerchantSignup = lazy(() => import("@/components/merchant/Signup"));
+const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
+const MerchantContracts = lazy(() => import("@/pages/merchant/Contracts"));
+const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
+const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
 
 
 function App() {
