@@ -187,7 +187,7 @@ class PlaidService {
       const user = {
         client_user_id: clientUserId,
         legal_name: userName,
-        email_address: userEmail,
+        email: userEmail, // Changed from email_address to email
       };
 
       // Prepare request
