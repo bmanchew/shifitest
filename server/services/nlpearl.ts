@@ -14,7 +14,7 @@ export class NLPearlService {
       logger.warn({
         message: "NLPearl service not properly configured",
         category: "api",
-        source: "nlpearl",
+        source: "twilio",
         metadata: {
           hasAccountId: !!this.accountId,
           hasApiKey: !!this.apiKey,
@@ -47,7 +47,7 @@ export class NLPearlService {
       logger.error({
         message: `Failed to check NLPearl call status: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
-        source: "nlpearl",
+        source: "twilio",
         metadata: { callId }
       });
       throw error;
@@ -67,7 +67,7 @@ export class NLPearlService {
         logger.error({
           message: `Failed to check call status: ${error instanceof Error ? error.message : String(error)}`,
           category: "api",
-          source: "nlpearl",
+          source: "twilio",
           metadata: { callId, attempt: i + 1 }
         });
       }
@@ -111,7 +111,7 @@ export class NLPearlService {
       logger.info({
         message: "NLPearl call initiated",
         category: "api",
-        source: "nlpearl",
+        source: "twilio",
         metadata: {
           phoneNumber,
           callId: response.data.call_id,
@@ -126,7 +126,7 @@ export class NLPearlService {
       logger.error({
         message: `Failed to initiate NLPearl call: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
-        source: "nlpearl",
+        source: "twilio",
         metadata: {
           error: error instanceof Error ? error.stack : String(error),
         },
