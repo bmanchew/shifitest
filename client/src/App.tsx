@@ -18,6 +18,7 @@ const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
 const MerchantContracts = lazy(() => import("@/pages/merchant/Contracts"));
 const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
 const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
+import MerchantSignup from "@/components/merchant/MerchantSignup"; // Added import
 
 // Customer pages
 const CustomerApplication = lazy(() => import("@/pages/customer/Application"));
