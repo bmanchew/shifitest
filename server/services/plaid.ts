@@ -1237,13 +1237,16 @@ class PlaidService {
       });
 
       // Determine the destination account based on routing flag
-      const destination = routeToShifi 
+      const destination = shouldRouteToShifi 
         ? process.env.SHIFI_PLAID_ACCOUNT_ID 
         : plaidMerchant.defaultFundingAccount || plaidMerchant.accountId;
 
       if (!destination) {
         throw new Error("No destination account available for transfer");
       }
+
+      // Calculate facilitator fee and routing based on credit tier
+      const { fee: platformFee, routeToShifi: finalRouteToShifi } = await calculatePlatformFee(amount, contractId.toString());
 
       // Create a transfer intent
       const transferIntentRequest: any = {
@@ -1253,17 +1256,17 @@ class PlaidService {
         user: {
           legal_name: `Contract ${contractId}`,
         },
-        mode: routeToShifi ? "PAYMENT" : "DISBURSEMENT", // TransferIntentCreateMode needs casting in some versions of the SDK
+        mode: finalRouteToShifi ? "PAYMENT" : "DISBURSEMENT", // TransferIntentCreateMode needs casting in some versions of the SDK
         ach_class: "ppd", // ACHClass needs casting in some versions of the SDK
         funding_account_id: destination,
       };
 
       // Add facilitator fee if provided (fee that ShiFi collects as a platform)
-      if (facilitatorFee && facilitatorFee > 0) {
+      if (platformFee && platformFee > 0) {
         // Since we're using the Plaid SDK, we'll need to cast to 'any' to add this property
         // because it might not be in the TypeScript type definition yet
         (transferIntentRequest as any).facilitator_fee = {
-          amount: facilitatorFee.toString()
+          amount: platformFee.toString()
         };
       }
 
@@ -1277,10 +1280,10 @@ class PlaidService {
         transferId: intentResponse.data.transfer_intent.id,
         amount,
         description,
-        type: routeToShifi ? "credit" : "debit",
+        type: finalRouteToShifi ? "credit" : "debit",
         status: intentResponse.data.transfer_intent.status,
-        routedToShifi: routeToShifi,
-        facilitatorFee: facilitatorFee,
+        routedToShifi: finalRouteToShifi,
+        facilitatorFee: platformFee,
         metadata: metadata ? JSON.stringify(metadata) : undefined
       });
 
@@ -1288,7 +1291,7 @@ class PlaidService {
         transferId: intentResponse.data.transfer_intent.id,
         status: intentResponse.data.transfer_intent.status,
         amount,
-        routedToShifi: routeToShifi,
+        routedToShifi: finalRouteToShifi,
         transferRecordId: transferRecord.id
       };
     } catch (error) {
@@ -1547,6 +1550,30 @@ class PlaidService {
       throw error;
     }
   }
+}
+
+/**
+ * Calculate platform facilitator fee based on credit tier
+ * Tier 1-3: 100% to ShiFi
+ * Tier 4/Declined: 10% fee, rest to merchant
+ */
+async function calculatePlatformFee(amount: number, contractId: string): Promise<{fee: number, routeToShifi: boolean}> {
+  const underwritingData = await storage.getUnderwritingDataByContractId(contractId);
+
+  // For tier 1-3, route entire payment to ShiFi
+  if (underwritingData?.creditTier && ['tier1', 'tier2', 'tier3'].includes(underwritingData.creditTier)) {
+    return {
+      fee: 0, // No fee since entire amount goes to ShiFi
+      routeToShifi: true // Route full amount to ShiFi
+    };
+  }
+
+  // For tier 4/declined, take 10% fee and route rest to merchant
+  const fee = Math.round(amount * 0.10 * 100) / 100; // 10% fee
+  return {
+    fee,
+    routeToShifi: false // Route to merchant with fee
+  };
 }
 
 export const plaidService = new PlaidService();
