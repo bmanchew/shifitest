@@ -64,6 +64,19 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
           });
           return;
         }
+
+        // Send SMS only after NLPearl call is active
+        try {
+          await sendSMS(contract.phoneNumber, `Your underwriting process has started.`);
+          logger.info({ message: `SMS sent to ${contract.phoneNumber}`, category: "api", source: "sms" });
+        } catch (smsError) {
+          logger.error({
+            message: `Failed to send SMS: ${smsError instanceof Error ? smsError.message : String(smsError)}`,
+            category: "api",
+            source: "sms",
+            metadata: { contractId, phoneNumber: contract.phoneNumber, error: smsError instanceof Error ? smsError.stack : null }
+          });
+        }
       } catch (error) {
         logger.error({
           message: `NLPearl call failed: ${error instanceof Error ? error.message : String(error)}`,
