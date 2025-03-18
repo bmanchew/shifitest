@@ -78,7 +78,10 @@ function App() {
           </>
         )}
 
-        {/* Merchant routes */}
+        {/* Public merchant signup route */}
+        <Route path="/merchant/signup" component={MerchantSignup} />
+
+        {/* Protected merchant routes */}
         {user && user.role === "merchant" && (
           <>
             <Route path="/" component={MerchantDashboard} />
