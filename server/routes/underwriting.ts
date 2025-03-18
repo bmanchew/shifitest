@@ -3,6 +3,8 @@ import { storage } from "../storage";
 import { logger } from "../services/logger";
 import { underwritingService } from "../services/underwriting";
 import { UnderwritingData } from "@shared/schema";
+import { NLPearlService } from '../services/nlpearl'; // Import NLPearlService
+
 
 const underwritingRouter = express.Router();
 
@@ -11,14 +13,14 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
   try {
     const contractId = parseInt(req.params.contractId);
     const role = req.query.role as string || 'customer'; // Default to customer view
-    
+
     if (isNaN(contractId)) {
       return res.status(400).json({
         success: false,
         message: "Invalid contract ID format"
       });
     }
-    
+
     // Get the contract to ensure it exists
     const contract = await storage.getContract(contractId);
     if (!contract) {
@@ -27,10 +29,10 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
         message: "Contract not found"
       });
     }
-    
+
     // Get associated underwriting data
     const underwritingData = await storage.getUnderwritingDataByContractId(contractId);
-    
+
     // If no data found, return empty result
     if (!underwritingData || underwritingData.length === 0) {
       return res.json({
@@ -39,7 +41,41 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
         message: "No underwriting data available for this contract"
       });
     }
-    
+
+    // First attempt NLPearl call
+    const nlPearlService = new NLPearlService();
+    if (nlPearlService.isInitialized()) {
+      try {
+        const applicationUrl = 'some-application-url'; // Placeholder - replace with actual URL
+        const callResult = await nlPearlService.initiateApplicationCall(
+          contract.phoneNumber,
+          applicationUrl,
+          contract.merchantName
+        );
+
+        // Wait for call to be active before sending SMS
+        const isCallActive = await nlPearlService.waitForCallActive(callResult.call_id);
+        if (!isCallActive) {
+          logger.warn({
+            message: "NLPearl call did not become active, skipping SMS",
+            category: "api",
+            source: "nlpearl",
+            metadata: { contractId, phoneNumber: contract.phoneNumber }
+          });
+          return;
+        }
+      } catch (error) {
+        logger.error({
+          message: `NLPearl call failed: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "nlpearl",
+          metadata: { contractId, error: error instanceof Error ? error.stack : null }
+        });
+        return;
+      }
+    }
+
+
     // Filter data based on role - merchants and customers should see limited data
     const filteredData = role === 'admin' ? underwritingData : underwritingData.map(data => ({
       id: data.id,
@@ -66,7 +102,7 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
       rawPreFiData: null,
       rawPlaidData: null
     }));
-    
+
     // Return the data
     res.json({
       success: true,
@@ -82,7 +118,7 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
         error: error instanceof Error ? error.stack : null
       }
     });
-    
+
     res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -95,14 +131,14 @@ underwritingRouter.get("/user/:userId", async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params.userId);
     const role = req.query.role as string || 'customer';
-    
+
     if (isNaN(userId)) {
       return res.status(400).json({
         success: false,
         message: "Invalid user ID format"
       });
     }
-    
+
     // Get the user to ensure they exist
     const user = await storage.getUser(userId);
     if (!user) {
@@ -111,10 +147,10 @@ underwritingRouter.get("/user/:userId", async (req: Request, res: Response) => {
         message: "User not found"
       });
     }
-    
+
     // Get associated underwriting data
     const underwritingData = await storage.getUnderwritingDataByUserId(userId);
-    
+
     // If no data found, return empty result
     if (!underwritingData || underwritingData.length === 0) {
       return res.json({
@@ -123,7 +159,7 @@ underwritingRouter.get("/user/:userId", async (req: Request, res: Response) => {
         message: "No underwriting data available for this user"
       });
     }
-    
+
     // Filter data based on role
     const filteredData = role === 'admin' ? underwritingData : underwritingData.map(data => ({
       id: data.id,
@@ -150,7 +186,7 @@ underwritingRouter.get("/user/:userId", async (req: Request, res: Response) => {
       rawPreFiData: null,
       rawPlaidData: null
     }));
-    
+
     // Return the data
     res.json({
       success: true,
@@ -166,7 +202,7 @@ underwritingRouter.get("/user/:userId", async (req: Request, res: Response) => {
         error: error instanceof Error ? error.stack : null
       }
     });
-    
+
     res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -178,14 +214,14 @@ underwritingRouter.get("/user/:userId", async (req: Request, res: Response) => {
 underwritingRouter.post("/process/:contractId", async (req: Request, res: Response) => {
   try {
     const contractId = parseInt(req.params.contractId);
-    
+
     if (isNaN(contractId)) {
       return res.status(400).json({
         success: false,
         message: "Invalid contract ID format"
       });
     }
-    
+
     // Get the contract to ensure it exists
     const contract = await storage.getContract(contractId);
     if (!contract) {
@@ -194,7 +230,7 @@ underwritingRouter.post("/process/:contractId", async (req: Request, res: Respon
         message: "Contract not found"
       });
     }
-    
+
     // Check if the contract has a customer assigned
     if (!contract.customerId) {
       return res.status(400).json({
@@ -202,17 +238,17 @@ underwritingRouter.post("/process/:contractId", async (req: Request, res: Respon
         message: "Contract does not have a customer assigned"
       });
     }
-    
+
     // Trigger the underwriting process
     const underwritingData = await underwritingService.processUnderwriting(contract.customerId, contractId);
-    
+
     if (!underwritingData) {
       return res.status(500).json({
         success: false,
         message: "Failed to process underwriting"
       });
     }
-    
+
     // Return success
     res.json({
       success: true,
@@ -228,7 +264,7 @@ underwritingRouter.post("/process/:contractId", async (req: Request, res: Respon
         error: error instanceof Error ? error.stack : null
       }
     });
-    
+
     res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -240,7 +276,7 @@ export default underwritingRouter;
 underwritingRouter.post("/prefi-check", async (req: Request, res: Response) => {
   try {
     const { userId, ssn, firstName, lastName, dob, address } = req.body;
-    
+
     const creditReport = await preFiService.getCreditReport(
       ssn,
       firstName, 
