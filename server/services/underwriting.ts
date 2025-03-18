@@ -302,6 +302,8 @@ export class UnderwritingService {
 }
 
 export const underwritingService = new UnderwritingService();
+
+export const underwritingService = new UnderwritingService();
 private async processMerchantUnderwriting(merchantId: number): Promise<UnderwritingData | null> {
     try {
       // Get Plaid access token for merchant
