@@ -147,7 +147,7 @@ class PlaidService {
   isInitialized(): boolean {
     return this.initialized && this.client !== null;
   }
-  
+
   // Method to expose the Plaid client for test endpoints only
   getClient(): PlaidApi {
     if (!this.isInitialized() || !this.client) {
@@ -598,7 +598,7 @@ class PlaidService {
       throw error;
     }
   }
-  
+
   /**
    * Create an asset report for a specific user by phone number
    * This is a helper method that finds the user by phone number and creates an asset report
@@ -612,14 +612,14 @@ class PlaidService {
     if (!this.isInitialized() || !this.client) {
       throw new Error("Plaid client not initialized");
     }
-    
+
     // Import storage here to avoid circular dependency
     const { storage } = await import('../storage');
-    
+
     try {
       // Find the user by phone number
       const user = await storage.getUserByPhone(phoneNumber);
-      
+
       if (!user) {
         throw new Error(`User with phone number ${phoneNumber} not found`);
       }
@@ -630,28 +630,37 @@ class PlaidService {
         source: "plaid",
         metadata: { userId: user.id, daysRequested },
       });
-      
+
       // Get user's recent contracts
       const contracts = await storage.getContractsByCustomerId(user.id);
-      
+
       if (!contracts || contracts.length === 0) {
         throw new Error(`No contracts found for user with phone ${phoneNumber}`);
       }
-      
+
       // Use the most recent contract
       const contractId = contracts[0].id;
-      
+
       // Create the asset report
-      const result = await this.createAssetReport(accessToken, daysRequested, options);
-      
-      // Store the asset report token in our database
-      await storage.storeAssetReportToken(contractId, result.assetReportToken, result.assetReportId, {
-        userId: user.id,
-        daysRequested
-      });
-      
+      const assetReportResponse = await this.createAssetReport(accessToken, daysRequested, options);
+
+      // Get the full report data right away
+      const reportData = await this.getAssetReport(assetReportResponse.assetReportToken, true);
+
+      // Store the asset report token and full report data in database
+      await storage.storeAssetReportToken(
+        parseInt(contractId.toString()),
+        assetReportResponse.assetReportToken,
+        assetReportResponse.assetReportId,
+        {
+          userId: user.id,
+          daysRequested,
+          analysisData: JSON.stringify(reportData.report)
+        }
+      );
+
       return {
-        ...result,
+        ...assetReportResponse,
         userId: user.id,
         contractId
       };
@@ -665,7 +674,7 @@ class PlaidService {
           error: error instanceof Error ? error.stack : null,
         },
       });
-      
+
       throw error;
     }
   }
@@ -728,21 +737,21 @@ class PlaidService {
 
       // Extract key financial metrics
       const accounts = report.items.flatMap(item => item.accounts || []);
-      
+
       // Calculate income estimate (monthly income * 12)
       const incomeStreams = report.items
         .flatMap(item => item.income_streams || [])
         .filter(stream => stream.confidence > 0.5);
-      
+
       const monthlyIncome = incomeStreams.reduce((sum, stream) => sum + (stream.monthly_income || 0), 0);
       const annualIncome = monthlyIncome * 12;
-      
+
       // Extract employment data from income streams
       const employmentMonths = Math.max(
         ...incomeStreams.map(stream => stream.days / 30),
         0
       );
-      
+
       // Calculate debt-to-income ratio
       const totalDebt = accounts
         .filter(account => account.type === 'loan' || account.type === 'credit')
@@ -751,30 +760,30 @@ class PlaidService {
           if (account.type === 'credit') {
             return sum + (account.balances.current || 0);
           }
-          
+
           // For loan accounts, use outstanding balance
           return sum + (account.balances.current || 0);
         }, 0);
-      
+
       const dtiRatio = monthlyIncome > 0 ? totalDebt / (monthlyIncome * 12) : 0;
-      
+
       // Analyze housing status
       const housingAccount = accounts.find(account => 
         account.name.toLowerCase().includes('mortgage') || 
         account.name.toLowerCase().includes('rent') ||
         account.subtype === 'mortgage'
       );
-      
+
       let housingStatus = 'unknown';
       let paymentHistoryMonths = 0;
-      
+
       if (housingAccount) {
         if (housingAccount.subtype === 'mortgage') {
           housingStatus = 'mortgage';
         } else if (housingAccount.name.toLowerCase().includes('rent')) {
           housingStatus = 'rent';
         }
-        
+
         // Estimate payment history from transaction data
         const paymentCount = report.items
           .flatMap(item => item.transactions || [])
@@ -782,10 +791,10 @@ class PlaidService {
             transaction.name.toLowerCase().includes('mortgage') || 
             transaction.name.toLowerCase().includes('rent')
           ).length;
-          
+
         paymentHistoryMonths = Math.min(Math.ceil(paymentCount), 24); // Cap at 24 months
       }
-      
+
       // Construct the analysis object with all metrics
       const analysis = {
         income: {
@@ -822,7 +831,7 @@ class PlaidService {
             .reduce((sum, account) => sum + (account.balances.available || 0), 0)
         }
       };
-      
+
       logger.info({
         message: "Completed Plaid asset report analysis for underwriting",
         category: "api",
@@ -835,7 +844,7 @@ class PlaidService {
           }
         },
       });
-      
+
       return analysis;
     } catch (error) {
       logger.error({
@@ -847,7 +856,7 @@ class PlaidService {
           error: error instanceof Error ? error.stack : null,
         },
       });
-      
+
       throw error;
     }
   }
@@ -865,7 +874,7 @@ class PlaidService {
 
     try {
       const { merchantId, legalName, email, redirectUri } = params;
-      
+
       logger.info({
         message: `Creating Plaid merchant onboarding link for merchant ${merchantId}`,
         category: "api",
@@ -875,7 +884,7 @@ class PlaidService {
 
       // First check if there's already a merchant in our database
       const existingPlaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
-      
+
       // If merchant already exists with completed status, return error
       if (existingPlaidMerchant && existingPlaidMerchant.onboardingStatus === 'completed') {
         return {
@@ -885,17 +894,17 @@ class PlaidService {
           alreadyOnboarded: true
         };
       }
-      
+
       // Create a unique client user ID for the merchant
       const clientUserId = `merchant-${merchantId}-${Date.now()}`;
-      
+
       // Set up user for link token
       const user = {
         client_user_id: clientUserId,
         legal_name: legalName,
         email_address: email
       };
-      
+
       // Create link token with payment_initiation product
       const request: LinkTokenCreateRequest = {
         user,
@@ -910,9 +919,9 @@ class PlaidService {
       if (redirectUri) {
         request.redirect_uri = redirectUri;
       }
-      
+
       const response = await this.client.linkTokenCreate(request);
-      
+
       logger.info({
         message: `Created Plaid merchant onboarding link for merchant ${merchantId}`,
         category: "api",
@@ -983,16 +992,16 @@ class PlaidService {
 
       // First, exchange the public token for an access token
       const { accessToken, itemId } = await this.exchangePublicToken(publicToken);
-      
+
       // Get the merchant from our database
       const merchant = await storage.getMerchant(merchantId);
       if (!merchant) {
         throw new Error(`Merchant with ID ${merchantId} not found`);
       }
-      
+
       // Get plaid merchant record or create if not exists
       let plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
-      
+
       if (!plaidMerchant) {
         // Create new record if one doesn't exist yet
         plaidMerchant = await storage.createPlaidMerchant({
@@ -1013,12 +1022,12 @@ class PlaidService {
           questionnaireId
         });
       }
-      
+
       // If we have an originatorId, check the status with Plaid
       if (originatorId) {
         try {
           const originatorStatus = await this.getMerchantOnboardingStatus(originatorId);
-          
+
           // Log the status we received from Plaid
           logger.info({
             message: `Received originator status from Plaid: ${originatorStatus.status}`,
@@ -1030,7 +1039,7 @@ class PlaidService {
               status: originatorStatus.status 
             }
           });
-          
+
           // Only mark as completed if Plaid says it's active
           // Otherwise keep it as in_progress
           if (originatorStatus.status.toLowerCase() === 'active') {
@@ -1038,7 +1047,7 @@ class PlaidService {
             const updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
               onboardingStatus: 'completed'
             });
-            
+
             return {
               merchantId,
               plaidMerchantId: updatedPlaidMerchant.id,
@@ -1074,7 +1083,7 @@ class PlaidService {
           });
         }
       }
-      
+
       // Mark onboarding as complete (this is the original behavior if we don't have an originatorId)
       const updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
         onboardingStatus: 'completed'
@@ -1201,19 +1210,19 @@ class PlaidService {
       if (!plaidMerchant) {
         throw new Error(`Merchant ${merchantId} is not onboarded with Plaid`);
       }
-      
+
       if (plaidMerchant.onboardingStatus !== 'completed') {
         throw new Error(`Merchant ${merchantId} has not completed Plaid onboarding`);
       }
-      
+
       // Determine routing destination based on:
       // 1. The explicit routeToShifi parameter (which overrides contract status)
       // 2. If the contract is owned by ShiFi (purchased)
-      
+
       // If routeToShifi is explicitly set to true, we'll route to ShiFi regardless of contract status
       // Otherwise, check if the contract has been purchased by ShiFi
       const shouldRouteToShifi = routeToShifi || (contract.purchasedByShifi === true);
-      
+
       logger.info({
         message: `Determining payment routing for contract ${contractId}`,
         category: "api",
@@ -1231,11 +1240,11 @@ class PlaidService {
       const destination = routeToShifi 
         ? process.env.SHIFI_PLAID_ACCOUNT_ID 
         : plaidMerchant.defaultFundingAccount || plaidMerchant.accountId;
-      
+
       if (!destination) {
         throw new Error("No destination account available for transfer");
       }
-      
+
       // Create a transfer intent
       const transferIntentRequest: any = {
         amount: amount.toString(),
@@ -1248,7 +1257,7 @@ class PlaidService {
         ach_class: "ppd", // ACHClass needs casting in some versions of the SDK
         funding_account_id: destination,
       };
-      
+
       // Add facilitator fee if provided (fee that ShiFi collects as a platform)
       if (facilitatorFee && facilitatorFee > 0) {
         // Since we're using the Plaid SDK, we'll need to cast to 'any' to add this property
@@ -1257,10 +1266,10 @@ class PlaidService {
           amount: facilitatorFee.toString()
         };
       }
-      
+
       // Create the transfer intent
       const intentResponse = await this.client.transferIntentCreate(transferIntentRequest);
-      
+
       // Record the transfer in our database
       const transferRecord = await storage.createPlaidTransfer({
         contractId,
@@ -1321,13 +1330,13 @@ class PlaidService {
       // First, use the /transfer/originator/list endpoint to get all merchants from Plaid
       const originatorsResponse = await this.client.transferOriginatorList({});
       const plaidOriginators = originatorsResponse.data.originators || [];
-      
+
       logger.info({
         message: `Retrieved ${plaidOriginators.length} originators from Plaid API`,
         category: "api",
         source: "plaid",
       });
-      
+
       if (plaidOriginators.length === 0) {
         logger.info({
           message: "No merchants found in Plaid platform",
@@ -1336,10 +1345,10 @@ class PlaidService {
         });
         return [];
       }
-      
+
       // Map the Plaid originators to our merchant data structure
       const activeMerchants = [];
-      
+
       for (const originator of plaidOriginators) {
         try {
           // Only include active originators
@@ -1351,17 +1360,17 @@ class PlaidService {
             });
             continue;
           }
-          
+
           // Try to find this originator in our database to get the merchant ID
           const plaidMerchant = await storage.getPlaidMerchantByOriginatorId(originator.originator_id);
-          
+
           const merchantData: any = {
             originatorId: originator.originator_id,
             originatorName: originator.company_name,
             status: originator.status,
             createdAt: originator.created_at,
           };
-          
+
           // If we have this originator in our database, add the merchant details
           if (plaidMerchant) {
             merchantData.merchantId = plaidMerchant.merchantId;
@@ -1369,7 +1378,7 @@ class PlaidService {
             merchantData.accessToken = plaidMerchant.accessToken || '';
             merchantData.accountId = plaidMerchant.accountId || '';
             merchantData.defaultFundingAccount = plaidMerchant.defaultFundingAccount || '';
-            
+
             // Get the merchant details from our database
             const merchant = await storage.getMerchant(plaidMerchant.merchantId);
             if (merchant) {
@@ -1387,11 +1396,11 @@ class PlaidService {
                 companyName: originator.company_name,
               },
             });
-            
+
             // Include it in our results anyway since it's an active originator in Plaid
             merchantData.plaidOnly = true;
           }
-          
+
           activeMerchants.push(merchantData);
         } catch (error) {
           // If we get an error processing this originator, log it but continue with others
@@ -1406,18 +1415,18 @@ class PlaidService {
           });
         }
       }
-      
+
       // As a fallback, also check our database for any merchants that may not be returned by Plaid API
       // This helps handle any potential sync issues between our database and Plaid
       const onboardedMerchants = await storage.getPlaidMerchantsByStatus('completed');
-      
+
       for (const merchant of onboardedMerchants) {
         try {
           // Skip if we already have this merchant in our results
           if (merchant.originatorId && activeMerchants.some(m => m.originatorId === merchant.originatorId)) {
             continue;
           }
-          
+
           if (!merchant.accessToken) {
             logger.warn({
               message: `Merchant ${merchant.merchantId} has no access token`,
@@ -1431,13 +1440,13 @@ class PlaidService {
           const accountsResponse = await this.client.accountsGet({
             access_token: merchant.accessToken
           });
-          
+
           // Check if the merchant has transfer capabilities
           const hasTransferCapability = accountsResponse.data.accounts.some(account => 
             account.type === 'depository' && 
             ['checking', 'savings'].includes(account.subtype || '')
           );
-          
+
           if (hasTransferCapability) {
             // Create merchant object with only required fields
             const merchantData: any = {
@@ -1449,14 +1458,14 @@ class PlaidService {
               defaultFundingAccount: merchant.defaultFundingAccount || '',
               fromDatabaseOnly: true
             };
-            
+
             // Get the merchant details from our database
             const merchantDetails = await storage.getMerchant(merchant.merchantId);
             if (merchantDetails) {
               merchantData.merchantName = merchantDetails.name;
               merchantData.merchantEmail = merchantDetails.email;
             }
-            
+
             activeMerchants.push(merchantData);
           }
         } catch (error) {
@@ -1472,7 +1481,7 @@ class PlaidService {
           });
         }
       }
-      
+
       return activeMerchants;
     } catch (error) {
       logger.error({
@@ -1512,7 +1521,7 @@ class PlaidService {
       });
 
       const status = response.data.transfer_intent.status;
-      
+
       // Update status in our database
       const transferRecord = await storage.getPlaidTransferById(parseInt(transferId));
       if (transferRecord) {
