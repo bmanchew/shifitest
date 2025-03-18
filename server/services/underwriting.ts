@@ -5,8 +5,7 @@ import { plaidService } from './plaid';
 import { UnderwritingData, users, underwritingData as underwritingTable } from '../../shared/schema';
 import { db } from '../db';
 
-// Define the underwriting service
-export class UnderwritingService {
+class UnderwritingService {
   async processUnderwriting(userId: number, contractId?: number): Promise<UnderwritingData | null> {
     try {
       logger.info({
@@ -23,8 +22,6 @@ export class UnderwritingService {
       }
       
       // 2. Get credit data from Pre-Fi
-      // This would use KYC data that would already be stored
-      // For this example, we'll use a mock credit report
       const creditData = await this.getCreditData(userId);
       
       // 3. Get income and debt data from Plaid
@@ -94,14 +91,12 @@ export class UnderwritingService {
   }
   
   private async getUserData(userId: number) {
-    // Fetch user data from the database
     const userResults = await db.select().from(users).where({ id: userId });
     return userResults[0] || null;
   }
   
   private async getCreditData(userId: number) {
     try {
-      // Get user data to retrieve KYC info
       const userData = await this.getUserData(userId);
       
       if (!userData || !userData.ssn || !userData.firstName || !userData.lastName || !userData.dob || !userData.address) {
@@ -122,7 +117,6 @@ export class UnderwritingService {
         throw new Error(`Missing required KYC data for credit check: ${missingFields.join(', ')}`);
       }
       
-      // Call the Pre-Fi API to get real credit data
       const creditReport = await preFiService.getCreditReport(
         userData.ssn,
         userData.firstName,
@@ -171,9 +165,6 @@ export class UnderwritingService {
         userId,
       });
 
-      // Look up access tokens associated with this user
-      // In a real implementation, you'd retrieve this from your database
-      // For this example, we'll check if we have any stored in the database
       const accessTokensData = await db.query.plaidTokens.findMany({
         where: (tokens, { eq }) => eq(tokens.userId, userId),
       });
@@ -185,9 +176,6 @@ export class UnderwritingService {
           userId,
         });
         
-        // If no access tokens found, return default metrics
-        // In production, you might want to fail the underwriting process
-        // or request the user to connect their accounts
         return {
           income: 0,
           employmentMonths: 0,
@@ -197,21 +185,18 @@ export class UnderwritingService {
         };
       }
 
-      // Use the most recently added access token
       const latestToken = accessTokensData[0];
       const accessToken = latestToken.accessToken;
 
-      // Create an asset report - this may take a few seconds to generate
       const assetReportResponse = await plaidService.createAssetReport({
         accessToken: accessToken,
-        daysRequested: 90, // 3 months of data
+        daysRequested: 90,
         clientReportId: `underwriting-${userId}-${Date.now()}`,
         user: {
           clientUserId: userId.toString(),
         }
       });
 
-      // Wait for the asset report to be ready with retries
       logger.info({
         message: `Created Plaid asset report, waiting for processing`,
         category: 'underwriting',
@@ -234,7 +219,7 @@ export class UnderwritingService {
             userId,
             error: error instanceof Error ? error.message : String(error),
           });
-          await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay between retries
+          await new Promise(resolve => setTimeout(resolve, 5000));
           retries++;
         }
       }
@@ -250,14 +235,12 @@ export class UnderwritingService {
         analysis,
       });
 
-      // Return the analyzed data in the format expected by the underwriting process
       return {
         income: analysis.income.annualIncome || 0,
         employmentMonths: analysis.employment.employmentMonths || 0,
         dtiRatio: analysis.debt.dtiRatio || 0,
         housingStatus: analysis.housing.housingStatus || 'unknown',
         housingPaymentHistoryMonths: analysis.housing.paymentHistoryMonths || 0,
-        // Include the full analysis in case we need to extract more data
         fullAnalysis: analysis,
       };
     } catch (error) {
@@ -268,7 +251,6 @@ export class UnderwritingService {
         error: error instanceof Error ? error.stack : null,
       });
       
-      // Fail the underwriting process if we can't get valid Plaid data
       logger.error({
         message: `Critical error getting Plaid data for underwriting`,
         category: 'underwriting',
@@ -280,9 +262,7 @@ export class UnderwritingService {
   }
   
   private async saveUnderwritingData(data: any) {
-    // Save the underwriting data to the database
     try {
-      // Check if there's an existing record
       const result = await db.insert(underwritingTable).values({
         ...data,
         updatedAt: new Date(),
@@ -299,15 +279,14 @@ export class UnderwritingService {
       throw error;
     }
   }
-private async processMerchantUnderwriting(merchantId: number): Promise<UnderwritingData | null> {
+
+  private async processMerchantUnderwriting(merchantId: number): Promise<UnderwritingData | null> {
     try {
-      // Get Plaid access token for merchant
       const plaidData = await this.getPlaidData(merchantId);
       
-      // Create and analyze asset report for 24 months
       const assetReport = await plaidService.createAssetReport({
         accessToken: plaidData.accessToken,
-        daysRequested: 730, // 2 years
+        daysRequested: 730,
         clientReportId: `merchant-verification-${merchantId}-${Date.now()}`
       });
 
@@ -315,15 +294,12 @@ private async processMerchantUnderwriting(merchantId: number): Promise<Underwrit
         assetReport.assetReportToken
       );
 
-      // Calculate average monthly revenue
       const monthlyRevenue = analysis?.income?.monthlyIncome || 0;
       const monthsOfHistory = analysis?.employment?.employmentMonths || 0;
 
-      // Determine qualification
       const qualifies = monthlyRevenue >= 100000 && monthsOfHistory >= 24;
       const creditTier = qualifies ? 'approved' : 'declined';
 
-      // Save merchant underwriting data
       return await this.saveUnderwritingData({
         userId: merchantId,
         creditTier,
@@ -343,3 +319,6 @@ private async processMerchantUnderwriting(merchantId: number): Promise<Underwrit
       throw error;
     }
   }
+}
+
+export const underwritingService = new UnderwritingService();
