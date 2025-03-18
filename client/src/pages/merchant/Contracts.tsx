@@ -17,7 +17,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Search, Filter } from "lucide-react";
 import { useState } from "react";
-import Link from 'next/link'; // Assuming Next.js Link component
+import { Link } from "wouter";
 
 export default function Contracts() {
   const { user } = useAuth();
