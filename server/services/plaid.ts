@@ -192,7 +192,10 @@ class PlaidService {
         auth: {
           same_day_microdeposits_enabled: true,
           sms_microdeposits_verification_enabled: true
-        }
+        },
+        required_if_supported_products: products,
+        optional_products: [],
+        update_mode: false
       };
 
       // Add optional redirect URI if provided
