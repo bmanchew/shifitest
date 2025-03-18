@@ -172,14 +172,16 @@ class PlaidService {
         userEmail,
         products = [Products.Auth, Products.Transactions, Products.Assets],
         redirectUri,
+        accessToken,
       } = params;
 
-      // Ensure Assets product is always included
-      if (!products.includes(Products.Assets)) {
-        products.push(Products.Assets);
+      // For existing Items, only request Assets product
+      const requestProducts = accessToken ? [Products.Assets] : products;
+      
+      // Ensure Assets product is included for new Items
+      if (!accessToken && !requestProducts.includes(Products.Assets)) {
+        requestProducts.push(Products.Assets);
       }
-        redirectUri,
-      } = params;
 
       // Prepare user object for the request
       const user = {
@@ -192,10 +194,11 @@ class PlaidService {
       const request: LinkTokenCreateRequest = {
         user,
         client_name: "ShiFi Financial",
-        products: products,
+        products: requestProducts,
         country_codes: [CountryCode.Us],
         language: "en",
         webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
+        access_token: accessToken,
         auth: {
           same_day_microdeposits_enabled: true,
           sms_microdeposits_verification_enabled: true
