@@ -170,7 +170,14 @@ class PlaidService {
         clientUserId,
         userName,
         userEmail,
-        products = [Products.Auth, Products.Transactions,Products.Assets],
+        products = [Products.Auth, Products.Transactions, Products.Assets],
+        redirectUri,
+      } = params;
+
+      // Ensure Assets product is always included
+      if (!products.includes(Products.Assets)) {
+        products.push(Products.Assets);
+      }
         redirectUri,
       } = params;
 
