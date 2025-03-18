@@ -512,13 +512,20 @@ class PlaidService {
         metadata: { daysRequested },
       });
 
-      // Prepare asset report request with webhook
+      // Prepare asset report request with webhook and required user info
       const request: AssetReportCreateRequest = {
         access_tokens: [accessToken],
         days_requested: daysRequested,
         options: {
           ...options,
           webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
+          client_report_id: `report-${Date.now()}`,
+          user: {
+            client_user_id: options?.client_user_id || `user-${Date.now()}`,
+            first_name: options?.first_name,
+            last_name: options?.last_name,
+            email: options?.email
+          }
         }
       };
 
