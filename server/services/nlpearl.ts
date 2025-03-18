@@ -85,14 +85,13 @@ export class NLPearlService {
       }
 
       const response = await axios.post(
-        `${this.baseUrl}/calls/initiate`,
+        `${this.baseUrl}/Outbound/${process.env.NLPEARL_CAMPAIGN_ID}/Call`,
         {
-          phone_number: phoneNumber,
-          context: {
+          to: phoneNumber,
+          callData: {
             merchant_name: merchantName,
             application_url: applicationUrl,
-          },
-          flow_id: "application_walkthrough", // You'll need to create this flow in NLPearl dashboard
+          }
         },
         {
           headers: {
