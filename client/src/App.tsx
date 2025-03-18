@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import LoadingFallback from "@/components/LoadingFallback";
+import LoadingFallback from "./components/LoadingFallback";
 
 // Import pages
 const Login = lazy(() => import("@/pages/auth/Login"));
