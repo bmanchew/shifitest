@@ -818,7 +818,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       let nlPearlResponse;
       let isCallActive = false;
 
-      // Only attempt NLPearl call if service is initialized
+      // Attempt NLPearl call if service is initialized
       if (nlpearlService.isInitialized()) {
         try {
           // Ensure we're using the correct phone number for NLPearl
@@ -838,12 +838,6 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               source: "nlpearl",
               metadata: { callId: nlPearlResponse.call_id }
             });
-            return res.json({ 
-              success: false, 
-              message: "NLPearl call failed to activate",
-              contractId: newContract.id,
-              applicationUrl
-            });
           }
         } catch (nlpearlError) {
           logger.error({
@@ -852,25 +846,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
             source: "nlpearl",
             metadata: { error: nlpearlError instanceof Error ? nlpearlError.message : String(nlpearlError) }
           });
-          return res.json({ 
-            success: false, 
-            message: "NLPearl call failed",
-            contractId: newContract.id,
-            applicationUrl
-          });
         }
-      } else {
-        logger.error({
-          message: "NLPearl service not initialized",
-          category: "api",
-          source: "nlpearl"
-        });
-        return res.json({ 
-          success: false, 
-          message: "NLPearl service not available",
-          contractId: newContract.id,
-          applicationUrl
-        });
       }
 
       // Send SMS regardless of NLPearl call status
