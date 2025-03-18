@@ -32,16 +32,26 @@ export class NLPearlService {
   }
 
   private async checkCallStatus(callId: string): Promise<{status: number}> {
-    const response = await axios.get(
-      `${this.baseUrl}/Call/${callId}`,
-      {
-        headers: {
-          Authorization: this.getAuthHeader(),
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    return response.data;
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/Call/${callId}`,
+        {
+          headers: {
+            Authorization: this.getAuthHeader(),
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      return response.data;
+    } catch (error) {
+      logger.error({
+        message: `Failed to check NLPearl call status: ${error instanceof Error ? error.message : String(error)}`,
+        category: "service",
+        source: "nlpearl",
+        metadata: { callId }
+      });
+      throw error;
+    }
   }
 
   async waitForCallActive(callId: string, maxAttempts = 10): Promise<boolean> {
