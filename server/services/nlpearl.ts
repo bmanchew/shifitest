@@ -58,7 +58,8 @@ export class NLPearlService {
     for (let i = 0; i < maxAttempts; i++) {
       try {
         const callStatus = await this.checkCallStatus(callId);
-        if (callStatus.status === 3) { // InProgress
+        // Accept status codes: 2 (Queued), 3 (InProgress), 4 (Connected)
+        if ([2, 3, 4].includes(callStatus.status)) {
           return true;
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between checks
