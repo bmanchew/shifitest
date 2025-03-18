@@ -780,6 +780,10 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       // Find or create a user for this phone number, passing in the email
       const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
 
+      // Get the application base URL from Replit
+      const replitDomain = getAppDomain();
+      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
+
       // Initiate NLPearl call first
       const nlPearlResponse = await nlpearlService.initiateApplicationCall(
         phoneNumber,
