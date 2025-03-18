@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import {
   AuthUser,
   loginUser,
+  registerUser,
+  RegisterParams,
   getCurrentUser,
   storeUserData,
   clearUserData,
@@ -14,6 +16,7 @@ export interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (params: RegisterParams) => Promise<void>;
   logout: () => void;
 }
 
@@ -108,6 +111,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const register = async (params: RegisterParams) => {
+    setIsLoading(true);
+    try {
+      await registerUser(params);
+      setIsLoading(false);
+    } catch (error) {
+      setIsLoading(false);
+      throw error;
+    }
+  };
+
   const logout = () => {
     setUser(null);
     clearUserData();
@@ -122,6 +136,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     isLoading,
     login,
+    register,
     logout,
   };
 

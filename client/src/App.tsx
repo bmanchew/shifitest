@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import LoadingFallback from "./components/LoadingFallback";
+import ContractDetails from "@/components/contract/ContractDetails";
 
 // Import pages
 const Login = lazy(() => import("@/pages/Login"));
@@ -53,6 +54,14 @@ export default function App() {
           <Route path="/merchant/contracts" component={MerchantContracts} />
           <Route path="/merchant/reports" component={MerchantReports} />
           <Route path="/merchant/settings" component={MerchantSettings} />
+
+          {/* Contract routes */}
+          <Route path="/contracts/:contractId">
+            {(params) => <ContractDetails />}
+          </Route>
+
+          {/* Admin dashboard explicit route */}
+          <Route path="/admin/dashboard" component={AdminDashboard} />
 
           {/* Default route */}
           <Route path="/" component={user ? MerchantDashboard : Login} />

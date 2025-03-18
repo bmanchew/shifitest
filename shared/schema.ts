@@ -322,3 +322,59 @@ export const insertPlaidTransferSchema = createInsertSchema(plaidTransfers).omit
 
 export type PlaidTransfer = typeof plaidTransfers.$inferSelect;
 export type InsertPlaidTransfer = z.infer<typeof insertPlaidTransferSchema>;
+
+// Merchant Business Details
+export const merchantBusinessDetails = pgTable("merchant_business_details", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  legalName: text("legal_name").notNull(),
+  ein: text("ein").notNull(), // Employer Identification Number
+  businessStructure: text("business_structure").notNull(), // LLC, Corporation, Partnership, etc.
+  addressLine1: text("address_line1"),
+  addressLine2: text("address_line2"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  websiteUrl: text("website_url"),
+  industryType: text("industry_type"),
+  yearEstablished: integer("year_established"),
+  annualRevenue: doublePrecision("annual_revenue"),
+  monthlyRevenue: doublePrecision("monthly_revenue"),
+  employeeCount: integer("employee_count"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertMerchantBusinessDetailsSchema = createInsertSchema(merchantBusinessDetails).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MerchantBusinessDetails = typeof merchantBusinessDetails.$inferSelect;
+export type InsertMerchantBusinessDetails = z.infer<typeof insertMerchantBusinessDetailsSchema>;
+
+// Merchant Documents
+export const merchantDocuments = pgTable("merchant_documents", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  type: text("type").notNull(), // business_license, tax_return, bank_statement, etc.
+  filename: text("filename").notNull(),
+  data: text("data").notNull(), // Base64 encoded file data or file path
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  verified: boolean("verified").default(false),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: integer("verified_by").references(() => users.id),
+  metadata: text("metadata"), // JSON stringified additional data
+});
+
+export const insertMerchantDocumentSchema = createInsertSchema(merchantDocuments).omit({
+  id: true,
+  uploadedAt: true,
+  verifiedAt: true,
+});
+
+export type MerchantDocument = typeof merchantDocuments.$inferSelect;
+export type InsertMerchantDocument = z.infer<typeof insertMerchantDocumentSchema>;

@@ -9,7 +9,9 @@ import {
   portfolioMonitoring, PortfolioMonitoring, InsertPortfolioMonitoring,
   complaintsData, ComplaintsData, InsertComplaintsData,
   plaidMerchants, PlaidMerchant, InsertPlaidMerchant,
-  plaidTransfers, PlaidTransfer, InsertPlaidTransfer
+  plaidTransfers, PlaidTransfer, InsertPlaidTransfer,
+  merchantBusinessDetails, MerchantBusinessDetails, InsertMerchantBusinessDetails,
+  merchantDocuments, MerchantDocument, InsertMerchantDocument
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like } from "drizzle-orm";
@@ -87,6 +89,19 @@ export interface IStorage {
   saveComplaintsData(complaints: any[]): Promise<ComplaintsData[]>;
   getComplaintsData(options?: { product?: string; company?: string; limit?: number; offset?: number }): Promise<ComplaintsData[]>;
   updateUserName(userId: number, firstName?: string, lastName?: string): Promise<User | null>;
+  
+  // Merchant Business Details operations
+  getMerchantBusinessDetails(id: number): Promise<MerchantBusinessDetails | undefined>;
+  getMerchantBusinessDetailsByMerchantId(merchantId: number): Promise<MerchantBusinessDetails | undefined>;
+  createMerchantBusinessDetails(details: InsertMerchantBusinessDetails): Promise<MerchantBusinessDetails>;
+  updateMerchantBusinessDetails(id: number, details: Partial<InsertMerchantBusinessDetails>): Promise<MerchantBusinessDetails | undefined>;
+  
+  // Merchant Documents operations
+  getMerchantDocument(id: number): Promise<MerchantDocument | undefined>;
+  getMerchantDocumentsByMerchantId(merchantId: number): Promise<MerchantDocument[]>;
+  getMerchantDocumentsByType(merchantId: number, type: string): Promise<MerchantDocument[]>;
+  createMerchantDocument(document: InsertMerchantDocument): Promise<MerchantDocument>;
+  updateMerchantDocumentVerification(id: number, verified: boolean, verifiedBy?: number): Promise<MerchantDocument | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -937,6 +952,78 @@ export class DatabaseStorage implements IStorage {
       console.error(`Error updating Plaid transfer status for ${id}:`, error);
       return undefined;
     }
+  }
+  
+  // Merchant Business Details methods
+  async getMerchantBusinessDetails(id: number): Promise<MerchantBusinessDetails | undefined> {
+    const [details] = await db.select().from(merchantBusinessDetails).where(eq(merchantBusinessDetails.id, id));
+    return details || undefined;
+  }
+
+  async getMerchantBusinessDetailsByMerchantId(merchantId: number): Promise<MerchantBusinessDetails | undefined> {
+    const [details] = await db.select().from(merchantBusinessDetails).where(eq(merchantBusinessDetails.merchantId, merchantId));
+    return details || undefined;
+  }
+
+  async createMerchantBusinessDetails(details: InsertMerchantBusinessDetails): Promise<MerchantBusinessDetails> {
+    const [newDetails] = await db.insert(merchantBusinessDetails).values({
+      ...details,
+      updatedAt: new Date()
+    }).returning();
+    return newDetails;
+  }
+
+  async updateMerchantBusinessDetails(id: number, details: Partial<InsertMerchantBusinessDetails>): Promise<MerchantBusinessDetails | undefined> {
+    const [updatedDetails] = await db.update(merchantBusinessDetails)
+      .set({
+        ...details,
+        updatedAt: new Date()
+      })
+      .where(eq(merchantBusinessDetails.id, id))
+      .returning();
+      
+    return updatedDetails;
+  }
+  
+  // Merchant Documents methods
+  async getMerchantDocument(id: number): Promise<MerchantDocument | undefined> {
+    const [document] = await db.select().from(merchantDocuments).where(eq(merchantDocuments.id, id));
+    return document || undefined;
+  }
+
+  async getMerchantDocumentsByMerchantId(merchantId: number): Promise<MerchantDocument[]> {
+    return await db.select().from(merchantDocuments).where(eq(merchantDocuments.merchantId, merchantId));
+  }
+
+  async getMerchantDocumentsByType(merchantId: number, type: string): Promise<MerchantDocument[]> {
+    return await db.select().from(merchantDocuments)
+      .where(and(
+        eq(merchantDocuments.merchantId, merchantId),
+        eq(merchantDocuments.type, type)
+      ));
+  }
+
+  async createMerchantDocument(document: InsertMerchantDocument): Promise<MerchantDocument> {
+    const [newDocument] = await db.insert(merchantDocuments).values(document).returning();
+    return newDocument;
+  }
+
+  async updateMerchantDocumentVerification(id: number, verified: boolean, verifiedBy?: number): Promise<MerchantDocument | undefined> {
+    const updateData: any = {
+      verified,
+      verifiedAt: verified ? new Date() : null,
+    };
+    
+    if (verified && verifiedBy) {
+      updateData.verifiedBy = verifiedBy;
+    }
+    
+    const [updatedDocument] = await db.update(merchantDocuments)
+      .set(updateData)
+      .where(eq(merchantDocuments.id, id))
+      .returning();
+      
+    return updatedDocument;
   }
 }
 

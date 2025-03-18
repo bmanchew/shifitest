@@ -1,6 +1,6 @@
 
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 
 interface ProtectedRouteProps {
@@ -9,14 +9,19 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ role, component: Component }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { user } = useAuth();
+  const [_, setLocation] = useLocation();
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
+  // If user isn't logged in, redirect to login
+  if (!user) {
+    setLocation("/login");
+    return null;
   }
 
-  if (user?.role !== role) {
-    return <Navigate to="/not-found" />;
+  // If user doesn't have the required role, redirect to not found
+  if (user.role !== role) {
+    setLocation("/not-found");
+    return null;
   }
 
   return <Component />;

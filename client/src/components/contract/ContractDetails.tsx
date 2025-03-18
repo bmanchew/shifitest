@@ -1,19 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useRoute } from 'wouter';
 import axios from 'axios';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/use-auth';
 import ApplicationStatus from './ApplicationStatus';
 import UnderwritingViewFactory from '../underwriting/UnderwritingViewFactory';
 
-interface ContractDetailsProps {
-  contractId?: string;
-}
-
-const ContractDetails: React.FC<ContractDetailsProps> = ({ contractId }) => {
+const ContractDetails = () => {
+  const [match, params] = useRoute('/contracts/:contractId');
+  const contractId = params?.contractId;
   const [contract, setContract] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,15 +109,3 @@ const ContractDetails: React.FC<ContractDetailsProps> = ({ contractId }) => {
 };
 
 export default ContractDetails;
-
-
-        {/* Underwriting Information Section */}
-        {contract && user && (
-          <div className="mb-6">
-            <h3 className="text-lg font-medium mb-3">Underwriting Information</h3>
-            <UnderwritingViewFactory 
-              userRole={user.role} 
-              contractId={contract.id} 
-            />
-          </div>
-        )}

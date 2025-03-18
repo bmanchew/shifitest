@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ export default function Register() {
   
   const { register } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [_, setLocation] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +41,7 @@ export default function Register() {
         title: "Registration successful",
         description: "Redirecting to login page",
       });
-      navigate("/login");
+      setLocation("/login");
     } catch (error: any) {
       toast({
         title: "Registration failed",
@@ -145,7 +145,7 @@ export default function Register() {
             </Button>
             <div className="text-center text-sm text-gray-500">
               Already have an account?{" "}
-              <Button variant="link" className="p-0" onClick={() => navigate("/login")}>
+              <Button variant="link" className="p-0" onClick={() => setLocation("/login")}>
                 Sign in
               </Button>
             </div>

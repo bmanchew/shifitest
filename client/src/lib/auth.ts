@@ -9,6 +9,23 @@ export interface AuthResult {
   user: AuthUser;
 }
 
+export interface RegisterParams {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+}
+
+export async function registerUser(params: RegisterParams): Promise<void> {
+  try {
+    await apiRequest("POST", "/api/auth/register", params);
+  } catch (error) {
+    console.error("Registration error:", error);
+    throw error;
+  }
+}
+
 export async function loginUser(email: string, password: string): Promise<AuthResult> {
   try {
     const data = await apiRequest<AuthResult>("POST", "/api/auth/login", {
