@@ -1,0 +1,52 @@
+025-03-18T15:21:30.056Z] [ERROR] [ad8941b2-cdff-4976-8279-0dc26e0d210b] Failed to create Plaid asset report: Request failed with status code 400 {
+  correlationId: 'ad8941b2-cdff-4976-8279-0dc26e0d210b',
+  requestId: '38e1ea65',
+  metadata: {
+    daysRequested: 90,
+    error: 'AxiosError: Request failed with status code 400\n' +
+      '    at settle (/home/runner/workspace/node_modules/axios/lib/core/settle.js:19:12)\n' +
+      '    at Unzip.handleStreamEnd (/home/runner/workspace/node_modules/axios/lib/adapters/http.js:599:11)\n' +
+      '    at Unzip.emit (node:events:530:35)\n' +
+      '    at endReadableNT (node:internal/streams/readable:1698:12)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)\n' +
+      '    at Axios.request (/home/runner/workspace/node_modules/axios/lib/core/Axios.js:45:41)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
+      '    at async PlaidService.createAssetReport (/home/runner/workspace/server/services/plaid.ts:513:24)\n' +
+      '    at async <anonymous> (/home/runner/workspace/server/routes.ts:2657:41)'
+  }
+}
+3:21:30 PM [express] POST /api/plaid/set-access-token 200 in 906ms :: {"success":true,"accounts":[{"…
+[2025-03-18T15:21:30.194Z] [INFO] [ad8941b2-cdff-4976-8279-0dc26e0d210b] POST /api/plaid/set-access-token 200 {
+  correlationId: 'ad8941b2-cdff-4976-8279-0dc26e0d210b',
+  requestId: 'e5165fe3',
+  metadata: {
+    method: 'POST',
+    path: '/api/plaid/set-access-token',
+    params: {},
+    query: {},
+    body: {
+      publicToken: '[REDACTED]',
+      contractId: 145,
+      institutionId: 'ins_133186',
+      institutionName: 'Arc',
+      accountId: 'rYe8bXNBm4TjEEeBkzw3UnQKbgNP13Hw9BJ1g'
+    },
+    responseTime: '906ms'
+  }
+}
+[2025-03-18T15:21:30.344Z] [ERROR] [ad8941b2-cdff-4976-8279-0dc26e0d210b] Error creating Asset Report: Request failed with status code 400 {
+  correlationId: 'ad8941b2-cdff-4976-8279-0dc26e0d210b',
+  requestId: 'e85b23b6',
+  metadata: {
+    contractId: 145,
+    userId: undefined,
+    error: 'AxiosError: Request failed with status code 400\n' +
+      '    at settle (/home/runner/workspace/node_modules/axios/lib/core/settle.js:19:12)\n' +
+      '    at Unzip.handleStreamEnd (/home/runner/workspace/node_modules/axios/lib/adapters/http.js:599:11)\n' +
+      '    at Unzip.emit (node:events:530:35)\n' +
+      '    at endReadableNT (node:internal/streams/readable:1698:12)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)\n' +
+      '    at Axios.request (/home/runner/workspace/node_modules/axios/lib/core/Axios.js:45:41)\n' +
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n' +
+      '    at async PlaidService.createAssetReport (/home/runner/workspace/server/services/plaid.ts:513:24)\n' +
+      '    at async <anonymous> (/home/runner/workspace/server/routes.ts:2657:41)'
