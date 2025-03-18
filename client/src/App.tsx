@@ -79,7 +79,7 @@ function App() {
         )}
 
         {/* Public merchant signup route */}
-        <Route path="/merchant/signup" component={MerchantSignup} />
+        <Route path="/merchant/signup" element={<MerchantSignup />} />
 
         {/* Protected merchant routes */}
         {user && user.role === "merchant" && (
