@@ -496,6 +496,15 @@ class PlaidService {
     }
 
     try {
+      // First verify assets product is enabled
+      const itemResponse = await this.client.itemGet({
+        access_token: accessToken
+      });
+      
+      if (!itemResponse.data.item.available_products.includes('assets')) {
+        throw new Error('Assets product not enabled for this access token');
+      }
+
       logger.info({
         message: "Creating Plaid asset report",
         category: "api",
@@ -503,11 +512,14 @@ class PlaidService {
         metadata: { daysRequested },
       });
 
-      // Prepare asset report request
+      // Prepare asset report request with webhook
       const request: AssetReportCreateRequest = {
         access_tokens: [accessToken],
         days_requested: daysRequested,
-        options: options || {},
+        options: {
+          ...options,
+          webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
+        }
       };
 
       const response = await this.client.assetReportCreate(request);
