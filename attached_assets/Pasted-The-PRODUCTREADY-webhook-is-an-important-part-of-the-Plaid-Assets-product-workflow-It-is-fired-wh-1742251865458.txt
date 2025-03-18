@@ -1,0 +1,24 @@
+The "PRODUCTREADY" webhook is an important part of the Plaid Assets product workflow. It is fired when an Asset Report has been successfully generated and is ready to be retrieved using the /assetreport/get or /asset_report/pdf/get endpoints.
+
+How the "PRODUCT_READY" Webhook Works
+Initiate Asset Report Creation: You start by calling the /asset_report/create endpoint to initiate the creation of an Asset Report. This process is not instantaneous and can take from a few seconds to about a minute, depending on the amount of historical data requested.
+
+Wait for the Webhook: Once the Asset Report is ready, Plaid will send a "PRODUCT_READY" webhook. This webhook indicates that the report is now available for retrieval.
+
+Retrieve the Asset Report: After receiving the "PRODUCTREADY" webhook, you can call the /assetreport/get endpoint to retrieve the report in JSON format or /asset_report/pdf/get for a PDF version.
+
+Webhook Schema
+The "PRODUCT_READY" webhook includes several fields, such as:
+
+webhook_type: This will be ASSETS.
+webhookcode: This will be PRODUCTREADY.
+assetreportid: The ID corresponding to the Asset Report that is ready.
+user_id: The ID corresponding to the user for whom the Asset Report was generated.
+Example Use Case
+This webhook is particularly useful for applications that need to automate the process of retrieving and processing Asset Reports as soon as they are available. By listening for this webhook, your application can efficiently manage the flow of data without needing to poll the API continuously.
+
+For more detailed information, you can refer to the Plaid Assets API documentation.
+To set up webhooks for the Plaid Assets product, you don't necessarily have to configure them through the Plaid Dashboard. Instead, you can specify the webhook URL directly when you create an Asset Report.
+
+How to Set Up Webhooks for Plaid Assets
+Specify Webhook in API Request: When you make a request to the /asset_report/create endpoint, you can include the options.webhook field in your request payload
