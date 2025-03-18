@@ -821,8 +821,9 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       // Only attempt NLPearl call if service is initialized
       if (nlpearlService.isInitialized()) {
         try {
+          // Ensure we're using the customer's phone number from the contract
           nlPearlResponse = await nlpearlService.initiateApplicationCall(
-            phoneNumber,
+            contract.phoneNumber,
             applicationUrl,
             merchant.name
           );
