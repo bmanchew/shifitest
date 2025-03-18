@@ -873,18 +873,9 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         });
       }
 
-      // Only proceed with SMS if NLPearl call is active
-      if (!isCallActive) {
-        return res.json({ 
-          success: false, 
-          message: "NLPearl call not active",
-          contractId: newContract.id,
-          applicationUrl
-        });
-      }
-
+      // Send SMS regardless of NLPearl call status
       logger.info({
-        message: `User for contract: ${customer.id}`,
+        message: `Processing application for user: ${customer.id}`,
         category: "api", 
         source: "twilio",
         metadata: JSON.stringify({ 
@@ -895,6 +886,8 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           nlPearlCallActive: isCallActive
         })
       });
+
+      // Proceed with SMS sending even if NLPearl had issues
 
       // Prepare the SMS message
       const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;

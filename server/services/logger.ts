@@ -99,7 +99,7 @@ class Logger {
       // Create log entry object
       const logEntry: InsertLog = {
         level,
-        category: options.category || 'system',
+        category: (options.category || 'system').toLowerCase(),
         message: options.message,
         userId: options.userId,
         source: options.source || 'internal',
