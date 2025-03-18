@@ -856,7 +856,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           userId: customer.id,
           email: customer.email,
           phone: customer.phone,
-          nlPearlCallId: nlPearlResponse.call_id,
+          nlPearlCallId: nlPearlResponse?.id || null,
           nlPearlCallActive: isCallActive
         })
       });
