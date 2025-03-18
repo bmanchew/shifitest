@@ -13,7 +13,7 @@ export class NLPearlService {
     if (!this.accountId || !this.apiKey) {
       logger.warn({
         message: "NLPearl service not properly configured",
-        category: "service",
+        category: "api",
         source: "nlpearl",
         metadata: {
           hasAccountId: !!this.accountId,
@@ -46,7 +46,7 @@ export class NLPearlService {
     } catch (error) {
       logger.error({
         message: `Failed to check NLPearl call status: ${error instanceof Error ? error.message : String(error)}`,
-        category: "service",
+        category: "api",
         source: "nlpearl",
         metadata: { callId }
       });
@@ -66,7 +66,7 @@ export class NLPearlService {
       } catch (error) {
         logger.error({
           message: `Failed to check call status: ${error instanceof Error ? error.message : String(error)}`,
-          category: "service",
+          category: "api",
           source: "nlpearl",
           metadata: { callId, attempt: i + 1 }
         });
@@ -87,7 +87,7 @@ export class NLPearlService {
 
       // Normalize phone number to just digits
       const normalizedPhone = phoneNumber.replace(/\D/g, '');
-      
+
       // Format as +1XXXXXXXXXX for US numbers
       const formattedPhone = `+1${normalizedPhone}`;
 
@@ -110,7 +110,7 @@ export class NLPearlService {
 
       logger.info({
         message: "NLPearl call initiated",
-        category: "service",
+        category: "api",
         source: "nlpearl",
         metadata: {
           phoneNumber,
@@ -125,7 +125,7 @@ export class NLPearlService {
     } catch (error) {
       logger.error({
         message: `Failed to initiate NLPearl call: ${error instanceof Error ? error.message : String(error)}`,
-        category: "service",
+        category: "api",
         source: "nlpearl",
         metadata: {
           error: error instanceof Error ? error.stack : String(error),
