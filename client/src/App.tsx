@@ -21,8 +21,7 @@ const MerchantContracts = lazy(() => import("@/pages/merchant/Contracts"));
 const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
 const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
 
-
-function App() {
+export default function App() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -30,55 +29,38 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50"> {/* Restored div element */}
       <Suspense fallback={<LoadingFallback />}>
         <Switch>
-          {/* Public routes */}
-          {!user && <Route path="/" component={Login} />}
-
-          {/* Customer public routes */}
-          <Route path="/offer/:contractId" component={CustomerContractOffer} />
+          <Route path="/login" component={Login} />
           <Route path="/apply/:contractId" component={CustomerApplication} />
-          <Route path="/apply" component={CustomerApplication} />
-          <Route path="/customer/application/:contractId" component={CustomerApplication} />
-          <Route path="/customer/contract-lookup" component={lazy(() => import("@/pages/customer/ContractLookup"))} />
-          <Route path="/dashboard/:contractId" component={CustomerDashboard} />
+          <Route path="/offer/:contractId" component={CustomerContractOffer} />
+
+          {/* Customer routes */}
+          <Route path="/customer/dashboard" component={CustomerDashboard} />
 
           {/* Admin routes */}
-          {user && user.role === "admin" && (
-            <>
-              <Route path="/" component={AdminDashboard} />
-              <Route path="/admin" component={AdminDashboard} />
-              <Route path="/admin/dashboard" component={AdminDashboard} />
-              <Route path="/admin/merchants" component={AdminMerchants} />
-              <Route path="/admin/contracts" component={AdminContracts} />
-              <Route path="/admin/logs" component={AdminLogs} />
-              <Route path="/admin/settings" component={AdminSettings} />
-              <Route path="/admin/portfolio" component={Portfolio} />
-            </>
-          )}
+          <Route path="/admin" component={AdminDashboard} />
+          <Route path="/admin/merchants" component={AdminMerchants} />
+          <Route path="/admin/contracts" component={AdminContracts} />
+          <Route path="/admin/logs" component={AdminLogs} />
+          <Route path="/admin/settings" component={AdminSettings} />
+          <Route path="/admin/portfolio" component={Portfolio} />
 
           {/* Merchant routes */}
-          {user && user.role === "merchant" && (
-            <>
-              <Route path="/" component={MerchantDashboard} />
-              <Route path="/merchant" component={MerchantDashboard} />
-              <Route path="/merchant/dashboard" component={MerchantDashboard} />
-              <Route path="/merchant/contracts" component={MerchantContracts} />
-              <Route path="/merchant/reports" component={MerchantReports} />
-              <Route path="/merchant/settings" component={MerchantSettings} />
-            </>
-          )}
+          <Route path="/merchant/signup" component={MerchantSignup} />
+          <Route path="/merchant/dashboard" component={MerchantDashboard} />
+          <Route path="/merchant/contracts" component={MerchantContracts} />
+          <Route path="/merchant/reports" component={MerchantReports} />
+          <Route path="/merchant/settings" component={MerchantSettings} />
 
-          {/* Public merchant signup route */}
-          <Route path="/merchant/signup" element={<MerchantSignup />} />
+          {/* Default route */}
+          <Route path="/" component={user ? MerchantDashboard : Login} />
 
-          {/* Catch-all route */}
+          {/* 404 route */}
           <Route component={NotFound} />
         </Switch>
       </Suspense>
     </div>
   );
 }
-
-export default App;
