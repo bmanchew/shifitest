@@ -815,23 +815,37 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       const replitDomain = getAppDomain();
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
 
-      // Initiate NLPearl call
-      const nlPearlResponse = await nlpearlService.initiateApplicationCall(
-        phoneNumber,
-        applicationUrl,
-        merchant.name
-      );
-
-      // Wait for call to be active
-      const isCallActive = await nlpearlService.waitForCallActive(nlPearlResponse.call_id);
+      let nlPearlResponse;
+      let isCallActive = false;
       
-      if (!isCallActive) {
-        logger.warn({
-          message: "NLPearl call did not become active",
-          category: "api",
-          source: "nlpearl",
-          metadata: { callId: nlPearlResponse.call_id }
-        });
+      // Only attempt NLPearl call if service is initialized
+      if (nlpearlService.isInitialized()) {
+        try {
+          nlPearlResponse = await nlpearlService.initiateApplicationCall(
+            phoneNumber,
+            applicationUrl,
+            merchant.name
+          );
+
+          // Wait for call to be active
+          isCallActive = await nlpearlService.waitForCallActive(nlPearlResponse.call_id);
+          
+          if (!isCallActive) {
+            logger.warn({
+              message: "NLPearl call did not become active",
+              category: "api",
+              source: "nlpearl",
+              metadata: { callId: nlPearlResponse.call_id }
+            });
+          }
+        } catch (nlpearlError) {
+          logger.warn({
+            message: "NLPearl call failed but continuing with SMS",
+            category: "api",
+            source: "nlpearl",
+            metadata: { error: nlpearlError instanceof Error ? nlpearlError.message : String(nlpearlError) }
+          });
+        }
       }
 
       logger.info({
