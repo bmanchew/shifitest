@@ -780,42 +780,6 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       // Find or create a user for this phone number, passing in the email
       const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
 
-      // Get the application base URL from Replit
-      const replitDomain = getAppDomain();
-      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
-
-      // Initiate NLPearl call first
-      const nlPearlResponse = await nlpearlService.initiateApplicationCall(
-        phoneNumber,
-        applicationUrl,
-        merchantName
-      );
-
-      // Wait for call to be active
-      const isCallActive = await nlpearlService.waitForCallActive(nlPearlResponse.call_id);
-      
-      if (!isCallActive) {
-        logger.warn({
-          message: "NLPearl call did not become active",
-          category: "api",
-          source: "nlpearl",
-          metadata: { callId: nlPearlResponse.call_id }
-        });
-      }
-
-      logger.info({
-        message: `User for contract: ${customer.id}`,
-        category: "api", 
-        source: "twilio",
-        metadata: JSON.stringify({ 
-          userId: customer.id,
-          email: customer.email,
-          phone: customer.phone,
-          nlPearlCallId: nlPearlResponse.call_id,
-          nlPearlCallActive: isCallActive
-        })
-      });
-
       // Create a new contract
       const newContract = await storage.createContract({
         contractNumber,
@@ -847,9 +811,41 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         console.log(`Created application progress for contract ${newContract.id}, step ${step}`);
       }
 
-      // Get the application base URL from Replit
+      // Get the application base URL from Replit and prepare URL
       const replitDomain = getAppDomain();
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
+
+      // Initiate NLPearl call
+      const nlPearlResponse = await nlpearlService.initiateApplicationCall(
+        phoneNumber,
+        applicationUrl,
+        merchant.name
+      );
+
+      // Wait for call to be active
+      const isCallActive = await nlpearlService.waitForCallActive(nlPearlResponse.call_id);
+      
+      if (!isCallActive) {
+        logger.warn({
+          message: "NLPearl call did not become active",
+          category: "api",
+          source: "nlpearl",
+          metadata: { callId: nlPearlResponse.call_id }
+        });
+      }
+
+      logger.info({
+        message: `User for contract: ${customer.id}`,
+        category: "api", 
+        source: "twilio",
+        metadata: JSON.stringify({ 
+          userId: customer.id,
+          email: customer.email,
+          phone: customer.phone,
+          nlPearlCallId: nlPearlResponse.call_id,
+          nlPearlCallActive: isCallActive
+        })
+      });
 
       // Prepare the SMS message
       const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
