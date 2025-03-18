@@ -818,6 +818,8 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       let nlPearlResponse;
       let isCallActive = false;
       
+      let shouldSendSMS = true;
+
       // Only attempt NLPearl call if service is initialized
       if (nlpearlService.isInitialized()) {
         try {
@@ -828,25 +830,43 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
             merchant.name
           );
 
-          // Wait for call to be active
+          // Wait for call to be active before sending SMS
           isCallActive = await nlpearlService.waitForCallActive(nlPearlResponse.call_id);
           
           if (!isCallActive) {
             logger.warn({
-              message: "NLPearl call did not become active",
+              message: "NLPearl call did not become active, skipping SMS",
               category: "api",
               source: "nlpearl",
               metadata: { callId: nlPearlResponse.call_id }
             });
+            shouldSendSMS = false;
           }
         } catch (nlpearlError) {
           logger.warn({
-            message: "NLPearl call failed but continuing with SMS",
+            message: "NLPearl call failed, skipping SMS",
             category: "api",
             source: "nlpearl",
             metadata: { error: nlpearlError instanceof Error ? nlpearlError.message : String(nlpearlError) }
           });
+          shouldSendSMS = false;
         }
+      } else {
+        shouldSendSMS = false;
+        logger.warn({
+          message: "NLPearl service not initialized, skipping SMS",
+          category: "api",
+          source: "nlpearl"
+        });
+      }
+
+      if (!shouldSendSMS) {
+        return res.json({ 
+          success: false, 
+          message: "Waiting for NLPearl call to be active",
+          contractId: newContract.id,
+          applicationUrl
+        });
       }
 
       logger.info({
