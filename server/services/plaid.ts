@@ -215,8 +215,10 @@ class PlaidService {
         request.webhook = `${process.env.PUBLIC_URL}/api/plaid/webhook`;
       }
 
-      // Only add advanced auth features if not in sandbox mode
-      if (this.env !== 'sandbox') {
+      // Add auth configuration conditionally
+      // When using same_day_microdeposits, we need to follow Plaid's restrictions
+      if (products.includes(Products.Auth) && !products.includes(Products.Transactions) && !products.includes(Products.Assets)) {
+        // Only add advanced auth features if Auth is the only product
         request.auth = {
           same_day_microdeposits_enabled: true,
           sms_microdeposits_verification_enabled: true
