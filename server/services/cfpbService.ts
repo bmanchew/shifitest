@@ -16,10 +16,15 @@ export class CFPBService {
       params.append('field', 'state');
       params.append('field', 'complaint_what_happened');
       params.append('field', 'company_response');
-      params.append('field', 'consumer_consented'); // Added to ensure consent data is included
-      params.append('field', 'consumer_disputed'); // Added to ensure dispute data is included
-      params.append('field', 'consumer_complaint_narrative'); // Added to get consumer narrative
-      params.append('field', 'tags'); // Get any tags that might identify the consumer
+      params.append('field', 'consumer_consented');
+      params.append('field', 'consumer_disputed');
+      params.append('field', 'consumer_complaint_narrative');
+      params.append('field', 'tags');
+
+      // Add required parameters for the CFPB API
+      params.append('size', '1000'); // Get maximum results
+      params.append('no_aggs', 'false'); // Enable aggregations
+      params.append('format', 'json');
 
       logger.info({
         message: 'Fetching CFPB complaint data',
@@ -28,7 +33,18 @@ export class CFPBService {
         metadata: { params: params.toString() }
       });
 
-      const response = await axios.get(`${this.baseUrl}?${params.toString()}`);
+      const response = await axios.get(`${this.baseUrl}?${params.toString()}`, {
+        timeout: 30000, // 30 second timeout
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.data || !response.data.hits) {
+        throw new Error('Invalid response format from CFPB API');
+      }
+
       return response.data;
     } catch (error) {
       logger.error({

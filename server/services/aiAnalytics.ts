@@ -1,4 +1,3 @@
-
 import { logger } from './logger';
 import { cfpbService } from './cfpbService';
 import { storage } from '../storage';
@@ -25,7 +24,7 @@ export class AIAnalyticsService {
       if (!complaintsData?.aggregations?.issue) {
         return [];
       }
-      
+
       return complaintsData.aggregations.issue.buckets
         .slice(0, 5)
         .map((bucket: any) => ({
@@ -51,7 +50,7 @@ export class AIAnalyticsService {
       if (!complaintsData?.aggregations?.company) {
         return [];
       }
-      
+
       return complaintsData.aggregations.company.buckets
         .slice(0, 5)
         .map((bucket: any) => ({
@@ -77,7 +76,7 @@ export class AIAnalyticsService {
       if (!complaintsData?.aggregations?.date_received) {
         return [];
       }
-      
+
       return complaintsData.aggregations.date_received.buckets
         .map((bucket: any) => {
           const date = new Date(bucket.key_as_string);
@@ -103,26 +102,26 @@ export class AIAnalyticsService {
   private generateInsights(personalLoanComplaints: any, creditCardComplaints: any) {
     try {
       const insights = [];
-      
+
       // Add some insights based on the complaint data
       if (personalLoanComplaints?.hits?.total > 0) {
         insights.push(`Personal loan complaints have increased by ${Math.floor(Math.random() * 10) + 5}% compared to last quarter.`);
-        
+
         const topIssue = this.extractTopIssues(personalLoanComplaints)[0];
         if (topIssue) {
           insights.push(`The most common issue in personal loans is "${topIssue.issue}" with ${topIssue.count} complaints.`);
         }
       }
-      
+
       if (creditCardComplaints?.hits?.total > 0) {
         insights.push(`Credit card complaints are trending ${Math.random() > 0.5 ? 'up' : 'down'} in the last quarter.`);
-        
+
         const topIssue = this.extractTopIssues(creditCardComplaints)[0];
         if (topIssue) {
           insights.push(`The most common issue in credit cards is "${topIssue.issue}" with ${topIssue.count} complaints.`);
         }
       }
-      
+
       return insights.length > 0 ? insights : ["Not enough data to generate insights."];
     } catch (error) {
       logger.error({
@@ -141,19 +140,19 @@ export class AIAnalyticsService {
   private generateUnderwritingRecommendations(unsecuredPersonalLoanComplaints: any, merchantCashAdvanceComplaints: any) {
     try {
       const recommendations = [];
-      
+
       if (unsecuredPersonalLoanComplaints?.hits?.total > 0) {
         recommendations.push("Strengthen income verification processes for unsecured personal loans to reduce fraud.");
         recommendations.push("Improve transparency in personal loan fee structures and payment terms.");
         recommendations.push("Consider implementing stronger identity verification for online loan applications.");
       }
-      
+
       if (merchantCashAdvanceComplaints?.hits?.total > 0) {
         recommendations.push("Review merchant cash advance factoring rates to ensure they're clearly explained to businesses.");
         recommendations.push("Consider more flexible repayment options for merchant cash advances during slow business periods.");
         recommendations.push("Enhance business stability assessment to reduce defaults on merchant cash advances.");
       }
-      
+
       return recommendations.length > 0 ? recommendations : ["Not enough recent origination data to generate recommendations."];
     } catch (error) {
       logger.error({
@@ -165,33 +164,33 @@ export class AIAnalyticsService {
       return ["Error generating underwriting recommendations from complaints data."];
     }
   }
-  
+
   /**
    * Generate insights from complaint data for fintech products
    */
   private generateFintechInsights(unsecuredPersonalLoanComplaints: any, merchantCashAdvanceComplaints: any) {
     try {
       const insights = [];
-      
+
       // Generate insights for unsecured personal loans
       if (unsecuredPersonalLoanComplaints?.hits?.total > 0) {
         const issues = this.extractTopIssues(unsecuredPersonalLoanComplaints);
         const companies = this.extractTopCompanies(unsecuredPersonalLoanComplaints);
         const trends = this.extractMonthlyTrend(unsecuredPersonalLoanComplaints);
-        
+
         if (issues.length > 0) {
           insights.push(`Most common unsecured personal loan complaint: ${issues[0].issue} (${issues[0].count} complaints).`);
         }
-        
+
         if (companies.length > 0) {
           insights.push(`Lender with most unsecured personal loan complaints: ${companies[0].company}.`);
         }
-        
+
         if (trends.length >= 2) {
           const currentMonth = trends[0];
           const prevMonth = trends[1];
           const percentChange = ((currentMonth.complaints - prevMonth.complaints) / prevMonth.complaints) * 100;
-          
+
           if (!isNaN(percentChange) && isFinite(percentChange)) {
             if (percentChange > 0) {
               insights.push(`Unsecured personal loan complaints increased by ${percentChange.toFixed(1)}% from ${prevMonth.month} to ${currentMonth.month}.`);
@@ -201,27 +200,27 @@ export class AIAnalyticsService {
           }
         }
       }
-      
+
       // Generate insights for merchant cash advances
       if (merchantCashAdvanceComplaints?.hits?.total > 0) {
         const issues = this.extractTopIssues(merchantCashAdvanceComplaints);
         const companies = this.extractTopCompanies(merchantCashAdvanceComplaints);
         const trends = this.extractMonthlyTrend(merchantCashAdvanceComplaints);
-        
+
         if (issues.length > 0) {
           insights.push(`Most common merchant cash advance complaint: ${issues[0].issue} (${issues[0].count} complaints).`);
         }
-        
+
         if (companies.length > 0) {
           insights.push(`Provider with most merchant cash advance complaints: ${companies[0].company}.`);
         }
-        
+
         // Add trend analysis for merchant cash advances
         if (trends.length >= 2) {
           const currentMonth = trends[0];
           const prevMonth = trends[1];
           const percentChange = ((currentMonth.complaints - prevMonth.complaints) / prevMonth.complaints) * 100;
-          
+
           if (!isNaN(percentChange) && isFinite(percentChange)) {
             if (percentChange > 0) {
               insights.push(`Merchant cash advance complaints increased by ${percentChange.toFixed(1)}% from ${prevMonth.month} to ${currentMonth.month}.`);
@@ -231,19 +230,19 @@ export class AIAnalyticsService {
           }
         }
       }
-      
+
       // Compare the two products if data exists for both
       if (unsecuredPersonalLoanComplaints?.hits?.total > 0 && merchantCashAdvanceComplaints?.hits?.total > 0) {
         const personalLoanTotal = unsecuredPersonalLoanComplaints.hits.total;
         const mcaTotal = merchantCashAdvanceComplaints.hits.total;
-        
+
         if (personalLoanTotal > mcaTotal) {
           insights.push(`Unsecured personal loans received ${((personalLoanTotal - mcaTotal) / mcaTotal * 100).toFixed(1)}% more complaints than merchant cash advances in the past 24 months.`);
         } else if (mcaTotal > personalLoanTotal) {
           insights.push(`Merchant cash advances received ${((mcaTotal - personalLoanTotal) / personalLoanTotal * 100).toFixed(1)}% more complaints than unsecured personal loans in the past 24 months.`);
         }
       }
-      
+
       return insights.length > 0 ? insights : ["Not enough recent origination data to generate meaningful insights."];
     } catch (error) {
       logger.error({
@@ -275,17 +274,25 @@ export class AIAnalyticsService {
         category: 'system',
         source: 'internal'
       });
-      
+
       let unsecuredPersonalLoanComplaints;
-      
+
       try {
-        // Using correct product and sub-product categorization per CFPB API specification
-        unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('Payday loan, title loan, or personal loan', {
-          subProduct: 'Personal loan',
-          dateReceivedMin: '2020-01-01', // Use fixed date for consistent testing
-          size: 1000
-        });
-        
+        const params = new URLSearchParams();
+        params.append('product', 'personal loan');
+        params.append('date_received_min', '2020-01-01');
+
+        unsecuredPersonalLoanComplaints = await cfpbService.getCFPBData(params);
+
+        if (!unsecuredPersonalLoanComplaints?.hits?.hits) {
+          logger.error({
+            message: 'No complaint data returned from CFPB API',
+            category: 'api',
+            source: 'cfpb'
+          });
+          throw new Error('No complaint data available');
+        }
+
         // Handle different Elasticsearch response formats for hit totals
         let complaintsCount = 0;
         if (unsecuredPersonalLoanComplaints?.hits?.total) {
@@ -300,7 +307,7 @@ export class AIAnalyticsService {
           // Handle array response format
           complaintsCount = unsecuredPersonalLoanComplaints.length;
         }
-        
+
         logger.info({
           message: 'Successfully fetched personal loan complaints',
           category: 'system',
@@ -318,12 +325,14 @@ export class AIAnalyticsService {
           category: 'system',
           source: 'internal',
         });
-        
+
         // Try with just the product parameter without specifying sub-product
-        unsecuredPersonalLoanComplaints = await cfpbService.getComplaintsByProduct('Payday loan, title loan, or personal loan', {
-          dateReceivedMin: this.getDateXMonthsAgo(60), // Look back 5 years for maximum data coverage
-          size: 1000
-        });
+        const params = new URLSearchParams();
+        params.append('product', 'personal loan');
+        params.append('date_received_min', this.getDateXMonthsAgo(60));
+        params.append('size', '1000');
+        unsecuredPersonalLoanComplaints = await cfpbService.getCFPBData(params);
+
       }
 
       // The CFPB categorizes Merchant Cash Advances under a few different categories
@@ -339,14 +348,24 @@ export class AIAnalyticsService {
           category: 'system',
           source: 'internal'
         });
-        
+
         // Correct product categorization for Merchant Cash Advances
-        merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Business loan', {
-          subProduct: 'Merchant cash advance',
-          dateReceivedMin: '2020-01-01', // Fixed date for consistent testing
-          size: 1000
-        });
-        
+        const params = new URLSearchParams();
+        params.append('product', 'merchant cash advance');
+        params.append('date_received_min', '2020-01-01');
+        params.append('size', '1000');
+
+        merchantCashAdvanceComplaints = await cfpbService.getCFPBData(params);
+
+        if (!merchantCashAdvanceComplaints?.hits?.hits) {
+          logger.error({
+            message: 'No merchant cash advance complaint data returned from CFPB API',
+            category: 'api',
+            source: 'cfpb'
+          });
+          throw new Error('No merchant cash advance complaint data available');
+        }
+
         // Handle different Elasticsearch response formats for hit totals
         let complaintsCount = 0;
         if (merchantCashAdvanceComplaints?.hits?.total) {
@@ -361,7 +380,7 @@ export class AIAnalyticsService {
           // Handle array response format
           complaintsCount = merchantCashAdvanceComplaints.length;
         }
-        
+
         logger.info({
           message: 'Successfully fetched merchant cash advance complaints',
           category: 'system',
@@ -379,13 +398,14 @@ export class AIAnalyticsService {
           category: 'system',
           source: 'internal',
         });
-        
+
         // Fall back to the product with search term
-        merchantCashAdvanceComplaints = await cfpbService.getComplaintsByProduct('Business loan', {
-          dateReceivedMin: this.getDateXMonthsAgo(60), // Look back 5 years for maximum data
-          searchTerm: 'merchant cash advance', // Search for MCA mentions in any business loans
-          size: 1000
-        });
+        const params = new URLSearchParams();
+        params.append('product', 'business loan');
+        params.append('date_received_min', this.getDateXMonthsAgo(60));
+        params.append('searchTerm', 'merchant cash advance');
+        params.append('size', '1000');
+        merchantCashAdvanceComplaints = await cfpbService.getCFPBData(params);
       }
 
       // Save complaint data to database for historical tracking
@@ -412,7 +432,7 @@ export class AIAnalyticsService {
       const createEmptyMonthlyTrend = () => {
         const months = [];
         const today = new Date();
-        
+
         for (let i = 5; i >= 0; i--) {
           const date = new Date();
           date.setMonth(today.getMonth() - i);
@@ -421,14 +441,14 @@ export class AIAnalyticsService {
             complaints: 0
           });
         }
-        
+
         return months;
       };
-      
+
       // Get total counts with proper handling of different response formats
       const getComplaintsCount = (complaintsData: any): number => {
         if (!complaintsData) return 0;
-        
+
         if (complaintsData.hits?.total) {
           if (typeof complaintsData.hits.total === 'number') {
             return complaintsData.hits.total;
@@ -438,13 +458,13 @@ export class AIAnalyticsService {
         } else if (Array.isArray(complaintsData) && complaintsData.length > 0) {
           return complaintsData.length;
         }
-        
+
         return 0;
       };
-      
+
       const personalLoanComplaintsCount = getComplaintsCount(unsecuredPersonalLoanComplaints);
       const merchantCashAdvanceComplaintsCount = getComplaintsCount(merchantCashAdvanceComplaints);
-      
+
       // Analyze the complaints data
       const analysisResults = {
         lastUpdated: new Date().toISOString(),
@@ -502,15 +522,15 @@ export class AIAnalyticsService {
     try {
       // Get the portfolio health metrics
       const portfolioMetrics = await storage.getLatestPortfolioMonitoring();
-      
+
       // Get recent complaints data
       const recentComplaints = await storage.getComplaintsData({
         limit: 500
       });
-      
+
       // Get underwriting data
       const underwritingData = await storage.getAllUnderwritingData();
-      
+
       // Generate recommendations based on the data
       const recommendations = {
         timestamp: new Date().toISOString(),
@@ -583,7 +603,7 @@ export class AIAnalyticsService {
           }
         ]
       };
-      
+
       return recommendations;
     } catch (error) {
       logger.error({
@@ -609,7 +629,7 @@ export class AIAnalyticsService {
     if (!complaintsData?.aggregations?.issue?.buckets) {
       return [];
     }
-    
+
     // Get total count properly handling different response formats
     let totalComplaints = 0;
     if (complaintsData.hits?.total) {
@@ -621,10 +641,10 @@ export class AIAnalyticsService {
     } else if (Array.isArray(complaintsData) && complaintsData.length > 0) {
       totalComplaints = complaintsData.length;
     }
-    
+
     // Prevent division by zero
     if (totalComplaints === 0) totalComplaints = 1;
-    
+
     return complaintsData.aggregations.issue.buckets.map((bucket: any) => ({
       issue: bucket.key,
       count: bucket.doc_count,
@@ -636,7 +656,7 @@ export class AIAnalyticsService {
     if (!complaintsData?.aggregations?.company?.buckets) {
       return [];
     }
-    
+
     // Get total count properly handling different response formats
     let totalComplaints = 0;
     if (complaintsData.hits?.total) {
@@ -648,10 +668,10 @@ export class AIAnalyticsService {
     } else if (Array.isArray(complaintsData) && complaintsData.length > 0) {
       totalComplaints = complaintsData.length;
     }
-    
+
     // Prevent division by zero
     if (totalComplaints === 0) totalComplaints = 1;
-    
+
     return complaintsData.aggregations.company.buckets.map((bucket: any) => ({
       company: bucket.key,
       count: bucket.doc_count,
@@ -663,7 +683,7 @@ export class AIAnalyticsService {
     if (!complaintsData?.aggregations?.date_received?.buckets) {
       return [];
     }
-    
+
     // Map the data and format it properly
     const trends = complaintsData.aggregations.date_received.buckets.map((bucket: any) => {
       const date = new Date(bucket.key_as_string);
@@ -674,17 +694,17 @@ export class AIAnalyticsService {
         complaints: bucket.doc_count
       };
     });
-    
+
     // Sort by date (newest first)
     trends.sort((a, b) => b.fullMonth.localeCompare(a.fullMonth));
-    
+
     // Take only the 6 most recent months
     const recentTrends = trends.slice(0, 6);
-    
+
     // Format final data for display (include year if different years exist)
     const years = new Set(recentTrends.map(t => t.year));
     const includeYear = years.size > 1;
-    
+
     return recentTrends.map(trend => ({
       month: includeYear ? `${trend.month} ${trend.year}` : trend.month,
       complaints: trend.complaints
@@ -700,7 +720,7 @@ export class AIAnalyticsService {
       "Consumers with multiple complaints often mention difficulty reaching customer service, which may be an early indicator of financial distress.",
       "Geographic analysis shows higher complaint rates in states with above-average unemployment, suggesting local economic conditions should be factored into underwriting."
     ];
-    
+
     return insights;
   }
 
@@ -732,7 +752,7 @@ export class AIAnalyticsService {
         reasoning: "Newly opened accounts show 3x higher risk of payment issues in first 6 months of loan."
       }
     ];
-    
+
     return recommendations;
   }
 }
