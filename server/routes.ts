@@ -14,7 +14,6 @@ import {
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
 import { plaidService } from "./services/plaid";
-import { Products } from "plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
@@ -2702,7 +2701,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           clientUserId,
           userName: userName || "Merchant Signup",
           userEmail: userEmail || "signup@shifi.ai",
-          products: products || [Products.Auth, Products.Transactions, Products.Assets], // Default products for signup
+          products: products || ["auth", "transactions", "assets"], // Default products for signup
           redirectUri, // Optional redirect URI for OAuth flow
         });
 
