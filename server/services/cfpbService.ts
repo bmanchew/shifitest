@@ -6,30 +6,24 @@ export class CFPBService {
 
   async getCFPBData(params = new URLSearchParams()) {
     try {
-      const fields = [
-        'date_received', 'product', 'sub_product', 'issue', 'sub_issue',
-        'company', 'state', 'complaint_what_happened', 'company_response',
-        'consumer_disputed', 'consumer_complaint_narrative'
-      ];
+      // Use minimal verified parameters
+      const baseParams = {
+        product: 'Personal loan',
+        date_received_min: '2023-03-19',
+        date_received_max: '2024-03-18',
+        size: '0',
+        agg: 'date_received',
+        agg_term_type: 'month',
+        format: 'json',
+        no_aggs: 'false'
+      };
 
-      fields.forEach(field => params.append('field', field));
-
-      params.append('size', '0');
-      params.append('no_aggs', 'false');
-      params.append('format', 'json');
-      params.append('agg', 'date_received');
-      params.append('agg_term_type', 'month');
-
-      // Set date range to past 24 months from today
-      const startDate = new Date('2023-03-19').toISOString().split('T')[0];
-      const endDate = new Date().toISOString().split('T')[0];
-
-      params.set('date_received_min', startDate);
-      params.set('date_received_max', endDate);
-
-      if (!params.has('product')) {
-        params.append('product', 'Personal loan');
-      }
+      // Merge base params with any custom params
+      Object.entries(baseParams).forEach(([key, value]) => {
+        if (!params.has(key)) {
+          params.append(key, value);
+        }
+      });
 
       logger.info({
         message: 'Fetching CFPB complaint data',
@@ -55,7 +49,8 @@ export class CFPBService {
         source: 'cfpb',
         metadata: {
           error: error instanceof Error ? error.stack : null,
-          params: params.toString()
+          params: params.toString(),
+          response: error.response?.data
         }
       });
       throw error;
