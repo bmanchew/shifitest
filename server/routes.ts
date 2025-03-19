@@ -2654,6 +2654,206 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
 
   // Plaid API Routes
 
+  // Handle merchant signup flow
+  
+  // Step 1: Create a link token specifically for merchant signup flow
+  apiRouter.get(
+    "/plaid/merchant-signup-link-token",
+    async (req: Request, res: Response) => {
+      try {
+        // Generate a temporary ID for merchant signup flow
+        const clientUserId = `merchant-signup-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+        
+        logger.info({
+          message: `Creating Plaid link token for merchant signup`,
+          category: "api", 
+          source: "plaid",
+          metadata: {
+            clientUserId,
+            flowType: "merchant_signup"
+          },
+        });
+        
+        // Check if Plaid is properly initialized
+        if (!plaidService.isInitialized()) {
+          logger.error({
+            message: "Plaid service not initialized when trying to create merchant signup link token",
+            category: "api",
+            source: "plaid",
+            metadata: {
+              clientUserId
+            },
+          });
+          
+          return res.status(503).json({
+            success: false,
+            message: "Plaid service is not available. Please try again later.",
+            error_code: "PLAID_NOT_INITIALIZED"
+          });
+        }
+        
+        // For merchant verification, we specifically need these products
+        // to validate revenue requirements
+        const merchantProducts = ["auth", "transactions", "assets"];
+        
+        const linkTokenResponse = await plaidService.createLinkToken({
+          userId: clientUserId,
+          clientUserId,
+          products: merchantProducts,
+        });
+        
+        res.json({
+          success: true,
+          linkToken: linkTokenResponse.linkToken,
+          link_token: linkTokenResponse.linkToken, // For backward compatibility
+          expiration: linkTokenResponse.expiration,
+          merchant_id: clientUserId // Used to track this signup process
+        });
+      } catch (error) {
+        // Extract more detailed error information for logging
+        let errorDetails = "Unknown error";
+        let errorCode = "UNKNOWN";
+        
+        if (error.response?.data) {
+          errorDetails = JSON.stringify(error.response.data);
+          errorCode = error.response.data.error_code || "UNKNOWN";
+        }
+        
+        logger.error({
+          message: `Failed to create merchant signup Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            errorDetails,
+            errorCode,
+            errorStack: error instanceof Error ? error.stack : null
+          }
+        });
+        
+        res.status(500).json({
+          success: false,
+          message: "Failed to create Plaid link token for merchant signup",
+          error_code: errorCode,
+        });
+      }
+    }
+  );
+  
+  // Step 2: Process merchant bank connection and begin verification
+  apiRouter.post(
+    "/plaid/merchant-signup-exchange",
+    async (req: Request, res: Response) => {
+      try {
+        const { publicToken, merchantId, businessInfo } = req.body;
+        
+        if (!publicToken) {
+          return res.status(400).json({
+            success: false,
+            message: "Public token is required",
+            error_code: "MISSING_PUBLIC_TOKEN"
+          });
+        }
+        
+        if (!merchantId || !merchantId.startsWith('merchant-signup-')) {
+          return res.status(400).json({
+            success: false,
+            message: "Valid merchant ID is required",
+            error_code: "INVALID_MERCHANT_ID"
+          });
+        }
+        
+        logger.info({
+          message: "Processing merchant signup bank connection",
+          category: "api",
+          source: "plaid",
+          metadata: { 
+            merchantId,
+            hasBusinessInfo: !!businessInfo
+          },
+        });
+        
+        // Exchange public token for access token
+        const exchangeResponse = await plaidService.exchangePublicToken(publicToken);
+        
+        // Get accounts and bank account details (routing, account numbers)
+        const authData = await plaidService.getAuth(exchangeResponse.accessToken);
+        
+        // Get transactions history to analyze revenue
+        // In a production app, you'd initiate a transactions sync session here
+        // For now, we'll skip that part and focus on validating bank connection
+        
+        // Create an asset report to analyze the merchant's financial data
+        // This helps validate their revenue claims ($100k/month for 2 years minimum)
+        const assetReportResponse = await plaidService.createAssetReport(
+          exchangeResponse.accessToken,
+          730, // 2 years of data (days)
+          { client_report_id: merchantId }
+        );
+        
+        // Store the merchant data
+        // In a real app, you'd store this in your database
+        // Here we'll just log it
+        logger.info({
+          message: "Merchant bank connection successful",
+          category: "api",
+          source: "plaid",
+          metadata: {
+            merchantId,
+            itemId: exchangeResponse.itemId,
+            accessToken: "[REDACTED]", // Never log actual access tokens
+            assetReportId: assetReportResponse.assetReportId,
+            assetReportToken: assetReportResponse.assetReportToken,
+            accountCount: authData.accounts.length
+          }
+        });
+        
+        // Return success with merchant bank information
+        res.json({
+          success: true,
+          message: "Bank account connected successfully",
+          merchant_id: merchantId,
+          accounts: authData.accounts.map(account => ({
+            id: account.account_id,
+            name: account.name,
+            mask: account.mask,
+            type: account.type,
+            subtype: account.subtype,
+            balance: account.balances.current,
+            currency: account.balances.iso_currency_code
+          })),
+          verification_status: "pending",
+          verification_message: "Your bank account is being verified. We're analyzing your transaction history to confirm your business meets our revenue requirements."
+        });
+      } catch (error) {
+        // Extract more detailed error information for logging
+        let errorDetails = "Unknown error";
+        let errorCode = "UNKNOWN";
+        
+        if (error.response?.data) {
+          errorDetails = JSON.stringify(error.response.data);
+          errorCode = error.response.data.error_code || "UNKNOWN";
+        }
+        
+        logger.error({
+          message: `Failed to process merchant bank connection: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            errorDetails,
+            errorCode,
+            errorStack: error instanceof Error ? error.stack : null
+          }
+        });
+        
+        res.status(500).json({
+          success: false,
+          message: "Failed to connect bank account for merchant verification",
+          error_code: errorCode,
+        });
+      }
+    }
+  );
+
   // Create a link token - used to initialize Plaid Link
   apiRouter.all(
     "/plaid/create-link-token",
