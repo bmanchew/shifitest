@@ -50,13 +50,17 @@ export default function MerchantSignup() {
     onSuccess: async (public_token, metadata) => {
       try {
         setIsLoading(true);
+        
+        // Get the first account from the accounts array
+        const accountId = metadata.accounts?.[0]?.id;
+        
         const response = await fetch('/api/merchant/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...formData,
             plaidPublicToken: public_token,
-            plaidAccountId: metadata.account_id
+            plaidAccountId: accountId
           })
         });
 

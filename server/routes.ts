@@ -14,6 +14,7 @@ import {
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
 import { plaidService } from "./services/plaid";
+import { Products } from "plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
