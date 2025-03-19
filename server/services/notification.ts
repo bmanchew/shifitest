@@ -361,18 +361,33 @@ export class NotificationService {
     try {
       // Only merchants can receive webhooks for now
       if (options.recipientType !== 'merchant') {
+        logger.info({
+          message: `Webhooks are only supported for merchants, not ${options.recipientType}`,
+          category: 'notification',
+          source: 'internal'
+        });
         return false;
       }
       
       // Get merchant information
       const merchant = await this.storage.getMerchant(options.recipientId);
       if (!merchant) {
+        logger.info({
+          message: `Merchant not found for webhook: ${options.recipientId}`,
+          category: 'notification',
+          source: 'internal'
+        });
         return false;
       }
       
       // Get merchant business details
       const businessDetails = await this.storage.getMerchantBusinessDetailsByMerchantId(merchant.id);
       if (!businessDetails) {
+        logger.info({
+          message: `Business details not found for merchant: ${merchant.id}`,
+          category: 'notification',
+          source: 'internal'
+        });
         return false;
       }
       
@@ -380,6 +395,11 @@ export class NotificationService {
       const webhookUrl = businessDetails.websiteUrl;
       
       if (!webhookUrl) {
+        logger.info({
+          message: `No webhook URL available for merchant: ${merchant.id}`,
+          category: 'notification',
+          source: 'internal'
+        });
         return false;
       }
       
