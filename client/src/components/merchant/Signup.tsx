@@ -1,6 +1,10 @@
-
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Card } from '../ui/card';
+import { Progress } from '../ui/progress';
+import { AlertCircle, CheckCircle2, Building2, Bank, FileCheck } from 'lucide-react';
 
 interface SignupFormData {
   firstName: string;
@@ -21,284 +25,211 @@ interface SignupFormData {
   estimatedMonthlyRevenue: string;
   annualFinancedVolume: string;
   ownerName: string;
-  ownerEmail: string;  
+  ownerEmail: string;
   ownerPhone: string;
   ownershipPercentage: string;
   ownerRole: string;
 }
+
+const steps = [
+  { id: 1, name: 'Business Info', icon: Building2 },
+  { id: 2, name: 'Bank Connection', icon: Bank },
+  { id: 3, name: 'Identity Verification', icon: FileCheck }
+];
 
 export default function MerchantSignup() {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<SignupFormData>({} as SignupFormData);
   const [plaidToken, setPlaidToken] = useState("");
   const [files, setFiles] = useState<{[key: string]: File}>({});
+  const [isLoading, setIsLoading] = useState(false);
 
   const { open, ready } = usePlaidLink({
     token: plaidToken,
-    onSuccess: (public_token, metadata) => {
-      handlePlaidSuccess(public_token, metadata);
+    onSuccess: async (public_token, metadata) => {
+      try {
+        setIsLoading(true);
+        const response = await fetch('/api/merchant/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...formData,
+            plaidPublicToken: public_token,
+            plaidAccountId: metadata.account_id
+          })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          setStep(3);
+          window.location.href = data.kycSessionUrl;
+        }
+      } catch (error) {
+        console.error('Error:', error);
+      } finally {
+        setIsLoading(false);
+      }
     }
   });
 
-  const handlePlaidSuccess = async (public_token: string, metadata: any) => {
-    try {
-      const response = await fetch('/api/plaid/merchant/complete-onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          publicToken: public_token,
-          accountId: metadata.account_id,
-          merchantData: formData
-        })
-      });
-      
-      if (!response.ok) throw new Error('Failed to complete merchant onboarding');
-      
-      // Move to next step after successful Plaid connection
-      setStep(step + 1);
-    } catch (error) {
-      console.error('Error completing Plaid onboarding:', error);
-    }
-  };
-
-  const initiatePlaidLink = async () => {
-    try {
-      const response = await fetch('/api/plaid/merchant/onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          merchantId: formData.companyName,
-          legalName: formData.legalBusinessName,
-          email: formData.email
-        })
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setPlaidToken(data.data.linkToken);
-        open();
-      }
-    } catch (error) {
-      console.error('Error initiating Plaid:', error);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (step < 4) {
-      setStep(step + 1);
-      return;
-    }
-
-    // Create form data for file upload
-    const formDataWithFiles = new FormData();
-    Object.entries(formData).forEach(([key, value]) => {
-      formDataWithFiles.append(key, value);
-    });
-    
-    Object.entries(files).forEach(([key, file]) => {
-      formDataWithFiles.append(key, file);
-    });
-
-    try {
-      const response = await fetch('/api/merchants/signup', {
-        method: 'POST',
-        body: formDataWithFiles
-      });
-
-      if (!response.ok) throw new Error('Signup failed');
-      
-      // Handle successful signup
-    } catch (error) {
-      console.error('Error submitting form:', error);
+    if (step === 1) {
+      setStep(2);
+      // Initialize Plaid
+      const response = await fetch('/api/plaid/create-link-token');
+      const data = await response.json();
+      setPlaidToken(data.link_token);
+    } else if (step === 2) {
+      open();
     }
   };
 
   const renderStep = () => {
-    switch(step) {
+    switch (step) {
       case 1:
         return (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold">Basic Information</h2>
+          <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-              <input 
-                type="text"
+              <Input
+                placeholder="Legal Business Name"
+                value={formData.legalBusinessName}
+                onChange={(e) => setFormData({...formData, legalBusinessName: e.target.value})}
+                required
+              />
+              <Input
+                placeholder="DBA (if applicable)"
+                value={formData.dba}
+                onChange={(e) => setFormData({...formData, dba: e.target.value})}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
                 placeholder="First Name"
-                className="input"
                 value={formData.firstName}
-                onChange={e => setFormData({...formData, firstName: e.target.value})}
+                onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                required
               />
-              <input 
-                type="text"
+              <Input
                 placeholder="Last Name"
-                className="input"
                 value={formData.lastName}
-                onChange={e => setFormData({...formData, lastName: e.target.value})}
+                onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                required
               />
-              <input 
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
                 type="email"
                 placeholder="Email"
-                className="input"
                 value={formData.email}
-                onChange={e => setFormData({...formData, email: e.target.value})}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                required
               />
-              <input 
+              <Input
                 type="tel"
                 placeholder="Phone"
-                className="input"
                 value={formData.phone}
-                onChange={e => setFormData({...formData, phone: e.target.value})}
+                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                required
               />
-              <input 
-                type="text"
-                placeholder="Company Name"
-                className="input"
-                value={formData.companyName}
-                onChange={e => setFormData({...formData, companyName: e.target.value})}
+            </div>
+            <Input
+              placeholder="Business Address"
+              value={formData.businessAddress}
+              onChange={(e) => setFormData({...formData, businessAddress: e.target.value})}
+              required
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                placeholder="EIN"
+                value={formData.ein}
+                onChange={(e) => setFormData({...formData, ein: e.target.value})}
+                required
               />
-              <input 
-                type="text"
-                placeholder="Industry"
-                className="input"
-                value={formData.industry}
-                onChange={e => setFormData({...formData, industry: e.target.value})}
-              />
-              <input 
-                type="url"
-                placeholder="Website"
-                className="input"
-                value={formData.website}
-                onChange={e => setFormData({...formData, website: e.target.value})}
+              <Input
+                placeholder="Business Structure"
+                value={formData.businessStructure}
+                onChange={(e) => setFormData({...formData, businessStructure: e.target.value})}
+                required
               />
             </div>
           </div>
         );
-
       case 2:
         return (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold">Business Details</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <input 
-                type="text"
-                placeholder="Legal Business Name"
-                className="input"
-                value={formData.legalBusinessName}
-                onChange={e => setFormData({...formData, legalBusinessName: e.target.value})}
-              />
-              <input 
-                type="text"
-                placeholder="DBA"
-                className="input"
-                value={formData.dba}
-                onChange={e => setFormData({...formData, dba: e.target.value})}
-              />
-              <select 
-                className="input"
-                value={formData.businessStructure}
-                onChange={e => setFormData({...formData, businessStructure: e.target.value})}
-              >
-                <option value="">Select Business Structure</option>
-                <option value="llc">LLC</option>
-                <option value="corporation">Corporation</option>
-                <option value="soleProprietor">Sole Proprietor</option>
-              </select>
-              <input 
-                type="text"
-                placeholder="EIN"
-                className="input"
-                value={formData.ein}
-                onChange={e => setFormData({...formData, ein: e.target.value})}
-              />
-              {/* Add more business detail fields */}
-            </div>
+          <div className="text-center space-y-4">
+            <Bank className="mx-auto h-12 w-12 text-primary" />
+            <h3 className="text-lg font-semibold">Connect Your Business Bank Account</h3>
+            <p className="text-muted-foreground">
+              We'll securely connect to your bank to verify your business revenue.
+            </p>
+            <Button
+              onClick={() => open()}
+              disabled={!ready || isLoading}
+              className="w-full"
+            >
+              {isLoading ? "Connecting..." : "Connect Bank Account"}
+            </Button>
           </div>
         );
-
       case 3:
         return (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold">Financial Information</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <input 
-                type="number"
-                placeholder="Estimated Monthly Revenue"
-                className="input"
-                value={formData.estimatedMonthlyRevenue}
-                onChange={e => setFormData({...formData, estimatedMonthlyRevenue: e.target.value})}
-              />
-              <input 
-                type="number"
-                placeholder="Annual Financed Volume"
-                className="input"
-                value={formData.annualFinancedVolume}
-                onChange={e => setFormData({...formData, annualFinancedVolume: e.target.value})}
-              />
-              <button 
-                type="button"
-                onClick={initiatePlaidLink}
-                className="btn btn-primary col-span-2"
-                disabled={!ready}
-              >
-                Connect Bank Account
-              </button>
-            </div>
-          </div>
-        );
-
-      case 4:
-        return (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold">Document Upload</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label>Voided Check</label>
-                <input 
-                  type="file"
-                  className="input"
-                  onChange={e => setFiles({...files, voidedCheck: e.target.files?.[0]})}
-                />
-              </div>
-              <div>
-                <label>Bank Statements</label>
-                <input 
-                  type="file"
-                  multiple
-                  className="input"
-                  onChange={e => setFiles({...files, bankStatements: e.target.files?.[0]})}
-                />
-              </div>
-              {/* Add more file upload fields */}
-            </div>
+          <div className="text-center space-y-4">
+            <FileCheck className="mx-auto h-12 w-12 text-primary" />
+            <h3 className="text-lg font-semibold">Identity Verification</h3>
+            <p className="text-muted-foreground">
+              Please complete the identity verification process.
+            </p>
           </div>
         );
     }
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-8">Merchant Signup</h1>
-      <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-        {renderStep()}
-        <div className="mt-8 flex justify-between">
-          {step > 1 && (
-            <button 
-              type="button" 
-              onClick={() => setStep(step - 1)}
-              className="btn"
-            >
-              Previous
-            </button>
-          )}
-          <button 
-            type="submit" 
-            className="btn btn-primary"
-          >
-            {step === 4 ? 'Submit' : 'Next'}
-          </button>
+    <div className="container max-w-4xl mx-auto px-4 py-8">
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-4">
+          {steps.map((s) => (
+            <div key={s.id} className="flex items-center">
+              <div className={`
+                flex items-center justify-center w-10 h-10 rounded-full
+                ${step >= s.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}
+              `}>
+                <s.icon className="h-5 w-5" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium">{s.name}</p>
+              </div>
+            </div>
+          ))}
         </div>
-      </form>
+        <Progress value={(step / steps.length) * 100} className="h-2" />
+      </div>
+
+      <Card className="p-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {renderStep()}
+          <div className="flex justify-between mt-6">
+            {step > 1 && (
+              <Button 
+                type="button" 
+                variant="outline"
+                onClick={() => setStep(step - 1)}
+                disabled={isLoading}
+              >
+                Back
+              </Button>
+            )}
+            <Button 
+              type="submit" 
+              className="ml-auto"
+              disabled={isLoading}
+            >
+              {step === 1 ? 'Continue' : step === 2 ? 'Connect Bank' : 'Complete'}
+            </Button>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }
