@@ -25,8 +25,12 @@ export class CFPBService {
 
       // Add required parameters
       params.append('size', '1000');
-      params.append('no_aggs', 'true');
+      params.append('no_aggs', 'false'); // Enable aggregations for trends
       params.append('format', 'json');
+      
+      // Add date aggregation for trends
+      params.append('agg.date_received', 'created_date');
+      params.append('agg.date_received.interval', 'month');
 
       // Add product filter if not present
       if (!params.has('product')) {
