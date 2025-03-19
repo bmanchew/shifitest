@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete';
 import { 
   Select,
   SelectContent,
@@ -88,15 +89,11 @@ enum SignupStep {
   Complete = 3,
 }
 
-// Business types
+// Business types - simplified to three main options
 const businessTypes = [
-  { label: "Sole Proprietorship", value: "sole_proprietorship" },
-  { label: "Partnership", value: "partnership" },
-  { label: "Limited Liability Company (LLC)", value: "llc" },
   { label: "Corporation", value: "corporation" },
-  { label: "S Corporation", value: "s_corporation" },
-  { label: "Nonprofit", value: "nonprofit" },
-  { label: "Other", value: "other" },
+  { label: "Limited Liability Company (LLC)", value: "llc" },
+  { label: "Sole Proprietorship", value: "sole_proprietorship" },
 ];
 
 export function MerchantSignup() {
@@ -356,10 +353,46 @@ export function MerchantSignup() {
                   control={form.control}
                   name="streetAddress"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Street Address</FormLabel>
+                    <FormItem className="col-span-2">
+                      <FormLabel>Business Address</FormLabel>
                       <FormControl>
-                        <Input placeholder="Street address" {...field} />
+                        <AddressAutocomplete
+                          value={field.value}
+                          onChange={(address, placeDetails) => {
+                            if (placeDetails) {
+                              // Extract address components
+                              const streetNumber = placeDetails.address_components?.find(
+                                (component) => component.types.includes("street_number")
+                              )?.long_name || "";
+                              
+                              const route = placeDetails.address_components?.find(
+                                (component) => component.types.includes("route")
+                              )?.long_name || "";
+                              
+                              const city = placeDetails.address_components?.find(
+                                (component) => component.types.includes("locality")
+                              )?.long_name || "";
+                              
+                              const state = placeDetails.address_components?.find(
+                                (component) => component.types.includes("administrative_area_level_1")
+                              )?.short_name || "";
+                              
+                              const zipCode = placeDetails.address_components?.find(
+                                (component) => component.types.includes("postal_code")
+                              )?.long_name || "";
+                              
+                              // Update form fields
+                              field.onChange(streetNumber + " " + route);
+                              form.setValue("city", city);
+                              form.setValue("state", state);
+                              form.setValue("zipCode", zipCode);
+                            } else {
+                              field.onChange(address);
+                            }
+                          }}
+                          placeholder="Enter business address"
+                          required
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -373,7 +406,7 @@ export function MerchantSignup() {
                     <FormItem>
                       <FormLabel>City</FormLabel>
                       <FormControl>
-                        <Input placeholder="City" {...field} />
+                        <Input placeholder="City" {...field} disabled />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -387,7 +420,7 @@ export function MerchantSignup() {
                     <FormItem>
                       <FormLabel>State</FormLabel>
                       <FormControl>
-                        <Input placeholder="State (e.g., CA)" maxLength={2} {...field} />
+                        <Input placeholder="State (e.g., CA)" maxLength={2} {...field} disabled />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -401,7 +434,7 @@ export function MerchantSignup() {
                     <FormItem>
                       <FormLabel>ZIP Code</FormLabel>
                       <FormControl>
-                        <Input placeholder="ZIP Code" {...field} />
+                        <Input placeholder="ZIP Code" {...field} disabled />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
