@@ -24,13 +24,15 @@ export class CFPBService {
       fields.forEach(field => params.append('field', field));
 
       // Add required parameters
-      params.append('size', '1000');
-      params.append('no_aggs', 'false'); // Enable aggregations for trends
+      params.append('size', '0'); // Set to 0 since we only need aggregations
+      params.append('no_aggs', 'false'); // Enable aggregations
       params.append('format', 'json');
       
       // Add date aggregation for trends
-      params.append('agg.date_received', 'created_date');
-      params.append('agg.date_received.interval', 'month');
+      params.append('date_received_min', '2023-01-01');
+      params.append('date_received_max', new Date().toISOString().split('T')[0]);
+      params.append('agg', 'date_received');
+      params.append('agg_term_type', 'month');
 
       // Add product filter if not present
       if (!params.has('product')) {
