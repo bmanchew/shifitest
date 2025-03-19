@@ -11,6 +11,7 @@ const CustomerContractOffer = lazy(() => import("@/pages/customer/ContractOffer"
 const CustomerDashboard = lazy(() => import("@/pages/customer/Dashboard"));
 const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
 const AdminMerchants = lazy(() => import("@/pages/admin/Merchants"));
+const AdminMerchantDetail = lazy(() => import("@/pages/admin/MerchantDetail"));
 const AdminContracts = lazy(() => import("@/pages/admin/Contracts"));
 const AdminLogs = lazy(() => import("@/pages/admin/Logs"));
 const AdminSettings = lazy(() => import("@/pages/admin/Settings"));
