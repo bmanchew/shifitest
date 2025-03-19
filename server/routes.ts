@@ -251,6 +251,200 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get Plaid settings for a merchant
+  apiRouter.get("/merchants/:id/plaid-settings", async (req: Request, res: Response) => {
+    try {
+      const merchantId = parseInt(req.params.id);
+      if (isNaN(merchantId)) {
+        return res.status(400).json({ message: "Invalid merchant ID format" });
+      }
+
+      // Check if merchant exists
+      const merchant = await storage.getMerchant(merchantId);
+      if (!merchant) {
+        return res.status(404).json({ message: "Merchant not found" });
+      }
+
+      // Get Plaid merchant settings
+      const plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+      
+      if (!plaidMerchant) {
+        // If no settings exist yet, return an empty object
+        return res.status(404).json({ 
+          success: false, 
+          message: "No Plaid settings found for this merchant" 
+        });
+      }
+
+      res.json(plaidMerchant);
+    } catch (error) {
+      logger.error({
+        message: "Error getting merchant Plaid settings",
+        error,
+        metadata: { merchantId: req.params.id }
+      });
+      res.status(500).json({ 
+        success: false, 
+        message: "Internal server error" 
+      });
+    }
+  });
+
+  // Update Plaid settings for a merchant
+  apiRouter.patch("/merchants/:id/plaid-settings", async (req: Request, res: Response) => {
+    try {
+      const merchantId = parseInt(req.params.id);
+      if (isNaN(merchantId)) {
+        return res.status(400).json({ message: "Invalid merchant ID format" });
+      }
+
+      // Check if merchant exists
+      const merchant = await storage.getMerchant(merchantId);
+      if (!merchant) {
+        return res.status(404).json({ message: "Merchant not found" });
+      }
+
+      // Get existing Plaid merchant settings
+      let plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+      
+      // Extract the fields to update
+      const { clientId, defaultFundingAccount } = req.body;
+      
+      let updatedPlaidMerchant;
+      
+      if (plaidMerchant) {
+        // Update existing record
+        updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
+          clientId,
+          defaultFundingAccount,
+          updatedAt: new Date()
+        });
+
+        logger.info({
+          message: "Updated Plaid settings for merchant",
+          category: "api",
+          source: "plaid",
+          metadata: { 
+            merchantId,
+            plaidMerchantId: plaidMerchant.id 
+          }
+        });
+      } else {
+        // Create new record if one doesn't exist
+        updatedPlaidMerchant = await storage.createPlaidMerchant({
+          merchantId,
+          clientId,
+          defaultFundingAccount,
+          onboardingStatus: 'pending'
+        });
+
+        logger.info({
+          message: "Created new Plaid settings for merchant",
+          category: "api",
+          source: "plaid",
+          metadata: { 
+            merchantId,
+            plaidMerchantId: updatedPlaidMerchant.id 
+          }
+        });
+      }
+
+      res.json({
+        success: true,
+        data: updatedPlaidMerchant
+      });
+    } catch (error) {
+      logger.error({
+        message: "Error updating merchant Plaid settings",
+        error,
+        metadata: { 
+          merchantId: req.params.id,
+          requestBody: req.body 
+        }
+      });
+      res.status(500).json({ 
+        success: false, 
+        message: "Internal server error" 
+      });
+    }
+  });
+
+  // Sync merchant with Plaid
+  apiRouter.post("/merchants/:id/plaid-sync", async (req: Request, res: Response) => {
+    try {
+      const merchantId = parseInt(req.params.id);
+      if (isNaN(merchantId)) {
+        return res.status(400).json({ message: "Invalid merchant ID format" });
+      }
+
+      // Check if the Plaid service is initialized
+      if (!plaidService.isInitialized()) {
+        return res.status(500).json({
+          success: false,
+          message: "Plaid service not initialized"
+        });
+      }
+
+      // Check if merchant exists
+      const merchant = await storage.getMerchant(merchantId);
+      if (!merchant) {
+        return res.status(404).json({ message: "Merchant not found" });
+      }
+
+      // Get Plaid merchant
+      const plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+      if (!plaidMerchant) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "No Plaid settings found for this merchant" 
+        });
+      }
+
+      // Check if this merchant has an originator ID
+      if (!plaidMerchant.originatorId) {
+        return res.status(400).json({
+          success: false,
+          message: "This merchant does not have a Plaid originator ID yet"
+        });
+      }
+
+      // Get the merchant's status from Plaid
+      const originatorStatus = await plaidService.getMerchantOnboardingStatus(plaidMerchant.originatorId);
+      
+      // Update the merchant's status in our database
+      const updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
+        onboardingStatus: originatorStatus.status as any,
+        updatedAt: new Date()
+      });
+
+      logger.info({
+        message: "Synced merchant with Plaid",
+        category: "api",
+        source: "plaid",
+        metadata: { 
+          merchantId,
+          originatorId: plaidMerchant.originatorId,
+          status: originatorStatus.status 
+        }
+      });
+
+      res.json({
+        success: true,
+        data: updatedPlaidMerchant
+      });
+    } catch (error) {
+      logger.error({
+        message: "Error syncing merchant with Plaid",
+        error,
+        metadata: { merchantId: req.params.id }
+      });
+      res.status(500).json({ 
+        success: false, 
+        message: "Failed to sync merchant with Plaid" 
+      });
+    }
+  });
+
   // Contract routes
   apiRouter.post("/contracts", async (req: Request, res: Response) => {
     try {

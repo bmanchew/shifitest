@@ -19,7 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Merchant } from "@shared/schema";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { Check, X, PlusCircle } from "lucide-react";
+import { Check, X, PlusCircle, ExternalLink } from "lucide-react";
+import { Link } from "wouter";
 
 export default function MerchantList() {
   const { toast } = useToast();
@@ -76,10 +77,13 @@ export default function MerchantList() {
     {
       id: "actions",
       cell: ({ row }) => {
+        const merchant = row.original;
         return (
-          <Button variant="ghost" size="sm">
-            View
-          </Button>
+          <Link href={`/admin/merchants/${merchant.id}`}>
+            <Button variant="ghost" size="sm" className="flex items-center gap-1">
+              View <ExternalLink className="h-4 w-4 ml-1" />
+            </Button>
+          </Link>
         );
       },
     },

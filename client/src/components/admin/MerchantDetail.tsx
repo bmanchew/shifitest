@@ -16,8 +16,8 @@ import { Merchant } from "@shared/schema";
 import MerchantPlaidSettings from "./MerchantPlaidSettings";
 
 export default function MerchantDetail() {
-  const [, params] = useParams();
-  const merchantId = parseInt(params.id);
+  const params = useParams();
+  const merchantId = parseInt(params.id || "0");
   const [activeTab, setActiveTab] = useState("overview");
 
   const { data: merchant, isLoading } = useQuery<Merchant>({
@@ -117,7 +117,7 @@ export default function MerchantDetail() {
                 </div>
                 <div>
                   <p className="text-sm font-medium">Created</p>
-                  <p>{new Date(merchant.createdAt).toLocaleDateString()}</p>
+                  <p>{merchant.createdAt ? new Date(merchant.createdAt).toLocaleDateString() : "Unknown"}</p>
                 </div>
               </div>
             </CardContent>

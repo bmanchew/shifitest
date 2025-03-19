@@ -72,7 +72,7 @@ export default function MerchantPlaidSettings({ merchantId }: MerchantPlaidSetti
       return apiRequest(`/api/merchants/${merchantId}/plaid-settings`, {
         method: "PATCH",
         data,
-      });
+      } as any);
     },
     onSuccess: () => {
       toast({
@@ -97,7 +97,7 @@ export default function MerchantPlaidSettings({ merchantId }: MerchantPlaidSetti
     mutationFn: async () => {
       return apiRequest(`/api/merchants/${merchantId}/plaid-sync`, {
         method: "POST",
-      });
+      } as any);
     },
     onSuccess: () => {
       toast({

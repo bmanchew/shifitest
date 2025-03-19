@@ -44,6 +44,7 @@ export default function App() {
           {/* Admin routes */}
           <Route path="/admin" component={AdminDashboard} />
           <Route path="/admin/merchants" component={AdminMerchants} />
+          <Route path="/admin/merchants/:id" component={AdminMerchantDetail} />
           <Route path="/admin/contracts" component={AdminContracts} />
           <Route path="/admin/logs" component={AdminLogs} />
           <Route path="/admin/settings" component={AdminSettings} />
