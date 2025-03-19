@@ -28,10 +28,9 @@ export class CFPBService {
       params.append('no_aggs', 'false');
       params.append('format', 'json');
       
-      // Set date range for last 24 months
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 24);
+      // Set exact date range from March 19, 2023 to March 19, 2025
+      const endDate = new Date('2025-03-19');
+      const startDate = new Date('2023-03-19');
       
       params.append('date_received_min', startDate.toISOString().split('T')[0]);
       params.append('date_received_max', endDate.toISOString().split('T')[0]);
