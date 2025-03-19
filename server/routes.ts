@@ -2655,37 +2655,53 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
   // Plaid API Routes
 
   // Create a link token - used to initialize Plaid Link
-  apiRouter.post(
+  apiRouter.all(
     "/plaid/create-link-token",
     async (req: Request, res: Response) => {
       try {
-        const { userId, userName, userEmail, products, redirectUri } = req.body;
-
-        if (!userId) {
+        const { userId, userName, userEmail, products, redirectUri, isSignup } = req.body;
+        
+        let clientUserId;
+        
+        // For merchant signup flow or situations where userId isn't available yet
+        if (!userId && (isSignup || req.method === 'GET')) {
+          // Generate a temporary ID for signup flow
+          clientUserId = `signup-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+          
+          logger.info({
+            message: `Creating Plaid link token for merchant signup`,
+            category: "api", 
+            source: "plaid",
+            metadata: {
+              clientUserId,
+              isSignup: true
+            },
+          });
+        } else if (!userId) {
           return res.status(400).json({
             success: false,
             message: "User ID is required",
           });
+        } else {
+          clientUserId = userId.toString();
+          
+          logger.info({
+            message: `Creating Plaid link token for user ${clientUserId}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              userId: clientUserId,
+              products,
+            },
+          });
         }
-
-        const clientUserId = userId.toString();
-
-        logger.info({
-          message: `Creating Plaid link token for user ${clientUserId}`,
-          category: "api",
-          source: "plaid",
-          metadata: {
-            userId: clientUserId,
-            products,
-          },
-        });
 
         const linkTokenResponse = await plaidService.createLinkToken({
           userId: clientUserId,
           clientUserId,
-          userName,
-          userEmail,
-          products, // Optional products array passed from frontend
+          userName: userName || "Merchant Signup",
+          userEmail: userEmail || "signup@shifi.ai",
+          products: products || [Products.Auth, Products.Transactions, Products.Assets], // Default products for signup
           redirectUri, // Optional redirect URI for OAuth flow
         });
 
