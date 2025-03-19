@@ -352,16 +352,29 @@ export class NotificationService {
         return false;
       }
       
-      // Get merchant webhook URL
+      // Get merchant information
       const merchant = await this.storage.getMerchant(options.recipientId);
-      if (!merchant || !merchant.webhookUrl) {
+      if (!merchant) {
+        return false;
+      }
+      
+      // Get merchant business details
+      const businessDetails = await this.storage.getMerchantBusinessDetailsByMerchantId(merchant.id);
+      if (!businessDetails) {
+        return false;
+      }
+      
+      // Use website URL as webhook endpoint since we don't have a dedicated webhookUrl field yet
+      const webhookUrl = businessDetails.websiteUrl;
+      
+      if (!webhookUrl) {
         return false;
       }
       
       // TODO: Implement webhook sending logic
       // This is a placeholder for future implementation
       logger.info({
-        message: `Webhook would be sent to ${merchant.webhookUrl} for ${type}`,
+        message: `Webhook would be sent to ${webhookUrl} for ${type}`,
         category: 'notification',
         source: 'internal'
       });
@@ -395,8 +408,8 @@ export class NotificationService {
           const merchant = await this.storage.getMerchant(id);
           return merchant ? {
             email: merchant.email,
-            phone: merchant.phoneNumber || undefined,
-            name: merchant.businessName
+            phone: merchant.phone || undefined,
+            name: merchant.name || merchant.contactName
           } : null;
         
         case 'customer':
