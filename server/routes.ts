@@ -3798,6 +3798,86 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
     }
   });
+  
+  // Find a specific originator by name
+  apiRouter.get("/plaid/find-originator/:name", async (req: Request, res: Response) => {
+    try {
+      if (!plaidService.isInitialized()) {
+        return res.status(500).json({
+          success: false,
+          message: "Plaid service not initialized"
+        });
+      }
+      
+      const searchName = req.params.name;
+      if (!searchName) {
+        return res.status(400).json({
+          success: false,
+          message: "Originator name is required"
+        });
+      }
+      
+      // Direct call to Plaid API to get all originators
+      const originatorListResponse = await plaidService.getClient().transferOriginatorList({});
+      const plaidOriginators = originatorListResponse.data.originators || [];
+      
+      // Find the originator that matches the name (case insensitive)
+      const foundOriginator = plaidOriginators.find(
+        (originator: any) => originator.company_name && 
+        originator.company_name.toLowerCase().includes(searchName.toLowerCase())
+      );
+      
+      if (foundOriginator) {
+        logger.info({
+          message: `Found originator matching '${searchName}': ${foundOriginator.company_name}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            originatorId: foundOriginator.originator_id,
+            clientId: foundOriginator.client_id,
+            status: foundOriginator.status
+          }
+        });
+        
+        return res.json({
+          success: true,
+          found: true,
+          originator: foundOriginator
+        });
+      } else {
+        logger.info({
+          message: `No originator found matching '${searchName}'`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            totalOriginators: plaidOriginators.length
+          }
+        });
+        
+        return res.json({
+          success: true,
+          found: false,
+          message: `No originator found matching '${searchName}'`,
+          totalOriginators: plaidOriginators.length
+        });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error finding originator by name: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          searchName: req.params.name,
+          error: error instanceof Error ? error.stack : null,
+        },
+      });
+
+      return res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Failed to find originator by name"
+      });
+    }
+  });
 
   // Sync all Plaid merchants with our database
   apiRouter.post("/plaid/merchants/sync", async (req: Request, res: Response) => {
