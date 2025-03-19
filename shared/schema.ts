@@ -9,6 +9,7 @@ export const applicationStepEnum = pgEnum('application_step', ['terms', 'kyc', '
 export const logLevelEnum = pgEnum('log_level', ['debug', 'info', 'warn', 'error', 'critical']);
 export const logCategoryEnum = pgEnum('log_category', ['system', 'user', 'api', 'payment', 'security', 'contract']);
 export const logSourceEnum = pgEnum('log_source', ['internal', 'twilio', 'didit', 'plaid', 'thanksroger', 'prefi']);
+export const verificationTypeEnum = pgEnum('verification_type', ['identity', 'bank', 'address', 'business', 'ownership']);
 export const creditTierEnum = pgEnum('credit_tier', ['tier1', 'tier2', 'tier3', 'declined']);
 export const onboardingStatusEnum = pgEnum('onboarding_status', ['pending', 'in_progress', 'completed', 'rejected']);
 
