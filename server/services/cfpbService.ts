@@ -1,9 +1,8 @@
-
 import axios from 'axios';
 import { logger } from './logger';
 
 export class CFPBService {
-  private baseUrl = 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/';
+  private baseUrl = 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1';
 
   async getCFPBData(params = new URLSearchParams()) {
     try {
