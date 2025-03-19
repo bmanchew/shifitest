@@ -158,10 +158,10 @@ export class NotificationService {
       });
 
       // Get successful channels
-      const successfulChannels = channels.filter(async (channel) => {
-        const channelStatus = await this.storage.getNotificationChannels(notificationId);
-        return channelStatus.some(cs => cs.channel === channel && cs.status === 'delivered');
-      });
+      const channelStatus = await this.storage.getNotificationChannels(notificationId);
+      const successfulChannels = channels.filter(channel => 
+        channelStatus.some(cs => cs.channel === channel && cs.status === 'delivered')
+      );
 
       return {
         success,
@@ -181,7 +181,10 @@ export class NotificationService {
         }
       });
       
-      return false;
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   }
 

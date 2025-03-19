@@ -131,8 +131,8 @@ router.get('/:type/:id', async (req, res) => {
       recipientId,
       recipientType as 'merchant' | 'customer' | 'admin',
       {
-        page,
         limit,
+        offset: (page - 1) * limit, // Calculate offset from page and limit
         unreadOnly: req.query.unreadOnly === 'true',
       }
     );
