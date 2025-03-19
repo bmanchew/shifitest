@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { usePlaidLink } from 'react-plaid-link';
+import { CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -246,10 +247,96 @@ export function MerchantSignup() {
     },
   });
   
-  // Complete identity verification
+  // Start the DiDit identity verification process
+  const startIdentityVerification = () => {
+    if (kycSessionUrl) {
+      // Open DiDit verification in a new tab
+      window.open(kycSessionUrl, '_blank');
+      
+      toast({
+        title: "Identity verification started",
+        description: "Complete the verification process in the new tab. Once finished, return here to continue.",
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: "Identity verification session not available. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Check verification status
+  const checkVerificationStatus = async () => {
+    if (!kycSessionId || !merchantId) {
+      toast({
+        title: "Error",
+        description: "Unable to check verification status. Missing session information.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      const response = await fetch(`/api/didit/session-status?sessionId=${kycSessionId}&merchantId=${merchantId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setVerificationStatus(data.status);
+        
+        if (data.status === "approved") {
+          toast({
+            title: "Verification Approved",
+            description: "Your identity has been successfully verified!",
+          });
+          
+          // Move to the complete step
+          setCurrentStep(SignupStep.Complete);
+        } else if (data.status === "rejected") {
+          toast({
+            title: "Verification Failed",
+            description: "Your identity verification was not successful. Please try again.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Verification Pending",
+            description: "Your identity verification is still being processed. Please check back later.",
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: data.message || "Failed to check verification status",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error checking verification status:', error);
+      toast({
+        title: "Error",
+        description: "Network error. Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Complete the merchant signup process
   const completeIdentityVerification = () => {
-    // In a real implementation, this would call your backend to submit final verification
-    setCurrentStep(SignupStep.Complete);
+    // Only complete if the verification is approved or we're bypassing the check
+    if (verificationStatus === "approved" || process.env.NODE_ENV === "development") {
+      setCurrentStep(SignupStep.Complete);
+    } else {
+      toast({
+        title: "Verification Required",
+        description: "Please complete the identity verification before proceeding.",
+        variant: "destructive",
+      });
+    }
   };
   
   // Render the appropriate step
@@ -617,22 +704,44 @@ export function MerchantSignup() {
               </div>
             )}
             
-            {verificationStatus && (
-              <div className={cn(
-                "p-4 rounded-md mb-6",
-                verificationStatus === "pending" ? "bg-yellow-50 text-yellow-800" : 
-                verificationStatus === "approved" ? "bg-green-50 text-green-800" : 
-                "bg-red-50 text-red-800"
-              )}>
-                <p className="font-medium">Verification Status: {verificationStatus.toUpperCase()}</p>
-                <p className="text-sm mt-2">
-                  {verificationStatus === "pending" && 
-                    "We're analyzing your bank account data to verify your business meets our requirements."}
-                  {verificationStatus === "approved" && 
-                    "Your business has been verified! You can proceed with the final steps."}
-                  {verificationStatus === "rejected" && 
-                    "We're sorry, but your business does not meet our current requirements."}
-                </p>
+            <div className="bg-blue-50 text-blue-800 p-4 rounded-md mb-6">
+              <p className="font-medium">Identity Verification Instructions:</p>
+              <ul className="list-disc pl-5 mt-2">
+                <li>Complete identity verification using a government ID</li>
+                <li>Verification typically takes 1-2 minutes</li>
+                <li>You'll need a valid driver's license or passport</li>
+                <li>We'll also verify your business ownership</li>
+                <li>You'll be redirected to our secure verification partner (DiDit)</li>
+              </ul>
+            </div>
+            
+            {verificationStatus === "pending" && (
+              <div className="bg-yellow-50 text-yellow-800 p-4 rounded-md mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-5 w-5" />
+                  <p className="font-medium">Verification Status: Pending</p>
+                </div>
+                <p>Your verification is in progress. If you've already completed the verification process, click "Check Verification Status" below.</p>
+              </div>
+            )}
+            
+            {verificationStatus === "approved" && (
+              <div className="bg-green-50 text-green-800 p-4 rounded-md mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle className="h-5 w-5" />
+                  <p className="font-medium">Verification Status: Approved</p>
+                </div>
+                <p>Your identity has been successfully verified! You can now proceed to the next step.</p>
+              </div>
+            )}
+            
+            {verificationStatus === "rejected" && (
+              <div className="bg-red-50 text-red-800 p-4 rounded-md mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <XCircle className="h-5 w-5" />
+                  <p className="font-medium">Verification Status: Rejected</p>
+                </div>
+                <p>Your identity verification was unsuccessful. Please try again or contact support for assistance.</p>
               </div>
             )}
             
@@ -642,22 +751,54 @@ export function MerchantSignup() {
               </div>
             )}
             
-            <Button
-              onClick={completeIdentityVerification}
-              disabled={verificationStatus !== "approved" && verificationStatus !== "pending"}
-              className="w-full"
-            >
-              {verificationStatus === "pending" ? "Check Verification Status" : "Complete Signup"}
-            </Button>
-            
-            <Button
-              variant="outline"
-              onClick={() => setCurrentStep(SignupStep.BankConnection)}
-              disabled={isLoading}
-              className="w-full mt-2"
-            >
-              Back to Bank Connection
-            </Button>
+            <div className="space-y-3">
+              {!kycSessionUrl ? (
+                <div className="text-amber-500 p-3 border border-amber-200 rounded-md bg-amber-50 mb-4">
+                  <p className="font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5" />
+                    Verification session not available
+                  </p>
+                  <p className="text-sm mt-1">
+                    There was an issue preparing your verification session. Please try again or contact support.
+                  </p>
+                </div>
+              ) : verificationStatus !== "approved" ? (
+                <>
+                  <Button
+                    onClick={startIdentityVerification}
+                    disabled={isLoading}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isLoading ? "Processing..." : "Start Identity Verification"}
+                  </Button>
+                  
+                  <Button
+                    onClick={checkVerificationStatus}
+                    disabled={isLoading}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Check Verification Status
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  onClick={completeIdentityVerification}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
+                  Continue to Next Step
+                </Button>
+              )}
+              
+              <Button
+                variant="outline"
+                onClick={() => setCurrentStep(SignupStep.BankConnection)}
+                disabled={isLoading}
+                className="w-full"
+              >
+                Back to Bank Connection
+              </Button>
+            </div>
           </div>
         );
         
