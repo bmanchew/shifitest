@@ -2696,12 +2696,41 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           });
         }
 
+        // Check if Plaid is properly initialized
+        if (!plaidService.isInitialized()) {
+          logger.error({
+            message: "Plaid service not initialized when trying to create link token",
+            category: "api",
+            source: "plaid",
+            metadata: {
+              userId: clientUserId,
+              isSignup: isSignup || req.method === 'GET'
+            },
+          });
+          
+          return res.status(503).json({
+            success: false,
+            message: "Plaid service is not available. Please try again later.",
+            error: "PLAID_NOT_INITIALIZED"
+          });
+        }
+
+        // Format products correctly for Plaid
+        let formattedProducts = [];
+        if (Array.isArray(products)) {
+          formattedProducts = products;
+        } else if (products) {
+          formattedProducts = [products];
+        } else {
+          formattedProducts = ["auth", "transactions", "assets"]; // Default products
+        }
+
         const linkTokenResponse = await plaidService.createLinkToken({
           userId: clientUserId,
           clientUserId,
-          userName: userName || "Merchant Signup",
-          userEmail: userEmail || "signup@shifi.ai",
-          products: products || ["auth", "transactions", "assets"], // Default products for signup
+          userName: userName || undefined, // Only pass if provided
+          userEmail: userEmail || undefined, // Only pass if provided
+          products: formattedProducts, 
           redirectUri, // Optional redirect URI for OAuth flow
         });
 
@@ -2712,18 +2741,30 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           expiration: linkTokenResponse.expiration,
         });
       } catch (error) {
+        // Extract more detailed error information for logging
+        let errorDetails = "Unknown error";
+        let errorCode = "UNKNOWN";
+        
+        if (error.response?.data) {
+          errorDetails = JSON.stringify(error.response.data);
+          errorCode = error.response.data.error_code || "UNKNOWN";
+        }
+        
         logger.error({
           message: `Failed to create Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
           category: "api",
           source: "plaid",
           metadata: {
-            error: error instanceof Error ? error.stack : null,
-          },
+            errorDetails,
+            errorCode,
+            errorStack: error instanceof Error ? error.stack : null
+          }
         });
 
         res.status(500).json({
           success: false,
           message: "Failed to create Plaid link token",
+          error_code: errorCode,
         });
       }
     },

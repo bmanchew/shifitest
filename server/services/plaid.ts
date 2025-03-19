@@ -170,30 +170,58 @@ class PlaidService {
         clientUserId,
         userName,
         userEmail,
-        products = [Products.Auth, Products.Transactions,Products.Assets],
+        products = [Products.Auth, Products.Transactions, Products.Assets],
         redirectUri,
       } = params;
 
       // Prepare user object for the request
       const user = {
         client_user_id: clientUserId,
-        legal_name: userName,
-        email_address: userEmail,
       };
+      
+      // Only add optional fields if they are provided
+      if (userName) {
+        user['legal_name'] = userName;
+      }
+      
+      if (userEmail) {
+        user['email_address'] = userEmail;
+      }
+
+      // Log the request parameters for debugging
+      logger.info({
+        message: "Plaid link token request parameters",
+        category: "api",
+        source: "plaid",
+        metadata: {
+          userId,
+          clientUserId,
+          env: this.env,
+          products: products,
+        },
+      });
 
       // Prepare request
       const request: LinkTokenCreateRequest = {
         user,
         client_name: "ShiFi Financial",
-        products: products,
+        products: products as Products[], // Ensure correct type
         country_codes: [CountryCode.Us],
         language: "en",
-        webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/webhook`,
-        auth: {
+      };
+
+      // Only add webhook URL if PUBLIC_URL is defined
+      if (process.env.PUBLIC_URL) {
+        request.webhook = `${process.env.PUBLIC_URL}/api/plaid/webhook`;
+      }
+
+      // Only add advanced auth features if not in sandbox mode
+      if (this.env !== 'sandbox') {
+        request.auth = {
           same_day_microdeposits_enabled: true,
           sms_microdeposits_verification_enabled: true
-        }
-      };
+        };
+      }
 
       // Add optional redirect URI if provided
       if (redirectUri) {
@@ -204,7 +232,11 @@ class PlaidService {
         message: `Creating Plaid link token for user ${userId}`,
         category: "api",
         source: "plaid",
-        metadata: { userId, products },
+        metadata: { 
+          userId, 
+          products,
+          requestBody: JSON.stringify(request)
+        },
       });
 
       const response = await this.client.linkTokenCreate(request);
@@ -238,6 +270,15 @@ class PlaidService {
         expiration: response.data.expiration,
       };
     } catch (error) {
+      // Extract more detailed error information from Plaid response
+      let errorDetails = "Unknown error";
+      let errorCode = "UNKNOWN";
+      
+      if (error.response?.data) {
+        errorDetails = JSON.stringify(error.response.data);
+        errorCode = error.response.data.error_code || "UNKNOWN";
+      }
+      
       logger.error({
         message: `Failed to create Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
@@ -245,6 +286,13 @@ class PlaidService {
         metadata: {
           userId: params.userId,
           error: error instanceof Error ? error.stack : null,
+          errorDetails,
+          errorCode,
+          request: {
+            clientUserId: params.clientUserId,
+            products: params.products,
+            env: this.env
+          }
         },
       });
 
