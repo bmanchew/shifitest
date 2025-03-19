@@ -94,6 +94,142 @@ class ThanksRogerService {
     return this.initialized;
   }
 
+  async createFinancingContract(options: {
+    templateId: string;
+    customerName: string;
+    customerEmail: string;
+    merchantName: string;
+    contractNumber: string;
+    amount: number;
+    downPayment: number;
+    financedAmount: number;
+    termMonths: number;
+    interestRate: number;
+    monthlyPayment: number;
+    sendEmail?: boolean;
+  }) {
+    if (!this.initialized) {
+      logger.warn({
+        message: 'Thanks Roger service not initialized',
+        category: 'contract',
+        source: 'thanksroger'
+      });
+      return null;
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/workspaces/${this.defaultWorkspaceId}/contracts`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          templateId: process.env.THANKSROGER_TEMPLATE_ID,
+          templateValues: {
+            'Customer Name': { type: 'singletext', value: options.customerName },
+            'Customer Email': { type: 'singletext', value: options.customerEmail },
+            'Merchant Name': { type: 'singletext', value: options.merchantName },
+            'Contract Number': { type: 'singletext', value: options.contractNumber },
+            'Amount': { type: 'singletext', value: options.amount.toString() },
+            'Down Payment': { type: 'singletext', value: options.downPayment.toString() },
+            'Financed Amount': { type: 'singletext', value: options.financedAmount.toString() },
+            'Term Months': { type: 'singletext', value: options.termMonths.toString() },
+            'Interest Rate': { type: 'singletext', value: options.interestRate.toString() },
+            'Monthly Payment': { type: 'singletext', value: options.monthlyPayment.toString() }
+          },
+          createdBy: 'system@shifi.com',
+          name: `Financing Agreement - ${options.contractNumber}`,
+          email: options.sendEmail || false
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Thanks Roger API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return {
+        contractId: data.contractId,
+        signingLink: data.signingLink,
+        status: 'created'
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error creating Thanks Roger contract: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'contract',
+        source: 'thanksroger',
+        metadata: { options }
+      });
+      return null;
+    }
+  }
+
+  async signContract(options: {
+    contractId: string;
+    signatureData: string;
+    signerName: string;
+    signatureDate: string;
+  }): Promise<ThanksRogerSignContractResponse> {
+    if (!this.initialized) {
+      throw new Error('Thanks Roger service not initialized');
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/workspaces/${this.defaultWorkspaceId}/contracts/${options.contractId}/sign`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          signature: options.signatureData,
+          signerName: options.signerName,
+          signedAt: options.signatureDate
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Thanks Roger API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return {
+        success: true,
+        contractId: options.contractId,
+        signatureId: data.signatureId,
+        status: 'signed',
+        signedAt: options.signatureDate,
+        documentUrl: data.documentUrl
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error signing Thanks Roger contract: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'contract',
+        source: 'thanksroger',
+        metadata: { contractId: options.contractId }
+      });
+      throw error;
+    }
+  }
+
+  async validateCredentials(): Promise<boolean> {
+    if (!this.initialized) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/workspaces/${this.defaultWorkspaceId}`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        }
+      });
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  }
+
   /**
    * Create a contract from a template
    * 
