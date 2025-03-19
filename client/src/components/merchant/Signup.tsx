@@ -5,7 +5,7 @@ import { Input } from '../ui/input';
 import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import React from 'react';
-import { AlertCircle, CheckCircle2, Building2, BuildingBank, FileCheck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Building2, FileCheck, Building as Bank } from 'lucide-react';
 
 interface SignupFormData {
   firstName: string;
