@@ -746,11 +746,41 @@ class PlaidService {
       const monthlyIncome = incomeStreams.reduce((sum, stream) => sum + (stream.monthly_income || 0), 0);
       const annualIncome = monthlyIncome * 12;
 
+      // Analyze income deposit patterns
+      const incomePatterns = incomeStreams.map(stream => {
+        const transactions = stream.income_transactions || [];
+        const dates = transactions.map(t => new Date(t.date).getDate());
+        const daysBetween = transactions.map((t, i) => {
+          if (i === 0) return 0;
+          const curr = new Date(t.date);
+          const prev = new Date(transactions[i-1].date);
+          return Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+        }).filter(d => d > 0);
+
+        const avgDaysBetween = daysBetween.length > 0 
+          ? daysBetween.reduce((a, b) => a + b, 0) / daysBetween.length 
+          : 30;
+
+        return {
+          frequency: avgDaysBetween <= 7 ? 'weekly' : 
+                     avgDaysBetween <= 14 ? 'biweekly' : 
+                     avgDaysBetween <= 16 ? 'semimonthly' : 'monthly',
+          commonDates: [...new Set(dates)].sort((a, b) => a - b),
+          confidence: stream.confidence,
+          amount: stream.monthly_income
+        };
+      });
+
       // Extract employment data from income streams
       const employmentMonths = Math.max(
         ...incomeStreams.map(stream => stream.days / 30),
         0
       );
+
+      // Add income patterns to analysis
+      const primaryIncomePattern = incomePatterns.length > 0 
+        ? incomePatterns.reduce((a, b) => a.amount > b.amount ? a : b)
+        : null;
 
       // Calculate debt-to-income ratio
       const totalDebt = accounts
@@ -803,7 +833,13 @@ class PlaidService {
           incomeStreams: incomeStreams.length,
           confidence: incomeStreams.length > 0 
             ? incomeStreams.reduce((sum, stream) => sum + stream.confidence, 0) / incomeStreams.length
-            : 0
+            : 0,
+          patterns: incomePatterns,
+          recommendedPaymentSchedule: primaryIncomePattern ? {
+            frequency: primaryIncomePattern.frequency,
+            suggestedDates: primaryIncomePattern.commonDates,
+            confidence: primaryIncomePattern.confidence
+          } : null
         },
         employment: {
           employmentMonths,
