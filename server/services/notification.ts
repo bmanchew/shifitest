@@ -60,7 +60,7 @@ export class NotificationService {
   async sendNotification(
     type: NotificationType,
     options: NotificationOptions
-  ): Promise<boolean> {
+  ): Promise<{ success: boolean; error?: string; channels?: string[] }> {
     try {
       // Default to email channel if none specified
       const channels = options.channels || ['email'];
@@ -157,7 +157,16 @@ export class NotificationService {
         updatedAt: new Date()
       });
 
-      return success;
+      // Get successful channels
+      const successfulChannels = channels.filter(async (channel) => {
+        const channelStatus = await this.storage.getNotificationChannels(notificationId);
+        return channelStatus.some(cs => cs.channel === channel && cs.status === 'delivered');
+      });
+
+      return {
+        success,
+        channels: successfulChannels
+      };
     } catch (error) {
       // Log the overall notification error
       await logger.error({
