@@ -143,22 +143,72 @@ export default function CustomerDashboard() {
         <div className="max-w-md w-full mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>Contract Not Found</CardTitle>
-              <CardDescription>We couldn't find the contract you're looking for.</CardDescription>
+              <CardTitle>Loading Your Dashboard</CardTitle>
+              <CardDescription>Please wait while we fetch your information...</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center">
-              <p className="text-sm text-gray-600 mb-6">
-                The contract may have expired or the link might be incorrect.
-              </p>
-              <Button onClick={() => navigate("/")}>
-                Return Home
-              </Button>
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
             </CardContent>
           </Card>
         </div>
       </div>
     );
   }
+
+  // Display points banner if ACH is enabled
+  const hasAutoPayment = contract.paymentMethod === 'ach';
+  const pointsEarned = hasAutoPayment ? 500 : 0;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {hasAutoPayment && (
+        <div className="bg-green-100 p-4 text-center mb-6">
+          <p className="text-green-800 font-medium">
+            Congratulations! You earned {pointsEarned} points for setting up automatic payments!
+          </p>
+        </div>
+      )}
+      
+      <div className="max-w-6xl mx-auto p-6">
+        <h1 className="text-2xl font-bold mb-6">Welcome to Your Dashboard</h1>
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Contract Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-2">
+                <div>
+                  <dt className="text-sm text-gray-500">Monthly Payment</dt>
+                  <dd className="text-lg font-medium">${contract.monthlyPayment}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-gray-500">Next Payment Date</dt>
+                  <dd className="text-lg font-medium">{new Date(contract.nextPaymentDate).toLocaleDateString()}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-gray-500">Payment Method</dt>
+                  <dd className="text-lg font-medium capitalize">{contract.paymentMethod}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Rewards Points</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center">
+                <p className="text-4xl font-bold text-primary">{pointsEarned}</p>
+                <p className="text-sm text-gray-500 mt-2">Points Earned</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">

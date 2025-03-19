@@ -373,7 +373,7 @@ export default function Application() {
       console.error('Contract data not available for dashboard redirect');
       return;
     }
-    
+
     // Add points for ACH setup if bank connection is completed
     if (completedSteps.includes('bank')) {
       apiRequest('POST', `/api/contracts/${contractData.contract.id}/points`, {
@@ -381,7 +381,7 @@ export default function Application() {
         reason: 'ach_setup_bonus'
       });
     }
-    
+
     window.location.href = `/dashboard/${contractData.contract.id}`;
   };
 
