@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { storage } from '../storage';
 import { notificationService } from '../services';
-import { NotificationType } from '@shared/schema';
-import logger from '../logger';
+import { NotificationType } from '../services/notification';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -58,23 +58,39 @@ router.post('/send', async (req, res) => {
       }
     );
     
-    if (!result.success) {
-      return res.status(400).json({ 
-        success: false, 
-        error: result.error || 'Failed to send notification'
+    // The notification service may return a boolean (legacy) or an object with success/error properties
+    if (typeof result === 'boolean') {
+      if (!result) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Failed to send notification'
+        });
+      }
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Notification sent successfully'
+      });
+    } else {
+      // Handle object response
+      if (!result.success) {
+        return res.status(400).json({ 
+          success: false, 
+          error: result.error || 'Failed to send notification'
+        });
+      }
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Notification sent successfully',
+        deliveredTo: result.channels
       });
     }
-    
-    return res.status(200).json({
-      success: true,
-      message: 'Notification sent successfully',
-      deliveredTo: result.channels
-    });
   } catch (error) {
     logger.error({
       message: `Error sending notification: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
-      source: 'external',
+      source: 'internal',
       metadata: {
         error: error instanceof Error ? error.stack : String(error)
       }
@@ -122,13 +138,9 @@ router.get('/:type/:id', async (req, res) => {
     );
     
     // Get total count for pagination
-    const totalCount = await storage.countInAppNotifications(
-      recipientId,
-      recipientType as 'merchant' | 'customer' | 'admin',
-      {
-        unreadOnly: req.query.unreadOnly === 'true',
-      }
-    );
+    // Use the notifications we already retrieved to calculate the total count
+    // This is a temporary solution until we implement a dedicated count method
+    const totalCount = notifications.length;
     
     return res.status(200).json({
       success: true,
@@ -144,7 +156,7 @@ router.get('/:type/:id', async (req, res) => {
     logger.error({
       message: `Error retrieving notifications: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
-      source: 'external',
+      source: 'internal',
       metadata: {
         error: error instanceof Error ? error.stack : String(error)
       }
@@ -168,7 +180,7 @@ router.post('/:id/read', async (req, res) => {
       });
     }
     
-    const result = await storage.markNotificationAsRead(id);
+    const result = await storage.markInAppNotificationAsRead(id);
     
     if (!result) {
       return res.status(404).json({
@@ -185,7 +197,7 @@ router.post('/:id/read', async (req, res) => {
     logger.error({
       message: `Error marking notification as read: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
-      source: 'external',
+      source: 'internal',
       metadata: {
         error: error instanceof Error ? error.stack : String(error)
       }
@@ -217,7 +229,7 @@ router.post('/:type/:id/read-all', async (req, res) => {
       });
     }
     
-    await storage.markAllNotificationsAsRead(
+    await storage.markAllInAppNotificationsAsRead(
       recipientId,
       recipientType as 'merchant' | 'customer' | 'admin'
     );
@@ -230,7 +242,7 @@ router.post('/:type/:id/read-all', async (req, res) => {
     logger.error({
       message: `Error marking all notifications as read: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
-      source: 'external',
+      source: 'internal',
       metadata: {
         error: error instanceof Error ? error.stack : String(error)
       }
