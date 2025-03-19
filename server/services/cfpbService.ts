@@ -2,51 +2,33 @@ import axios from 'axios';
 import { logger } from './logger';
 
 export class CFPBService {
-  private baseUrl = 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1';
+  private baseUrl = 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/';
 
   async getCFPBData(params = new URLSearchParams()) {
     try {
-      // Add standard fields we want to retrieve
       const fields = [
-        'date_received',
-        'product',
-        'sub_product',
-        'issue',
-        'sub_issue',
-        'company',
-        'state',
-        'complaint_what_happened',
-        'company_response',
-        'consumer_disputed',
-        'consumer_complaint_narrative'
+        'date_received', 'product', 'sub_product', 'issue', 'sub_issue',
+        'company', 'state', 'complaint_what_happened', 'company_response',
+        'consumer_disputed', 'consumer_complaint_narrative'
       ];
 
       fields.forEach(field => params.append('field', field));
 
-      // Add required parameters for aggregations
       params.append('size', '0');
       params.append('no_aggs', 'false');
       params.append('format', 'json');
-      
-      // Set exact date range from March 19, 2023 to March 19, 2025
-      const endDate = new Date('2025-03-19');
-      const startDate = new Date('2023-03-19');
-      
-      params.append('date_received_min', startDate.toISOString().split('T')[0]);
-      params.append('date_received_max', endDate.toISOString().split('T')[0]);
       params.append('agg', 'date_received');
       params.append('agg_term_type', 'month');
 
-      // Add product filter if not present
-      if (!params.has('product')) {
-        params.append('product', 'personal loan');
-      }
+      // Set date range to past 24 months from today
+      const startDate = new Date('2023-03-19').toISOString().split('T')[0];
+      const endDate = new Date().toISOString().split('T')[0];
 
-      // Add date range if not present
-      if (!params.has('date_received_min')) {
-        const twoYearsAgo = new Date();
-        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-        params.append('date_received_min', twoYearsAgo.toISOString().split('T')[0]);
+      params.set('date_received_min', startDate);
+      params.set('date_received_max', endDate);
+
+      if (!params.has('product')) {
+        params.append('product', 'Personal loan');
       }
 
       logger.info({
@@ -58,10 +40,7 @@ export class CFPBService {
 
       const response = await axios.get(`${this.baseUrl}?${params.toString()}`, {
         timeout: 30000,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Accept': 'application/json' }
       });
 
       if (!response.data) {
@@ -74,7 +53,7 @@ export class CFPBService {
         message: `Error fetching CFPB data: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
         source: 'cfpb',
-        metadata: { 
+        metadata: {
           error: error instanceof Error ? error.stack : null,
           params: params.toString()
         }
@@ -84,8 +63,7 @@ export class CFPBService {
   }
 
   async getPersonalLoanComplaints() {
-    const params = new URLSearchParams();
-    params.append('product', 'personal loan');
+    const params = new URLSearchParams({ product: 'Personal loan' });
     return this.getCFPBData(params);
   }
 }
