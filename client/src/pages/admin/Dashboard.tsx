@@ -26,9 +26,9 @@ export default function AdminDashboard() {
       return res.json();
     },
     placeholderData: {
-      activeMerchants: 24,
-      activeContracts: 142,
-      pendingContracts: 17,
+      activeMerchants: 0,
+      activeContracts: 0,
+      pendingContracts: 0,
     },
   });
 
