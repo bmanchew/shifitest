@@ -275,6 +275,7 @@ export const plaidMerchants = pgTable("plaid_merchants", {
   id: serial("id").primaryKey(),
   merchantId: integer("merchant_id").references(() => merchants.id).notNull().unique(),
   plaidCustomerId: text("plaid_customer_id"), // The ID assigned by Plaid for this merchant
+  clientId: text("client_id"), // The client ID provided by Plaid for this merchant
   originatorId: text("originator_id"), // The originator ID from Plaid
   onboardingStatus: onboardingStatusEnum("onboarding_status").notNull().default('pending'),
   onboardingUrl: text("onboarding_url"), // The URL for the merchant to complete onboarding
