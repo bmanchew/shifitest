@@ -231,7 +231,7 @@ export default function MerchantSignup() {
   };
 
   return (
-    <div className="container max-w-4xl mx-auto px-4 py-8">
+    <div className="container max-w-6xl mx-auto px-4 py-8">
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
           {steps.map((s) => (
@@ -251,30 +251,42 @@ export default function MerchantSignup() {
         <Progress value={(step / steps.length) * 100} className="h-2" />
       </div>
 
-      <Card className="p-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {renderStep()}
-          <div className="flex justify-between mt-6">
-            {step > 1 && (
+      <div className="flex flex-col lg:flex-row gap-6">
+        <Card className={`p-6 ${step === 1 ? 'lg:w-1/2' : 'w-full'}`}>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {renderStep()}
+            <div className="flex justify-between mt-6">
+              {step > 1 && (
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => setStep(step - 1)}
+                  disabled={isLoading}
+                >
+                  Back
+                </Button>
+              )}
               <Button 
-                type="button" 
-                variant="outline"
-                onClick={() => setStep(step - 1)}
+                type="submit" 
+                className="ml-auto"
                 disabled={isLoading}
               >
-                Back
+                {step === 1 ? 'Continue' : step === 2 ? 'Connect Bank' : 'Complete'}
               </Button>
-            )}
-            <Button 
-              type="submit" 
-              className="ml-auto"
-              disabled={isLoading}
-            >
-              {step === 1 ? 'Continue' : step === 2 ? 'Connect Bank' : 'Complete'}
-            </Button>
+            </div>
+          </form>
+        </Card>
+        
+        {step === 1 && (
+          <div className="lg:w-1/2 flex items-center justify-center">
+            <img 
+              src="/ShiFiMidesk.png" 
+              alt="Unlock More Revenue With ShiFi Financing" 
+              className="h-auto max-w-full rounded-lg shadow-lg" 
+            />
           </div>
-        </form>
-      </Card>
+        )}
+      </div>
     </div>
   );
 }
