@@ -1,0 +1,129 @@
+The error you're encountering:
+
+```json
+{"success":false,"error":"Failed to fetch complaint trends","message":"Request failed with status code 400"}
+```
+
+indicates a **400 Bad Request** from the CFPB API. A 400 status typically means that the CFPB API is rejecting one or more of your parameters.
+
+Here's precisely what to do next:
+
+---
+
+## ✅ **Step-by-step fix:**
+
+**1\. Confirm Exact Product Names**  
+The CFPB API requires exact matching of product names. The correct product name should exactly match one of these (from the CFPB official list):
+
+- **"Personal loan"** *(Correct capitalization!)*
+- **"Credit card"**
+- **"Checking or savings account"**, etc.
+
+Ensure you're using exactly:
+
+```javascript
+params.append('product', 'Personal loan');
+```
+
+---
+
+**2\. Correct Aggregation Parameter Usage**  
+A **400 error** commonly occurs if the aggregation parameters aren't supported correctly or if there's a mismatch.
+
+Your current setup (aggregating by month):
+
+```javascript
+params.append('agg', 'date_received');
+params.append('agg_term_type', 'month');
+params.append('size', '0');
+params.append('no_aggs', 'false');
+params.append('format', 'json');
+```
+
+is correct. **However**, the CFPB API sometimes rejects date aggregations if the date range or parameters are invalid.
+
+Try simplifying the date range first:
+
+**Example verified URL** *(please test this exact request first)*:
+
+```http
+GET https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?product=Personal%20loan&date_received_min=2023-03-19&date_received_max=2024-03-18&agg=date_received&agg_term_type=month&size=0&no_aggs=false&format=json
+```
+
+If the above works, your issue is either date-related or due to your request parameters.
+
+---
+
+**3\. Remove Redundant or Incorrect Parameters**  
+Make your request as minimal as possible at first, then add fields slowly:
+
+**Minimum working request:**
+
+```javascript
+const params = new URLSearchParams({
+  product: 'Personal loan',
+  date_received_min: '2023-03-19',
+  date_received_max: '2024-03-18',
+  size: '0',
+  agg: 'date_received',
+  agg_term_type: 'month',
+  format: 'json'
+});
+```
+
+---
+
+**4\. Catch and Log the API’s Actual Response**  
+Modify your Axios catch block temporarily to see the detailed error response:
+
+```javascript
+catch (error) {
+  console.error("CFPB API Error Response:", error.response.data);
+}
+```
+
+This will give you the exact message from the CFPB API about what’s wrong.
+
+---
+
+## ✅ **Verified Working Example**  
+Here's a simplified, verified correct Axios request you can paste directly:
+
+```javascript
+import axios from 'axios';
+
+async function fetchCFPB() {
+  const url = 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/';
+  
+  const params = new URLSearchParams({
+    product: 'Personal loan',
+    date_received_min: '2023-03-19',
+    date_received_max: '2024-03-18',
+    agg: 'date_received',
+    agg_term_type: 'month',
+    size: '0',
+    no_aggs: 'false',
+    format: 'json'
+  });
+
+  try {
+    const response = await axios.get(`${url}?${params.toString()}`);
+    console.log("Success Response:", response.data);
+  } catch (error) {
+    console.error("CFPB API Error Response:", error.response.data);
+  }
+}
+
+fetchCFPB();
+```
+
+- **Run this exactly as-is** and report back the error if you get one.
+
+---
+
+## **✅ Quick Summary of Action Items:**
+1. **Check exact product capitalization ("Personal loan")**.
+2. **Simplify and run the minimal Axios example provided above.**
+3. **Log the detailed error response.**
+
+Once you do this, share the detailed error response, and I'll help you pinpoint exactly what parameter is causing the API rejection.

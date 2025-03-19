@@ -841,7 +841,7 @@ export function MerchantSignup() {
   };
   
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl">
+    <div className="container mx-auto py-8 px-4 max-w-6xl">
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold mb-2">Merchant Application</h1>
         <p className="text-gray-500">Complete the steps below to apply for a ShiFi merchant account</p>
@@ -877,11 +877,23 @@ export function MerchantSignup() {
         </div>
       </div>
       
-      <Card>
-        <CardContent className="pt-6">
-          {renderStep()}
-        </CardContent>
-      </Card>
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="lg:w-1/2">
+          <Card>
+            <CardContent className="pt-6">
+              {renderStep()}
+            </CardContent>
+          </Card>
+        </div>
+        
+        <div className="lg:w-1/2 flex items-center justify-center">
+          <img 
+            src="/images/ShiFiMidesk.png" 
+            alt="Unlock More Revenue With ShiFi Financing" 
+            className="h-auto max-w-full rounded-lg shadow-lg" 
+          />
+        </div>
+      </div>
     </div>
   );
 }
