@@ -209,6 +209,19 @@ class PlaidService {
 
       const response = await this.client.linkTokenCreate(request);
 
+      if (!response.data || !response.data.link_token) {
+        logger.error({
+          message: `Plaid returned an invalid response when creating link token for user ${userId}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            userId,
+            response: JSON.stringify(response.data)
+          },
+        });
+        throw new Error("Invalid response from Plaid: missing link token");
+      }
+
       logger.info({
         message: `Created Plaid link token for user ${userId}`,
         category: "api",

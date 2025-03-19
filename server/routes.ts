@@ -2708,6 +2708,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         res.json({
           success: true,
           linkToken: linkTokenResponse.linkToken,
+          link_token: linkTokenResponse.linkToken, // For backward compatibility
           expiration: linkTokenResponse.expiration,
         });
       } catch (error) {

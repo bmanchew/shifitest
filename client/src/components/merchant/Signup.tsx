@@ -112,6 +112,10 @@ export default function MerchantSignup() {
             console.log("Got new link token:", data.linkToken);
             setPlaidToken(data.linkToken);
             setTimeout(() => open(), 500); // Give it a moment to update
+          } else if (data.link_token) { // Handle legacy response format
+            console.log("Got new link token from legacy format:", data.link_token);
+            setPlaidToken(data.link_token);
+            setTimeout(() => open(), 500); // Give it a moment to update
           } else {
             alert("Could not initialize bank connection. Please try again.");
           }
