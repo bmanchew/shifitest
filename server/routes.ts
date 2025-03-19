@@ -4702,6 +4702,282 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
     }
   });
+  
+  // DiDit KYC verification endpoints
+  
+  // Create a webhook endpoint for DiDit
+  apiRouter.post("/didit/webhook", async (req: Request, res: Response) => {
+    try {
+      const { session_id, status, contract_id } = req.body;
+      
+      if (!session_id || !status) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields in webhook payload",
+        });
+      }
+      
+      logger.info({
+        message: "Received DiDit verification webhook",
+        category: "api",
+        source: "didit",
+        metadata: {
+          sessionId: session_id,
+          status,
+          contractId: contract_id,
+        },
+      });
+      
+      // Update contract verification status if contract_id is provided
+      if (contract_id) {
+        try {
+          const contractId = parseInt(contract_id);
+          
+          // Add entry to verifications table
+          await storage.createVerification({
+            contractId,
+            type: "identity",
+            status: status,
+            provider: "didit",
+            sessionId: session_id,
+            completedAt: status === "approved" || status === "rejected" ? new Date() : null,
+            data: JSON.stringify(req.body),
+          });
+          
+          if (status === "approved") {
+            // Mark the KYC step as completed if it exists
+            const applicationProgress = await storage.getApplicationProgressByContractId(contractId);
+            const kycStep = applicationProgress.find(step => step.step === "kyc");
+            
+            if (kycStep) {
+              await storage.updateApplicationProgressCompletion(
+                kycStep.id,
+                true,
+                JSON.stringify({
+                  verificationId: session_id,
+                  status: "approved",
+                  completedAt: new Date().toISOString(),
+                })
+              );
+            }
+            
+            // Move the contract to the next step if currently on identity verification
+            const contract = await storage.getContract(contractId);
+            if (contract && contract.currentStep === "identity_verification") {
+              await storage.updateContractStep(contractId, "payment");
+            }
+          }
+        } catch (error) {
+          logger.error({
+            message: `Failed to update contract verification status: ${error instanceof Error ? error.message : String(error)}`,
+            category: "api",
+            source: "didit",
+            metadata: {
+              sessionId: session_id,
+              contractId: contract_id,
+              error: error instanceof Error ? error.stack : String(error),
+            },
+          });
+        }
+      }
+      
+      res.status(200).json({ success: true });
+    } catch (error) {
+      logger.error({
+        message: `Error processing DiDit webhook: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "didit",
+        metadata: {
+          body: req.body,
+          error: error instanceof Error ? error.stack : String(error),
+        },
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "Internal server error processing webhook",
+      });
+    }
+  });
+  
+  // Check the status of a DiDit verification session
+  apiRouter.get("/didit/session-status", async (req: Request, res: Response) => {
+    try {
+      const { sessionId, merchantId } = req.query;
+      
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          message: "Session ID is required",
+        });
+      }
+      
+      logger.info({
+        message: "Checking DiDit session status",
+        category: "api",
+        source: "didit",
+        metadata: {
+          sessionId,
+          merchantId,
+        },
+      });
+      
+      try {
+        // Check if we already have a verification record for this session
+        let status = "pending";
+        
+        if (merchantId) {
+          const verifications = await storage.getVerificationsByContractId(parseInt(merchantId as string));
+          const verification = verifications.find(v => v.sessionId === sessionId);
+          
+          if (verification) {
+            status = verification.status;
+            
+            logger.info({
+              message: "Found existing verification record",
+              category: "api",
+              source: "didit",
+              metadata: {
+                sessionId,
+                merchantId,
+                status,
+                completedAt: verification.completedAt,
+              },
+            });
+            
+            return res.json({
+              success: true,
+              status,
+              message: `Verification status: ${status}`,
+            });
+          }
+        }
+        
+        // If no record exists, check with DiDit API
+        const sessionStatus = await diditService.getVerificationSessionStatus(sessionId as string);
+        
+        if (sessionStatus) {
+          status = sessionStatus.status;
+          
+          // If we have a merchant ID, create/update the verification record
+          if (merchantId && status !== "pending") {
+            await storage.createVerification({
+              contractId: parseInt(merchantId as string),
+              type: "identity",
+              status: status,
+              provider: "didit",
+              sessionId: sessionId as string,
+              completedAt: status === "approved" || status === "rejected" ? new Date() : null,
+              data: JSON.stringify(sessionStatus),
+            });
+            
+            // If approved, update the contract progress
+            if (status === "approved") {
+              const applicationProgress = await storage.getApplicationProgressByContractId(parseInt(merchantId as string));
+              const kycStep = applicationProgress.find(step => step.step === "kyc");
+              
+              if (kycStep) {
+                await storage.updateApplicationProgressCompletion(
+                  kycStep.id,
+                  true,
+                  JSON.stringify({
+                    verificationId: sessionId,
+                    status: "approved",
+                    completedAt: new Date().toISOString(),
+                  })
+                );
+              }
+            }
+          }
+          
+          logger.info({
+            message: "Retrieved DiDit session status",
+            category: "api",
+            source: "didit",
+            metadata: {
+              sessionId,
+              merchantId,
+              status,
+            },
+          });
+          
+          return res.json({
+            success: true,
+            status,
+            message: `Verification status: ${status}`,
+          });
+        } else {
+          return res.json({
+            success: true,
+            status: "pending",
+            message: "Verification is still in progress",
+          });
+        }
+      } catch (error) {
+        logger.error({
+          message: `Failed to check verification status: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "didit",
+          metadata: {
+            sessionId,
+            merchantId,
+            error: error instanceof Error ? error.stack : String(error),
+          },
+        });
+        
+        return res.status(500).json({
+          success: false,
+          message: "Failed to check verification status",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error in DiDit session status endpoint: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "didit",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error),
+        },
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "Internal server error checking session status",
+      });
+    }
+  });
+  
+  // Endpoint for handling the verification completion redirect
+  apiRouter.get("/merchant/verification-complete", async (req: Request, res: Response) => {
+    try {
+      const { merchantId, sessionId } = req.query;
+      
+      logger.info({
+        message: "DiDit verification process completed, user redirected back",
+        category: "api",
+        source: "didit",
+        metadata: {
+          merchantId,
+          sessionId,
+        },
+      });
+      
+      // Redirect to the merchant signup page with appropriate status
+      res.redirect(`/merchant/signup?step=identity_verification&merchant_id=${merchantId || ''}`);
+    } catch (error) {
+      logger.error({
+        message: `Error handling verification completion: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "didit",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error),
+        },
+      });
+      
+      res.redirect('/merchant/signup?error=verification_redirect');
+    }
+  });
 
   // Mount the API router
   app.use("/api", apiRouter);

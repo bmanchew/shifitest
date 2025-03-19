@@ -417,6 +417,39 @@ class DiditService {
   }
 
   /**
+   * Get the status of a verification session
+   * This is a simplified version of getSessionDecision that only returns the status
+   */
+  async getVerificationSessionStatus(
+    sessionId: string,
+  ): Promise<{ status: string } | null> {
+    try {
+      const sessionDecision = await this.getSessionDecision(sessionId);
+      
+      if (!sessionDecision) {
+        return null;
+      }
+      
+      // Return just the status in lowercase for consistent handling
+      return {
+        status: sessionDecision.status.toLowerCase(),
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to get verification session status: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "didit",
+        metadata: {
+          sessionId,
+          error: error instanceof Error ? error.stack : String(error),
+        },
+      });
+      
+      return null;
+    }
+  }
+  
+  /**
    * Retrieve the results of a verification session
    * In mock mode, generates simulated verification results
    */
