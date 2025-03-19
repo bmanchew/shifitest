@@ -115,6 +115,55 @@ export class EmailService {
     
     const text = `
       Welcome to ShiFi!
+
+  /**
+   * Send password reset email to merchant
+   */
+  async sendMerchantPasswordReset(merchantEmail: string, merchantName: string, resetToken: string): Promise<boolean> {
+    const subject = 'ShiFi - Password Reset Instructions';
+    const resetLink = `https://shifi.ai/reset-password?token=${resetToken}`;
+    
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #333;">Password Reset Instructions</h1>
+        
+        <p>Hello ${merchantName},</p>
+        
+        <p>An administrator has requested a password reset for your ShiFi merchant account. Click the button below to set a new password:</p>
+        
+        <a href="${resetLink}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0;">Reset Password</a>
+        
+        <p>If you didn't expect this password reset, please contact our support team at support@shifi.ai.</p>
+        
+        <p>This password reset link will expire in 24 hours.</p>
+        
+        <p>Best regards,<br>The ShiFi Team</p>
+      </div>
+    `;
+    
+    const text = `
+      Password Reset Instructions
+      
+      Hello ${merchantName},
+      
+      An administrator has requested a password reset for your ShiFi merchant account.
+      To set a new password, please visit: ${resetLink}
+      
+      If you didn't expect this password reset, please contact our support team at support@shifi.ai.
+      
+      This password reset link will expire in 24 hours.
+      
+      Best regards,
+      The ShiFi Team
+    `;
+    
+    return this.sendEmail({
+      to: merchantEmail,
+      subject,
+      html,
+      text
+    });
+  }
       
       Hello ${merchantName},
       
