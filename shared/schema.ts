@@ -378,3 +378,76 @@ export const insertMerchantDocumentSchema = createInsertSchema(merchantDocuments
 
 export type MerchantDocument = typeof merchantDocuments.$inferSelect;
 export type InsertMerchantDocument = z.infer<typeof insertMerchantDocumentSchema>;
+
+// Notification Status and Channel Enums
+export const notificationStatusEnum = pgEnum('notification_status', ['pending', 'delivered', 'failed', 'partial_failure']);
+export const notificationChannelEnum = pgEnum('notification_channel', ['email', 'sms', 'in_app', 'webhook']);
+export const notificationRecipientTypeEnum = pgEnum('notification_recipient_type', ['merchant', 'customer', 'admin']);
+
+// Notifications
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  recipientId: integer("recipient_id").notNull(), // ID of the merchant, customer, or admin
+  recipientType: notificationRecipientTypeEnum("recipient_type").notNull(),
+  type: text("type").notNull(), // notification type code
+  status: notificationStatusEnum("status").notNull().default('pending'),
+  channels: text("channels").array(), // Array of channels used
+  sentAt: timestamp("sent_at").defaultNow(),
+  metadata: text("metadata"), // JSON stringified additional data
+  updatedAt: timestamp("updated_at"),
+});
+
+// Notification Channels - tracks status of each channel for a notification
+export const notificationChannels = pgTable("notification_channels", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").references(() => notifications.id).notNull(),
+  channel: notificationChannelEnum("channel").notNull(),
+  status: notificationStatusEnum("status").notNull().default('pending'),
+  sentAt: timestamp("sent_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  errorMessage: text("error_message"),
+  retryCount: integer("retry_count").default(0),
+});
+
+// In-App Notifications - persistent notifications stored for display in the UI
+export const inAppNotifications = pgTable("in_app_notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(), // ID of the user (merchant, customer, admin)
+  userType: notificationRecipientTypeEnum("user_type").notNull(),
+  type: text("type").notNull(), // notification type code
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  readAt: timestamp("read_at"),
+  metadata: text("metadata"), // JSON stringified additional data
+});
+
+// Create schema objects for notifications
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  sentAt: true,
+  updatedAt: true,
+});
+
+export const insertNotificationChannelSchema = createInsertSchema(notificationChannels).omit({
+  id: true,
+  sentAt: true,
+  updatedAt: true,
+});
+
+export const insertInAppNotificationSchema = createInsertSchema(inAppNotifications).omit({
+  id: true,
+  createdAt: true,
+  readAt: true,
+});
+
+// Export types
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
+export type NotificationChannel = typeof notificationChannels.$inferSelect;
+export type InsertNotificationChannel = z.infer<typeof insertNotificationChannelSchema>;
+
+export type InAppNotification = typeof inAppNotifications.$inferSelect;
+export type InsertInAppNotification = z.infer<typeof insertInAppNotificationSchema>;

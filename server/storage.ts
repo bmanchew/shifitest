@@ -11,7 +11,10 @@ import {
   plaidMerchants, PlaidMerchant, InsertPlaidMerchant,
   plaidTransfers, PlaidTransfer, InsertPlaidTransfer,
   merchantBusinessDetails, MerchantBusinessDetails, InsertMerchantBusinessDetails,
-  merchantDocuments, MerchantDocument, InsertMerchantDocument
+  merchantDocuments, MerchantDocument, InsertMerchantDocument,
+  notifications, Notification, InsertNotification,
+  notificationChannels, NotificationChannel, InsertNotificationChannel,
+  inAppNotifications, InAppNotification, InsertInAppNotification
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like } from "drizzle-orm";
@@ -102,6 +105,23 @@ export interface IStorage {
   getMerchantDocumentsByType(merchantId: number, type: string): Promise<MerchantDocument[]>;
   createMerchantDocument(document: InsertMerchantDocument): Promise<MerchantDocument>;
   updateMerchantDocumentVerification(id: number, verified: boolean, verifiedBy?: number): Promise<MerchantDocument | undefined>;
+  
+  // Notification operations
+  createNotification(notification: InsertNotification): Promise<number>; // Return notification ID
+  getNotification(id: number): Promise<Notification | undefined>;
+  getNotificationsByRecipient(recipientId: number, recipientType: string): Promise<Notification[]>;
+  updateNotification(data: { id: number, status: string, updatedAt: Date }): Promise<Notification | undefined>;
+  
+  // Notification Channel operations
+  createNotificationChannel(channel: InsertNotificationChannel): Promise<NotificationChannel>;
+  updateNotificationChannel(data: { notificationId: number, channel: string, status: string, updatedAt: Date, errorMessage?: string }): Promise<NotificationChannel | undefined>;
+  getNotificationChannels(notificationId: number): Promise<NotificationChannel[]>;
+  
+  // In-App Notification operations
+  createInAppNotification(notification: InsertInAppNotification): Promise<InAppNotification>;
+  getInAppNotifications(userId: number, userType: string, options?: { unreadOnly?: boolean, limit?: number, offset?: number }): Promise<InAppNotification[]>;
+  markInAppNotificationAsRead(id: number): Promise<InAppNotification | undefined>;
+  markAllInAppNotificationsAsRead(userId: number, userType: string): Promise<number>; // Returns count of notifications updated
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1024,6 +1044,157 @@ export class DatabaseStorage implements IStorage {
       .returning();
       
     return updatedDocument;
+  }
+
+  // Notification operations
+  async createNotification(notification: InsertNotification): Promise<number> {
+    const [result] = await db.insert(notifications).values(notification).returning();
+    return result.id;
+  }
+  
+  async getNotification(id: number): Promise<Notification | undefined> {
+    const [notification] = await db.select().from(notifications).where(eq(notifications.id, id));
+    return notification || undefined;
+  }
+  
+  async getNotificationsByRecipient(recipientId: number, recipientType: string): Promise<Notification[]> {
+    return await db.select().from(notifications).where(
+      and(
+        eq(notifications.recipientId, recipientId),
+        eq(notifications.recipientType, recipientType as any)
+      )
+    ).orderBy(desc(notifications.sentAt));
+  }
+  
+  async updateNotification(data: { id: number, status: string, updatedAt: Date }): Promise<Notification | undefined> {
+    const [updated] = await db
+      .update(notifications)
+      .set({
+        status: data.status as any,
+        updatedAt: data.updatedAt
+      })
+      .where(eq(notifications.id, data.id))
+      .returning();
+    return updated;
+  }
+  
+  // Notification Channel operations
+  async createNotificationChannel(channel: InsertNotificationChannel): Promise<NotificationChannel> {
+    const [newChannel] = await db.insert(notificationChannels).values(channel).returning();
+    return newChannel;
+  }
+  
+  async updateNotificationChannel(
+    data: { notificationId: number, channel: string, status: string, updatedAt: Date, errorMessage?: string }
+  ): Promise<NotificationChannel | undefined> {
+    const { notificationId, channel: channelType, status, updatedAt, errorMessage } = data;
+    
+    // Find the channel record
+    const [existingChannel] = await db.select().from(notificationChannels).where(
+      and(
+        eq(notificationChannels.notificationId, notificationId),
+        eq(notificationChannels.channel, channelType as any)
+      )
+    );
+    
+    if (!existingChannel) return undefined;
+    
+    // Update data
+    const updateData: any = {
+      status: status as any,
+      updatedAt
+    };
+    
+    if (errorMessage !== undefined) {
+      updateData.errorMessage = errorMessage;
+    }
+    
+    // If status is failed, increment retry count
+    if (status === 'failed') {
+      updateData.retryCount = existingChannel.retryCount + 1;
+    }
+    
+    // Update the channel
+    const [updated] = await db
+      .update(notificationChannels)
+      .set(updateData)
+      .where(eq(notificationChannels.id, existingChannel.id))
+      .returning();
+      
+    return updated;
+  }
+  
+  async getNotificationChannels(notificationId: number): Promise<NotificationChannel[]> {
+    return await db.select().from(notificationChannels)
+      .where(eq(notificationChannels.notificationId, notificationId))
+      .orderBy(notificationChannels.channel);
+  }
+  
+  // In-App Notification operations
+  async createInAppNotification(notification: InsertInAppNotification): Promise<InAppNotification> {
+    const [newNotification] = await db.insert(inAppNotifications).values(notification).returning();
+    return newNotification;
+  }
+  
+  async getInAppNotifications(
+    userId: number, 
+    userType: string, 
+    options?: { unreadOnly?: boolean, limit?: number, offset?: number }
+  ): Promise<InAppNotification[]> {
+    let query = db.select().from(inAppNotifications).where(
+      and(
+        eq(inAppNotifications.userId, userId),
+        eq(inAppNotifications.userType, userType as any)
+      )
+    );
+    
+    // Apply unreadOnly filter if specified
+    if (options?.unreadOnly) {
+      query = query.where(eq(inAppNotifications.isRead, false));
+    }
+    
+    // Apply pagination if specified
+    if (options?.limit) {
+      query = query.limit(options.limit);
+      
+      if (options?.offset) {
+        query = query.offset(options.offset);
+      }
+    }
+    
+    // Order by creation date, newest first
+    return await query.orderBy(desc(inAppNotifications.createdAt));
+  }
+  
+  async markInAppNotificationAsRead(id: number): Promise<InAppNotification | undefined> {
+    const [updated] = await db
+      .update(inAppNotifications)
+      .set({
+        isRead: true,
+        readAt: new Date()
+      })
+      .where(eq(inAppNotifications.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async markAllInAppNotificationsAsRead(userId: number, userType: string): Promise<number> {
+    const result = await db
+      .update(inAppNotifications)
+      .set({
+        isRead: true,
+        readAt: new Date()
+      })
+      .where(
+        and(
+          eq(inAppNotifications.userId, userId),
+          eq(inAppNotifications.userType, userType as any),
+          eq(inAppNotifications.isRead, false)
+        )
+      );
+    
+    // Return number of rows affected
+    return result.rowCount || 0;
   }
 }
 
