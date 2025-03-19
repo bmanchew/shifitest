@@ -55,12 +55,12 @@ export default function ContractTerms({
 
     try {
       setIsSubmitting(true);
-      
+
       const termsData = {
         termsAccepted: true,
         acceptedAt: new Date().toISOString(),
       };
-      
+
       // If progressId doesn't exist or is 0, create a new progress item
       if (!progressId) {
         try {
@@ -75,15 +75,15 @@ export default function ContractTerms({
               data: JSON.stringify(termsData),
             }
           );
-          
+
           // Log success
           console.log("Created new terms progress item with ID:", newProgress?.id);
-          
+
           toast({
             title: "Terms Accepted",
             description: "You have successfully accepted the contract terms.",
           });
-          
+
           onComplete();
         } catch (createError) {
           console.error("Failed to create terms progress:", createError);
@@ -100,16 +100,16 @@ export default function ContractTerms({
             completed: true,
             data: JSON.stringify(termsData),
           });
-          
+
           toast({
             title: "Terms Accepted",
             description: "You have successfully accepted the contract terms.",
           });
-          
+
           onComplete();
         } catch (updateError) {
           console.error("Failed to update terms progress:", updateError);
-          
+
           // If update fails with 404, try to create a new record
           if (updateError instanceof Error && updateError.message.includes("404")) {
             console.log("Progress record not found, creating new one");
@@ -120,12 +120,12 @@ export default function ContractTerms({
                 completed: true,
                 data: JSON.stringify(termsData),
               });
-              
+
               toast({
                 title: "Terms Accepted",
                 description: "You have successfully accepted the contract terms.",
               });
-              
+
               onComplete();
             } catch (createError) {
               console.error("Failed to create terms progress after update failed:", createError);
@@ -218,6 +218,10 @@ export default function ContractTerms({
           <li className="flex">
             <Check className="h-5 w-5 text-primary-500 mr-2" />
             No prepayment penalties
+          </li>
+          <li className="flex">
+            <Check className="h-5 w-5 text-primary-500 mr-2" />
+            By accepting these terms, you agree to allow ShiFi to: (1) share your information with Pre-Fi, our underwriting partner, to assess your creditworthiness and determine financing offers, (2) obtain and use your credit report information, and (3) allow Pre-Fi to store and process your data in accordance with their privacy policy. You understand this may affect your credit score.
           </li>
         </ul>
       </div>
