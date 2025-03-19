@@ -16,13 +16,13 @@ export default function CustomerDashboard() {
   const contractId = parseInt(contractIdParam || "0");
   const { toast } = useToast();
   const navigate = useNavigate();
-  
+
   // Fetch contract details
   const { data: contract, isLoading: isLoadingContract } = useQuery({
     queryKey: ["/api/contracts", contractId],
     queryFn: async () => {
       if (!contractId) return null;
-      
+
       try {
         const res = await fetch(`/api/contracts/${contractId}`, {
           credentials: "include",
@@ -38,6 +38,27 @@ export default function CustomerDashboard() {
     },
   });
 
+  //Fetch points data -  Added to fetch points earned.  Placement is arbitrary due to lack of context in original code.
+  const { data: pointsData, isLoading: isLoadingPoints } = useQuery({
+    queryKey: ["/api/points", contractId],
+    queryFn: async () => {
+      if (!contractId) return null;
+      try {
+        const res = await fetch(`/api/points/${contractId}`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          throw new Error("Failed to fetch points");
+        }
+        return res.json();
+      } catch (error) {
+        console.error("Error fetching points:", error);
+        return null;
+      }
+    },
+  });
+
+
   // Format currency values
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -49,7 +70,7 @@ export default function CustomerDashboard() {
   // Generate payment schedule
   const generatePaymentSchedule = () => {
     if (!contract) return [];
-    
+
     const startDate = new Date();
     return Array.from({ length: contract.termMonths }, (_, i) => ({
       paymentNumber: i + 1,
@@ -61,17 +82,17 @@ export default function CustomerDashboard() {
 
   // Payment schedule
   const paymentSchedule = generatePaymentSchedule();
-  
+
   // Calculate remaining balance
   const calculateRemainingBalance = () => {
     if (!contract) return 0;
-    
+
     const totalPayments = paymentSchedule.filter(p => p.status === "paid").length;
     return contract.financedAmount - (totalPayments * contract.monthlyPayment);
   };
 
   const remainingBalance = calculateRemainingBalance();
-  
+
   // Handle make payment action
   const handleMakePayment = () => {
     toast({
@@ -80,7 +101,7 @@ export default function CustomerDashboard() {
     });
     // In a real app, redirect to payment page or open payment modal
   };
-  
+
   // Handle download contract
   const handleDownloadContract = () => {
     toast({
@@ -89,7 +110,7 @@ export default function CustomerDashboard() {
     });
     // In a real app, generate and download contract PDF
   };
-  
+
   // Handle early payoff
   const handleEarlyPayoff = () => {
     toast({
@@ -99,7 +120,13 @@ export default function CustomerDashboard() {
     // In a real app, redirect to early payoff page
   };
 
-  if (isLoadingContract) {
+  // Don't show return to merchant screen if we have contract data
+  if (!isLoadingContract && !contract) {
+    navigate('/');
+    return null;
+  }
+
+  if (isLoadingContract || isLoadingPoints) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
         <div className="flex flex-col items-center">
@@ -169,7 +196,16 @@ export default function CustomerDashboard() {
           </div>
         </div>
       </div>
-      
+
+      {/* Points Banner */}
+      {pointsData?.points > 0 && (
+        <div className="bg-green-100 p-4 text-center">
+          <p className="text-green-800">
+            Congratulations! You earned {pointsData.points} points for setting up automatic payments!
+          </p>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto p-6">
         <Tabs defaultValue="overview" className="mt-6">
           <TabsList>
@@ -177,7 +213,7 @@ export default function CustomerDashboard() {
             <TabsTrigger value="payments">Payment Schedule</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="overview" className="mt-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card>
@@ -213,7 +249,7 @@ export default function CustomerDashboard() {
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg">Payment Summary</CardTitle>
@@ -237,7 +273,7 @@ export default function CustomerDashboard() {
                       <span className="text-sm font-medium">{formatCurrency(remainingBalance)}</span>
                     </div>
                   </div>
-                  
+
                   <div className="mt-6">
                     <Button 
                       variant="outline" 
@@ -250,7 +286,7 @@ export default function CustomerDashboard() {
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg">Merchant Information</CardTitle>
@@ -270,7 +306,7 @@ export default function CustomerDashboard() {
                       <Badge variant="success" className="mt-1">Active</Badge>
                     </div>
                   </div>
-                  
+
                   <div className="mt-6">
                     <Button 
                       variant="outline" 
@@ -284,7 +320,7 @@ export default function CustomerDashboard() {
                 </CardContent>
               </Card>
             </div>
-            
+
             <Card className="mt-6">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">Next Payment</CardTitle>
@@ -312,7 +348,7 @@ export default function CustomerDashboard() {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="payments" className="mt-6">
             <Card>
               <CardHeader>
@@ -363,7 +399,7 @@ export default function CustomerDashboard() {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="documents" className="mt-6">
             <Card>
               <CardHeader>
@@ -387,7 +423,7 @@ export default function CustomerDashboard() {
                       Download
                     </Button>
                   </div>
-                  
+
                   <div className="border rounded-lg p-4 flex justify-between items-center">
                     <div className="flex items-center">
                       <FileText className="h-8 w-8 text-gray-400 mr-3" />
@@ -401,7 +437,7 @@ export default function CustomerDashboard() {
                       Download
                     </Button>
                   </div>
-                  
+
                   <div className="border rounded-lg p-4 flex justify-between items-center">
                     <div className="flex items-center">
                       <CalendarRange className="h-8 w-8 text-gray-400 mr-3" />
