@@ -8,7 +8,16 @@ export class StripeService {
 
   constructor() {
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    if (stripeSecretKey) {
+    if (!stripeSecretKey) {
+      logger.warn({
+        message: 'Stripe service not initialized - missing secret key',
+        category: 'payment',
+        source: 'stripe'
+      });
+      return;
+    }
+
+    try {
       this.stripe = new Stripe(stripeSecretKey, {
         apiVersion: '2023-10-16'
       });
@@ -18,6 +27,15 @@ export class StripeService {
         category: 'payment',
         source: 'stripe'
       });
+    } catch (error) {
+      logger.error({
+        message: `Failed to initialize Stripe: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'payment',
+        source: 'stripe',
+        metadata: {
+          error: error instanceof Error ? error.stack : null
+        }
+      });
     }
   }
 
@@ -26,11 +44,24 @@ export class StripeService {
       throw new Error('Stripe service not initialized');
     }
 
-    return await this.stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
-      currency: 'usd',
-      metadata
-    });
+    try {
+      return await this.stripe.paymentIntents.create({
+        amount: Math.round(amount * 100), // Convert to cents
+        currency: 'usd',
+        metadata
+      });
+    } catch (error) {
+      logger.error({
+        message: `Failed to create payment intent: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'payment',
+        source: 'stripe',
+        metadata: {
+          amount,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      throw error;
+    }
   }
 
   public isStripeInitialized = () => this.isInitialized;
