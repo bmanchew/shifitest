@@ -37,7 +37,7 @@ export class EmailService {
    */
   async sendEmail(emailData: EmailData): Promise<boolean> {
     const requestId = randomUUID().substring(0, 8);
-    
+
     try {
       // Ensure we have a from email address
       const email = {
@@ -47,7 +47,7 @@ export class EmailService {
 
       // Send the email through SendGrid
       await sgMail.send(email);
-      
+
       // Log the successful email send
       await logger.info({
         message: `Email sent successfully to ${email.to}`,
@@ -61,7 +61,7 @@ export class EmailService {
           service: 'sendgrid'
         }
       });
-      
+
       return true;
     } catch (error) {
       // Log the error
@@ -77,7 +77,7 @@ export class EmailService {
           service: 'sendgrid'
         }
       });
-      
+
       return false;
     }
   }
@@ -87,75 +87,52 @@ export class EmailService {
    */
   async sendMerchantWelcome(merchantEmail: string, merchantName: string, temporaryPassword: string): Promise<boolean> {
     const subject = 'Welcome to ShiFi - Your Merchant Account is Ready';
-    
+
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h1 style="color: #333;">Welcome to ShiFi!</h1>
-        
+
         <p>Hello ${merchantName},</p>
-        
+
         <p>Your merchant account has been successfully created. You can now log in to the ShiFi platform to offer installment payment options to your customers.</p>
-        
+
         <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
           <p><strong>Your login credentials:</strong></p>
           <p>Email: ${merchantEmail}</p>
           <p>Temporary Password: ${temporaryPassword}</p>
         </div>
-        
+
         <p><strong>Important:</strong> For security reasons, you'll be asked to change your password on your first login.</p>
-        
+
         <a href="https://shifi.ai/login" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px;">Log In Now</a>
-        
+
         <p style="margin-top: 30px;">If you have any questions, please contact our support team at support@shifi.ai.</p>
-        
+
         <p>Best regards,<br>The ShiFi Team</p>
       </div>
     `;
-    
+
     const text = `
       Welcome to ShiFi!
 
-  /**
-   * Send password reset email to merchant
-   */
-  async sendMerchantPasswordReset(merchantEmail: string, merchantName: string, resetToken: string): Promise<boolean> {
-    const subject = 'ShiFi - Password Reset Instructions';
-    const resetLink = `https://shifi.ai/reset-password?token=${resetToken}`;
-    
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #333;">Password Reset Instructions</h1>
-        
-        <p>Hello ${merchantName},</p>
-        
-        <p>An administrator has requested a password reset for your ShiFi merchant account. Click the button below to set a new password:</p>
-        
-        <a href="${resetLink}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0;">Reset Password</a>
-        
-        <p>If you didn't expect this password reset, please contact our support team at support@shifi.ai.</p>
-        
-        <p>This password reset link will expire in 24 hours.</p>
-        
-        <p>Best regards,<br>The ShiFi Team</p>
-      </div>
-    `;
-    
-    const text = `
-      Password Reset Instructions
-      
       Hello ${merchantName},
-      
-      An administrator has requested a password reset for your ShiFi merchant account.
-      To set a new password, please visit: ${resetLink}
-      
-      If you didn't expect this password reset, please contact our support team at support@shifi.ai.
-      
-      This password reset link will expire in 24 hours.
-      
+
+      Your merchant account has been successfully created. You can now log in to the ShiFi platform to offer installment payment options to your customers.
+
+      Your login credentials:
+      Email: ${merchantEmail}
+      Temporary Password: ${temporaryPassword}
+
+      Important: For security reasons, you'll be asked to change your password on your first login.
+
+      Log in at: https://shifi.ai/login
+
+      If you have any questions, please contact our support team at support@shifi.ai.
+
       Best regards,
       The ShiFi Team
     `;
-    
+
     return this.sendEmail({
       to: merchantEmail,
       subject,
@@ -163,25 +140,48 @@ export class EmailService {
       text
     });
   }
-      
+
+  /**
+   * Send password reset email to merchant
+   */
+  async sendMerchantPasswordReset(merchantEmail: string, merchantName: string, resetToken: string): Promise<boolean> {
+    const subject = 'ShiFi - Password Reset Instructions';
+    const resetLink = `https://shifi.ai/reset-password?token=${resetToken}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #333;">Password Reset Instructions</h1>
+
+        <p>Hello ${merchantName},</p>
+
+        <p>An administrator has requested a password reset for your ShiFi merchant account. Click the button below to set a new password:</p>
+
+        <a href="${resetLink}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0;">Reset Password</a>
+
+        <p>If you didn't expect this password reset, please contact our support team at support@shifi.ai.</p>
+
+        <p>This password reset link will expire in 24 hours.</p>
+
+        <p>Best regards,<br>The ShiFi Team</p>
+      </div>
+    `;
+
+    const text = `
+      Password Reset Instructions
+
       Hello ${merchantName},
-      
-      Your merchant account has been successfully created. You can now log in to the ShiFi platform to offer installment payment options to your customers.
-      
-      Your login credentials:
-      Email: ${merchantEmail}
-      Temporary Password: ${temporaryPassword}
-      
-      Important: For security reasons, you'll be asked to change your password on your first login.
-      
-      Log in at: https://shifi.ai/login
-      
-      If you have any questions, please contact our support team at support@shifi.ai.
-      
+
+      An administrator has requested a password reset for your ShiFi merchant account.
+      To set a new password, please visit: ${resetLink}
+
+      If you didn't expect this password reset, please contact our support team at support@shifi.ai.
+
+      This password reset link will expire in 24 hours.
+
       Best regards,
       The ShiFi Team
     `;
-    
+
     return this.sendEmail({
       to: merchantEmail,
       subject,
@@ -196,43 +196,43 @@ export class EmailService {
   async sendPasswordReset(userEmail: string, userName: string, resetToken: string): Promise<boolean> {
     const subject = 'ShiFi - Password Reset Request';
     const resetLink = `https://shifi.ai/reset-password?token=${resetToken}`;
-    
+
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h1 style="color: #333;">Password Reset Request</h1>
-        
+
         <p>Hello ${userName},</p>
-        
+
         <p>We received a request to reset your ShiFi account password. Click the button below to reset your password:</p>
-        
+
         <a href="${resetLink}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0;">Reset Password</a>
-        
+
         <p>If you didn't request a password reset, please ignore this email or contact our support team at support@shifi.ai.</p>
-        
+
         <p>This password reset link is valid for 24 hours.</p>
-        
+
         <p>Best regards,<br>The ShiFi Team</p>
       </div>
     `;
-    
+
     const text = `
       Password Reset Request
-      
+
       Hello ${userName},
-      
+
       We received a request to reset your ShiFi account password. 
-      
+
       To reset your password, please visit:
       ${resetLink}
-      
+
       If you didn't request a password reset, please ignore this email or contact our support team at support@shifi.ai.
-      
+
       This password reset link is valid for 24 hours.
-      
+
       Best regards,
       The ShiFi Team
     `;
-    
+
     return this.sendEmail({
       to: userEmail,
       subject,
@@ -246,54 +246,54 @@ export class EmailService {
    */
   async sendPaymentReminder(customerEmail: string, customerName: string, amount: number, dueDate: string, contractNumber: string): Promise<boolean> {
     const subject = 'ShiFi - Payment Reminder';
-    
+
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h1 style="color: #333;">Payment Reminder</h1>
-        
+
         <p>Hello ${customerName},</p>
-        
+
         <p>This is a friendly reminder that your payment of $${amount.toFixed(2)} for contract #${contractNumber} is due on ${dueDate}.</p>
-        
+
         <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
           <p><strong>Payment details:</strong></p>
           <p>Amount: $${amount.toFixed(2)}</p>
           <p>Due Date: ${dueDate}</p>
           <p>Contract #: ${contractNumber}</p>
         </div>
-        
+
         <a href="https://shifi.ai/customer/payments" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px;">Make Payment</a>
-        
+
         <p style="margin-top: 30px;">If you have already made this payment, please disregard this message.</p>
-        
+
         <p>If you have any questions, please contact our support team at support@shifi.ai.</p>
-        
+
         <p>Best regards,<br>The ShiFi Team</p>
       </div>
     `;
-    
+
     const text = `
       Payment Reminder
-      
+
       Hello ${customerName},
-      
+
       This is a friendly reminder that your payment of $${amount.toFixed(2)} for contract #${contractNumber} is due on ${dueDate}.
-      
+
       Payment details:
       Amount: $${amount.toFixed(2)}
       Due Date: ${dueDate}
       Contract #: ${contractNumber}
-      
+
       To make a payment, visit: https://shifi.ai/customer/payments
-      
+
       If you have already made this payment, please disregard this message.
-      
+
       If you have any questions, please contact our support team at support@shifi.ai.
-      
+
       Best regards,
       The ShiFi Team
     `;
-    
+
     return this.sendEmail({
       to: customerEmail,
       subject,
@@ -307,42 +307,42 @@ export class EmailService {
    */
   async sendApplicationReceived(customerEmail: string, customerName: string, merchantName: string): Promise<boolean> {
     const subject = 'Your Financing Application Received';
-    
+
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h1 style="color: #333;">Application Received</h1>
-        
+
         <p>Hello ${customerName},</p>
-        
+
         <p>Thank you for applying for financing through ${merchantName}. We have received your application and it is currently being reviewed.</p>
-        
+
         <p>Our team will process your application as quickly as possible. You can expect to hear back from us within 1-2 business days.</p>
-        
+
         <p>You will receive an email notification once a decision has been made.</p>
-        
+
         <p style="margin-top: 30px;">If you have any questions, please contact our support team at support@shifi.ai.</p>
-        
+
         <p>Best regards,<br>The ShiFi Team</p>
       </div>
     `;
-    
+
     const text = `
       Application Received
-      
+
       Hello ${customerName},
-      
+
       Thank you for applying for financing through ${merchantName}. We have received your application and it is currently being reviewed.
-      
+
       Our team will process your application as quickly as possible. You can expect to hear back from us within 1-2 business days.
-      
+
       You will receive an email notification once a decision has been made.
-      
+
       If you have any questions, please contact our support team at support@shifi.ai.
-      
+
       Best regards,
       The ShiFi Team
     `;
-    
+
     return this.sendEmail({
       to: customerEmail,
       subject,
