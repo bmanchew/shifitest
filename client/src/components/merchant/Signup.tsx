@@ -252,7 +252,7 @@ export default function MerchantSignup() {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
-        <Card className={`p-6 ${step === 1 ? 'lg:w-1/2' : 'w-full'}`}>
+        <Card className="p-6 lg:w-1/2">
           <form onSubmit={handleSubmit} className="space-y-6">
             {renderStep()}
             <div className="flex justify-between mt-6">
@@ -277,15 +277,13 @@ export default function MerchantSignup() {
           </form>
         </Card>
         
-        {step === 1 && (
-          <div className="lg:w-1/2 flex items-center justify-center">
-            <img 
-              src="/ShiFiMidesk.png" 
-              alt="Unlock More Revenue With ShiFi Financing" 
-              className="h-auto max-w-full rounded-lg shadow-lg" 
-            />
-          </div>
-        )}
+        <div className="lg:w-1/2 flex items-center justify-center">
+          <img 
+            src="/ShiFiMidesk.png" 
+            alt="Unlock More Revenue With ShiFi Financing" 
+            className="h-auto max-w-full rounded-lg shadow-lg" 
+          />
+        </div>
       </div>
     </div>
   );
