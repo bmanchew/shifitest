@@ -2807,23 +2807,91 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           }
         });
         
-        // Return success with merchant bank information
-        res.json({
-          success: true,
-          message: "Bank account connected successfully",
-          merchant_id: merchantId,
-          accounts: authData.accounts.map(account => ({
-            id: account.account_id,
-            name: account.name,
-            mask: account.mask,
-            type: account.type,
-            subtype: account.subtype,
-            balance: account.balances.current,
-            currency: account.balances.iso_currency_code
-          })),
-          verification_status: "pending",
-          verification_message: "Your bank account is being verified. We're analyzing your transaction history to confirm your business meets our revenue requirements."
-        });
+        // Now create a DiDit verification session for KYC
+        try {
+          // Create a callback URL that includes the merchant ID
+          const callbackUrl = `${req.protocol}://${req.get('host')}/merchant/verification-complete?merchantId=${merchantId}`;
+          
+          logger.info({
+            message: "Creating DiDit verification session for merchant signup",
+            category: "api",
+            source: "didit",
+            metadata: { 
+              merchantId,
+              callbackUrl 
+            }
+          });
+          
+          // Create the verification session
+          const kycSession = await diditService.createVerificationSession({
+            contractId: merchantId,
+            callbackUrl,
+            requiredFields: ['first_name', 'last_name', 'date_of_birth', 'document_number']
+          });
+          
+          if (!kycSession) {
+            throw new Error('Failed to create KYC verification session');
+          }
+          
+          logger.info({
+            message: "DiDit verification session created successfully",
+            category: "api",
+            source: "didit",
+            metadata: { 
+              merchantId,
+              sessionId: kycSession.session_id,
+              sessionUrl: kycSession.session_url
+            }
+          });
+          
+          // Return success with merchant bank information and KYC session details
+          res.json({
+            success: true,
+            message: "Bank account connected successfully",
+            merchant_id: merchantId,
+            accounts: authData.accounts.map(account => ({
+              id: account.account_id,
+              name: account.name,
+              mask: account.mask,
+              type: account.type,
+              subtype: account.subtype,
+              balance: account.balances.current,
+              currency: account.balances.iso_currency_code
+            })),
+            verification_status: "pending",
+            verification_message: "Your bank account is being verified. We're analyzing your transaction history to confirm your business meets our revenue requirements.",
+            kycSessionId: kycSession.session_id,
+            kycSessionUrl: kycSession.session_url
+          });
+        } catch (kycError) {
+          logger.error({
+            message: `Failed to create DiDit verification session: ${kycError instanceof Error ? kycError.message : String(kycError)}`,
+            category: "api",
+            source: "didit",
+            metadata: {
+              merchantId,
+              error: kycError instanceof Error ? kycError.stack : String(kycError)
+            }
+          });
+          
+          // Still return success for bank connection but note the KYC session creation failure
+          res.json({
+            success: true,
+            message: "Bank account connected successfully, but identity verification setup failed",
+            merchant_id: merchantId,
+            accounts: authData.accounts.map(account => ({
+              id: account.account_id,
+              name: account.name,
+              mask: account.mask,
+              type: account.type,
+              subtype: account.subtype,
+              balance: account.balances.current,
+              currency: account.balances.iso_currency_code
+            })),
+            verification_status: "pending",
+            verification_message: "Your bank account is being verified, but identity verification setup failed. Please try again later."
+          });
+        }
       } catch (error) {
         // Extract more detailed error information for logging
         let errorDetails = "Unknown error";

@@ -106,6 +106,8 @@ export function MerchantSignup() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [verificationStatus, setVerificationStatus] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [kycSessionUrl, setKycSessionUrl] = useState<string>("");
+  const [kycSessionId, setKycSessionId] = useState<string>("");
   
   const { toast } = useToast();
   
@@ -192,6 +194,13 @@ export function MerchantSignup() {
       if (data.success) {
         setAccounts(data.accounts || []);
         setVerificationStatus(data.verification_status || "pending");
+        
+        // Store KYC session information if available
+        if (data.kycSessionUrl) {
+          setKycSessionUrl(data.kycSessionUrl);
+          setKycSessionId(data.kycSessionId || "");
+        }
+        
         setCurrentStep(SignupStep.IdentityVerification);
         
         toast({
