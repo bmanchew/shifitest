@@ -159,11 +159,19 @@ export default function Login() {
           </form>
         </Card>
         
-        <div className="lg:w-1/2 flex items-center justify-center">
+        <div className="lg:w-1/2 flex items-center justify-center p-8">
           <img 
-            src="/images/ShiFiMidesk.png" 
+            src="/ShiFiMidesk.png" 
             alt="Unlock More Revenue With ShiFi Financing" 
-            className="h-auto max-w-full rounded-lg shadow-lg" 
+            className="h-auto max-w-full w-4/5 rounded-lg shadow-lg" 
+            onError={(e) => {
+              console.error("Image failed to load:", e);
+              const imgElement = e.currentTarget;
+              // Try alternative paths if the image fails to load
+              if (imgElement.src === '/ShiFiMidesk.png') {
+                imgElement.src = '/images/ShiFiMidesk.png';
+              }
+            }}
           />
         </div>
       </div>
