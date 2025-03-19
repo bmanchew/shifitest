@@ -139,7 +139,36 @@ export default function SendApplication() {
       <CardContent>
         <div className="grid md:grid-cols-2 gap-6">
           <div>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                // First send SMS
+                const smsResponse = await fetch('/api/send-application', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ phoneNumber })
+                });
+                
+                if (!smsResponse.ok) throw new Error('Failed to send SMS');
+                
+                // Then initiate NLPearl call
+                const nlpearlResponse = await fetch('/api/initiate-call', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    phoneNumber,
+                    applicationUrl: window.location.origin + '/apply'
+                  })
+                });
+                
+                if (!nlpearlResponse.ok) throw new Error('Failed to initiate call');
+                
+                toast.success('Application sent and call initiated');
+              } catch (error) {
+                console.error('Error:', error);
+                toast.error('Failed to send application');
+              }
+            }} className="space-y-4">
               <div className="grid gap-2">
                 <Label htmlFor="customer-phone">Customer Phone Number</Label>
                 <Input
