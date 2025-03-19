@@ -122,9 +122,50 @@ export interface IStorage {
   getInAppNotifications(userId: number, userType: string, options?: { unreadOnly?: boolean, limit?: number, offset?: number }): Promise<InAppNotification[]>;
   markInAppNotificationAsRead(id: number): Promise<InAppNotification | undefined>;
   markAllInAppNotificationsAsRead(userId: number, userType: string): Promise<number>; // Returns count of notifications updated
+
+
+  updateMerchant(id: number, updateData: Partial<Merchant>): Promise<Merchant | undefined>;
+  getMerchantByEmail(email: string): Promise<Merchant | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
+
+  async updateMerchant(id: number, updateData: Partial<Merchant>): Promise<Merchant | undefined> {
+    try {
+      // Set updatedAt timestamp if applicable to your schema
+      const dataToUpdate = {
+        ...updateData
+      };
+      
+      // Execute the update query
+      const [updatedMerchant] = await db
+        .update(merchants)
+        .set(dataToUpdate)
+        .where(eq(merchants.id, id))
+        .returning();
+        
+      return updatedMerchant;
+    } catch (error) {
+      console.error(`Error updating merchant ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getMerchantByEmail(email: string): Promise<Merchant | undefined> {
+    try {
+      const [merchant] = await db
+        .select()
+        .from(merchants)
+        .where(eq(merchants.email, email));
+        
+      return merchant || undefined;
+    } catch (error) {
+      console.error(`Error getting merchant by email ${email}:`, error);
+      return undefined;
+    }
+  }
+
+
   // User methods
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));

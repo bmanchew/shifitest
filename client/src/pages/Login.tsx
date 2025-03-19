@@ -28,33 +28,33 @@ export default function Login() {
 
     try {
       console.log("Attempting login with:", email);
-      
+
       // Make the login API call directly to see the response
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`Login failed with status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       console.log("Login API response:", data);
-      
+
       if (!data.user) {
         throw new Error("Invalid response format - missing user data");
       }
-      
+
       // Now call the auth context login method with the user data
       await login(email, password);
-      
+
       // If we get here, login was successful
       console.log("Login successful");
-      
+
       // Redirect based on user role
       if (data.user.role === "admin") {
         setLocation("/admin");
@@ -65,12 +65,14 @@ export default function Login() {
       } else {
         setLocation("/");
       }
-      
     } catch (error) {
       console.error("Login failed:", error);
       toast({
         title: "Login Failed",
-        description: error instanceof Error ? error.message : "Invalid email or password. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Invalid email or password. Please try again.",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -140,13 +142,13 @@ export default function Login() {
               />
             </div>
 
-            <div className="text-sm text-gray-500">
+            {/* <div className="text-sm text-gray-500">
               <p>Demo accounts:</p>
               <ul className="list-disc pl-5 space-y-1 mt-1">
                 <li>Admin: admin@shifi.com / admin123</li>
                 <li>Merchant: merchant@techsolutions.com / merchant123</li>
               </ul>
-            </div>
+            </div> */}
           </CardContent>
           <CardFooter>
             <Button type="submit" className="w-full" disabled={isLoading}>

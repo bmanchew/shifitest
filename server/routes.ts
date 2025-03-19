@@ -4951,6 +4951,81 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
     }
   });
+
+  // Add this to routes.ts file
+
+// Update a merchant
+apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
+
+    // Validate that the merchant exists
+    const merchant = await storage.getMerchant(id);
+    if (!merchant) {
+      return res.status(404).json({ message: "Merchant not found" });
+    }
+
+    // Extract fields to update
+    const { 
+      name, 
+      contactName, 
+      email, 
+      phone, 
+      address, 
+      active 
+    } = req.body;
+
+    // Build update object (only include defined fields)
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (contactName !== undefined) updateData.contactName = contactName;
+    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone;
+    if (address !== undefined) updateData.address = address;
+    if (active !== undefined) updateData.active = active;
+
+    // Check if email is being changed and it's already in use by another merchant
+    if (email !== undefined && email !== merchant.email) {
+      const existingMerchant = await storage.getMerchantByEmail(email);
+      if (existingMerchant && existingMerchant.id !== id) {
+        return res.status(409).json({ message: "A merchant with this email already exists" });
+      }
+    }
+
+    // Update the merchant in storage
+    const updatedMerchant = await storage.updateMerchant(id, updateData);
+
+    // Create log for merchant update
+    await storage.createLog({
+      level: "info",
+      message: `Merchant updated: ${merchant.name}`,
+      metadata: JSON.stringify({
+        id: merchant.id,
+        updatedFields: Object.keys(updateData),
+      }),
+    });
+
+    res.json(updatedMerchant);
+  } catch (error) {
+    console.error("Update merchant error:", error);
+
+    // Create error log
+    await storage.createLog({
+      level: "error",
+      category: "api",
+      source: "internal",
+      message: `Failed to update merchant: ${error instanceof Error ? error.message : String(error)}`,
+      metadata: JSON.stringify({
+        error: error instanceof Error ? error.stack : null,
+      }),
+    });
+
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
   
   // Endpoint for handling the verification completion redirect
   apiRouter.get("/merchant/verification-complete", async (req: Request, res: Response) => {
