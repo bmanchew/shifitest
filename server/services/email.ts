@@ -26,8 +26,7 @@ interface EmailData {
   text?: string;
 }
 
-const DEFAULT_FROM_EMAIL = process.env.DEFAULT_FROM_EMAIL || 'noreply@example.com';
-const DEFAULT_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL as string;
+const DEFAULT_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL as string || 'noreply@example.com';
 
 /**
  * EmailService - Handles all email communications
