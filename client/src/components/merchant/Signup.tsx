@@ -279,7 +279,7 @@ export default function MerchantSignup() {
         
         <div className="lg:w-1/2 flex items-center justify-center">
           <img 
-            src="/ShiFiMidesk.png" 
+            src="/images/ShiFiMidesk.png" 
             alt="Unlock More Revenue With ShiFi Financing" 
             className="h-auto max-w-full rounded-lg shadow-lg" 
           />

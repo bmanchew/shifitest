@@ -88,6 +88,8 @@ class PlaidService {
     const clientId = process.env.PLAID_CLIENT_ID;
     const secret = process.env.PLAID_SECRET;
 
+    console.log(clientId, secret);
+
     if (!clientId || !secret) {
       logger.warn({
         message:
@@ -178,14 +180,14 @@ class PlaidService {
       const user = {
         client_user_id: clientUserId,
       };
-      
+
       // Only add optional fields if they are provided
       if (userName) {
-        user['legal_name'] = userName;
+        user["legal_name"] = userName;
       }
-      
+
       if (userEmail) {
-        user['email_address'] = userEmail;
+        user["email_address"] = userEmail;
       }
 
       // Log the request parameters for debugging
@@ -217,11 +219,15 @@ class PlaidService {
 
       // Add auth configuration conditionally
       // When using same_day_microdeposits, we need to follow Plaid's restrictions
-      if (products.includes(Products.Auth) && !products.includes(Products.Transactions) && !products.includes(Products.Assets)) {
+      if (
+        products.includes(Products.Auth) &&
+        !products.includes(Products.Transactions) &&
+        !products.includes(Products.Assets)
+      ) {
         // Only add advanced auth features if Auth is the only product
         request.auth = {
           same_day_microdeposits_enabled: true,
-          sms_microdeposits_verification_enabled: true
+          sms_microdeposits_verification_enabled: true,
         };
       }
 
@@ -234,10 +240,10 @@ class PlaidService {
         message: `Creating Plaid link token for user ${userId}`,
         category: "api",
         source: "plaid",
-        metadata: { 
-          userId, 
+        metadata: {
+          userId,
           products,
-          requestBody: JSON.stringify(request)
+          requestBody: JSON.stringify(request),
         },
       });
 
@@ -250,7 +256,7 @@ class PlaidService {
           source: "plaid",
           metadata: {
             userId,
-            response: JSON.stringify(response.data)
+            response: JSON.stringify(response.data),
           },
         });
         throw new Error("Invalid response from Plaid: missing link token");
@@ -275,12 +281,12 @@ class PlaidService {
       // Extract more detailed error information from Plaid response
       let errorDetails = "Unknown error";
       let errorCode = "UNKNOWN";
-      
+
       if (error.response?.data) {
         errorDetails = JSON.stringify(error.response.data);
         errorCode = error.response.data.error_code || "UNKNOWN";
       }
-      
+
       logger.error({
         message: `Failed to create Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
@@ -293,8 +299,8 @@ class PlaidService {
           request: {
             clientUserId: params.clientUserId,
             products: params.products,
-            env: this.env
-          }
+            env: this.env,
+          },
         },
       });
 
@@ -574,7 +580,10 @@ class PlaidService {
       };
 
       const response = await this.client.assetReportCreate(request);
-      console.log("Asset Report Create Response:", JSON.stringify(response.data, null, 2));
+      console.log(
+        "Asset Report Create Response:",
+        JSON.stringify(response.data, null, 2),
+      );
 
       logger.info({
         message: "Created Plaid asset report",
@@ -677,7 +686,7 @@ class PlaidService {
     }
 
     // Import storage here to avoid circular dependency
-    const { storage } = await import('../storage');
+    const { storage } = await import("../storage");
 
     try {
       // Find the user by phone number
@@ -698,17 +707,26 @@ class PlaidService {
       const contracts = await storage.getContractsByCustomerId(user.id);
 
       if (!contracts || contracts.length === 0) {
-        throw new Error(`No contracts found for user with phone ${phoneNumber}`);
+        throw new Error(
+          `No contracts found for user with phone ${phoneNumber}`,
+        );
       }
 
       // Use the most recent contract
       const contractId = contracts[0].id;
 
       // Create the asset report
-      const assetReportResponse = await this.createAssetReport(accessToken, daysRequested, options);
+      const assetReportResponse = await this.createAssetReport(
+        accessToken,
+        daysRequested,
+        options,
+      );
 
       // Get the full report data right away
-      const reportData = await this.getAssetReport(assetReportResponse.assetReportToken, true);
+      const reportData = await this.getAssetReport(
+        assetReportResponse.assetReportToken,
+        true,
+      );
 
       // Store the asset report token and full report data in database
       await storage.storeAssetReportToken(
@@ -718,14 +736,14 @@ class PlaidService {
         {
           userId: user.id,
           daysRequested,
-          analysisData: JSON.stringify(reportData.report)
-        }
+          analysisData: JSON.stringify(reportData.report),
+        },
       );
 
       return {
         ...assetReportResponse,
         userId: user.id,
-        contractId
+        contractId,
       };
     } catch (error) {
       logger.error({
@@ -777,7 +795,9 @@ class PlaidService {
    * Analyze asset report data for underwriting purposes
    * Extracts key financial metrics used in credit decisioning
    */
-  async analyzeAssetReportForUnderwriting(assetReportToken: string): Promise<any> {
+  async analyzeAssetReportForUnderwriting(
+    assetReportToken: string,
+  ): Promise<any> {
     if (!this.isInitialized() || !this.client) {
       throw new Error("Plaid client not initialized");
     }
@@ -799,58 +819,74 @@ class PlaidService {
       }
 
       // Extract key financial metrics
-      const accounts = report.items.flatMap(item => item.accounts || []);
+      const accounts = report.items.flatMap((item) => item.accounts || []);
 
       // Calculate income estimate (monthly income * 12)
       const incomeStreams = report.items
-        .flatMap(item => item.income_streams || [])
-        .filter(stream => stream.confidence > 0.5);
+        .flatMap((item) => item.income_streams || [])
+        .filter((stream) => stream.confidence > 0.5);
 
-      const monthlyIncome = incomeStreams.reduce((sum, stream) => sum + (stream.monthly_income || 0), 0);
+      const monthlyIncome = incomeStreams.reduce(
+        (sum, stream) => sum + (stream.monthly_income || 0),
+        0,
+      );
       const annualIncome = monthlyIncome * 12;
 
       // Analyze income deposit patterns
-      const incomePatterns = incomeStreams.map(stream => {
+      const incomePatterns = incomeStreams.map((stream) => {
         const transactions = stream.income_transactions || [];
-        const dates = transactions.map(t => new Date(t.date).getDate());
-        const daysBetween = transactions.map((t, i) => {
-          if (i === 0) return 0;
-          const curr = new Date(t.date);
-          const prev = new Date(transactions[i-1].date);
-          return Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
-        }).filter(d => d > 0);
+        const dates = transactions.map((t) => new Date(t.date).getDate());
+        const daysBetween = transactions
+          .map((t, i) => {
+            if (i === 0) return 0;
+            const curr = new Date(t.date);
+            const prev = new Date(transactions[i - 1].date);
+            return Math.round(
+              (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24),
+            );
+          })
+          .filter((d) => d > 0);
 
-        const avgDaysBetween = daysBetween.length > 0 
-          ? daysBetween.reduce((a, b) => a + b, 0) / daysBetween.length 
-          : 30;
+        const avgDaysBetween =
+          daysBetween.length > 0
+            ? daysBetween.reduce((a, b) => a + b, 0) / daysBetween.length
+            : 30;
 
         return {
-          frequency: avgDaysBetween <= 7 ? 'weekly' : 
-                     avgDaysBetween <= 14 ? 'biweekly' : 
-                     avgDaysBetween <= 16 ? 'semimonthly' : 'monthly',
+          frequency:
+            avgDaysBetween <= 7
+              ? "weekly"
+              : avgDaysBetween <= 14
+                ? "biweekly"
+                : avgDaysBetween <= 16
+                  ? "semimonthly"
+                  : "monthly",
           commonDates: [...new Set(dates)].sort((a, b) => a - b),
           confidence: stream.confidence,
-          amount: stream.monthly_income
+          amount: stream.monthly_income,
         };
       });
 
       // Extract employment data from income streams
       const employmentMonths = Math.max(
-        ...incomeStreams.map(stream => stream.days / 30),
-        0
+        ...incomeStreams.map((stream) => stream.days / 30),
+        0,
       );
 
       // Add income patterns to analysis
-      const primaryIncomePattern = incomePatterns.length > 0 
-        ? incomePatterns.reduce((a, b) => a.amount > b.amount ? a : b)
-        : null;
+      const primaryIncomePattern =
+        incomePatterns.length > 0
+          ? incomePatterns.reduce((a, b) => (a.amount > b.amount ? a : b))
+          : null;
 
       // Calculate debt-to-income ratio
       const totalDebt = accounts
-        .filter(account => account.type === 'loan' || account.type === 'credit')
+        .filter(
+          (account) => account.type === "loan" || account.type === "credit",
+        )
         .reduce((sum, account) => {
           // For credit accounts, use balance as debt
-          if (account.type === 'credit') {
+          if (account.type === "credit") {
             return sum + (account.balances.current || 0);
           }
 
@@ -861,28 +897,30 @@ class PlaidService {
       const dtiRatio = monthlyIncome > 0 ? totalDebt / (monthlyIncome * 12) : 0;
 
       // Analyze housing status
-      const housingAccount = accounts.find(account => 
-        account.name.toLowerCase().includes('mortgage') || 
-        account.name.toLowerCase().includes('rent') ||
-        account.subtype === 'mortgage'
+      const housingAccount = accounts.find(
+        (account) =>
+          account.name.toLowerCase().includes("mortgage") ||
+          account.name.toLowerCase().includes("rent") ||
+          account.subtype === "mortgage",
       );
 
-      let housingStatus = 'unknown';
+      let housingStatus = "unknown";
       let paymentHistoryMonths = 0;
 
       if (housingAccount) {
-        if (housingAccount.subtype === 'mortgage') {
-          housingStatus = 'mortgage';
-        } else if (housingAccount.name.toLowerCase().includes('rent')) {
-          housingStatus = 'rent';
+        if (housingAccount.subtype === "mortgage") {
+          housingStatus = "mortgage";
+        } else if (housingAccount.name.toLowerCase().includes("rent")) {
+          housingStatus = "rent";
         }
 
         // Estimate payment history from transaction data
         const paymentCount = report.items
-          .flatMap(item => item.transactions || [])
-          .filter(transaction => 
-            transaction.name.toLowerCase().includes('mortgage') || 
-            transaction.name.toLowerCase().includes('rent')
+          .flatMap((item) => item.transactions || [])
+          .filter(
+            (transaction) =>
+              transaction.name.toLowerCase().includes("mortgage") ||
+              transaction.name.toLowerCase().includes("rent"),
           ).length;
 
         paymentHistoryMonths = Math.min(Math.ceil(paymentCount), 24); // Cap at 24 months
@@ -894,53 +932,69 @@ class PlaidService {
           annualIncome,
           monthlyIncome,
           incomeStreams: incomeStreams.length,
-          confidence: incomeStreams.length > 0 
-            ? incomeStreams.reduce((sum, stream) => sum + stream.confidence, 0) / incomeStreams.length
-            : 0,
+          confidence:
+            incomeStreams.length > 0
+              ? incomeStreams.reduce(
+                  (sum, stream) => sum + stream.confidence,
+                  0,
+                ) / incomeStreams.length
+              : 0,
           patterns: incomePatterns,
-          recommendedPaymentSchedule: primaryIncomePattern ? {
-            frequency: primaryIncomePattern.frequency,
-            suggestedDates: primaryIncomePattern.commonDates,
-            confidence: primaryIncomePattern.confidence
-          } : null
+          recommendedPaymentSchedule: primaryIncomePattern
+            ? {
+                frequency: primaryIncomePattern.frequency,
+                suggestedDates: primaryIncomePattern.commonDates,
+                confidence: primaryIncomePattern.confidence,
+              }
+            : null,
         },
         employment: {
           employmentMonths,
-          hasStableIncome: employmentMonths >= 12 && monthlyIncome > 0
+          hasStableIncome: employmentMonths >= 12 && monthlyIncome > 0,
         },
         debt: {
           totalDebt,
-          dtiRatio
+          dtiRatio,
         },
         housing: {
           housingStatus,
           paymentHistoryMonths,
-          hasStableHousing: paymentHistoryMonths >= 6
+          hasStableHousing: paymentHistoryMonths >= 6,
         },
         accounts: {
           totalAccounts: accounts.length,
-          loansCount: accounts.filter(account => account.type === 'loan').length,
-          creditCount: accounts.filter(account => account.type === 'credit').length,
-          depository: accounts.filter(account => account.type === 'depository').length,
+          loansCount: accounts.filter((account) => account.type === "loan")
+            .length,
+          creditCount: accounts.filter((account) => account.type === "credit")
+            .length,
+          depository: accounts.filter(
+            (account) => account.type === "depository",
+          ).length,
         },
         balances: {
-          totalBalance: accounts.reduce((sum, account) => sum + (account.balances.current || 0), 0),
+          totalBalance: accounts.reduce(
+            (sum, account) => sum + (account.balances.current || 0),
+            0,
+          ),
           availableFunds: accounts
-            .filter(account => account.type === 'depository')
-            .reduce((sum, account) => sum + (account.balances.available || 0), 0)
-        }
+            .filter((account) => account.type === "depository")
+            .reduce(
+              (sum, account) => sum + (account.balances.available || 0),
+              0,
+            ),
+        },
       };
 
       logger.info({
         message: "Completed Plaid asset report analysis for underwriting",
         category: "api",
         source: "plaid",
-        metadata: { 
+        metadata: {
           analysisMetrics: {
             income: analysis.income.annualIncome,
             dti: analysis.debt.dtiRatio,
-            employmentMonths: analysis.employment.employmentMonths
-          }
+            employmentMonths: analysis.employment.employmentMonths,
+          },
         },
       });
 
@@ -969,7 +1023,7 @@ class PlaidService {
     }
 
     // Import storage here to avoid circular dependency
-    const { storage } = await import('../storage');
+    const { storage } = await import("../storage");
 
     try {
       const { merchantId, legalName, email, redirectUri } = params;
@@ -982,15 +1036,19 @@ class PlaidService {
       });
 
       // First check if there's already a merchant in our database
-      const existingPlaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+      const existingPlaidMerchant =
+        await storage.getPlaidMerchantByMerchantId(merchantId);
 
       // If merchant already exists with completed status, return error
-      if (existingPlaidMerchant && existingPlaidMerchant.onboardingStatus === 'completed') {
+      if (
+        existingPlaidMerchant &&
+        existingPlaidMerchant.onboardingStatus === "completed"
+      ) {
         return {
           merchantId: existingPlaidMerchant.merchantId,
           plaidCustomerId: existingPlaidMerchant.plaidCustomerId,
           onboardingStatus: existingPlaidMerchant.onboardingStatus,
-          alreadyOnboarded: true
+          alreadyOnboarded: true,
         };
       }
 
@@ -1001,14 +1059,18 @@ class PlaidService {
       const user = {
         client_user_id: clientUserId,
         legal_name: legalName,
-        email_address: email
+        email_address: email,
       };
 
       // Create link token with payment_initiation product
       const request: LinkTokenCreateRequest = {
         user,
         client_name: "ShiFi Financial",
-        products: [Products.PaymentInitiation, Products.Auth, Products.Transfer],
+        products: [
+          Products.PaymentInitiation,
+          Products.Auth,
+          Products.Transfer,
+        ],
         country_codes: [CountryCode.Us],
         language: "en",
         webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/merchant-webhook`,
@@ -1036,15 +1098,18 @@ class PlaidService {
       let plaidMerchantRecord;
       if (existingPlaidMerchant) {
         // Update existing record
-        plaidMerchantRecord = await storage.updatePlaidMerchant(existingPlaidMerchant.id, {
-          onboardingStatus: 'in_progress',
-          onboardingUrl: response.data.link_token
-        });
+        plaidMerchantRecord = await storage.updatePlaidMerchant(
+          existingPlaidMerchant.id,
+          {
+            onboardingStatus: "in_progress",
+            onboardingUrl: response.data.link_token,
+          },
+        );
       } else {
         // Create new record
         plaidMerchantRecord = await storage.createPlaidMerchant({
           merchantId,
-          onboardingStatus: 'in_progress',
+          onboardingStatus: "in_progress",
           onboardingUrl: response.data.link_token,
         });
       }
@@ -1053,7 +1118,7 @@ class PlaidService {
         merchantId,
         linkToken: response.data.link_token,
         expiration: response.data.expiration,
-        plaidMerchantId: plaidMerchantRecord.id
+        plaidMerchantId: plaidMerchantRecord.id,
       };
     } catch (error) {
       logger.error({
@@ -1073,13 +1138,19 @@ class PlaidService {
   /**
    * Complete merchant onboarding after Plaid Link flow
    */
-  async completeMerchantOnboarding(merchantId: number, publicToken: string, accountId: string, originatorId?: string, questionnaireId?: string) {
+  async completeMerchantOnboarding(
+    merchantId: number,
+    publicToken: string,
+    accountId: string,
+    originatorId?: string,
+    questionnaireId?: string,
+  ) {
     if (!this.isInitialized() || !this.client) {
       throw new Error("Plaid client not initialized");
     }
 
     // Import storage here to avoid circular dependency
-    const { storage } = await import('../storage');
+    const { storage } = await import("../storage");
 
     try {
       logger.info({
@@ -1090,7 +1161,8 @@ class PlaidService {
       });
 
       // First, exchange the public token for an access token
-      const { accessToken, itemId } = await this.exchangePublicToken(publicToken);
+      const { accessToken, itemId } =
+        await this.exchangePublicToken(publicToken);
 
       // Get the merchant from our database
       const merchant = await storage.getMerchant(merchantId);
@@ -1099,17 +1171,18 @@ class PlaidService {
       }
 
       // Get plaid merchant record or create if not exists
-      let plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+      let plaidMerchant =
+        await storage.getPlaidMerchantByMerchantId(merchantId);
 
       if (!plaidMerchant) {
         // Create new record if one doesn't exist yet
         plaidMerchant = await storage.createPlaidMerchant({
           merchantId,
-          onboardingStatus: 'in_progress',
+          onboardingStatus: "in_progress",
           accessToken,
           accountId,
           originatorId,
-          questionnaireId
+          questionnaireId,
         });
       } else {
         // Update existing record
@@ -1118,34 +1191,38 @@ class PlaidService {
           accountId,
           defaultFundingAccount: accountId,
           originatorId,
-          questionnaireId
+          questionnaireId,
         });
       }
 
       // If we have an originatorId, check the status with Plaid
       if (originatorId) {
         try {
-          const originatorStatus = await this.getMerchantOnboardingStatus(originatorId);
+          const originatorStatus =
+            await this.getMerchantOnboardingStatus(originatorId);
 
           // Log the status we received from Plaid
           logger.info({
             message: `Received originator status from Plaid: ${originatorStatus.status}`,
             category: "api",
             source: "plaid",
-            metadata: { 
+            metadata: {
               merchantId,
               originatorId,
-              status: originatorStatus.status 
-            }
+              status: originatorStatus.status,
+            },
           });
 
           // Only mark as completed if Plaid says it's active
           // Otherwise keep it as in_progress
-          if (originatorStatus.status.toLowerCase() === 'active') {
+          if (originatorStatus.status.toLowerCase() === "active") {
             // Mark onboarding as complete
-            const updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
-              onboardingStatus: 'completed'
-            });
+            const updatedPlaidMerchant = await storage.updatePlaidMerchant(
+              plaidMerchant.id,
+              {
+                onboardingStatus: "completed",
+              },
+            );
 
             return {
               merchantId,
@@ -1154,18 +1231,18 @@ class PlaidService {
               accessToken,
               accountId,
               originatorId,
-              originatorStatus: originatorStatus.status
+              originatorStatus: originatorStatus.status,
             };
           } else {
             // Originator exists but isn't active yet
             return {
               merchantId,
               plaidMerchantId: plaidMerchant.id,
-              status: 'in_progress',
+              status: "in_progress",
               accessToken,
               accountId,
               originatorId,
-              originatorStatus: originatorStatus.status
+              originatorStatus: originatorStatus.status,
             };
           }
         } catch (originatorError) {
@@ -1177,16 +1254,20 @@ class PlaidService {
             metadata: {
               merchantId,
               originatorId,
-              error: originatorError instanceof Error ? originatorError.stack : null,
+              error:
+                originatorError instanceof Error ? originatorError.stack : null,
             },
           });
         }
       }
 
       // Mark onboarding as complete (this is the original behavior if we don't have an originatorId)
-      const updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
-        onboardingStatus: 'completed'
-      });
+      const updatedPlaidMerchant = await storage.updatePlaidMerchant(
+        plaidMerchant.id,
+        {
+          onboardingStatus: "completed",
+        },
+      );
 
       return {
         merchantId,
@@ -1194,7 +1275,7 @@ class PlaidService {
         status: updatedPlaidMerchant.onboardingStatus,
         accessToken,
         accountId,
-        originatorId
+        originatorId,
       };
     } catch (error) {
       logger.error({
@@ -1276,10 +1357,18 @@ class PlaidService {
     }
 
     // Import storage here to avoid circular dependency
-    const { storage } = await import('../storage');
+    const { storage } = await import("../storage");
 
     try {
-      const { amount, merchantId, contractId, description, routeToShifi, facilitatorFee, metadata } = params;
+      const {
+        amount,
+        merchantId,
+        contractId,
+        description,
+        routeToShifi,
+        facilitatorFee,
+        metadata,
+      } = params;
 
       logger.info({
         message: `Creating Plaid platform payment for contract ${contractId}`,
@@ -1289,7 +1378,7 @@ class PlaidService {
           amount,
           merchantId,
           contractId,
-          routeToShifi
+          routeToShifi,
         },
       });
 
@@ -1301,17 +1390,22 @@ class PlaidService {
 
       // Verify contract belongs to the merchant
       if (contract.merchantId !== merchantId) {
-        throw new Error(`Contract ${contractId} does not belong to merchant ${merchantId}`);
+        throw new Error(
+          `Contract ${contractId} does not belong to merchant ${merchantId}`,
+        );
       }
 
       // Get Plaid merchant data
-      const plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+      const plaidMerchant =
+        await storage.getPlaidMerchantByMerchantId(merchantId);
       if (!plaidMerchant) {
         throw new Error(`Merchant ${merchantId} is not onboarded with Plaid`);
       }
 
-      if (plaidMerchant.onboardingStatus !== 'completed') {
-        throw new Error(`Merchant ${merchantId} has not completed Plaid onboarding`);
+      if (plaidMerchant.onboardingStatus !== "completed") {
+        throw new Error(
+          `Merchant ${merchantId} has not completed Plaid onboarding`,
+        );
       }
 
       // Determine routing destination based on:
@@ -1320,7 +1414,8 @@ class PlaidService {
 
       // If routeToShifi is explicitly set to true, we'll route to ShiFi regardless of contract status
       // Otherwise, check if the contract has been purchased by ShiFi
-      const shouldRouteToShifi = routeToShifi || (contract.purchasedByShifi === true);
+      const shouldRouteToShifi =
+        routeToShifi || contract.purchasedByShifi === true;
 
       logger.info({
         message: `Determining payment routing for contract ${contractId}`,
@@ -1336,8 +1431,8 @@ class PlaidService {
       });
 
       // Determine the destination account based on routing flag
-      const destination = shouldRouteToShifi 
-        ? process.env.SHIFI_PLAID_ACCOUNT_ID 
+      const destination = shouldRouteToShifi
+        ? process.env.SHIFI_PLAID_ACCOUNT_ID
         : plaidMerchant.defaultFundingAccount || plaidMerchant.accountId;
 
       if (!destination) {
@@ -1345,7 +1440,8 @@ class PlaidService {
       }
 
       // Calculate facilitator fee and routing based on credit tier
-      const { fee: platformFee, routeToShifi: finalRouteToShifi } = await calculatePlatformFee(amount, contractId.toString());
+      const { fee: platformFee, routeToShifi: finalRouteToShifi } =
+        await calculatePlatformFee(amount, contractId.toString());
 
       // Create a transfer intent
       const transferIntentRequest: any = {
@@ -1365,12 +1461,14 @@ class PlaidService {
         // Since we're using the Plaid SDK, we'll need to cast to 'any' to add this property
         // because it might not be in the TypeScript type definition yet
         (transferIntentRequest as any).facilitator_fee = {
-          amount: platformFee.toString()
+          amount: platformFee.toString(),
         };
       }
 
       // Create the transfer intent
-      const intentResponse = await this.client.transferIntentCreate(transferIntentRequest);
+      const intentResponse = await this.client.transferIntentCreate(
+        transferIntentRequest,
+      );
 
       // Record the transfer in our database
       const transferRecord = await storage.createPlaidTransfer({
@@ -1383,7 +1481,7 @@ class PlaidService {
         status: intentResponse.data.transfer_intent.status,
         routedToShifi: finalRouteToShifi,
         facilitatorFee: platformFee,
-        metadata: metadata ? JSON.stringify(metadata) : undefined
+        metadata: metadata ? JSON.stringify(metadata) : undefined,
       });
 
       return {
@@ -1391,7 +1489,7 @@ class PlaidService {
         status: intentResponse.data.transfer_intent.status,
         amount,
         routedToShifi: finalRouteToShifi,
-        transferRecordId: transferRecord.id
+        transferRecordId: transferRecord.id,
       };
     } catch (error) {
       logger.error({
@@ -1420,7 +1518,7 @@ class PlaidService {
     }
 
     // Import storage here to avoid circular dependency
-    const { storage } = await import('../storage');
+    const { storage } = await import("../storage");
 
     try {
       logger.info({
@@ -1431,7 +1529,10 @@ class PlaidService {
 
       // First, use the /transfer/originator/list endpoint to get all merchants from Plaid
       const originatorsResponse = await this.client.transferOriginatorList({});
-      console.log("Plaid Originators Response:", JSON.stringify(originatorsResponse.data, null, 2));
+      console.log(
+        "Plaid Originators Response:",
+        JSON.stringify(originatorsResponse.data, null, 2),
+      );
       const plaidOriginators = originatorsResponse.data.originators || [];
 
       logger.info({
@@ -1455,7 +1556,7 @@ class PlaidService {
       for (const originator of plaidOriginators) {
         try {
           // Only include active originators
-          if (originator.transfer_diligence_status !== 'approved') {
+          if (originator.transfer_diligence_status !== "approved") {
             logger.info({
               message: `Skipping non-active originator: ${originator.client_id} with status ${originator.transfer_diligence_status}`,
               category: "api",
@@ -1465,7 +1566,9 @@ class PlaidService {
           }
 
           // Try to find this originator in our database to get the merchant ID
-          const plaidMerchant = await storage.getPlaidMerchantByOriginatorId(originator.client_id);
+          const plaidMerchant = await storage.getPlaidMerchantByOriginatorId(
+            originator.client_id,
+          );
 
           const merchantData: any = {
             originatorId: originator.client_id,
@@ -1478,12 +1581,15 @@ class PlaidService {
           if (plaidMerchant) {
             merchantData.merchantId = plaidMerchant.merchantId;
             merchantData.plaidMerchantId = plaidMerchant.id;
-            merchantData.accessToken = plaidMerchant.accessToken || '';
-            merchantData.accountId = plaidMerchant.accountId || '';
-            merchantData.defaultFundingAccount = plaidMerchant.defaultFundingAccount || '';
+            merchantData.accessToken = plaidMerchant.accessToken || "";
+            merchantData.accountId = plaidMerchant.accountId || "";
+            merchantData.defaultFundingAccount =
+              plaidMerchant.defaultFundingAccount || "";
 
             // Get the merchant details from our database
-            const merchant = await storage.getMerchant(plaidMerchant.merchantId);
+            const merchant = await storage.getMerchant(
+              plaidMerchant.merchantId,
+            );
             if (merchant) {
               merchantData.merchantName = merchant.name;
               merchantData.merchantEmail = merchant.email;
@@ -1521,12 +1627,18 @@ class PlaidService {
 
       // As a fallback, also check our database for any merchants that may not be returned by Plaid API
       // This helps handle any potential sync issues between our database and Plaid
-      const onboardedMerchants = await storage.getPlaidMerchantsByStatus('completed');
+      const onboardedMerchants =
+        await storage.getPlaidMerchantsByStatus("completed");
 
       for (const merchant of onboardedMerchants) {
         try {
           // Skip if we already have this merchant in our results
-          if (merchant.originatorId && activeMerchants.some(m => m.originatorId === merchant.originatorId)) {
+          if (
+            merchant.originatorId &&
+            activeMerchants.some(
+              (m) => m.originatorId === merchant.originatorId,
+            )
+          ) {
             continue;
           }
 
@@ -1541,13 +1653,14 @@ class PlaidService {
 
           // Check if the merchant's accounts are still active
           const accountsResponse = await this.client.accountsGet({
-            access_token: merchant.accessToken
+            access_token: merchant.accessToken,
           });
 
           // Check if the merchant has transfer capabilities
-          const hasTransferCapability = accountsResponse.data.accounts.some(account => 
-            account.type === 'depository' && 
-            ['checking', 'savings'].includes(account.subtype || '')
+          const hasTransferCapability = accountsResponse.data.accounts.some(
+            (account) =>
+              account.type === "depository" &&
+              ["checking", "savings"].includes(account.subtype || ""),
           );
 
           if (hasTransferCapability) {
@@ -1556,14 +1669,16 @@ class PlaidService {
               merchantId: merchant.merchantId,
               plaidMerchantId: merchant.id,
               originatorId: merchant.originatorId,
-              accessToken: merchant.accessToken || '', 
-              accountId: merchant.accountId || '',
-              defaultFundingAccount: merchant.defaultFundingAccount || '',
-              fromDatabaseOnly: true
+              accessToken: merchant.accessToken || "",
+              accountId: merchant.accountId || "",
+              defaultFundingAccount: merchant.defaultFundingAccount || "",
+              fromDatabaseOnly: true,
             };
 
             // Get the merchant details from our database
-            const merchantDetails = await storage.getMerchant(merchant.merchantId);
+            const merchantDetails = await storage.getMerchant(
+              merchant.merchantId,
+            );
             if (merchantDetails) {
               merchantData.merchantName = merchantDetails.name;
               merchantData.merchantEmail = merchantDetails.email;
@@ -1609,7 +1724,7 @@ class PlaidService {
     }
 
     // Import storage here to avoid circular dependency
-    const { storage } = await import('../storage');
+    const { storage } = await import("../storage");
 
     try {
       logger.info({
@@ -1620,13 +1735,15 @@ class PlaidService {
 
       // Get transfer from Plaid
       const response = await this.client.transferIntentGet({
-        transfer_intent_id: transferId
+        transfer_intent_id: transferId,
       });
 
       const status = response.data.transfer_intent.status;
 
       // Update status in our database
-      const transferRecord = await storage.getPlaidTransferById(parseInt(transferId));
+      const transferRecord = await storage.getPlaidTransferById(
+        parseInt(transferId),
+      );
       if (transferRecord) {
         await storage.updatePlaidTransferStatus(transferRecord.id, status);
       }
@@ -1634,7 +1751,9 @@ class PlaidService {
       return {
         transferId,
         status,
-        requiresAttention: ['failed', 'returned'].includes(status.toLowerCase())
+        requiresAttention: ["failed", "returned"].includes(
+          status.toLowerCase(),
+        ),
       };
     } catch (error) {
       logger.error({
@@ -1657,22 +1776,29 @@ class PlaidService {
  * Tier 1-3: 100% to ShiFi
  * Tier 4/Declined: 10% fee, rest to merchant
  */
-async function calculatePlatformFee(amount: number, contractId: string): Promise<{fee: number, routeToShifi: boolean}> {
-  const underwritingData = await storage.getUnderwritingDataByContractId(contractId);
+async function calculatePlatformFee(
+  amount: number,
+  contractId: string,
+): Promise<{ fee: number; routeToShifi: boolean }> {
+  const underwritingData =
+    await storage.getUnderwritingDataByContractId(contractId);
 
   // For tier 1-3, route entire payment to ShiFi
-  if (underwritingData?.creditTier && ['tier1', 'tier2', 'tier3'].includes(underwritingData.creditTier)) {
+  if (
+    underwritingData?.creditTier &&
+    ["tier1", "tier2", "tier3"].includes(underwritingData.creditTier)
+  ) {
     return {
       fee: 0, // No fee since entire amount goes to ShiFi
-      routeToShifi: true // Route full amount to ShiFi
+      routeToShifi: true, // Route full amount to ShiFi
     };
   }
 
   // For tier 4/declined, take 10% fee and route rest to merchant
-  const fee = Math.round(amount * 0.10 * 100) / 100; // 10% fee
+  const fee = Math.round(amount * 0.1 * 100) / 100; // 10% fee
   return {
     fee,
-    routeToShifi: false // Route to merchant with fee
+    routeToShifi: false, // Route to merchant with fee
   };
 }
 

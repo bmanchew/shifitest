@@ -1,4 +1,3 @@
-
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -10,29 +9,34 @@ app.use(express.json());
 
 // Validate required environment variables
 const requiredEnvVars = [
-  'PLAID_CLIENT_ID', 
-  'PLAID_SECRET', 
-  'PREFI_API_KEY',
-  'NLPEARL_ACCOUNT_ID',
-  'NLPEARL_API_KEY',
-  'NLPEARL_CAMPAIGN_ID'
+  "PLAID_CLIENT_ID",
+  "PLAID_SECRET",
+  "PREFI_API_KEY",
+  "NLPEARL_ACCOUNT_ID",
+  "NLPEARL_API_KEY",
+  "NLPEARL_CAMPAIGN_ID",
   // The CFPB API is public and doesn't require an API key
 ];
 
-const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+const missingEnvVars = requiredEnvVars.filter(
+  (varName) => !process.env[varName],
+);
 
 if (missingEnvVars.length > 0) {
-  console.error('ERROR: Missing required environment variables:', missingEnvVars.join(', '));
-  console.error('Please set these variables in the Secrets tab');
+  console.error(
+    "ERROR: Missing required environment variables:",
+    missingEnvVars.join(", "),
+  );
+  console.error("Please set these variables in the Secrets tab");
 }
 
 app.use(express.urlencoded({ extended: false }));
 
 // Enable CORS for all routes
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   next();
 });
 
@@ -73,30 +77,30 @@ app.use((req, res, next) => {
 // Create a server startup function that avoids multiple instances
 async function startServer() {
   // Use a more robust singleton pattern with a static server instance
-  const serverInstanceKey = 'server_instance';
-  
+  const serverInstanceKey = "server_instance";
+
   // Check if we already have a server instance
   if ((global as any)[serverInstanceKey]) {
     logger.warn({
       message: "Server startup attempted but server is already running",
       category: "system",
-      metadata: { alreadyRunning: true }
+      metadata: { alreadyRunning: true },
     });
     return (global as any)[serverInstanceKey]; // Return the existing server instance
   }
-  
+
   // Set up cleanup to release resources on process termination
   const cleanup = () => {
     const server = (global as any)[serverInstanceKey];
     if (server && server.listening) {
       logger.info({
         message: "Shutting down server gracefully",
-        category: "system"
+        category: "system",
       });
       server.close(() => {
         logger.info({
           message: "Server shutdown complete",
-          category: "system"
+          category: "system",
         });
         (global as any)[serverInstanceKey] = null;
         process.exit(0);
@@ -105,18 +109,18 @@ async function startServer() {
       process.exit(0);
     }
   };
-  
+
   // Handle termination signals
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
-  process.on('uncaughtException', (err) => {
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+  process.on("uncaughtException", (err) => {
     logger.error({
       message: `Uncaught exception: ${err.message}`,
-      category: 'system',
-      metadata: { 
+      category: "system",
+      metadata: {
         error: err.message,
-        stack: err.stack 
-      }
+        stack: err.stack,
+      },
     });
     cleanup();
   });
@@ -125,39 +129,42 @@ async function startServer() {
     // Seed the database with initial data if needed
     try {
       // Check if database needs seeding and seed it
-      if ('seedInitialData' in storage) {
+      if ("seedInitialData" in storage) {
         await (storage as any).seedInitialData();
       }
-      
+
       // Run any pending migrations
       try {
         // Import runMigrations function using dynamic import
-        const { runMigrations } = await import('./migrations/index');
+        const { runMigrations } = await import("./migrations/index");
         await runMigrations();
         logger.info({
-          message: 'Database migrations completed during startup',
-          category: 'system',
+          message: "Database migrations completed during startup",
+          category: "system",
         });
       } catch (migrationError) {
         logger.warn({
           message: `Could not run migrations: ${migrationError instanceof Error ? migrationError.message : String(migrationError)}`,
-          category: 'system',
-          metadata: { error: String(migrationError) }
+          category: "system",
+          metadata: { error: String(migrationError) },
         });
       }
     } catch (error) {
       console.error("Error initializing database:", error);
       logger.error({
-        message: 'Error initializing database',
-        category: 'system',
-        metadata: { 
+        message: "Error initializing database",
+        category: "system",
+        metadata: {
           error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined 
-        }
+          stack: error instanceof Error ? error.stack : undefined,
+        },
       });
     }
 
     const server = await registerRoutes(app);
+    const clientId = process.env.PLAID_CLIENT_ID;
+    const secret = process.env.PLAID_SECRET;
+    console.log(clientId, secret);
 
     app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
@@ -170,8 +177,8 @@ async function startServer() {
         statusCode: status,
         metadata: {
           stack: err.stack,
-          error: err instanceof Error ? err.message : String(err)
-        }
+          error: err instanceof Error ? err.message : String(err),
+        },
       });
 
       res.status(status).json({ message });
@@ -193,94 +200,106 @@ async function startServer() {
     const basePort = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
     let currentPort = basePort;
     const maxPortAttempts = 10; // Limit port attempts to prevent infinite loops
-    
+
     const findAvailablePort = async (): Promise<number> => {
       return new Promise((resolve, reject) => {
         let attempts = 0;
         const checkPort = (port: number) => {
           // Use dynamic import instead of require for ESM compatibility
-          import('net').then(netModule => {
-            const tester = netModule.createServer()
-              .once('error', (err: Error & { code?: string }) => {
-                if (err.code === 'EADDRINUSE') {
-                  if (attempts >= maxPortAttempts) {
-                    return reject(new Error('Could not find an available port after multiple attempts'));
+          import("net")
+            .then((netModule) => {
+              const tester = netModule
+                .createServer()
+                .once("error", (err: Error & { code?: string }) => {
+                  if (err.code === "EADDRINUSE") {
+                    if (attempts >= maxPortAttempts) {
+                      return reject(
+                        new Error(
+                          "Could not find an available port after multiple attempts",
+                        ),
+                      );
+                    }
+                    attempts++;
+                    log(`Port ${port} is in use, trying ${port + 1}`);
+                    tester.close(() => checkPort(port + 1));
+                  } else {
+                    reject(err);
                   }
-                  attempts++;
-                  log(`Port ${port} is in use, trying ${port + 1}`);
-                  tester.close(() => checkPort(port + 1));
-                } else {
-                  reject(err);
-                }
-              })
-              .once('listening', () => {
-                tester.close(() => resolve(port));
-              })
-              .listen(port, '0.0.0.0');
-          }).catch(err => reject(err));
+                })
+                .once("listening", () => {
+                  tester.close(() => resolve(port));
+                })
+                .listen(port, "0.0.0.0");
+            })
+            .catch((err) => reject(err));
         };
-        
+
         checkPort(currentPort);
       });
     };
-    
+
     // Start the server on an available port
     try {
       // Find an available port first
       currentPort = await findAvailablePort();
-      
+
       // Start the server only once on the available port
-      const httpServer = server.listen({
-        port: currentPort,
-        host: "0.0.0.0",
-        reusePort: false,
-      }, () => {
-        const serverAddress = httpServer.address();
-        const serverPort = typeof serverAddress === 'object' && serverAddress ? serverAddress.port : currentPort;
-        log(`Server listening on http://0.0.0.0:${serverPort}`);
-        logger.info({
-          message: `ShiFi server started on port ${serverPort}`,
-          category: 'system',
-          metadata: {
-            environment: app.get('env'),
-            nodeVersion: process.version,
-            address: '0.0.0.0',
-            port: serverPort
-          },
-          tags: ['startup', 'server']
-        });
-      });
-      
+      const httpServer = server.listen(
+        {
+          port: currentPort,
+          host: "0.0.0.0",
+          reusePort: false,
+        },
+        () => {
+          const serverAddress = httpServer.address();
+          const serverPort =
+            typeof serverAddress === "object" && serverAddress
+              ? serverAddress.port
+              : currentPort;
+          log(`Server listening on http://0.0.0.0:${serverPort}`);
+          logger.info({
+            message: `ShiFi server started on port ${serverPort}`,
+            category: "system",
+            metadata: {
+              environment: app.get("env"),
+              nodeVersion: process.version,
+              address: "0.0.0.0",
+              port: serverPort,
+            },
+            tags: ["startup", "server"],
+          });
+        },
+      );
+
       // Store the server instance globally to prevent multiple instances
-      (global as any)['server_instance'] = httpServer;
-      
-      httpServer.on('error', (err: Error) => {
+      (global as any)["server_instance"] = httpServer;
+
+      httpServer.on("error", (err: Error) => {
         logger.error({
           message: `Server error: ${err.message}`,
-          category: 'system',
-          metadata: { error: err.message, stack: err.stack }
+          category: "system",
+          metadata: { error: err.message, stack: err.stack },
         });
       });
     } catch (error) {
       logger.error({
         message: `Failed to start server: ${error instanceof Error ? error.message : String(error)}`,
-        category: 'system',
-        metadata: { 
+        category: "system",
+        metadata: {
           error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined 
-        }
+          stack: error instanceof Error ? error.stack : undefined,
+        },
       });
       throw error;
     }
-    
   } catch (error) {
     logger.error({
       message: `Critical error starting server: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'system',
-      metadata: { 
+      category: "system",
+      metadata: {
         error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined 
-      }
+        stack: error instanceof Error ? error.stack : undefined,
+      },
     });
     // Release startup lock to allow for restart attempts
     (global as any)[globalStartupLock] = false;
@@ -288,43 +307,44 @@ async function startServer() {
 }
 
 // Implement a global semaphore to prevent multiple server instances
-const globalStartupLock = 'server_startup_lock';
+const globalStartupLock = "server_startup_lock";
 
 // Only proceed if we don't have a lock already
 if (!(global as any)[globalStartupLock]) {
   // Set the lock before attempting to start
   (global as any)[globalStartupLock] = true;
-  
+
   try {
-    startServer().catch(err => {
-      console.error('Failed to start server:', err);
+    startServer().catch((err) => {
+      console.error("Failed to start server:", err);
       logger.error({
         message: `Failed to start server: ${err.message}`,
-        category: 'system',
-        metadata: { 
+        category: "system",
+        metadata: {
           error: err.message,
-          stack: err.stack 
-        }
+          stack: err.stack,
+        },
       });
       // Release lock on error
       (global as any)[globalStartupLock] = false;
     });
   } catch (err) {
-    console.error('Error starting server:', err);
+    console.error("Error starting server:", err);
     logger.error({
       message: `Error starting server: ${err instanceof Error ? err.message : String(err)}`,
-      category: 'system',
-      metadata: { 
+      category: "system",
+      metadata: {
         error: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined 
-      }
+        stack: err instanceof Error ? err.stack : undefined,
+      },
     });
     // Release lock on error
     (global as any)[globalStartupLock] = false;
   }
 } else {
   logger.info({
-    message: "Server startup already in progress, skipping duplicate startup attempt",
-    category: "system"
+    message:
+      "Server startup already in progress, skipping duplicate startup attempt",
+    category: "system",
   });
 }
