@@ -49,6 +49,7 @@ export default function MerchantSignup() {
     token: plaidToken,
     onSuccess: async (public_token, metadata) => {
       try {
+        console.log("Plaid Link success", { public_token, metadata });
         setIsLoading(true);
         
         // Get the first account from the accounts array
@@ -79,14 +80,49 @@ export default function MerchantSignup() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (step === 1) {
-      setStep(2);
-      // Initialize Plaid
-      const response = await fetch('/api/plaid/create-link-token');
-      const data = await response.json();
-      setPlaidToken(data.link_token);
-    } else if (step === 2) {
-      open();
+    try {
+      if (step === 1) {
+        setStep(2);
+        setIsLoading(true);
+        console.log("Step 1 -> 2: Fetching Plaid link token");
+        // Initialize Plaid
+        const response = await fetch('/api/plaid/create-link-token');
+        const data = await response.json();
+        console.log("Plaid link token response:", data);
+        
+        if (data.success && data.linkToken) {
+          setPlaidToken(data.linkToken);
+          console.log("Link token set:", data.linkToken);
+        } else if (data.link_token) { // Handle legacy response format
+          setPlaidToken(data.link_token);
+          console.log("Link token set from legacy format:", data.link_token);
+        } else {
+          console.error("Failed to get link token:", data);
+          alert("Failed to connect to bank. Please try again.");
+        }
+        setIsLoading(false);
+      } else if (step === 2) {
+        console.log("Step 2: Opening Plaid link with token:", plaidToken);
+        if (!plaidToken) {
+          console.error("No Plaid token available");
+          // Try to get a new token
+          const response = await fetch('/api/plaid/create-link-token');
+          const data = await response.json();
+          if (data.success && data.linkToken) {
+            console.log("Got new link token:", data.linkToken);
+            setPlaidToken(data.linkToken);
+            setTimeout(() => open(), 500); // Give it a moment to update
+          } else {
+            alert("Could not initialize bank connection. Please try again.");
+          }
+        } else {
+          open();
+        }
+      }
+    } catch (error) {
+      console.error("Error in form submission:", error);
+      setIsLoading(false);
+      alert("An error occurred. Please try again.");
     }
   };
 
