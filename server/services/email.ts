@@ -26,7 +26,7 @@ interface EmailData {
   text?: string;
 }
 
-// Default sender email from environment variables
+const DEFAULT_FROM_EMAIL = process.env.DEFAULT_FROM_EMAIL || 'noreply@example.com';
 const DEFAULT_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL as string;
 
 /**
