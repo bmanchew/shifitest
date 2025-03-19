@@ -17,7 +17,7 @@ const AdminLogs = lazy(() => import("@/pages/admin/Logs"));
 const AdminSettings = lazy(() => import("@/pages/admin/Settings"));
 const Portfolio = lazy(() => import("@/pages/admin/Portfolio"));
 const NotFound = lazy(() => import("@/pages/not-found"));
-const MerchantSignup = lazy(() => import("@/components/merchant/Signup"));
+const MerchantSignup = lazy(() => import("@/components/merchant/MerchantSignup"));
 const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
 const MerchantContracts = lazy(() => import("@/pages/merchant/Contracts"));
 const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
