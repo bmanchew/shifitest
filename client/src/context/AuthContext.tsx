@@ -79,7 +79,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // For demo purposes, handle merchant user special case
       if (user.role === "merchant" && !user.merchantId) {
-        user.merchantId = 1; // Default to first merchant for demo
+        user.merchantId = 49; // Default to Shiloh Finance merchant ID (49)
       }
 
       // Handle backward compatibility with name field during migration
