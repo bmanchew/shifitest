@@ -2262,7 +2262,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
 
         // Update the signing progress with the local signature data
         if (signingProgressId) {
-          awaitstorage.updateApplicationProgressCompletion(
+          await storage.updateApplicationProgressCompletion(
             signingProgressId,
             true, // Mark as completed
             JSON.stringify({
