@@ -1,0 +1,11 @@
+{
+  "name": "twilio-check",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Script to check Twilio configuration",
+  "main": "check-twilio.js",
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "twilio": "^4.11.0"
+  }
+}
