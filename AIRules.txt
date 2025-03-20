@@ -1,0 +1,113 @@
+// CODING STANDARDS FOR AI ASSISTANTS
+
+// GENERAL PRINCIPLES
+// 1. Write production-ready code only - no placeholders, mockups, or dummy code
+// 2. If you see placeholder code, replace it with fully functional implementation
+// 3. Follow modern React best practices (React 18+)
+// 4. Optimize for readability, maintainability, and performance
+
+// REACT & TYPESCRIPT STANDARDS
+const reactTypeScriptStandards = {
+  // Component Architecture
+  components: {
+    preferFunctional: true,
+    naming: "PascalCase",
+    propsInterface: "I{ComponentName}Props", // e.g., IButtonProps
+    stateInterface: "I{ComponentName}State", // when needed
+    fileNaming: "{ComponentName}.tsx",
+    organisation: "One component per file when possible"
+  },
+  
+  // TypeScript Usage
+  typescript: {
+    strictMode: true,
+    typeInference: "Use when clear, explicit typing otherwise",
+    typesLocation: "Colocate with components or in src/types/ for shared types",
+    useEnums: "For fixed sets of related constants",
+    typeGuards: "Implement for runtime type safety when needed"
+  },
+  
+  // React Patterns
+  patterns: {
+    stateManagement: ["useState", "useReducer", "useContext", "React Query/SWR for server state"],
+    sideEffects: "useEffect with proper dependency arrays and cleanup functions",
+    memoization: "React.memo for expensive renders, useMemo for expensive calculations",
+    performance: "Use useCallback for event handlers passed to child components",
+    errorHandling: "Implement error boundaries at appropriate component levels",
+    accessibility: "Follow WAI-ARIA practices and include proper aria attributes"
+  },
+  
+  // Code Organization
+  organization: {
+    customHooks: "Extract complex logic into custom hooks (use{HookName} naming)",
+    utils: "Pure functions in separate utility files",
+    constants: "Extract magic strings/numbers into named constants",
+    folderStructure: `
+      src/
+        assets/           # Static files like images, fonts
+        components/       # Reusable UI components
+          common/         # Widely used components (Button, Input, etc)
+          layout/         # Layout components (Header, Footer, etc)
+          feature/        # Feature-specific components
+        hooks/            # Custom React hooks
+        pages/            # Route-level components
+        services/         # API and external service integrations
+        types/            # Shared TypeScript interfaces, types, enums
+        utils/            # Utility functions
+        context/          # React Context providers
+        App.tsx
+        index.tsx
+    `
+  }
+};
+
+// CODE QUALITY GUIDELINES
+const codeQualityGuidelines = {
+  // Testing
+  testing: "Write or suggest test coverage for critical functions and components",
+  
+  // Error Handling
+  errorHandling: "Handle all promise rejections and potential exceptions",
+  
+  // Performance
+  performance: {
+    lazyLoading: "Use React.lazy and Suspense for route-level code splitting",
+    listRendering: "Implement virtualization for long lists",
+    memoization: "Memoize expensive calculations and prevent unnecessary rerenders"
+  },
+  
+  // Security
+  security: {
+    userInput: "Sanitize all user inputs",
+    xss: "Avoid dangerouslySetInnerHTML when possible",
+    dependencies: "Suggest keeping dependencies updated"
+  }
+};
+
+// IMPLEMENTATION SPECIFICS
+const implementationRules = {
+  // State Management
+  stateManagement: "Choose appropriate approach based on complexity (useState → useReducer → Context → external library)",
+  
+  // API Integration
+  apiIntegration: "Use React Query or SWR for data fetching, caching, and synchronization",
+  
+  // Forms
+  forms: "Prefer React Hook Form or Formik with Yup/Zod validation",
+  
+  // Styling
+  styling: "Support CSS-in-JS, CSS Modules, or utility-first approaches like Tailwind",
+  
+  // Optimization
+  optimization: "Implement code splitting, lazy loading, and proper memoization"
+};
+
+// When writing or reviewing code:
+// 1. Ensure all imports are properly specified
+// 2. Provide complete implementation, not just function signatures
+// 3. Include PropTypes or TypeScript interfaces for all components
+// 4. Ensure proper error handling for async operations
+// 5. Add comments for complex logic
+// 6. Follow established naming conventions
+
+
