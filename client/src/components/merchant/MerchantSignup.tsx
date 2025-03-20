@@ -894,9 +894,10 @@ export function MerchantSignup() {
             onError={(e) => {
               console.error("Image failed to load:", e);
               const imgElement = e.currentTarget;
-              // Try alternative paths if the image fails to load
-              if (imgElement.src === '/ShiFiMidesk.png') {
-                imgElement.src = '/images/ShiFiMidesk.png';
+              // Try using the absolute URL if the relative path fails
+              if (imgElement.src.endsWith('/ShiFiMidesk.png')) {
+                const baseUrl = window.location.origin;
+                imgElement.src = `${baseUrl}/ShiFiMidesk.png`;
               }
             }}
           />

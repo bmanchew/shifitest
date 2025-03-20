@@ -49,6 +49,7 @@ function App() {
       <Switch>
         {/* Public routes */}
         {!user && <Route path="/" component={Login} />}
+        {!user && <Route path="/merchant/signup" component={lazy(() => import("@/components/merchant/Signup"))} />}
 
         {/* Customer public routes */}
         <Route path="/offer/:contractId" component={CustomerContractOffer} />
