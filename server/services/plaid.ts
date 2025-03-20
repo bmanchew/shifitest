@@ -88,8 +88,6 @@ class PlaidService {
     const clientId = process.env.PLAID_CLIENT_ID;
     const secret = process.env.PLAID_SECRET;
 
-    console.log(clientId, secret);
-
     if (!clientId || !secret) {
       logger.warn({
         message:

@@ -71,6 +71,39 @@ export class CFPBService {
     });
     return this.getCFPBData(params);
   }
+
+  async getMerchantCashAdvanceComplaints() {
+    const params = new URLSearchParams({
+      product: 'merchant cash advance',
+      date_received_min: '2020-01-01',
+      date_received_max: '2024-03-18',
+      size: '1000',
+      format: 'json'
+    });
+    return this.getCFPBData(params);
+  }
+  
+  async getComplaintTrends() {
+    try {
+      const personalLoanComplaints = await this.getPersonalLoanComplaints();
+      const merchantCashAdvanceComplaints = await this.getMerchantCashAdvanceComplaints();
+      
+      return {
+        personalLoans: personalLoanComplaints,
+        merchantCashAdvance: merchantCashAdvanceComplaints
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error fetching complaint trends: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'cfpb',
+        metadata: {
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      throw error;
+    }
+  }
 }
 
 export const cfpbService = new CFPBService();

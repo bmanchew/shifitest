@@ -11,7 +11,7 @@ export const adminReportsRouter = express.Router();
 // Get CFPB complaint trends
 adminReportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
   try {
-    const complaintTrends = await cfpbService.getMockComplaintTrends();
+    const complaintTrends = await cfpbService.getComplaintTrends();
     
     res.json({
       success: true,
@@ -46,16 +46,16 @@ adminReportsRouter.get("/ai-analytics", async (req: Request, res: Response) => {
       });
     } catch (analyticError) {
       logger.warn({
-        message: `Could not get real AI analytics, using mock data: ${analyticError instanceof Error ? analyticError.message : String(analyticError)}`,
+        message: `Could not get real AI analytics, using complaint trends data: ${analyticError instanceof Error ? analyticError.message : String(analyticError)}`,
         category: "api",
         source: "admin"
       });
       
-      const mockData = await cfpbService.getMockComplaintTrends();
+      const trendsData = await cfpbService.getComplaintTrends();
       res.json({
         success: true,
-        data: mockData,
-        isMockData: true
+        data: trendsData,
+        isBackupData: true
       });
     }
   } catch (error) {
