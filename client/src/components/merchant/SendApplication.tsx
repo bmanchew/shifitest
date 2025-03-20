@@ -163,14 +163,18 @@ export default function SendApplication() {
 
                 if (!nlpearlResponse.ok) throw new Error('Failed to initiate call');
 
-                toast.success('Application sent and call initiated');
+                toast({
+                  title: "Success",
+                  description: "Application sent and call initiated",
+                  variant: "success"
+                });
               } catch (error) {
                 console.error('Error:', error);
                 toast({
-                    variant: "destructive",
-                    title: "Error",
-                    description: "Failed to send application"
-                  });
+                  title: "Error",
+                  description: "Failed to send application",
+                  variant: "destructive"
+                });
               }
             }} className="space-y-4">
               <div className="grid gap-2">
