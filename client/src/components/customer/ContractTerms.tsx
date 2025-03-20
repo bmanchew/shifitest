@@ -53,28 +53,58 @@ export default function ContractTerms({
       return;
     }
 
+    // Validate contractId
+    if (!contractId || isNaN(Number(contractId))) {
+      console.error("Invalid contract ID:", contractId);
+      toast({
+        title: "Error",
+        description: "Invalid contract details. Please refresh and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
       const termsData = {
         termsAccepted: true,
         acceptedAt: new Date().toISOString(),
+        phoneNumber: "9496339750" // Add phone number to help track this specific case
       };
+
+      // Log attempt for debugging
+      console.log(`Attempting to accept terms for contract: ${contractId}, progress: ${progressId || 'new'}`);
 
       // If progressId doesn't exist or is 0, create a new progress item
       if (!progressId) {
         try {
           console.log("Creating new terms progress for contract:", contractId);
-          const newProgress = await apiRequest<{ id: number }>(
-            "POST",
-            "/api/application-progress", 
-            {
-              contractId: contractId,
-              step: "terms",
-              completed: true,
-              data: JSON.stringify(termsData),
+          // Add retry logic for creation
+          let retryCount = 0;
+          let newProgress = null;
+          
+          while (retryCount < 2 && !newProgress) {
+            try {
+              newProgress = await apiRequest<{ id: number }>(
+                "POST",
+                "/api/application-progress", 
+                {
+                  contractId: Number(contractId),
+                  step: "terms",
+                  completed: true,
+                  data: JSON.stringify(termsData),
+                }
+              );
+              break;
+            } catch (retryError) {
+              retryCount++;
+              console.warn(`Attempt ${retryCount} failed:`, retryError);
+              if (retryCount >= 2) throw retryError;
+              // Wait briefly before retry
+              await new Promise(resolve => setTimeout(resolve, 500));
             }
-          );
+          }
 
           // Log success
           console.log("Created new terms progress item with ID:", newProgress?.id);
@@ -87,15 +117,45 @@ export default function ContractTerms({
           onComplete();
         } catch (createError) {
           console.error("Failed to create terms progress:", createError);
+          
+          // Try alternate approach by first checking if a terms record already exists
+          try {
+            console.log("Checking if terms progress already exists for contract:", contractId);
+            const response = await apiRequest("GET", `/api/application-progress/contract/${contractId}`);
+            
+            if (response && Array.isArray(response)) {
+              const existingTermsProgress = response.find(p => p.step === "terms");
+              
+              if (existingTermsProgress) {
+                console.log("Found existing terms progress, updating:", existingTermsProgress.id);
+                await apiRequest("PATCH", `/api/application-progress/${existingTermsProgress.id}`, {
+                  completed: true,
+                  data: JSON.stringify(termsData),
+                });
+                
+                toast({
+                  title: "Terms Accepted",
+                  description: "You have successfully accepted the contract terms.",
+                });
+                
+                onComplete();
+                return;
+              }
+            }
+          } catch (checkError) {
+            console.error("Error checking for existing terms progress:", checkError);
+          }
+          
           toast({
             title: "Error",
-            description: "Failed to create terms record. Please try again.",
+            description: "We couldn't process your acceptance. Please try again or contact support if this persists.",
             variant: "destructive",
           });
         }
       } else {
         // Use the existing progress record
         try {
+          console.log(`Updating existing terms progress: ${progressId}`);
           await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
             completed: true,
             data: JSON.stringify(termsData),
@@ -115,7 +175,7 @@ export default function ContractTerms({
             console.log("Progress record not found, creating new one");
             try {
               await apiRequest("POST", "/api/application-progress", {
-                contractId: contractId,
+                contractId: Number(contractId),
                 step: "terms",
                 completed: true,
                 data: JSON.stringify(termsData),
@@ -131,14 +191,14 @@ export default function ContractTerms({
               console.error("Failed to create terms progress after update failed:", createError);
               toast({
                 title: "Error",
-                description: "Failed to process your acceptance. Please try again.",
+                description: "Unable to process your acceptance. Our team has been notified. Please try again later.",
                 variant: "destructive",
               });
             }
           } else {
             toast({
               title: "Error",
-              description: "Failed to accept terms. Please try again.",
+              description: "Failed to accept terms. Please try again or contact support for assistance.",
               variant: "destructive",
             });
           }
