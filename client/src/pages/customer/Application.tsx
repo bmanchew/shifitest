@@ -239,31 +239,27 @@ export default function Application() {
         .map((item: any) => item.step);
       setCompletedSteps(completed);
     } else if (!isLoadingContract) {
-      // Use mock data if no contract found and not still loading
-      setContractData(mockContractData);
-
-      // Create mock progress items
-      const mockProgress = [
-        { id: 1001, step: "terms", completed: false },
-        { id: 1002, step: "kyc", completed: false },
-        { id: 1003, step: "bank", completed: false },
-        { id: 1004, step: "payment", completed: false },
-        { id: 1005, step: "signing", completed: false },
-      ];
-
-      setApplicationProgress(mockProgress);
-
-      // Create a progress map
-      const progressMapObj: Record<string, any> = {};
-      mockProgress.forEach((item) => {
-        progressMapObj[item.step] = item;
+      // If no contract was found and we're not still loading, 
+      // then redirect to the contract lookup page
+      if (contractId <= 0) {
+        console.log("No contract ID provided, redirecting to contract lookup page");
+        setLocation("/customer/contract-lookup");
+        return;
+      }
+      
+      // If we have a contractId but no contract was found, show an error
+      toast({
+        title: "Contract Not Found",
+        description: "We couldn't find this contract. Please check your link or enter your phone number to find your application.",
+        variant: "destructive",
       });
-      setProgressMap(progressMapObj);
-
-      setCurrentStep("terms");
-      setCompletedSteps([]);
+      
+      // Redirect to contract lookup after showing the error
+      setTimeout(() => {
+        setLocation("/customer/contract-lookup");
+      }, 2000);
     }
-  }, [contractResponse, isLoadingContract]);
+  }, [contractResponse, isLoadingContract, contractId, toast, setLocation]);
 
   // All application steps
   const steps: Step[] = [

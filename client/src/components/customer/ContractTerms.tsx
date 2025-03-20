@@ -53,6 +53,17 @@ export default function ContractTerms({
       return;
     }
 
+    // Check if we have a valid contract ID
+    if (!contractId || contractId <= 0) {
+      console.error("Invalid contract ID:", contractId);
+      toast({
+        title: "Missing Contract",
+        description: "There was an issue with your application. Please return to the lookup page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -61,8 +72,10 @@ export default function ContractTerms({
         acceptedAt: new Date().toISOString(),
       };
 
+      console.log(`Accepting terms for contract ${contractId} (progress ID: ${progressId || 'none'})`);
+
       // If progressId doesn't exist or is 0, create a new progress item
-      if (!progressId) {
+      if (!progressId || progressId <= 0) {
         try {
           console.log("Creating new terms progress for contract:", contractId);
           const newProgress = await apiRequest<{ id: number }>(
@@ -87,15 +100,21 @@ export default function ContractTerms({
           onComplete();
         } catch (createError) {
           console.error("Failed to create terms progress:", createError);
+          
+          // Try to get more error details
+          const errorMessage = createError instanceof Error ? createError.message : String(createError);
+          console.error("Error details:", errorMessage);
+          
           toast({
-            title: "Error",
-            description: "Failed to create terms record. Please try again.",
+            title: "Error Accepting Terms",
+            description: "There was a problem with your application. Please try again or contact support.",
             variant: "destructive",
           });
         }
       } else {
         // Use the existing progress record
         try {
+          console.log(`Updating existing progress record ${progressId} for contract ${contractId}`);
           await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
             completed: true,
             data: JSON.stringify(termsData),
@@ -109,17 +128,22 @@ export default function ContractTerms({
           onComplete();
         } catch (updateError) {
           console.error("Failed to update terms progress:", updateError);
+          const errorMessage = updateError instanceof Error ? updateError.message : String(updateError);
+          console.error("Update error details:", errorMessage);
 
           // If update fails with 404, try to create a new record
-          if (updateError instanceof Error && updateError.message.includes("404")) {
+          if (updateError instanceof Error && 
+              (errorMessage.includes("404") || errorMessage.includes("not found"))) {
             console.log("Progress record not found, creating new one");
             try {
-              await apiRequest("POST", "/api/application-progress", {
+              const newProgress = await apiRequest("POST", "/api/application-progress", {
                 contractId: contractId,
                 step: "terms",
                 completed: true,
                 data: JSON.stringify(termsData),
               });
+
+              console.log("Created new terms progress after failed update:", newProgress);
 
               toast({
                 title: "Terms Accepted",
@@ -129,6 +153,9 @@ export default function ContractTerms({
               onComplete();
             } catch (createError) {
               console.error("Failed to create terms progress after update failed:", createError);
+              const createErrorMsg = createError instanceof Error ? createError.message : String(createError);
+              console.error("Create error details:", createErrorMsg);
+              
               toast({
                 title: "Error",
                 description: "Failed to process your acceptance. Please try again.",
