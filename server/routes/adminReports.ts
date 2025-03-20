@@ -242,7 +242,9 @@ adminReportsRouter.post("/monitoring-schedule", async (req: Request, res: Respon
     res.json({
       success: true,
       message: "Monitoring schedule updated successfully",
-      data: updatedSchedule[0]
+      data: Array.isArray(updatedSchedule) && updatedSchedule.length > 0 
+        ? updatedSchedule[0] 
+        : updatedSchedule
     });
   } catch (error) {
     logger.error({

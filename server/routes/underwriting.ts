@@ -69,12 +69,35 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
     // First attempt NLPearl call
     if (nlpearlService.isInitialized()) {
       try {
+        // Ensure phone number exists and is a string
+        if (!contract.phoneNumber) {
+          logger.warn({
+            message: "Contract has no phone number for NLPearl call",
+            category: "api",
+            source: "nlpearl",
+            metadata: { contractId }
+          });
+          return;
+        }
+        
+        // Get merchant details for merchant name
+        const merchant = await storage.getMerchant(contract.merchantId);
+        if (!merchant || !merchant.name) {
+          logger.warn({
+            message: "Could not find merchant or merchant name for NLPearl call",
+            category: "api",
+            source: "nlpearl",
+            metadata: { contractId, merchantId: contract.merchantId }
+          });
+          return;
+        }
+        
         // Generate application URL based on current host
         const applicationUrl = `${req.protocol}://${req.get('host')}/apply/${contractId}`;
         const callResult = await nlpearlService.initiateApplicationCall(
           contract.phoneNumber,
           applicationUrl,
-          contract.merchantName
+          merchant.name
         );
 
         // Wait for call to be active before sending SMS
@@ -91,14 +114,16 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
 
         // Send SMS only after NLPearl call is active
         try {
-          await sendSMS(contract.phoneNumber, `Your underwriting process has started.`);
-          logger.info({ message: `SMS sent to ${contract.phoneNumber}`, category: "api", source: "twilio" });
+          // At this point we've already checked that phoneNumber exists, so we can assert it as string
+          const phoneNumber = contract.phoneNumber as string;
+          await sendSMS(phoneNumber, `Your underwriting process has started.`);
+          logger.info({ message: `SMS sent to ${phoneNumber}`, category: "api", source: "twilio" });
         } catch (smsError) {
           logger.error({
             message: `Failed to send SMS: ${smsError instanceof Error ? smsError.message : String(smsError)}`,
             category: "api",
             source: "twilio",
-            metadata: { contractId, phoneNumber: contract.phoneNumber, error: smsError instanceof Error ? smsError.stack : null }
+            metadata: { contractId, error: smsError instanceof Error ? smsError.stack : null }
           });
         }
       } catch (error) {
