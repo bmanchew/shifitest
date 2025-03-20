@@ -155,13 +155,17 @@ export default function SendApplication() {
 
                 if (!smsResponse.ok) throw new Error('Failed to send SMS');
 
-                // Then initiate NLPearl call
+                // Get the response data from SMS send to get the contract ID
+                const smsResponseData = await smsResponse.json();
+                
+                // Then initiate NLPearl call with the correct application URL that includes contract ID and merchant ID
                 const nlpearlResponse = await fetch('/api/initiate-call', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ 
                     phoneNumber,
-                    applicationUrl: window.location.origin + '/apply'
+                    applicationUrl: smsResponseData.applicationUrl || `${window.location.origin}/apply`,
+                    merchantName: user.name || "ShiFi Financing"
                   })
                 });
 

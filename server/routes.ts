@@ -949,8 +949,54 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         metadata: { phoneNumber, merchantId, amount }
       });
       
-      // Generate application URL
-      const applicationUrl = `${req.protocol}://${req.get('host')}/apply`;
+      // Create a contract for this application
+      const contractNumber = generateContractNumber();
+      const termMonths = 24; // Fixed term
+      const interestRate = 0; // 0% APR
+      const downPaymentPercent = 15; // 15% down payment
+      const downPayment = amount * (downPaymentPercent / 100);
+      const financedAmount = amount - downPayment;
+      const monthlyPayment = financedAmount / termMonths;
+
+      // Find or create a user for this phone number
+      const customer = await storage.findOrCreateUserByPhone(phoneNumber);
+
+      // Create the contract
+      const newContract = await storage.createContract({
+        contractNumber,
+        merchantId,
+        customerId: customer.id,
+        amount,
+        downPayment,
+        financedAmount,
+        termMonths,
+        interestRate,
+        monthlyPayment,
+        status: "pending",
+        currentStep: "terms",
+        phoneNumber: phoneNumber
+      });
+
+      logger.info({
+        message: `Created contract for phone ${phoneNumber}`,
+        category: "api",
+        source: "contract",
+        metadata: { contractId: newContract.id, merchantId }
+      });
+
+      // Create application progress for all steps
+      const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
+      for (const step of applicationSteps) {
+        await storage.createApplicationProgress({
+          contractId: newContract.id,
+          step: step as any,
+          completed: false,
+          data: null,
+        });
+      }
+      
+      // Generate application URL with contract ID and merchant ID
+      const applicationUrl = `${req.protocol}://${req.get('host')}/apply/${newContract.id}?mid=${merchantId}`;
       
       // Prepare message for SMS
       const message = `You've been invited to apply for ShiFi financing${
