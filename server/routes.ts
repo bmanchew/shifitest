@@ -17,6 +17,7 @@ import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
+import { NLPearlService } from './services/nlpearl';
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
@@ -900,6 +901,151 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     }
   });
 
+
+  apiRouter.post("/send-application", async (req: Request, res: Response) => {
+    try {
+      const { phoneNumber, merchantId, amount } = req.body;
+      
+      if (!phoneNumber || !merchantId) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number and merchant ID are required"
+        });
+      }
+      
+      logger.info({
+        message: "Sending application via SMS",
+        category: "api",
+        source: "twilio", // Changed from application to twilio to match allowed types
+        metadata: { phoneNumber, merchantId, amount }
+      });
+      
+      // Generate application URL
+      const applicationUrl = `${req.protocol}://${req.get('host')}/apply`;
+      
+      // Prepare message for SMS
+      const message = `You've been invited to apply for ShiFi financing${
+        amount ? ` for $${parseFloat(amount).toFixed(2)}` : ''
+      }. Apply here: ${applicationUrl}`;
+      
+      // Send SMS using Twilio service
+      const result = await twilioService.sendSMS({
+        to: phoneNumber,
+        body: message
+      });
+      
+      if (!result.success) {
+        logger.error({
+          message: `Failed to send application SMS: ${result.error}`,
+          category: "api",
+          source: "twilio"
+        });
+        
+        return res.status(500).json({
+          success: false,
+          message: "Failed to send application SMS",
+          error: result.error
+        });
+      }
+      
+      // Log successful send
+      logger.info({
+        message: "Successfully sent application SMS",
+        category: "api",
+        source: "twilio",
+        metadata: { messageId: result.messageId, phoneNumber }
+      });
+      
+      return res.status(200).json({
+        success: true,
+        message: "Application sent successfully",
+        messageId: result.messageId,
+        isSimulated: result.isSimulated
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error sending application: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "twilio",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send application",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  
+  // Create NLPearl service instance
+  const nlpearlService = new NLPearlService();
+  
+  // Add initiate-call endpoint for NLPearl integration
+  apiRouter.post("/initiate-call", async (req: Request, res: Response) => {
+    try {
+      const { phoneNumber, applicationUrl, merchantName } = req.body;
+      
+      if (!phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number is required"
+        });
+      }
+      
+      logger.info({
+        message: "Initiating application follow-up call",
+        category: "api",
+        source: "nlpearl",
+        metadata: { 
+          phoneNumber,
+          applicationUrl: applicationUrl || `${req.protocol}://${req.get('host')}/apply`,
+          merchantName: merchantName || "ShiFi Financing"
+        }
+      });
+      
+      // Use NLPearl service to initiate a call
+      const callResult = await nlpearlService.initiateApplicationCall(
+        phoneNumber,
+        applicationUrl || `${req.protocol}://${req.get('host')}/apply`,
+        merchantName || "ShiFi Financing"
+      );
+      
+      // Log successful call initiation
+      logger.info({
+        message: "Successfully initiated follow-up call",
+        category: "api",
+        source: "nlpearl",
+        metadata: { 
+          phoneNumber,
+          callId: callResult.call_id
+        }
+      });
+      
+      return res.status(200).json({
+        success: true,
+        message: "Follow-up call initiated successfully",
+        callId: callResult.call_id
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error initiating follow-up call: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "nlpearl",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to initiate follow-up call",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
 
   apiRouter.post("/send-sms", async (req: Request, res: Response) => {
     try {
