@@ -4,27 +4,36 @@ import { logger } from "./logger";
 export class NLPearlService {
   private readonly accountId: string;
   private readonly apiKey: string;
+  private readonly campaignId: string;
   private readonly baseUrl = "https://api.nlpearl.ai/v1";
 
   constructor() {
     this.accountId = process.env.NLPEARL_ACCOUNT_ID || "";
     this.apiKey = process.env.NLPEARL_API_KEY || "";
+    this.campaignId = process.env.NLPEARL_CAMPAIGN_ID || "";
 
-    if (!this.accountId || !this.apiKey) {
+    if (!this.accountId || !this.apiKey || !this.campaignId) {
       logger.warn({
         message: "NLPearl service not properly configured",
         category: "api",
-        source: "twilio",
+        source: "internal",
         metadata: {
           hasAccountId: !!this.accountId,
           hasApiKey: !!this.apiKey,
+          hasCampaignId: !!this.campaignId
         },
+      });
+    } else {
+      logger.info({
+        message: "NLPearl service initialized successfully",
+        category: "api",
+        source: "internal"
       });
     }
   }
 
   isInitialized(): boolean {
-    return !!(this.accountId && this.apiKey);
+    return !!(this.accountId && this.apiKey && this.campaignId);
   }
 
   private getAuthHeader() {
@@ -47,7 +56,7 @@ export class NLPearlService {
       logger.error({
         message: `Failed to check NLPearl call status: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
-        source: "twilio",
+        source: "internal",
         metadata: { callId }
       });
       throw error;
