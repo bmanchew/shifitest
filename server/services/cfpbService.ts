@@ -7,16 +7,9 @@ export class CFPBService {
 
   async getCFPBData(params = new URLSearchParams()) {
     try {
-      // Use minimal verified parameters
+      // Only set format as base param
       const baseParams = {
-        product: 'Personal loan',
-        date_received_min: '2023-03-19',
-        date_received_max: '2024-03-18',
-        size: '0',
-        agg: 'date_received',
-        agg_term_type: 'month',
-        format: 'json',
-        no_aggs: 'false'
+        format: 'json'
       };
 
       // Merge base params with any custom params
@@ -61,13 +54,11 @@ export class CFPBService {
   async getPersonalLoanComplaints() {
     const params = new URLSearchParams({
       product: 'Personal loan',
-      date_received_min: '2023-03-19',
-      date_received_max: '2024-03-18',
-      agg: 'date_received',
-      agg_term_type: 'month',
-      size: '0',
-      no_aggs: 'false',
-      format: 'json'
+      date_received_min: '2023-01-01',
+      date_received_max: new Date().toISOString().split('T')[0],
+      size: '100',
+      sort: 'date_received:desc',
+      field: ['date_received', 'sub_product', 'issue', 'complaint_what_happened']
     });
     return this.getCFPBData(params);
   }
@@ -75,10 +66,11 @@ export class CFPBService {
   async getMerchantCashAdvanceComplaints() {
     const params = new URLSearchParams({
       product: 'merchant cash advance',
-      date_received_min: '2020-01-01',
-      date_received_max: '2024-03-18',
-      size: '1000',
-      format: 'json'
+      date_received_min: '2023-01-01',
+      date_received_max: new Date().toISOString().split('T')[0],
+      size: '100',
+      sort: 'date_received:desc',
+      field: ['date_received', 'sub_product', 'issue', 'complaint_what_happened']
     });
     return this.getCFPBData(params);
   }
