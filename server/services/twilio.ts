@@ -30,7 +30,11 @@ class TwilioService {
           category: "system",
           source: "twilio",
           metadata: {
-            phoneNumber: this.twilioPhone
+            fromNumber: this.twilioPhone,
+            accountConfigured: !!accountSid,
+            tokenConfigured: !!authToken,
+            clientInitialized: !!this.client,
+            initialized: this.initialized
           }
         });
       } catch (error) {
@@ -75,7 +79,7 @@ class TwilioService {
           hasClient: !!this.client
         }
       });
-      
+
       // Return simulated success response
       return {
         success: true,
@@ -86,7 +90,7 @@ class TwilioService {
 
     try {
       const fromNumber = message.from || this.twilioPhone;
-      
+
       if (!fromNumber) {
         throw new Error("No 'from' phone number provided and TWILIO_PHONE_NUMBER is not set");
       }
