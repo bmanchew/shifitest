@@ -939,7 +939,27 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       // Regular SMS flow
       const { phoneNumber, merchantId, amount, email } = req.body;
 
+      logger.info({
+        message: "Attempting to send application SMS",
+        category: "sms",
+        metadata: { 
+          phoneNumber,
+          merchantId,
+          amount,
+          email 
+        }
+      });
+
       if (!phoneNumber || !merchantId || !amount) {
+        logger.warn({
+          message: "Missing required fields for SMS",
+          category: "sms",
+          metadata: { 
+            phoneNumber,
+            merchantId,
+            amount
+          }
+        });
         return res.status(400).json({
           message: "Phone number, merchant ID, and amount are required",
         });

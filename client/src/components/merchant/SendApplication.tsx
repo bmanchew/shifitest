@@ -146,7 +146,11 @@ export default function SendApplication() {
                 const smsResponse = await fetch('/api/send-application', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ phoneNumber })
+                  body: JSON.stringify({ 
+                    phoneNumber,
+                    merchantId: user.id,
+                    amount: purchaseAmount || 0
+                  })
                 });
 
                 if (!smsResponse.ok) throw new Error('Failed to send SMS');
