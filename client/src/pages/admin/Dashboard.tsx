@@ -40,6 +40,17 @@ export default function AdminDashboard() {
     queryKey: ["/api/merchants"],
   });
 
+  const { data: merchants = [] } = useQuery({
+    queryKey: ["/api/merchants"],
+    queryFn: async () => {
+      const res = await fetch("/api/merchants", {
+        credentials: "include"
+      });
+      if (!res.ok) throw new Error("Failed to fetch merchants");
+      return res.json();
+    }
+  });
+
   const { data: contracts = [] } = useQuery<Contract[]>({
     queryKey: ["/api/contracts"],
   });
