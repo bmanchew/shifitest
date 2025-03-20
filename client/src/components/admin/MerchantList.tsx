@@ -96,6 +96,29 @@ export default function MerchantList() {
               <Button variant="ghost" size="sm" className="flex items-center gap-1">
                 View <ExternalLink className="h-4 w-4 ml-1" />
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-1"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (confirm('Are you sure you want to archive this merchant?')) {
+                    const res = await fetch(`/api/merchants/${merchant.id}/archive`, {
+                      method: 'POST',
+                      credentials: 'include'
+                    });
+                    if (res.ok) {
+                      refetch();
+                      toast({
+                        title: "Merchant archived",
+                        description: "The merchant has been archived successfully."
+                      });
+                    }
+                  }
+                }}
+              >
+                Archive
+              </Button>
             </Link>
           </div>
         );

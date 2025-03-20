@@ -424,6 +424,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: "api",
         source: "plaid",
         metadata: { 
+
+
+  // Archive a merchant
+  apiRouter.post("/merchants/:id/archive", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+
+      // Update the merchant
+      const updatedMerchant = await storage.updateMerchant(id, {
+        archived: true
+      });
+
+      // Create log for merchant archive
+      await storage.createLog({
+        level: "info",
+        message: `Merchant archived: ${updatedMerchant.name}`,
+        metadata: JSON.stringify({
+          id: updatedMerchant.id
+        }),
+      });
+
+      res.json(updatedMerchant);
+    } catch (error) {
+      console.error("Archive merchant error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+
           merchantId,
           originatorId: plaidMerchant.originatorId,
           status: originatorStatus.status 

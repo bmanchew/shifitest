@@ -40,6 +40,7 @@ export const merchants = pgTable("merchants", {
   phone: text("phone").notNull(),
   address: text("address"),
   active: boolean("active").default(true),
+  archived: boolean("archived").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   userId: integer("user_id").references(() => users.id),
 });
