@@ -424,7 +424,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: "api",
         source: "plaid",
         metadata: { 
+          merchantId,
+          originatorId: plaidMerchant.originatorId,
+          status: originatorStatus.status
+        }
+      });
 
+      // Return the updated merchant status
+      return res.status(200).json({
+        success: true,
+        message: "Merchant Plaid status synced successfully",
+        status: originatorStatus.status,
+        plaidMerchant: updatedPlaidMerchant
+      });
+    } catch (error) {
+      console.error("Error syncing merchant with Plaid:", error);
+      return res.status(500).json({ 
+        success: false,
+        message: "Failed to sync merchant with Plaid",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
 
   // Archive a merchant
   apiRouter.post("/merchants/:id/archive", async (req: Request, res: Response) => {
@@ -452,34 +473,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Archive merchant error:", error);
       res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  logger.info({
-    message: "Merchant sync completed",
-    category: "api",
-    source: "plaid",
-    metadata: {
-      merchantId,
-      originatorId: plaidMerchant.originatorId,
-      status: originatorStatus.status 
-    }
-  });
-
-      res.json({
-        success: true,
-        data: updatedPlaidMerchant
-      });
-    } catch (error) {
-      logger.error({
-        message: "Error syncing merchant with Plaid",
-        error,
-        metadata: { merchantId: req.params.id }
-      });
-      res.status(500).json({ 
-        success: false, 
-        message: "Failed to sync merchant with Plaid" 
-      });
     }
   });
 
