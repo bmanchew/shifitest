@@ -7,6 +7,7 @@ const logger = {
 };
 
 import emailService from './email';
+import { twilioService } from './twilio';
 import { IStorage } from '../storage';
 
 export type NotificationType = 
@@ -292,7 +293,7 @@ export class NotificationService {
   }
 
   /**
-   * Send notification via SMS (placeholder for Twilio integration)
+   * Send notification via SMS using Twilio
    */
   private async sendSmsNotification(
     type: NotificationType,
@@ -307,15 +308,93 @@ export class NotificationService {
       options.recipientPhone = recipient.phone;
     }
 
-    // TODO: Implement Twilio SMS sending
-    // This is a placeholder for future implementation
-    logger.info({
-      message: `SMS would be sent to ${options.recipientPhone} for ${type}`,
-      category: 'notification',
-      source: 'internal'
-    });
+    try {
+      // Generate SMS content based on notification type
+      const messageBody = options.message || this.getSmsTemplateForType(type, options);
+      
+      // Send the SMS via Twilio
+      const result = await twilioService.sendSMS({
+        to: options.recipientPhone,
+        body: messageBody
+      });
+      
+      // Log the result
+      logger.info({
+        message: result.isSimulated 
+          ? `SMS simulated to ${options.recipientPhone} for ${type}` 
+          : `SMS sent to ${options.recipientPhone} for ${type}`,
+        category: 'notification',
+        source: 'twilio',
+        metadata: {
+          notificationType: type,
+          recipientId: options.recipientId,
+          recipientType: options.recipientType,
+          messageId: result.messageId,
+          isSimulated: result.isSimulated
+        }
+      });
+      
+      return result.success;
+    } catch (error) {
+      logger.error({
+        message: `Failed to send SMS to ${options.recipientPhone}: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'notification',
+        source: 'twilio',
+        metadata: {
+          notificationType: type,
+          recipientId: options.recipientId,
+          recipientType: options.recipientType,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return false;
+    }
+  }
+  
+  /**
+   * Generate SMS text based on notification type
+   */
+  private getSmsTemplateForType(type: NotificationType, options: NotificationOptions): string {
+    // Common variables
+    const recipientName = options.data?.name || options.data?.businessName || "Customer";
     
-    return true; // Placeholder success
+    // Generate message based on notification type
+    switch (type) {
+      case 'merchant_welcome':
+        return `Welcome to ShiFi, ${recipientName}! Your merchant account has been created. Please complete your profile to start offering financing to your customers.`;
+        
+      case 'merchant_approval':
+        return `Congratulations ${recipientName}! Your ShiFi merchant account has been approved. You can now start offering financing to your customers.`;
+        
+      case 'merchant_document_request':
+        return `ShiFi needs additional documents to complete your merchant account setup. Please log in to your dashboard to upload them.`;
+        
+      case 'customer_welcome':
+        return `Welcome to ShiFi! Your application for financing has been started. Click the link to complete your application: ${options.data?.applicationUrl || ""}`;
+        
+      case 'customer_application_submitted':
+        return `Thank you! Your ShiFi financing application has been submitted and is being reviewed. We'll notify you of the decision soon.`;
+        
+      case 'customer_application_approved':
+        return `Good news! Your ShiFi financing application has been approved. Log in to view your payment schedule and complete the process.`;
+        
+      case 'customer_application_rejected':
+        return `We've reviewed your ShiFi financing application. Unfortunately, we're unable to approve it at this time. Please contact us for more information.`;
+        
+      case 'customer_payment_reminder':
+        return `Payment reminder: Your ShiFi payment of ${options.data?.paymentAmount || "$0.00"} is due on ${options.data?.dueDate || "the due date"}. Please log in to make your payment.`;
+        
+      case 'customer_payment_confirmation':
+        return `Thank you! Your payment of ${options.data?.paymentAmount || "$0.00"} has been received.`;
+        
+      case 'customer_contract_signed':
+        return `Your financing agreement has been signed and approved. Funds will be disbursed within 1-2 business days.`;
+        
+      default:
+        // Generic message for other notification types
+        return options.data?.message || `You have a new notification from ShiFi.`;
+    }
   }
 
   /**
