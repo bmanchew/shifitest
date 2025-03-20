@@ -209,7 +209,7 @@ export default function SendApplication() {
                   className="h-10"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Optional: The customer will also receive an email with the application
+                  {/*Removed optional email message*/}
                 </p>
               </div>
 
