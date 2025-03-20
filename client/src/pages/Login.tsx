@@ -88,7 +88,15 @@ export default function Login() {
               <img 
                 src="/logo3.png" 
                 alt="ShiFi Logo"
-                className="h-8 w-auto" 
+                className="h-8 w-auto"
+                onError={(e) => {
+                  console.error("Logo failed to load");
+                  const imgElement = e.currentTarget;
+                  if (imgElement.src.endsWith('/logo3.png')) {
+                    const baseUrl = window.location.origin;
+                    imgElement.src = `${baseUrl}/logo3.png`;
+                  }
+                }}
               />
               <span className="ml-2 text-2xl font-bold">ShiFi</span>
             </div>
