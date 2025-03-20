@@ -17,7 +17,7 @@ import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
-import { NLPearlService } from './services/nlpearl';
+import { nlpearlService } from './services';
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
@@ -979,9 +979,6 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
     }
   });
-  
-  // Create NLPearl service instance
-  const nlpearlService = new NLPearlService();
   
   // Add initiate-call endpoint for NLPearl integration
   apiRouter.post("/initiate-call", async (req: Request, res: Response) => {
