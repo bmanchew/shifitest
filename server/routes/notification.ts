@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { storage } from '../storage';
 import { notificationService } from '../services';
+import { twilioService } from '../services/twilio';
 import { NotificationType } from '../services/notification';
 import { logger } from '../services/logger';
 
@@ -251,6 +252,100 @@ router.post('/:type/:id/read-all', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to mark notifications as read'
+    });
+  }
+});
+
+// Schema for direct SMS sending
+const sendSmsSchema = z.object({
+  phoneNumber: z.string().min(10), // Minimum 10 digits for phone numbers
+  message: z.string().min(1).optional(), // Optional custom message
+  merchantId: z.number().optional(),
+  amount: z.number().optional(), // Optional amount for financing applications
+  email: z.string().email().optional(), // Optional email
+});
+
+// Direct SMS sending endpoint
+router.post('/send-sms', async (req, res) => {
+  try {
+    const validatedData = sendSmsSchema.parse(req.body);
+    
+    // Generate application URL or use default site URL
+    const applicationUrl = req.body.applicationUrl || `${req.protocol}://${req.get('host')}/apply`;
+    
+    // Generate message if not provided
+    const message = validatedData.message || 
+      `You've been invited to apply for ShiFi financing${validatedData.amount ? ` for $${validatedData.amount.toFixed(2)}` : ''}. Apply here: ${applicationUrl}`;
+    
+    // Send the SMS via Twilio
+    const result = await twilioService.sendSMS({
+      to: validatedData.phoneNumber,
+      body: message
+    });
+    
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error || 'Failed to send SMS'
+      });
+    }
+    
+    // Also create a notification record if we have a merchant ID
+    if (validatedData.merchantId) {
+      try {
+        // Find a user with this phone number or create a placeholder
+        let customerId = 0;
+        const normalizedPhone = validatedData.phoneNumber.replace(/\D/g, '');
+        const existingUser = await storage.getUserByPhone(normalizedPhone);
+        
+        if (existingUser) {
+          customerId = existingUser.id;
+        }
+        
+        // Create notification through the notification service for tracking
+        await notificationService.sendNotification(
+          'customer_welcome',
+          {
+            recipientId: customerId || 0,
+            recipientType: 'customer',
+            recipientPhone: validatedData.phoneNumber,
+            channels: ['sms'],
+            data: {
+              merchantId: validatedData.merchantId,
+              applicationUrl,
+              amount: validatedData.amount
+            }
+          }
+        );
+      } catch (notificationError) {
+        // Log but don't fail the request if notification record creation fails
+        logger.error({
+          message: `Failed to create notification record: ${notificationError instanceof Error ? notificationError.message : String(notificationError)}`,
+          category: 'api',
+          source: 'internal'
+        });
+      }
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: 'SMS sent successfully',
+      messageId: result.messageId,
+      isSimulated: result.isSimulated
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error sending SMS: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'api',
+      source: 'twilio',
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    return res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Invalid request'
     });
   }
 });
