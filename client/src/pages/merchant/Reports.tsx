@@ -39,7 +39,7 @@ const MerchantPerformanceCard = () => <div>Merchant Performance Card (Implementa
 
 export default function Reports() {
   const { user } = useAuth();
-  const merchantId = user?.merchantId || 1;
+  const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
   const [timeRange, setTimeRange] = useState("30d");
 
   const { data: contracts = [], isLoading } = useQuery<Contract[]>({

@@ -21,7 +21,7 @@ import { Link } from "wouter";
 
 export default function Contracts() {
   const { user } = useAuth();
-  const merchantId = user?.merchantId || 1;
+  const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const { data: contracts = [] } = useQuery<Contract[]>({

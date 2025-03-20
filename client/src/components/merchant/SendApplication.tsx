@@ -64,7 +64,7 @@ export default function SendApplication() {
     try {
       setIsSubmitting(true);
       // Get merchant ID based on current user
-      const merchantId = user?.merchantId || 1;
+      const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
 
       const response = await fetch("/api/send-sms", {
         method: "POST",
@@ -148,7 +148,7 @@ export default function SendApplication() {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ 
                     phoneNumber,
-                    merchantId: user.id,
+                    merchantId: user?.merchantId || 49, // Use merchant ID, not user ID
                     amount: purchaseAmount || 0
                   })
                 });
@@ -165,7 +165,8 @@ export default function SendApplication() {
                   body: JSON.stringify({ 
                     phoneNumber,
                     applicationUrl: smsResponseData.applicationUrl || `${window.location.origin}/apply`,
-                    merchantName: user.name || "ShiFi Financing"
+                    merchantName: user?.name || "ShiFi Financing",
+                    merchantId: user?.merchantId || 49 // Pass the merchant ID to the API
                   })
                 });
 
@@ -173,8 +174,7 @@ export default function SendApplication() {
 
                 toast({
                   title: "Success",
-                  description: "Application sent and call initiated",
-                  variant: "success"
+                  description: "Application sent and call initiated"
                 });
               } catch (error) {
                 console.error('Error:', error);

@@ -8,7 +8,7 @@ import { Users, FileText, DollarSign } from "lucide-react";
 
 export default function MerchantDashboard() {
   const { user } = useAuth();
-  const merchantId = user?.merchantId || 1;
+  const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
 
   const { data: contracts = [] } = useQuery<Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
