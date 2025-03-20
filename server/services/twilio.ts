@@ -151,14 +151,31 @@ class TwilioService {
   }
 
   async validateCredentials(): Promise<boolean> {
-    if (!this.isInitialized() || !this.client) {
+    if (!this.client) {
       return false;
     }
 
     try {
-      // Just try to retrieve account info - if this doesn't throw, credentials are valid
-      await this.client.api.v2010.accounts.list({limit: 1});
-      return true;
+      // Validate account info and phone number ownership
+      const accounts = await this.client.api.v2010.accounts.list({limit: 1});
+      const phoneNumbers = await this.client.incomingPhoneNumbers.list({limit: 1});
+      
+      const isValid = accounts.length > 0 && phoneNumbers.some(p => p.phoneNumber === this.twilioPhone);
+      
+      if (!isValid) {
+        logger.error({
+          message: "Twilio validation failed - account exists but phone number not found",
+          category: "system",
+          source: "twilio",
+          metadata: {
+            configuredPhone: this.twilioPhone,
+            hasAccounts: accounts.length > 0,
+            hasPhone: phoneNumbers.length > 0
+          }
+        });
+      }
+      
+      return isValid;
     } catch (error) {
       logger.error({
         message: `Twilio credentials validation failed: ${error instanceof Error ? error.message : String(error)}`,
