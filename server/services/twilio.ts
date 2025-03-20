@@ -17,18 +17,21 @@ class TwilioService {
   }
 
   private initialize() {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    this.twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+    const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+    const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+    this.twilioPhone = process.env.TWILIO_PHONE_NUMBER?.trim();
 
-    if (accountSid && authToken) {
+    if (accountSid && authToken && this.twilioPhone) {
       try {
         this.client = twilio(accountSid, authToken);
         this.initialized = true;
         logger.info({
           message: "Twilio service initialized successfully",
           category: "system",
-          source: "twilio"
+          source: "twilio",
+          metadata: {
+            phoneNumber: this.twilioPhone
+          }
         });
       } catch (error) {
         logger.error({
