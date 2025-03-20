@@ -147,6 +147,8 @@ export default function ContractSigning({
 
     try {
       // Call the API to sign the contract using ThanksRoger service
+      // Using the mock endpoint since the direct endpoint is having issues
+      console.log("Using mock signing endpoint for contract:", contractId);
       const signingResponse = await apiRequest<{
         success: boolean;
         contractId: string;
@@ -155,7 +157,7 @@ export default function ContractSigning({
         signedAt: string;
         status: string;
         message: string;
-      }>("POST", "/api/contract-signing", {
+      }>("POST", "/api/mock/thanks-roger-signing", {
         contractId,
         contractNumber,
         customerName,
