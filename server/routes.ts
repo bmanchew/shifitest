@@ -1066,13 +1066,30 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
   // Add initiate-call endpoint for NLPearl integration
   apiRouter.post("/initiate-call", async (req: Request, res: Response) => {
     try {
-      const { phoneNumber, applicationUrl, merchantName } = req.body;
+      const { phoneNumber, applicationUrl, merchantId, merchantName } = req.body;
       
       if (!phoneNumber) {
         return res.status(400).json({
           success: false,
           message: "Phone number is required"
         });
+      }
+      
+      // Get display name from merchant if merchantId is provided
+      let displayName = merchantName || "ShiFi Financing";
+      if (merchantId) {
+        try {
+          const merchant = await storage.getMerchant(parseInt(merchantId));
+          if (merchant) {
+            displayName = merchant.name;
+          }
+        } catch (err) {
+          logger.warn({
+            message: `Could not get merchant name for ID ${merchantId}`,
+            category: "api",
+            source: "nlpearl"
+          });
+        }
       }
       
       logger.info({
@@ -1082,7 +1099,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         metadata: { 
           phoneNumber,
           applicationUrl: applicationUrl || `${req.protocol}://${req.get('host')}/apply`,
-          merchantName: merchantName || "ShiFi Financing"
+          merchantName: displayName
         }
       });
       
@@ -1090,7 +1107,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       const callResult = await nlpearlService.initiateApplicationCall(
         phoneNumber,
         applicationUrl || `${req.protocol}://${req.get('host')}/apply`,
-        merchantName || "ShiFi Financing"
+        displayName
       );
       
       // Log successful call initiation
