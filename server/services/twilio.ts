@@ -16,7 +16,7 @@ class TwilioService {
     this.initialize();
   }
 
-  private initialize() {
+  private async initialize() {
     const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
     const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
     this.twilioPhone = process.env.TWILIO_PHONE_NUMBER?.trim();
@@ -24,7 +24,18 @@ class TwilioService {
     if (accountSid && authToken && this.twilioPhone) {
       try {
         this.client = twilio(accountSid, authToken);
-        this.initialized = true;
+        // Validate credentials by making a test API call
+        const isValid = await this.validateCredentials();
+        this.initialized = isValid;
+        
+        if (!isValid) {
+          logger.error({
+            message: "Twilio credentials validation failed",
+            category: "system",
+            source: "twilio"
+          });
+          return;
+        }
         logger.info({
           message: "Twilio service initialized successfully",
           category: "system",
