@@ -1092,21 +1092,44 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         }
       }
       
+      // Ensure the applicationUrl has a contract ID and merchant ID
+      let fullApplicationUrl = applicationUrl;
+      
+      // If applicationUrl doesn't contain a specific contract, use a more explicit error message
+      if (!applicationUrl || !applicationUrl.includes('/apply/')) {
+        // Use the URL format from the request with a warning
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        fullApplicationUrl = baseUrl + '/apply';
+        logger.warn({
+          message: "Application URL missing contract ID in follow-up call",
+          category: "api",
+          source: "nlpearl",
+          metadata: { 
+            phoneNumber,
+            providedUrl: applicationUrl,
+            fallbackUrl: fullApplicationUrl,
+            merchantName: displayName,
+            merchantId
+          }
+        });
+      }
+      
       logger.info({
         message: "Initiating application follow-up call",
         category: "api",
         source: "nlpearl",
         metadata: { 
           phoneNumber,
-          applicationUrl: applicationUrl || `${req.protocol}://${req.get('host')}/apply`,
-          merchantName: displayName
+          applicationUrl: fullApplicationUrl,
+          merchantName: displayName,
+          merchantId
         }
       });
       
       // Use NLPearl service to initiate a call
       const callResult = await nlpearlService.initiateApplicationCall(
         phoneNumber,
-        applicationUrl || `${req.protocol}://${req.get('host')}/apply`,
+        fullApplicationUrl,
         displayName
       );
       
@@ -1264,9 +1287,9 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         });
       }
 
-      // Get the application URL
+      // Get the application URL - include both contract ID and merchant ID parameters
       const replitDomain = getAppDomain();
-      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
+      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}?mid=${merchantId}`;
 
       // Prepare the SMS message
       const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
@@ -1528,9 +1551,9 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         console.log(`Created application progress for contract ${newContract.id}, step ${step}`);
       }
 
-      // Get the application base URL from Replit
+      // Get the application base URL from Replit - include both contract ID and merchant ID
       const replitDomain = getAppDomain();
-      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
+      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}?mid=${merchantId}`;
 
       // Prepare the SMS message
       const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;

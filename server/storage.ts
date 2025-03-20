@@ -284,8 +284,16 @@ export class DatabaseStorage implements IStorage {
 
   // Merchant methods
   async getMerchant(id: number): Promise<Merchant | undefined> {
-    const [merchant] = await db.select().from(merchants).where(eq(merchants.id, id));
-    return merchant || undefined;
+    try {
+      const [merchant] = await db.select().from(merchants).where(eq(merchants.id, id));
+      if (!merchant) {
+        console.warn(`No merchant found with ID ${id}`);
+      }
+      return merchant || undefined;
+    } catch (error) {
+      console.error(`Error getting merchant with ID ${id}:`, error);
+      return undefined;
+    }
   }
 
   async getMerchantByUserId(userId: number): Promise<Merchant | undefined> {
