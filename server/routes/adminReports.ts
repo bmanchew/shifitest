@@ -21,7 +21,7 @@ adminReportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
     logger.error({
       message: `Failed to get CFPB complaint trends: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "admin",
+      source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null
       }
@@ -48,7 +48,7 @@ adminReportsRouter.get("/ai-analytics", async (req: Request, res: Response) => {
       logger.warn({
         message: `Could not get real AI analytics, using complaint trends data: ${analyticError instanceof Error ? analyticError.message : String(analyticError)}`,
         category: "api",
-        source: "admin"
+        source: "internal"
       });
       
       const trendsData = await cfpbService.getComplaintTrends();
@@ -62,7 +62,7 @@ adminReportsRouter.get("/ai-analytics", async (req: Request, res: Response) => {
     logger.error({
       message: `Failed to get AI analytics: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "admin",
+      source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null
       }
@@ -88,7 +88,7 @@ adminReportsRouter.get("/portfolio-health", async (req: Request, res: Response) 
     logger.error({
       message: `Failed to get portfolio health: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "admin",
+      source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null
       }
@@ -114,7 +114,7 @@ adminReportsRouter.get("/complaint-trends", async (req: Request, res: Response) 
     logger.error({
       message: `Failed to get complaint trends: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "admin",
+      source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null
       }
@@ -140,7 +140,7 @@ adminReportsRouter.get("/underwriting-recommendations", async (req: Request, res
     logger.error({
       message: `Failed to get underwriting recommendations: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "admin",
+      source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null
       }
@@ -182,7 +182,7 @@ adminReportsRouter.post("/run-portfolio-monitoring", async (req: Request, res: R
     logger.error({
       message: `Failed to run portfolio monitoring: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "admin",
+      source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null
       }
@@ -213,7 +213,7 @@ adminReportsRouter.get("/monitoring-schedule", async (req: Request, res: Respons
     logger.error({
       message: `Failed to get monitoring schedule: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "admin",
+      source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null
       }
@@ -248,7 +248,7 @@ adminReportsRouter.post("/monitoring-schedule", async (req: Request, res: Respon
     logger.error({
       message: `Failed to update monitoring schedule: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "admin",
+      source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null
       }

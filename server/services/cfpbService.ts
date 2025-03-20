@@ -51,7 +51,7 @@ export class CFPBService {
         metadata: {
           error: error instanceof Error ? error.stack : null,
           params: params.toString(),
-          response: error.response?.data
+          response: axios.isAxiosError(error) ? error.response?.data : null
         }
       });
       throw error;

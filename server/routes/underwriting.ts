@@ -3,8 +3,32 @@ import { storage } from "../storage";
 import { logger } from "../services/logger";
 import { underwritingService } from "../services/underwriting";
 import { nlpearlService } from "../services/index"; // Import nlpearlService instance
+import { twilioService } from "../services/twilio"; // Import twilioService for sendSMS
+import { preFiService } from "../services/prefi"; // Import preFiService
 import { UnderwritingData } from "@shared/schema";
 
+
+// Helper function to send SMS messages
+async function sendSMS(phoneNumber: string, message: string): Promise<boolean> {
+  try {
+    const result = await twilioService.sendSMS({
+      to: phoneNumber,
+      body: message
+    });
+    return result.success;
+  } catch (error) {
+    logger.error({
+      message: `SMS sending failed: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "twilio",
+      metadata: {
+        phoneNumber,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    return false;
+  }
+}
 
 const underwritingRouter = express.Router();
 
@@ -68,12 +92,12 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
         // Send SMS only after NLPearl call is active
         try {
           await sendSMS(contract.phoneNumber, `Your underwriting process has started.`);
-          logger.info({ message: `SMS sent to ${contract.phoneNumber}`, category: "api", source: "sms" });
+          logger.info({ message: `SMS sent to ${contract.phoneNumber}`, category: "api", source: "twilio" });
         } catch (smsError) {
           logger.error({
             message: `Failed to send SMS: ${smsError instanceof Error ? smsError.message : String(smsError)}`,
             category: "api",
-            source: "sms",
+            source: "twilio",
             metadata: { contractId, phoneNumber: contract.phoneNumber, error: smsError instanceof Error ? smsError.stack : null }
           });
         }
@@ -306,7 +330,9 @@ underwritingRouter.post("/prefi-check", async (req: Request, res: Response) => {
     logger.error({
       message: `Error running PreFi check`,
       category: 'underwriting',
-      error: error instanceof Error ? error.stack : String(error)
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
     });
     return res.status(500).json({
       success: false,
