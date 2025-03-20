@@ -20,11 +20,42 @@ import { Link } from "wouter";
 export default function AdminDashboard() {
   const { data: merchants = [] } = useQuery<Merchant[]>({
     queryKey: ["/api/merchants"],
+    queryFn: async () => {
+      const res = await fetch("/api/merchants", {
+        credentials: "include"
+      });
+      if (!res.ok) throw new Error("Failed to fetch merchants");
+      return res.json();
+    }
   });
 
   const { data: contracts = [] } = useQuery<Contract[]>({
     queryKey: ["/api/contracts"],
+    queryFn: async () => {
+      const res = await fetch("/api/contracts", {
+        credentials: "include"
+      });
+      if (!res.ok) throw new Error("Failed to fetch contracts");
+      return res.json();
+    }
   });
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users", {
+        credentials: "include"
+      });
+      if (!res.ok) throw new Error("Failed to fetch customers");
+      return res.json();
+    }
+  });
+
+  const getCustomerName = (customerId: number | null) => {
+    if (!customerId) return "No Customer";
+    const customer = customers.find(c => c.id === customerId);
+    return customer ? `${customer.firstName} ${customer.lastName}` : "Unknown Customer";
+  };
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
