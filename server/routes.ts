@@ -56,6 +56,14 @@ function generateContractNumber(): string {
 export async function registerRoutes(app: Express): Promise<Server> {
   const apiRouter = express.Router();
 
+  // Health check endpoint
+  apiRouter.get("/", (req: Request, res: Response) => {
+    res.status(200).json({
+      status: "healthy",
+      message: "ShiFi API is running"
+    });
+  });
+
   // Auth routes
   apiRouter.post("/auth/login", async (req: Request, res: Response) => {
     try {
