@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { FilePenLine, FileText, Info, Check } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 interface ContractSigningProps {
   contractId: number;
@@ -11,6 +12,16 @@ interface ContractSigningProps {
   customerName: string;
   onComplete: () => void;
   onBack: () => void;
+}
+
+interface Contract {
+  id: number;
+  contractNumber: string;
+  customerId: number | null;
+  phoneNumber: string | null;
+  merchantId: number;
+  status: string;
+  step: string;
 }
 
 export default function ContractSigning({
@@ -27,6 +38,12 @@ export default function ContractSigning({
   const [signatureData, setSignatureData] = useState<string>("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [signingError, setSigningError] = useState<string | null>(null);
+
+  // Fetch contract data to get the phone number
+  const { data: contract } = useQuery<Contract>({
+    queryKey: [`/api/contracts/${contractId}`],
+    enabled: !!contractId,
+  });
 
   // Handle contract review moving to signing step
   const handleReviewComplete = () => {
@@ -147,8 +164,7 @@ export default function ContractSigning({
 
     try {
       // Call the API to sign the contract using ThanksRoger service
-      // Using the mock endpoint since the direct endpoint is having issues
-      console.log("Using mock signing endpoint for contract:", contractId);
+      console.log("Submitting signature for contract:", contractId);
       const signingResponse = await apiRequest<{
         success: boolean;
         contractId: string;
@@ -157,11 +173,12 @@ export default function ContractSigning({
         signedAt: string;
         status: string;
         message: string;
-      }>("POST", "/api/mock/thanks-roger-signing", {
+      }>("POST", "/api/contract-signing", {
         contractId,
         contractNumber,
         customerName,
         signatureData,
+        phoneNumber: contract?.phoneNumber || "" // Include phone number for verification with empty fallback
       });
 
       if (!signingResponse.success) {
