@@ -1044,6 +1044,255 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     }
   });
 
+  // Endpoint to check Twilio service status
+  apiRouter.get("/twilio/status", async (req: Request, res: Response) => {
+    try {
+      const isInitialized = twilioService.isInitialized();
+      const accountSid = process.env.TWILIO_ACCOUNT_SID ? "Configured" : "Not configured";
+      const authToken = process.env.TWILIO_AUTH_TOKEN ? "Configured" : "Not configured";
+      const phoneNumber = process.env.TWILIO_PHONE_NUMBER;
+
+      logger.info({
+        message: "Twilio service status check",
+        category: "api",
+        source: "twilio",
+        metadata: {
+          isInitialized,
+          accountSid: !!process.env.TWILIO_ACCOUNT_SID,
+          authToken: !!process.env.TWILIO_AUTH_TOKEN,
+          phoneNumber: phoneNumber || "Not configured"
+        }
+      });
+
+      return res.json({
+        success: true,
+        status: {
+          isInitialized,
+          accountSid,
+          authToken,
+          phoneNumber: phoneNumber || "Not configured",
+          mode: isInitialized ? "Live" : "Simulation"
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error checking Twilio service status: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "twilio",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+
+      return res.status(500).json({
+        success: false,
+        message: "Error checking Twilio status",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Simplified SMS application sending endpoint
+  apiRouter.post("/twilio/send-application", async (req: Request, res: Response) => {
+    try {
+      const { phoneNumber, merchantId, amount, email } = req.body;
+
+      if (!phoneNumber || !merchantId || !amount) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number, merchant ID, and amount are required"
+        });
+      }
+
+      logger.info({
+        message: "Application SMS requested",
+        category: "sms",
+        source: "twilio",
+        metadata: {
+          phoneNumber,
+          merchantId,
+          amount,
+          email: email || null
+        }
+      });
+
+      // Get merchant
+      const merchant = await storage.getMerchant(parseInt(merchantId));
+      if (!merchant) {
+        return res.status(404).json({ 
+          success: false,
+          message: "Merchant not found" 
+        });
+      }
+
+      // Create a contract for this application
+      const contractNumber = generateContractNumber();
+      const termMonths = 24; // Fixed term
+      const interestRate = 0; // 0% APR
+      const downPaymentPercent = 15; // 15% down payment
+      const downPayment = amount * (downPaymentPercent / 100);
+      const financedAmount = amount - downPayment;
+      const monthlyPayment = financedAmount / termMonths;
+
+      // Find or create a user for this phone number
+      const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
+
+      // Create the contract
+      const newContract = await storage.createContract({
+        contractNumber,
+        merchantId,
+        customerId: customer.id,
+        amount,
+        downPayment,
+        financedAmount,
+        termMonths,
+        interestRate,
+        monthlyPayment,
+        status: "pending",
+        currentStep: "terms",
+        phoneNumber: phoneNumber
+      });
+
+      // Create application progress for all steps
+      const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
+      for (const step of applicationSteps) {
+        await storage.createApplicationProgress({
+          contractId: newContract.id,
+          step: step as any,
+          completed: false,
+          data: null,
+        });
+      }
+
+      // Get the application URL
+      const replitDomain = getAppDomain();
+      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}`;
+
+      // Prepare the SMS message
+      const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
+
+      // Send SMS using Twilio service
+      const result = await twilioService.sendSMS({
+        to: phoneNumber,
+        body: messageText
+      });
+
+      // Log the SMS delivery attempt
+      await storage.createLog({
+        level: "info",
+        category: "sms",
+        source: "twilio",
+        message: `Application SMS to ${phoneNumber}`,
+        metadata: JSON.stringify({
+          phoneNumber,
+          merchantId,
+          amount,
+          contractId: newContract.id,
+          messageId: result.messageId,
+          isSimulated: result.isSimulated
+        })
+      });
+
+      return res.json({
+        success: true,
+        message: result.isSimulated ? 
+          `Application SMS would be sent to ${phoneNumber} (simulation mode)` : 
+          `Application SMS sent to ${phoneNumber}`,
+        contractId: newContract.id,
+        applicationUrl,
+        messageId: result.messageId,
+        isSimulated: result.isSimulated
+      });
+    } catch (error) {
+      logger.error({
+        message: `Application SMS error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "sms",
+        source: "twilio",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send application SMS",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Simple SMS testing endpoint
+  apiRouter.post("/twilio/test-sms", async (req: Request, res: Response) => {
+    try {
+      const { phoneNumber, message } = req.body;
+
+      if (!phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number is required"
+        });
+      }
+
+      // Default message if none provided
+      const smsMessage = message || "This is a test message from ShiFi. The SMS testing endpoint is working correctly.";
+
+      logger.info({
+        message: "Test SMS requested",
+        category: "api",
+        source: "twilio",
+        metadata: {
+          phoneNumber,
+          messageLength: smsMessage.length
+        }
+      });
+
+      // Send SMS using Twilio service
+      const result = await twilioService.sendSMS({
+        to: phoneNumber,
+        body: smsMessage
+      });
+
+      // Create log for test SMS
+      await storage.createLog({
+        level: "info",
+        category: "api",
+        source: "twilio",
+        message: `Test SMS to ${phoneNumber}`,
+        metadata: JSON.stringify({
+          phoneNumber,
+          messageId: result.messageId,
+          isSimulated: result.isSimulated,
+          success: result.success
+        })
+      });
+
+      return res.json({
+        success: true,
+        message: result.isSimulated ? 
+          `Test SMS would be sent to ${phoneNumber} (simulation mode)` : 
+          `Test SMS sent to ${phoneNumber}`,
+        messageId: result.messageId,
+        status: result.isSimulated ? "simulated" : "delivered",
+        isSimulated: result.isSimulated
+      });
+    } catch (error) {
+      logger.error({
+        message: `Test SMS error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "twilio",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send test SMS",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   apiRouter.post("/send-sms", async (req: Request, res: Response) => {
     try {
       // Check if this is a test SMS from admin panel
