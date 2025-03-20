@@ -86,11 +86,14 @@ export default function Login() {
           <CardHeader className="space-y-1">
             <div className="flex items-center justify-center mb-2">
               <img 
-                src="/logo3.png"
+                src={`${window.location.origin}/logo3.png`}
                 alt="ShiFi Logo"
-                className="h-8 w-8"
+                className="h-8 w-8 object-contain"
                 onError={(e) => {
-                  console.error("Logo failed to load");
+                  const img = e.currentTarget;
+                  if (img.src !== `${window.location.origin}/attached_assets/logo3.png`) {
+                    img.src = `${window.location.origin}/attached_assets/logo3.png`;
+                  }
                 }}
               />
               <span className="ml-2 text-2xl font-bold">ShiFi</span>
