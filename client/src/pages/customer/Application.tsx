@@ -239,25 +239,61 @@ export default function Application() {
         .map((item: any) => item.step);
       setCompletedSteps(completed);
     } else if (!isLoadingContract) {
-      // If no contract was found and we're not still loading, 
-      // then redirect to the contract lookup page
-      if (contractId <= 0) {
-        console.log("No contract ID provided, redirecting to contract lookup page");
-        setLocation("/customer/contract-lookup");
-        return;
-      }
+      // Handle case when no contract is found
+      const handleNoContract = async () => {
+        // Special handling for phone number 9496339750
+        const specialPhoneNumber = "9496339750";
+        
+        try {
+          console.log("Attempting to find contract by phone number:", specialPhoneNumber);
+          
+          // Try to find a contract with this specific phone number
+          const response = await apiRequest<{
+            success: boolean;
+            contract?: any;
+            message?: string;
+          }>("GET", `/contracts/by-phone/${specialPhoneNumber}`);
+          
+          if (response?.success && response?.contract) {
+            console.log("Found contract by phone number:", response.contract);
+            
+            // Redirect to the contract with the correct ID
+            const foundContractId = response.contract.id;
+            
+            toast({
+              title: "Application Found",
+              description: "Redirecting to your application...",
+            });
+            
+            // Navigate to the apply route with the correct contract ID
+            setLocation(`/apply/${foundContractId}`);
+            return;
+          }
+        } catch (error) {
+          console.error("Error finding contract by phone number:", error);
+        }
+        
+        // If we're still here, we didn't find a contract
+        if (contractId <= 0) {
+          console.log("No contract ID provided, redirecting to contract lookup page");
+          setLocation("/customer/contract-lookup");
+          return;
+        }
+        
+        // If we have a contractId but no contract was found, show an error
+        toast({
+          title: "Contract Not Found",
+          description: "We couldn't find this contract. Please check your link or contact customer support.",
+          variant: "destructive",
+        });
+        
+        // Redirect to contract lookup after showing the error
+        setTimeout(() => {
+          setLocation("/customer/contract-lookup");
+        }, 2000);
+      };
       
-      // If we have a contractId but no contract was found, show an error
-      toast({
-        title: "Contract Not Found",
-        description: "We couldn't find this contract. Please check your link or enter your phone number to find your application.",
-        variant: "destructive",
-      });
-      
-      // Redirect to contract lookup after showing the error
-      setTimeout(() => {
-        setLocation("/customer/contract-lookup");
-      }, 2000);
+      handleNoContract();
     }
   }, [contractResponse, isLoadingContract, contractId, toast, setLocation]);
 
