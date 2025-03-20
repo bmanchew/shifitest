@@ -8,7 +8,7 @@
 
 // REACT & TYPESCRIPT STANDARDS
 const reactTypeScriptStandards = {
-  // Component Architecture
+  // Component Architecture 
   components: {
     preferFunctional: true,
     naming: "PascalCase",
