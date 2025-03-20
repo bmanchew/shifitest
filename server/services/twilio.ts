@@ -61,9 +61,16 @@ class TwilioService {
   }> {
     if (!this.isInitialized() || !this.client) {
       logger.warn({
-        message: `Simulating SMS to ${message.to}: ${message.body}`,
+        message: `Twilio not initialized - Simulating SMS to ${message.to}`,
         category: "api",
-        source: "twilio"
+        source: "twilio",
+        metadata: {
+          accountSid: !!process.env.TWILIO_ACCOUNT_SID,
+          authToken: !!process.env.TWILIO_AUTH_TOKEN,
+          phoneNumber: process.env.TWILIO_PHONE_NUMBER,
+          isInitialized: this.isInitialized(),
+          hasClient: !!this.client
+        }
       });
       
       // Return simulated success response
