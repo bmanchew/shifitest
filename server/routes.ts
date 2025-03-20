@@ -455,12 +455,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
-          merchantId,
-          originatorId: plaidMerchant.originatorId,
-          status: originatorStatus.status 
-        }
-      });
+  logger.info({
+    message: "Merchant sync completed",
+    category: "api",
+    source: "plaid",
+    metadata: {
+      merchantId,
+      originatorId: plaidMerchant.originatorId,
+      status: originatorStatus.status 
+    }
+  });
 
       res.json({
         success: true,
