@@ -368,7 +368,7 @@ class ThanksRogerService {
 
     try {
       // Call the Thanks Roger API to apply the signature
-      const url = `${this.baseUrl}/contracts/${options.contractId}/signatures`;
+      const url = `${this.baseUrl}/workspaces/${this.defaultWorkspaceId}/contracts/${options.contractId}/signatures`;
       
       logger.info({
         message: `Attempting to sign contract ${options.contractId}`,
