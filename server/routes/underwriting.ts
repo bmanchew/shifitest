@@ -2,8 +2,8 @@ import express, { Request, Response } from "express";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
 import { underwritingService } from "../services/underwriting";
+import { nlpearlService } from "../services/index"; // Import nlpearlService instance
 import { UnderwritingData } from "@shared/schema";
-import { NLPearlService } from '../services/nlpearl'; // Import NLPearlService
 
 
 const underwritingRouter = express.Router();
@@ -43,18 +43,18 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
     }
 
     // First attempt NLPearl call
-    const nlPearlService = new NLPearlService();
-    if (nlPearlService.isInitialized()) {
+    if (nlpearlService.isInitialized()) {
       try {
-        const applicationUrl = 'some-application-url'; // Placeholder - replace with actual URL
-        const callResult = await nlPearlService.initiateApplicationCall(
+        // Generate application URL based on current host
+        const applicationUrl = `${req.protocol}://${req.get('host')}/apply/${contractId}`;
+        const callResult = await nlpearlService.initiateApplicationCall(
           contract.phoneNumber,
           applicationUrl,
           contract.merchantName
         );
 
         // Wait for call to be active before sending SMS
-        const isCallActive = await nlPearlService.waitForCallActive(callResult.call_id);
+        const isCallActive = await nlpearlService.waitForCallActive(callResult.call_id);
         if (!isCallActive) {
           logger.warn({
             message: "NLPearl call did not become active, skipping SMS",

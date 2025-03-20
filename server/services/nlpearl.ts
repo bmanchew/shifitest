@@ -76,7 +76,7 @@ export class NLPearlService {
         logger.error({
           message: `Failed to check call status: ${error instanceof Error ? error.message : String(error)}`,
           category: "api",
-          source: "twilio",
+          source: "nlpearl",
           metadata: { callId, attempt: i + 1 }
         });
       }
@@ -120,11 +120,11 @@ export class NLPearlService {
       logger.info({
         message: "NLPearl call initiated",
         category: "api",
-        source: "twilio",
+        source: "nlpearl",
         metadata: {
           phoneNumber,
           callId: response.data.call_id,
-          requestUrl: `${this.baseUrl}/calls/initiate`,
+          requestUrl: `${this.baseUrl}/Outbound/${process.env.NLPEARL_CAMPAIGN_ID}/Call`,
           merchantName,
           applicationUrl
         },
@@ -135,9 +135,12 @@ export class NLPearlService {
       logger.error({
         message: `Failed to initiate NLPearl call: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
-        source: "twilio",
+        source: "nlpearl",
         metadata: {
           error: error instanceof Error ? error.stack : String(error),
+          phoneNumber,
+          merchantName,
+          applicationUrl
         },
       });
       throw error;
