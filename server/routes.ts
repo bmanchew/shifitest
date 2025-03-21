@@ -4431,6 +4431,52 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
               assetReportId: req.body.asset_report_id,
             },
           });
+
+          if (webhook_code === "PRODUCT_READY") {
+            try {
+              // Get the asset report token from our database
+              const assetReport = await storage.getAssetReportByReportId(req.body.asset_report_id);
+              
+              if (!assetReport) {
+                logger.error({
+                  message: "Asset report not found in database",
+                  category: "api",
+                  source: "plaid",
+                  metadata: { assetReportId: req.body.asset_report_id }
+                });
+                break;
+              }
+
+              // Get the full report data
+              const reportData = await plaidService.getAssetReport(assetReport.assetReportToken, true);
+
+              // Store the analysis data
+              await storage.updateAssetReport(assetReport.id, {
+                status: "completed",
+                analysisData: JSON.stringify(reportData.report)
+              });
+
+              logger.info({
+                message: "Successfully processed asset report webhook",
+                category: "api",
+                source: "plaid",
+                metadata: {
+                  assetReportId: req.body.asset_report_id,
+                  status: "completed"
+                }
+              });
+            } catch (error) {
+              logger.error({
+                message: `Failed to process asset report webhook: ${error instanceof Error ? error.message : String(error)}`,
+                category: "api",
+                source: "plaid",
+                metadata: {
+                  assetReportId: req.body.asset_report_id,
+                  error: error instanceof Error ? error.stack : null
+                }
+              });
+            }
+          }
           break;
 
         case "INCOME":
