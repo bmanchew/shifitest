@@ -36,9 +36,9 @@ export default function AdminDashboard() {
   const activeContracts = stats?.activeContracts || 0;
   const pendingContracts = stats?.pendingContracts || 0;
 
-  const { data: merchants = [] } = useQuery<Merchant[]>({
-    queryKey: ["/api/merchants"],
-  });
+  // const { data: merchants = [] } = useQuery<Merchant[]>({
+  //   queryKey: ["/api/merchants"],
+  // });
 
   const { data: merchants = [] } = useQuery({
     queryKey: ["/api/merchants"],

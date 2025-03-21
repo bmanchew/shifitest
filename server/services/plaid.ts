@@ -578,21 +578,21 @@ class PlaidService {
       };
 
       const response = await this.client.assetReportCreate(request);
-      console.log(
-        "Asset Report Create Response:",
-        JSON.stringify(response.data, null, 2),
-      );
 
-      logger.info({
-        message: "Created Plaid asset report",
-        category: "api",
-        source: "plaid",
-        metadata: {
-          assetReportId: response.data.asset_report_id,
-          assetReportToken: response.data.asset_report_token,
-          requestId: response.data.request_id,
-        },
-      });
+      "Asset Report Create Response:",
+        //   JSON.stringify(response.data, null, 2),
+        // );
+
+        logger.info({
+          message: "Created Plaid asset report",
+          category: "api",
+          source: "plaid",
+          metadata: {
+            assetReportId: response.data.asset_report_id,
+            assetReportToken: response.data.asset_report_token,
+            requestId: response.data.request_id,
+          },
+        });
 
       return {
         assetReportId: response.data.asset_report_id,

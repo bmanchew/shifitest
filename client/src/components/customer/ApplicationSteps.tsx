@@ -29,8 +29,8 @@ export default function ApplicationSteps({
                   completedSteps.includes(step.id)
                     ? "bg-green-500"
                     : currentStep === step.id
-                      ? "bg-primary-600 text-white"
-                      : "bg-gray-200 text-gray-500"
+                    ? "bg-primary-600 text-white"
+                    : "bg-gray-200 text-gray-500"
                 }`}
               >
                 {completedSteps.includes(step.id) ? (
@@ -42,25 +42,21 @@ export default function ApplicationSteps({
             </div>
 
             {index < steps.length - 1 && (
-              <div
+              <div 
                 className={`h-0.5 absolute top-4 left-8 right-0 -mr-4 ${
-                  completedSteps.includes(step.id)
-                    ? "bg-green-500"
-                    : "bg-gray-200"
+                  completedSteps.includes(step.id) ? "bg-green-500" : "bg-gray-200"
                 }`}
               />
             )}
 
             <div className="ml-3 absolute -bottom-7 w-max">
-              <p
-                className={`text-xs ${
-                  currentStep === step.id
-                    ? "font-semibold text-gray-900"
-                    : completedSteps.includes(step.id)
-                      ? "text-green-600"
-                      : "text-gray-500"
-                }`}
-              >
+              <p className={`text-xs ${
+                currentStep === step.id
+                  ? "font-semibold text-gray-900"
+                  : completedSteps.includes(step.id)
+                  ? "text-green-600"
+                  : "text-gray-500"
+              }`}>
                 {step.title}
               </p>
             </div>
@@ -70,14 +66,13 @@ export default function ApplicationSteps({
 
       <div className="sm:hidden mt-1">
         <p className="text-sm font-medium text-gray-900">
-          Step {steps.findIndex((s) => s.id === currentStep) + 1} of{" "}
-          {steps.length}: {steps.find((s) => s.id === currentStep)?.title}
+          Step {steps.findIndex(s => s.id === currentStep) + 1} of {steps.length}: {steps.find(s => s.id === currentStep)?.title}
         </p>
         <div className="flex w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-2">
           <div
             className="bg-primary-600"
             style={{
-              width: `${((steps.findIndex((s) => s.id === currentStep) + 1) / steps.length) * 100}%`,
+              width: `${((steps.findIndex(s => s.id === currentStep) + 1) / steps.length) * 100}%`,
             }}
           />
         </div>

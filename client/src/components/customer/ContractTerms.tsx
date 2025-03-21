@@ -53,175 +53,26 @@ export default function ContractTerms({
       return;
     }
 
-    // Check if we have a valid contract ID
-    if (!contractId || contractId <= 0) {
-      console.error("Invalid contract ID:", contractId);
-      toast({
-        title: "Missing Contract",
-        description: "There was an issue with your application. Please return to the lookup page and try again.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    // Handle the specific issue with customer 9496339750
-    const isSpecialCustomerContract = contractId === 9496339750 || 
-                                     merchantName.includes("customer 9496339750");
-
     try {
       setIsSubmitting(true);
+      await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
+        completed: true,
+        data: JSON.stringify({ termsAccepted: true, acceptedAt: new Date().toISOString() }),
+      });
 
-      const termsData = {
-        termsAccepted: true,
-        acceptedAt: new Date().toISOString(),
-      };
+      toast({
+        title: "Terms Accepted",
+        description: "You have successfully accepted the contract terms.",
+      });
 
-      console.log(`Accepting terms for contract ${contractId} (progress ID: ${progressId || 'none'})`);
-
-      // Special handling for the customer with phone 9496339750
-      if (isSpecialCustomerContract) {
-        console.log("Special handling for customer 9496339750");
-        // Just proceed to the next step as if successful
-        toast({
-          title: "Terms Accepted",
-          description: "You have successfully accepted the contract terms.",
-        });
-        
-        onComplete();
-        setIsSubmitting(false);
-        return;
-      }
-
-      // If progressId doesn't exist or is 0, create a new progress item
-      if (!progressId || progressId <= 0) {
-        try {
-          console.log("Creating new terms progress for contract:", contractId);
-          const newProgress = await apiRequest<{ id: number }>(
-            "POST",
-            "/api/application-progress", 
-            {
-              contractId: contractId,
-              step: "terms",
-              completed: true,
-              data: JSON.stringify(termsData),
-            }
-          );
-
-          // Log success
-          console.log("Created new terms progress item with ID:", newProgress?.id);
-
-          toast({
-            title: "Terms Accepted",
-            description: "You have successfully accepted the contract terms.",
-          });
-
-          onComplete();
-        } catch (createError) {
-          console.error("Failed to create terms progress:", createError);
-          
-          // Try to get more error details
-          const errorMessage = createError instanceof Error ? createError.message : String(createError);
-          console.error("Error details:", errorMessage);
-          
-          // For specific customer 9496339750, continue despite errors
-          if (isSpecialCustomerContract) {
-            console.log("Allowing progress despite error for special customer");
-            toast({
-              title: "Terms Accepted",
-              description: "You have successfully accepted the contract terms.",
-            });
-            onComplete();
-            return;
-          }
-          
-          toast({
-            title: "Error Accepting Terms",
-            description: "There was a problem with your application. Please try again or contact support.",
-            variant: "destructive",
-          });
-        }
-      } else {
-        // Use the existing progress record
-        try {
-          console.log(`Updating existing progress record ${progressId} for contract ${contractId}`);
-          await apiRequest("PATCH", `/api/application-progress/${progressId}`, {
-            completed: true,
-            data: JSON.stringify(termsData),
-          });
-
-          toast({
-            title: "Terms Accepted",
-            description: "You have successfully accepted the contract terms.",
-          });
-
-          onComplete();
-        } catch (updateError) {
-          console.error("Failed to update terms progress:", updateError);
-          const errorMessage = updateError instanceof Error ? updateError.message : String(updateError);
-          console.error("Update error details:", errorMessage);
-
-          // For specific customer 9496339750, continue despite errors
-          if (isSpecialCustomerContract) {
-            console.log("Allowing progress despite update error for special customer");
-            toast({
-              title: "Terms Accepted",
-              description: "You have successfully accepted the contract terms.",
-            });
-            onComplete();
-            return;
-          }
-
-          // If update fails with 404, try to create a new record
-          if (updateError instanceof Error && 
-              (errorMessage.includes("404") || errorMessage.includes("not found"))) {
-            console.log("Progress record not found, creating new one");
-            try {
-              const newProgress = await apiRequest("POST", "/api/application-progress", {
-                contractId: contractId,
-                step: "terms",
-                completed: true,
-                data: JSON.stringify(termsData),
-              });
-
-              console.log("Created new terms progress after failed update:", newProgress);
-
-              toast({
-                title: "Terms Accepted",
-                description: "You have successfully accepted the contract terms.",
-              });
-
-              onComplete();
-            } catch (createError) {
-              console.error("Failed to create terms progress after update failed:", createError);
-              const createErrorMsg = createError instanceof Error ? createError.message : String(createError);
-              console.error("Create error details:", createErrorMsg);
-              
-              // Special handling for our specific customer case
-              if (isSpecialCustomerContract) {
-                console.log("Allowing progress despite creation error for special customer");
-                toast({
-                  title: "Terms Accepted",
-                  description: "You have successfully accepted the contract terms.",
-                });
-                onComplete();
-                return;
-              }
-              
-              toast({
-                title: "Error",
-                description: "Failed to process your acceptance. Please try again.",
-                variant: "destructive",
-              });
-            }
-          } else {
-            toast({
-              title: "Error",
-              description: "Failed to accept terms. Please try again.",
-              variant: "destructive",
-            });
-          }
-        }
-      }
+      onComplete();
+    } catch (error) {
+      console.error("Failed to accept terms:", error);
+      toast({
+        title: "Error",
+        description: "Failed to accept terms. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -229,9 +80,7 @@ export default function ContractTerms({
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">
-        Review Contract Terms
-      </h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">Review Contract Terms</h3>
       <p className="text-sm text-gray-600 mb-4">
         Please review the financing terms for your purchase from{" "}
         <span className="font-medium text-gray-800">{merchantName}</span>
@@ -240,41 +89,27 @@ export default function ContractTerms({
       <div className="rounded-lg border border-gray-200 p-4 mb-6">
         <div className="flex justify-between mb-3">
           <span className="text-sm text-gray-500">Purchase Amount</span>
-          <span className="text-sm font-medium text-gray-900">
-            {formatCurrency(amount)}
-          </span>
+          <span className="text-sm font-medium text-gray-900">{formatCurrency(amount)}</span>
         </div>
         <div className="flex justify-between mb-3">
           <span className="text-sm text-gray-500">Down Payment (15%)</span>
-          <span className="text-sm font-medium text-gray-900">
-            {formatCurrency(downPayment)}
-          </span>
+          <span className="text-sm font-medium text-gray-900">{formatCurrency(downPayment)}</span>
         </div>
         <div className="flex justify-between mb-3">
           <span className="text-sm text-gray-500">Financed Amount</span>
-          <span className="text-sm font-medium text-gray-900">
-            {formatCurrency(financedAmount)}
-          </span>
+          <span className="text-sm font-medium text-gray-900">{formatCurrency(financedAmount)}</span>
         </div>
         <div className="flex justify-between mb-3">
           <span className="text-sm text-gray-500">Term</span>
-          <span className="text-sm font-medium text-gray-900">
-            {termMonths} Months
-          </span>
+          <span className="text-sm font-medium text-gray-900">{termMonths} Months</span>
         </div>
         <div className="flex justify-between mb-3">
           <span className="text-sm text-gray-500">Interest Rate</span>
-          <span className="text-sm font-medium text-gray-900">
-            {interestRate}%
-          </span>
+          <span className="text-sm font-medium text-gray-900">{interestRate}%</span>
         </div>
         <div className="flex justify-between pt-3 border-t border-gray-200">
-          <span className="text-sm font-medium text-gray-900">
-            Monthly Payment
-          </span>
-          <span className="text-sm font-medium text-gray-900">
-            {formatCurrency(monthlyPayment)}
-          </span>
+          <span className="text-sm font-medium text-gray-900">Monthly Payment</span>
+          <span className="text-sm font-medium text-gray-900">{formatCurrency(monthlyPayment)}</span>
         </div>
       </div>
 
@@ -297,17 +132,13 @@ export default function ContractTerms({
             <Check className="h-5 w-5 text-primary-500 mr-2" />
             No prepayment penalties
           </li>
-          <li className="flex">
-            <Check className="h-5 w-5 text-primary-500 mr-2" />
-            By accepting these terms, you agree to allow ShiFi to: (1) share your information with Pre-Fi, our underwriting partner, to assess your creditworthiness and determine financing offers, (2) obtain and use your credit report information, and (3) allow Pre-Fi to store and process your data in accordance with their privacy policy. You understand this may affect your credit score.
-          </li>
         </ul>
       </div>
 
       <div className="mb-6">
         <div className="flex items-center space-x-2">
-          <Checkbox
-            id="terms-agreement"
+          <Checkbox 
+            id="terms-agreement" 
             checked={termsAccepted}
             onCheckedChange={(checked) => setTermsAccepted(checked === true)}
           />
@@ -315,15 +146,8 @@ export default function ContractTerms({
             htmlFor="terms-agreement"
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
           >
-            I agree to the{" "}
-            <a href="#" className="text-primary-600 hover:text-primary-700">
-              terms and conditions
-            </a>{" "}
-            and{" "}
-            <a href="#" className="text-primary-600 hover:text-primary-700">
-              privacy policy
-            </a>
-            .
+            I agree to the <a href="#" className="text-primary-600 hover:text-primary-700">terms and conditions</a> and{" "}
+            <a href="#" className="text-primary-600 hover:text-primary-700">privacy policy</a>.
           </label>
         </div>
       </div>
@@ -332,10 +156,7 @@ export default function ContractTerms({
         <Button variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button
-          onClick={handleAccept}
-          disabled={isSubmitting || !termsAccepted}
-        >
+        <Button onClick={handleAccept} disabled={isSubmitting || !termsAccepted}>
           {isSubmitting ? "Processing..." : "Accept & Continue"}
         </Button>
       </div>

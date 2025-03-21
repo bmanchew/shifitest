@@ -166,20 +166,8 @@ export default function PaymentSchedule({
         Payment Schedule
       </h3>
       <p className="text-sm text-gray-600 mb-4">
-        Review and confirm your payment schedule for the financing contract. Payment dates are aligned with your income deposit patterns for your convenience.
+        Review and confirm your payment schedule for the financing contract.
       </p>
-
-      <div className="bg-green-50 rounded-lg p-4 mb-6 flex">
-        <CalendarDays className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-        <div>
-          <p className="text-sm font-medium text-green-800 mb-1">
-            Smart Payment Scheduling
-          </p>
-          <p className="text-sm text-green-700">
-            Your payment dates have been automatically scheduled to align with your typical income deposits for better financial planning.
-          </p>
-        </div>
-      </div>
 
       <div className="rounded-lg border border-gray-200 p-4 mb-6">
         <div className="flex justify-between mb-3">
