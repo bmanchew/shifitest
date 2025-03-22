@@ -1,17 +1,87 @@
-import { pgTable, text, serial, integer, boolean, timestamp, doublePrecision, pgEnum, json } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  serial,
+  integer,
+  boolean,
+  timestamp,
+  doublePrecision,
+  pgEnum,
+  json,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Enums
-export const userRoleEnum = pgEnum('user_role', ['admin', 'merchant', 'customer']);
-export const contractStatusEnum = pgEnum('contract_status', ['pending', 'active', 'completed', 'declined', 'cancelled']);
-export const applicationStepEnum = pgEnum('application_step', ['terms', 'kyc', 'bank', 'bank_pending', 'payment', 'signing', 'completed']);
-export const logLevelEnum = pgEnum('log_level', ['debug', 'info', 'warn', 'error', 'critical']);
-export const logCategoryEnum = pgEnum('log_category', ['system', 'user', 'api', 'payment', 'security', 'contract', 'sms', 'underwriting']);
-export const logSourceEnum = pgEnum('log_source', ['internal', 'twilio', 'didit', 'plaid', 'thanksroger', 'prefi', 'stripe', 'cfpb', 'nlpearl', 'signing']);
-export const verificationTypeEnum = pgEnum('verification_type', ['identity', 'bank', 'address', 'business', 'ownership']);
-export const creditTierEnum = pgEnum('credit_tier', ['tier1', 'tier2', 'tier3', 'declined']);
-export const onboardingStatusEnum = pgEnum('onboarding_status', ['pending', 'in_progress', 'completed', 'rejected']);
+export const userRoleEnum = pgEnum("user_role", [
+  "admin",
+  "merchant",
+  "customer",
+]);
+export const contractStatusEnum = pgEnum("contract_status", [
+  "pending",
+  "active",
+  "completed",
+  "declined",
+  "cancelled",
+]);
+export const applicationStepEnum = pgEnum("application_step", [
+  "terms",
+  "kyc",
+  "bank",
+  "bank_pending",
+  "payment",
+  "signing",
+  "completed",
+]);
+export const logLevelEnum = pgEnum("log_level", [
+  "debug",
+  "info",
+  "warn",
+  "error",
+  "critical",
+]);
+export const logCategoryEnum = pgEnum("log_category", [
+  "system",
+  "user",
+  "api",
+  "payment",
+  "security",
+  "contract",
+  "sms",
+  "underwriting",
+]);
+export const logSourceEnum = pgEnum("log_source", [
+  "internal",
+  "twilio",
+  "didit",
+  "plaid",
+  "thanksroger",
+  "prefi",
+  "stripe",
+  "cfpb",
+  "nlpearl",
+  "signing",
+]);
+export const verificationTypeEnum = pgEnum("verification_type", [
+  "identity",
+  "bank",
+  "address",
+  "business",
+  "ownership",
+]);
+export const creditTierEnum = pgEnum("credit_tier", [
+  "tier1",
+  "tier2",
+  "tier3",
+  "declined",
+]);
+export const onboardingStatusEnum = pgEnum("onboarding_status", [
+  "pending",
+  "in_progress",
+  "completed",
+  "rejected",
+]);
 
 // Users
 export const users = pgTable("users", {
@@ -21,7 +91,7 @@ export const users = pgTable("users", {
   firstName: text("first_name"),
   lastName: text("last_name"),
   name: text("name"), // Keep for backward compatibility
-  role: userRoleEnum("role").notNull().default('customer'),
+  role: userRoleEnum("role").notNull().default("customer"),
   phone: text("phone"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -40,7 +110,7 @@ export const merchants = pgTable("merchants", {
   phone: text("phone").notNull(),
   address: text("address"),
   active: boolean("active").default(true),
-  archived: boolean("archived").default(false),
+  archived: boolean("archived").default(false), // Add this line
   createdAt: timestamp("created_at").defaultNow(),
   userId: integer("user_id").references(() => users.id),
 });
@@ -54,7 +124,9 @@ export const insertMerchantSchema = createInsertSchema(merchants).omit({
 export const contracts = pgTable("contracts", {
   id: serial("id").primaryKey(),
   contractNumber: text("contract_number").notNull().unique(),
-  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  merchantId: integer("merchant_id")
+    .references(() => merchants.id)
+    .notNull(),
   customerId: integer("customer_id").references(() => users.id),
   amount: doublePrecision("amount").notNull(),
   downPayment: doublePrecision("down_payment").notNull(),
@@ -62,8 +134,8 @@ export const contracts = pgTable("contracts", {
   termMonths: integer("term_months").notNull().default(24),
   interestRate: doublePrecision("interest_rate").notNull().default(0),
   monthlyPayment: doublePrecision("monthly_payment").notNull(),
-  status: contractStatusEnum("status").notNull().default('pending'),
-  currentStep: applicationStepEnum("current_step").notNull().default('terms'),
+  status: contractStatusEnum("status").notNull().default("pending"),
+  currentStep: applicationStepEnum("current_step").notNull().default("terms"),
   purchasedByShifi: boolean("purchased_by_shifi").notNull().default(false), // Whether contract has been purchased by ShiFi Fund
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
@@ -79,7 +151,9 @@ export const insertContractSchema = createInsertSchema(contracts).omit({
 // Application Progress
 export const applicationProgress = pgTable("application_progress", {
   id: serial("id").primaryKey(),
-  contractId: integer("contract_id").references(() => contracts.id).notNull(),
+  contractId: integer("contract_id")
+    .references(() => contracts.id)
+    .notNull(),
   step: applicationStepEnum("step").notNull(),
   completed: boolean("completed").default(false),
   data: text("data"), // JSON stringified data specific to the step
@@ -87,7 +161,9 @@ export const applicationProgress = pgTable("application_progress", {
   completedAt: timestamp("completed_at"),
 });
 
-export const insertApplicationProgressSchema = createInsertSchema(applicationProgress).omit({
+export const insertApplicationProgressSchema = createInsertSchema(
+  applicationProgress,
+).omit({
   id: true,
   createdAt: true,
   completedAt: true,
@@ -97,11 +173,11 @@ export const insertApplicationProgressSchema = createInsertSchema(applicationPro
 export const logs = pgTable("logs", {
   id: serial("id").primaryKey(),
   timestamp: timestamp("timestamp").defaultNow(),
-  level: logLevelEnum("level").notNull().default('info'),
-  category: logCategoryEnum("category").notNull().default('system'),
+  level: logLevelEnum("level").notNull().default("info"),
+  category: logCategoryEnum("category").notNull().default("system"),
   message: text("message").notNull(),
   userId: integer("user_id").references(() => users.id),
-  source: logSourceEnum("source").notNull().default('internal'),
+  source: logSourceEnum("source").notNull().default("internal"),
   requestId: text("request_id"), // to group logs for a single request/operation
   correlationId: text("correlation_id"), // to track across multiple systems
   metadata: text("metadata"), // JSON stringified additional data
@@ -129,12 +205,16 @@ export type Contract = typeof contracts.$inferSelect;
 export type InsertContract = z.infer<typeof insertContractSchema>;
 
 export type ApplicationProgress = typeof applicationProgress.$inferSelect;
-export type InsertApplicationProgress = z.infer<typeof insertApplicationProgressSchema>;
+export type InsertApplicationProgress = z.infer<
+  typeof insertApplicationProgressSchema
+>;
 
 // Underwriting data
 export const underwritingData = pgTable("underwriting_data", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id).notNull(),
+  userId: integer("user_id")
+    .references(() => users.id)
+    .notNull(),
   contractId: integer("contract_id").references(() => contracts.id),
   creditTier: creditTierEnum("credit_tier").notNull(),
   creditScore: integer("credit_score"),
@@ -157,7 +237,9 @@ export const underwritingData = pgTable("underwriting_data", {
   updatedAt: timestamp("updated_at"),
 });
 
-export const insertUnderwritingDataSchema = createInsertSchema(underwritingData).omit({
+export const insertUnderwritingDataSchema = createInsertSchema(
+  underwritingData,
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -167,7 +249,9 @@ export type Log = typeof logs.$inferSelect;
 export type InsertLog = z.infer<typeof insertLogSchema>;
 
 export type UnderwritingData = typeof underwritingData.$inferSelect;
-export type InsertUnderwritingData = z.infer<typeof insertUnderwritingDataSchema>;
+export type InsertUnderwritingData = z.infer<
+  typeof insertUnderwritingDataSchema
+>;
 
 // Asset Reports
 export const assetReports = pgTable("asset_reports", {
@@ -223,13 +307,17 @@ export const insertAssetReportSchema = createInsertSchema(assetReports).omit({
   createdAt: true,
 });
 
-export const insertPortfolioMonitoringSchema = createInsertSchema(portfolioMonitoring).omit({
+export const insertPortfolioMonitoringSchema = createInsertSchema(
+  portfolioMonitoring,
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const insertComplaintsDataSchema = createInsertSchema(complaintsData).omit({
+export const insertComplaintsDataSchema = createInsertSchema(
+  complaintsData,
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -239,7 +327,9 @@ export type AssetReport = typeof assetReports.$inferSelect;
 export type InsertAssetReport = z.infer<typeof insertAssetReportSchema>;
 
 export type PortfolioMonitoring = typeof portfolioMonitoring.$inferSelect;
-export type InsertPortfolioMonitoring = z.infer<typeof insertPortfolioMonitoringSchema>;
+export type InsertPortfolioMonitoring = z.infer<
+  typeof insertPortfolioMonitoringSchema
+>;
 
 export type ComplaintsData = typeof complaintsData.$inferSelect;
 export type InsertComplaintsData = z.infer<typeof insertComplaintsDataSchema>;
@@ -247,7 +337,9 @@ export type InsertComplaintsData = z.infer<typeof insertComplaintsDataSchema>;
 // Merchant Performance
 export const merchantPerformance = pgTable("merchant_performance", {
   id: serial("id").primaryKey(),
-  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  merchantId: integer("merchant_id")
+    .references(() => merchants.id)
+    .notNull(),
   performanceScore: doublePrecision("performance_score").notNull(),
   grade: text("grade").notNull(), // A+, A, A-, B+, etc.
   defaultRate: doublePrecision("default_rate"),
@@ -264,24 +356,33 @@ export const merchantPerformance = pgTable("merchant_performance", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertMerchantPerformanceSchema = createInsertSchema(merchantPerformance).omit({
+export const insertMerchantPerformanceSchema = createInsertSchema(
+  merchantPerformance,
+).omit({
   id: true,
   createdAt: true,
 });
 
 export type MerchantPerformance = typeof merchantPerformance.$inferSelect;
-export type InsertMerchantPerformance = z.infer<typeof insertMerchantPerformanceSchema>;
+export type InsertMerchantPerformance = z.infer<
+  typeof insertMerchantPerformanceSchema
+>;
 
 // Plaid Platform Payment data for merchants
 export const plaidMerchants = pgTable("plaid_merchants", {
   id: serial("id").primaryKey(),
-  merchantId: integer("merchant_id").references(() => merchants.id).notNull().unique(),
+  merchantId: integer("merchant_id")
+    .references(() => merchants.id)
+    .notNull()
+    .unique(),
   plaidCustomerId: text("plaid_customer_id"), // The ID assigned by Plaid for this merchant
   clientId: text("client_id"), // The client ID provided by Plaid for this merchant
   originatorId: text("originator_id"), // The originator ID from Plaid
-  onboardingStatus: onboardingStatusEnum("onboarding_status").notNull().default('pending'),
+  onboardingStatus: onboardingStatusEnum("onboarding_status")
+    .notNull()
+    .default("pending"),
   onboardingUrl: text("onboarding_url"), // The URL for the merchant to complete onboarding
-  questionnaireId: text("questionnaire_id"), // The ID of the onboarding questionnaire 
+  questionnaireId: text("questionnaire_id"), // The ID of the onboarding questionnaire
   plaidData: text("plaid_data"), // JSON stringified Plaid merchant data
   accessToken: text("access_token"), // The Plaid access token for this merchant
   accountId: text("account_id"), // The primary bank account ID for this merchant
@@ -290,7 +391,9 @@ export const plaidMerchants = pgTable("plaid_merchants", {
   updatedAt: timestamp("updated_at"),
 });
 
-export const insertPlaidMerchantSchema = createInsertSchema(plaidMerchants).omit({
+export const insertPlaidMerchantSchema = createInsertSchema(
+  plaidMerchants,
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -317,7 +420,9 @@ export const plaidTransfers = pgTable("plaid_transfers", {
   updatedAt: timestamp("updated_at"),
 });
 
-export const insertPlaidTransferSchema = createInsertSchema(plaidTransfers).omit({
+export const insertPlaidTransferSchema = createInsertSchema(
+  plaidTransfers,
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -329,7 +434,9 @@ export type InsertPlaidTransfer = z.infer<typeof insertPlaidTransferSchema>;
 // Merchant Business Details
 export const merchantBusinessDetails = pgTable("merchant_business_details", {
   id: serial("id").primaryKey(),
-  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  merchantId: integer("merchant_id")
+    .references(() => merchants.id)
+    .notNull(),
   legalName: text("legal_name").notNull(),
   ein: text("ein").notNull(), // Employer Identification Number
   businessStructure: text("business_structure").notNull(), // LLC, Corporation, Partnership, etc.
@@ -348,19 +455,26 @@ export const merchantBusinessDetails = pgTable("merchant_business_details", {
   updatedAt: timestamp("updated_at"),
 });
 
-export const insertMerchantBusinessDetailsSchema = createInsertSchema(merchantBusinessDetails).omit({
+export const insertMerchantBusinessDetailsSchema = createInsertSchema(
+  merchantBusinessDetails,
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export type MerchantBusinessDetails = typeof merchantBusinessDetails.$inferSelect;
-export type InsertMerchantBusinessDetails = z.infer<typeof insertMerchantBusinessDetailsSchema>;
+export type MerchantBusinessDetails =
+  typeof merchantBusinessDetails.$inferSelect;
+export type InsertMerchantBusinessDetails = z.infer<
+  typeof insertMerchantBusinessDetailsSchema
+>;
 
 // Merchant Documents
 export const merchantDocuments = pgTable("merchant_documents", {
   id: serial("id").primaryKey(),
-  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  merchantId: integer("merchant_id")
+    .references(() => merchants.id)
+    .notNull(),
   type: text("type").notNull(), // business_license, tax_return, bank_statement, etc.
   filename: text("filename").notNull(),
   data: text("data").notNull(), // Base64 encoded file data or file path
@@ -373,19 +487,36 @@ export const merchantDocuments = pgTable("merchant_documents", {
   metadata: text("metadata"), // JSON stringified additional data
 });
 
-export const insertMerchantDocumentSchema = createInsertSchema(merchantDocuments).omit({
+export const insertMerchantDocumentSchema = createInsertSchema(
+  merchantDocuments,
+).omit({
   id: true,
   uploadedAt: true,
   verifiedAt: true,
 });
 
 export type MerchantDocument = typeof merchantDocuments.$inferSelect;
-export type InsertMerchantDocument = z.infer<typeof insertMerchantDocumentSchema>;
+export type InsertMerchantDocument = z.infer<
+  typeof insertMerchantDocumentSchema
+>;
 
 // Notification Status and Channel Enums
-export const notificationStatusEnum = pgEnum('notification_status', ['pending', 'delivered', 'failed', 'partial_failure']);
-export const notificationChannelEnum = pgEnum('notification_channel', ['email', 'sms', 'in_app', 'webhook']);
-export const notificationRecipientTypeEnum = pgEnum('notification_recipient_type', ['merchant', 'customer', 'admin']);
+export const notificationStatusEnum = pgEnum("notification_status", [
+  "pending",
+  "delivered",
+  "failed",
+  "partial_failure",
+]);
+export const notificationChannelEnum = pgEnum("notification_channel", [
+  "email",
+  "sms",
+  "in_app",
+  "webhook",
+]);
+export const notificationRecipientTypeEnum = pgEnum(
+  "notification_recipient_type",
+  ["merchant", "customer", "admin"],
+);
 
 // Notifications
 export const notifications = pgTable("notifications", {
@@ -393,7 +524,7 @@ export const notifications = pgTable("notifications", {
   recipientId: integer("recipient_id").notNull(), // ID of the merchant, customer, or admin
   recipientType: notificationRecipientTypeEnum("recipient_type").notNull(),
   type: text("type").notNull(), // notification type code
-  status: notificationStatusEnum("status").notNull().default('pending'),
+  status: notificationStatusEnum("status").notNull().default("pending"),
   channels: text("channels").array(), // Array of channels used
   sentAt: timestamp("sent_at").defaultNow(),
   metadata: text("metadata"), // JSON stringified additional data
@@ -403,9 +534,11 @@ export const notifications = pgTable("notifications", {
 // Notification Channels - tracks status of each channel for a notification
 export const notificationChannels = pgTable("notification_channels", {
   id: serial("id").primaryKey(),
-  notificationId: integer("notification_id").references(() => notifications.id).notNull(),
+  notificationId: integer("notification_id")
+    .references(() => notifications.id)
+    .notNull(),
   channel: notificationChannelEnum("channel").notNull(),
-  status: notificationStatusEnum("status").notNull().default('pending'),
+  status: notificationStatusEnum("status").notNull().default("pending"),
   sentAt: timestamp("sent_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
   errorMessage: text("error_message"),
@@ -433,13 +566,17 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   updatedAt: true,
 });
 
-export const insertNotificationChannelSchema = createInsertSchema(notificationChannels).omit({
+export const insertNotificationChannelSchema = createInsertSchema(
+  notificationChannels,
+).omit({
   id: true,
   sentAt: true,
   updatedAt: true,
 });
 
-export const insertInAppNotificationSchema = createInsertSchema(inAppNotifications).omit({
+export const insertInAppNotificationSchema = createInsertSchema(
+  inAppNotifications,
+).omit({
   id: true,
   createdAt: true,
   readAt: true,
@@ -450,7 +587,11 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
 export type NotificationChannel = typeof notificationChannels.$inferSelect;
-export type InsertNotificationChannel = z.infer<typeof insertNotificationChannelSchema>;
+export type InsertNotificationChannel = z.infer<
+  typeof insertNotificationChannelSchema
+>;
 
 export type InAppNotification = typeof inAppNotifications.$inferSelect;
-export type InsertInAppNotification = z.infer<typeof insertInAppNotificationSchema>;
+export type InsertInAppNotification = z.infer<
+  typeof insertInAppNotificationSchema
+>;
