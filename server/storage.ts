@@ -27,6 +27,9 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   findOrCreateUserByPhone(phone: string): Promise<User>;
 
+  // Add to the IStorage interface
+updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined>;
+
   // Merchant operations
   getMerchant(id: number): Promise<Merchant | undefined>;
   getMerchantByUserId(userId: number): Promise<Merchant | undefined>;
@@ -1226,6 +1229,28 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return updated;
   }
+  // Add this method to your DatabaseStorage class
+async updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined> {
+  try {
+    // Set updated timestamp
+    const updatedData = {
+      ...data,
+      refreshedAt: new Date()
+    };
+    
+    // Execute the update query
+    const [updatedReport] = await db
+      .update(assetReports)
+      .set(updatedData)
+      .where(eq(assetReports.id, id))
+      .returning();
+      
+    return updatedReport;
+  } catch (error) {
+    console.error(`Error updating asset report ${id}:`, error);
+    return undefined;
+  }
+}
   
   async markAllInAppNotificationsAsRead(userId: number, userType: string): Promise<number> {
     const result = await db

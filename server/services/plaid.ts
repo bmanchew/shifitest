@@ -579,7 +579,7 @@ class PlaidService {
 
       const response = await this.client.assetReportCreate(request);
 
-      "Asset Report Create Response:",
+      // "Asset Report Create Response:",
         //   JSON.stringify(response.data, null, 2),
         // );
 

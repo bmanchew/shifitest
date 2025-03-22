@@ -42,9 +42,9 @@ export default function BankConnection({
           success: boolean;
           linkToken: string;
         }>("POST", "/api/plaid/create-link-token", {
-          userId: `user-${contractId}`, // Use contract ID as user ID for now
-          userName: "Customer", // Optional
-          products: ["auth"], // Specify the Plaid products we need
+          userId: `user-${contractId}`, 
+          // userName: "Customer", 
+          products: ['auth', 'assets', 'transactions'],
         });
 
         if (!response.success || !response.linkToken) {
