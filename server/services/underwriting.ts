@@ -21,22 +21,25 @@ class UnderwritingService {
         throw new Error(`User data not found for user ID ${userId}`);
       }
       
-      // 2. Get credit data from Pre-Fi
-      const creditData = await this.getCreditData(userId);
-      
-      // 3. Get income and debt data from Plaid
+      // 2. Get Plaid data first (primary source for most metrics)
       const plaidData = await this.getPlaidData(userId);
       
-      // 4. Calculate scores and points
+      // 3. Get only credit score from Pre-Fi
+      const creditScoreOnly = await this.getCreditScoreOnly(userId);
+      
+      // 4. Calculate scores and points (primarily using Plaid data)
       const annualIncomePoints = preFiService.calculateAnnualIncomePoints(plaidData.income);
       const employmentHistoryPoints = preFiService.calculateEmploymentHistoryPoints(plaidData.employmentMonths);
-      const creditScorePoints = preFiService.calculateCreditScorePoints(creditData.creditScore);
+      const creditScorePoints = preFiService.calculateCreditScorePoints(creditScoreOnly.creditScore);
       const dtiRatioPoints = preFiService.calculateDtiRatioPoints(plaidData.dtiRatio);
       const housingStatusPoints = preFiService.calculateHousingStatusPoints(
         plaidData.housingStatus, 
         plaidData.housingPaymentHistoryMonths
       );
-      const delinquencyPoints = preFiService.calculateDelinquencyPoints(creditData.delinquencyHistory);
+      // Use Plaid data for delinquency if available, otherwise fall back to empty object
+      const delinquencyPoints = preFiService.calculateDelinquencyPoints(
+        plaidData.delinquencyHistory || {}
+      );
       
       // 5. Calculate total points
       const totalPoints = annualIncomePoints + employmentHistoryPoints + creditScorePoints + 
@@ -45,12 +48,12 @@ class UnderwritingService {
       // 6. Determine credit tier
       const creditTier = preFiService.calculateCreditTier(creditData.creditScore, totalPoints);
       
-      // 7. Save underwriting data
+      // 7. Save underwriting data (Plaid-first approach)
       const underwritingData = await this.saveUnderwritingData({
         userId,
         contractId,
         creditTier,
-        creditScore: creditData.creditScore,
+        creditScore: creditScoreOnly.creditScore,
         annualIncome: plaidData.income,
         annualIncomePoints,
         employmentHistoryMonths: plaidData.employmentMonths,
@@ -61,10 +64,10 @@ class UnderwritingService {
         housingStatus: plaidData.housingStatus,
         housingPaymentHistory: plaidData.housingPaymentHistoryMonths,
         housingStatusPoints,
-        delinquencyHistory: JSON.stringify(creditData.delinquencyHistory),
+        delinquencyHistory: JSON.stringify(plaidData.delinquencyHistory || {}),
         delinquencyPoints,
         totalPoints,
-        rawPreFiData: JSON.stringify(creditData),
+        rawPreFiData: JSON.stringify({ creditScore: creditScoreOnly.creditScore }), // Only store credit score
         rawPlaidData: JSON.stringify(plaidData),
       });
       
@@ -214,6 +217,66 @@ class UnderwritingService {
           if (analysis) break;
         } catch (error) {
           logger.warn({
+
+  private async getCreditScoreOnly(userId: number) {
+    try {
+      const userData = await this.getUserData(userId);
+      
+      if (!userData || !userData.ssn || !userData.firstName || !userData.lastName || !userData.dob || !userData.address) {
+        const missingFields = [];
+        if (!userData) missingFields.push('userData');
+        if (!userData?.ssn) missingFields.push('ssn');
+        if (!userData?.firstName) missingFields.push('firstName');
+        if (!userData?.lastName) missingFields.push('lastName');
+        if (!userData?.dob) missingFields.push('dob');
+        if (!userData?.address) missingFields.push('address');
+        
+        logger.error({
+          message: `Missing required KYC data for user ${userId}`,
+          category: 'underwriting',
+          userId,
+          missingFields
+        });
+        throw new Error(`Missing required KYC data for credit check: ${missingFields.join(', ')}`);
+      }
+      
+      // Get only credit score from Pre-Fi
+      const creditReport = await preFiService.getCreditReport(
+        userData.ssn,
+        userData.firstName,
+        userData.lastName,
+        userData.dob,
+        {
+          street: userData.address.street,
+          city: userData.address.city,
+          state: userData.address.state,
+          zip: userData.address.zip
+        }
+      );
+
+      logger.info({
+        message: 'Successfully retrieved credit score from PreFi',
+        category: 'underwriting',
+        userId,
+        hasData: !!creditReport,
+        creditScore: creditReport?.creditScore
+      });
+      
+      // Return only the credit score
+      return {
+        creditScore: creditReport.creditScore
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error getting credit score from Pre-Fi: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'underwriting',
+        userId,
+        error: error instanceof Error ? error.stack : null
+      });
+      throw error;
+    }
+  }
+
             message: `Attempt ${retries + 1} to get asset report failed, retrying...`,
             category: 'underwriting',
             userId,
@@ -235,12 +298,27 @@ class UnderwritingService {
         analysis,
       });
 
+      // Extract delinquency information from Plaid asset report
+      const delinquencyHistory = analysis.accounts?.reduce((result, account) => {
+        // Extract late payment information from account activity if available
+        const late30Count = account.late_payments?.late_30_days || 0;
+        const late60Count = account.late_payments?.late_60_days || 0;
+        const late90Count = account.late_payments?.late_90_days || 0;
+        
+        return {
+          late30: (result.late30 || 0) + late30Count,
+          late60: (result.late60 || 0) + late60Count,
+          late90: (result.late90 || 0) + late90Count
+        };
+      }, { late30: 0, late60: 0, late90: 0 });
+      
       return {
         income: analysis.income.annualIncome || 0,
         employmentMonths: analysis.employment.employmentMonths || 0,
         dtiRatio: analysis.debt.dtiRatio || 0,
         housingStatus: analysis.housing.housingStatus || 'unknown',
         housingPaymentHistoryMonths: analysis.housing.paymentHistoryMonths || 0,
+        delinquencyHistory: delinquencyHistory, // Include delinquency data from Plaid
         fullAnalysis: analysis,
       };
     } catch (error) {
