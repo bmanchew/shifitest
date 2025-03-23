@@ -28,6 +28,7 @@ import underwritingRouter from "./routes/underwriting";
 import merchantRouter from "./routes/merchant";
 import notificationRouter from "./routes/notification";
 import paymentRouter from "./routes/payments";
+import indexRoutes from "./routes/index"; // Import routes from index.ts
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available
