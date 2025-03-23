@@ -30,6 +30,7 @@ import underwritingRouter from "./routes/underwriting";
 import merchantRouter from "./routes/merchant";
 import notificationRouter from "./routes/notification";
 import paymentRouter from "./routes/payments";
+import healthRouter from "./routes/health"; // Import health routes
 import indexRoutes from "./routes/index"; // Import routes from index.ts
 import fs from 'fs';
 import path from 'path';
@@ -4964,6 +4965,9 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
 
   // Mount the payment router
   apiRouter.use("/payments", paymentRouter);
+  
+  // Mount the health router
+  apiRouter.use("/health", healthRouter);
 
   // Get contract by phone number
   apiRouter.get("/contracts/by-phone/:phoneNumber", async (req: Request, res: Response) => {
@@ -6041,25 +6045,7 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
     });
   });
 
-  // Add direct health route
-  apiRouter.get('/health', async (req, res) => {
-    try {
-      // Check database connection
-      await db.execute(sql`SELECT 1`);
-      
-      return res.json({
-        status: 'ok',
-        message: 'API is healthy',
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      return res.status(500).json({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
+  // Health routes are now handled by the healthRouter
   
   // Mount the index routes - these contain other modular routes
   console.log("Mounting index routes...");
