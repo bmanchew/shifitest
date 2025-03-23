@@ -50,12 +50,30 @@ export default function SendApplication() {
     }).format(value);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phoneNumber || !amount) {
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user?.merchantId) {
       toast({
         title: "Error",
-        description: "Please enter both phone number and amount",
+        description: "Merchant ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!phoneNumber) {
+      toast({
+        title: "Error",
+        description: "Phone number is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!purchaseAmount || isNaN(purchaseAmount) || purchaseAmount <= 0) {
+      toast({
+        title: "Error",
+        description: "Valid purchase amount is required",
         variant: "destructive",
       });
       return;
@@ -63,60 +81,57 @@ export default function SendApplication() {
 
     try {
       setIsSubmitting(true);
-      // Get merchant ID based on current user
-      const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
 
-      const response = await fetch("/api/send-sms", {
+      // Format phone number to ensure consistency
+      const formattedPhone = phoneNumber.replace(/\D/g, '');
+
+      // Make sure we have a valid phone number with at least 10 digits
+      if (formattedPhone.length < 10) {
+        throw new Error("Please enter a valid phone number with at least 10 digits");
+      }
+
+      const response = await apiRequest("/api/send-sms", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+        data: {
+          phoneNumber: formattedPhone,
+          email: email || undefined, // Only include email if provided
+          merchantId: user.merchantId,
+          amount: purchaseAmount.toString(), // Ensure amount is sent as string to prevent precision issues
         },
-        body: JSON.stringify({
-          phoneNumber,
-          email, // Include email in the request
-          merchantId,
-          amount: parseFloat(amount),
-        }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `HTTP error! status: ${response.status}`);
-      }
+      if (response.data && response.data.success) {
+        toast({
+          title: "Success",
+          description: response.data.isSimulated 
+            ? "Application would be sent (simulation mode)" 
+            : "Application sent successfully",
+        });
 
-      const data = await response.json();
+        // Clear form fields
+        setPhoneNumber("");
+        setEmail("");
+        setAmount("");
+        setShowCalculator(false);
+      } else {
+        throw new Error(
+          (response.data && response.data.message) || 
+          (response.data && response.data.error) || 
+          "Failed to send application"
+        );
+      }
+    } catch (error: any) {
+      console.error("Error sending application:", error);
+
+      // Extract the most useful error message
+      const errorMessage = 
+        (error.response && error.response.data && error.response.data.message) ||
+        (error.response && error.response.data && error.response.data.error) ||
+        (error.message) ||
+        "Failed to send application. Please try again.";
 
       toast({
-        title: "Application Sent",
-        description: data.message || "The application has been sent to the customer.",
-      });
-
-      console.log("Application sent successfully:", data);
-
-      // Reset form fields
-      setPhoneNumber("");
-      setEmail(""); // Reset email field
-      setAmount("");
-      setShowCalculator(false);
-    } catch (error) {
-      console.error("Failed to send application:", error);
-
-      // Try to extract more detailed error information
-      let errorMessage = "Failed to send the application. Please try again.";
-
-      if (error instanceof Error) {
-        // Try to parse the error message as JSON for more details
-        try {
-          const errorData = JSON.parse(error.message);
-          errorMessage = errorData.message || error.message;
-        } catch {
-          // If parsing fails, use the original error message
-          errorMessage = error.message;
-        }
-      }
-
-      toast({
-        title: "Error",
+        title: "Error Sending Application",
         description: errorMessage,
         variant: "destructive",
       });
@@ -157,7 +172,7 @@ export default function SendApplication() {
 
                 // Get the response data from SMS send to get the contract ID
                 const smsResponseData = await smsResponse.json();
-                
+
                 // Then initiate NLPearl call with the correct application URL that includes contract ID and merchant ID
                 const nlpearlResponse = await fetch('/api/initiate-call', {
                   method: 'POST',
@@ -242,6 +257,7 @@ export default function SendApplication() {
                   type="submit"
                   className="w-full"
                   disabled={isSubmitting}
+                  onClick={handleSubmit}
                 >
                   {isSubmitting ? "Sending..." : "Send Application"}
                 </Button>

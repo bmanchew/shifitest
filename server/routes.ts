@@ -1030,108 +1030,149 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     try {
       const { phoneNumber, merchantId, amount } = req.body;
       
+      logger.info({
+        message: "Attempting to send application via SMS",
+        category: "api",
+        source: "twilio", 
+        metadata: { phoneNumber, merchantId, amount }
+      });
+      
       if (!phoneNumber || !merchantId) {
+        logger.warn({
+          message: "Missing required fields for application",
+          category: "api",
+          source: "twilio",
+          metadata: { phoneNumber, merchantId }
+        });
+        
         return res.status(400).json({
           success: false,
           message: "Phone number and merchant ID are required"
         });
       }
       
-      logger.info({
-        message: "Sending application via SMS",
-        category: "api",
-        source: "twilio", // Changed from application to twilio to match allowed types
-        metadata: { phoneNumber, merchantId, amount }
-      });
+      // Verify merchant exists
+      const merchant = await storage.getMerchant(parseInt(merchantId));
+      if (!merchant) {
+        logger.warn({
+          message: `Merchant not found: ${merchantId}`,
+          category: "api",
+          source: "twilio"
+        });
+        
+        return res.status(404).json({
+          success: false,
+          message: "Merchant not found"
+        });
+      }
       
       // Create a contract for this application
       const contractNumber = generateContractNumber();
       const termMonths = 24; // Fixed term
       const interestRate = 0; // 0% APR
       const downPaymentPercent = 15; // 15% down payment
-      const downPayment = amount * (downPaymentPercent / 100);
-      const financedAmount = amount - downPayment;
+      const downPayment = parseFloat(amount) * (downPaymentPercent / 100);
+      const financedAmount = parseFloat(amount) - downPayment;
       const monthlyPayment = financedAmount / termMonths;
 
       // Find or create a user for this phone number
-      const customer = await storage.findOrCreateUserByPhone(phoneNumber);
+      try {
+        const customer = await storage.findOrCreateUserByPhone(phoneNumber);
+        
+        if (!customer) {
+          throw new Error("Failed to create customer record");
+        }
 
-      // Create the contract
-      const newContract = await storage.createContract({
-        contractNumber,
-        merchantId,
-        customerId: customer.id,
-        amount,
-        downPayment,
-        financedAmount,
-        termMonths,
-        interestRate,
-        monthlyPayment,
-        status: "pending",
-        currentStep: "terms",
-        phoneNumber: phoneNumber
-      });
-
-      logger.info({
-        message: `Created contract for phone ${phoneNumber}`,
-        category: "api",
-        source: "contract",
-        metadata: { contractId: newContract.id, merchantId }
-      });
-
-      // Create application progress for all steps
-      const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
-      for (const step of applicationSteps) {
-        await storage.createApplicationProgress({
-          contractId: newContract.id,
-          step: step as any,
-          completed: false,
-          data: null,
+        // Create the contract
+        const newContract = await storage.createContract({
+          contractNumber,
+          merchantId: parseInt(merchantId),
+          customerId: customer.id,
+          amount: parseFloat(amount),
+          downPayment,
+          financedAmount,
+          termMonths,
+          interestRate,
+          monthlyPayment,
+          status: "pending",
+          currentStep: "terms",
+          phoneNumber: phoneNumber
         });
-      }
-      
-      // Generate application URL with contract ID and merchant ID
-      const applicationUrl = `${req.protocol}://${req.get('host')}/apply/${newContract.id}?mid=${merchantId}`;
-      
-      // Prepare message for SMS
-      const message = `You've been invited to apply for ShiFi financing${
-        amount ? ` for $${parseFloat(amount).toFixed(2)}` : ''
-      }. Apply here: ${applicationUrl}`;
-      
-      // Send SMS using Twilio service
-      const result = await twilioService.sendSMS({
-        to: phoneNumber,
-        body: message
-      });
-      
-      if (!result.success) {
-        logger.error({
-          message: `Failed to send application SMS: ${result.error}`,
+
+        logger.info({
+          message: `Created contract for phone ${phoneNumber}`,
           category: "api",
-          source: "twilio"
+          source: "contract",
+          metadata: { contractId: newContract.id, merchantId }
+        });
+
+        // Create application progress for all steps
+        const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
+        for (const step of applicationSteps) {
+          await storage.createApplicationProgress({
+            contractId: newContract.id,
+            step: step as any,
+            completed: false,
+            data: null,
+          });
+        }
+        
+        // Generate application URL with contract ID and merchant ID
+        const applicationUrl = `${req.protocol}://${req.get('host')}/apply/${newContract.id}?mid=${merchantId}`;
+        
+        // Prepare message for SMS
+        const message = `You've been invited to apply for ShiFi financing${
+          amount ? ` for $${parseFloat(amount).toFixed(2)}` : ''
+        }. Apply here: ${applicationUrl}`;
+        
+        // Send SMS using Twilio service
+        const result = await twilioService.sendSMS({
+          to: phoneNumber,
+          body: message
         });
         
-        return res.status(500).json({
-          success: false,
-          message: "Failed to send application SMS",
-          error: result.error
+        if (!result.success) {
+          logger.error({
+            message: `Failed to send application SMS: ${result.error}`,
+            category: "api",
+            source: "twilio"
+          });
+          
+          return res.status(500).json({
+            success: false,
+            message: "Failed to send application SMS",
+            error: result.error
+          });
+        }
+        
+        // Log successful send
+        logger.info({
+          message: "Successfully sent application SMS",
+          category: "api",
+          source: "twilio",
+          metadata: { messageId: result.messageId, phoneNumber }
         });
+        
+        return res.status(200).json({
+          success: true,
+          message: "Application sent successfully",
+          messageId: result.messageId,
+          isSimulated: result.isSimulated,
+          contractId: newContract.id,
+          applicationUrl
+        });
+      } catch (userError) {
+        logger.error({
+          message: `Error creating customer or contract: ${userError instanceof Error ? userError.message : String(userError)}`,
+          category: "api",
+          source: "internal",
+          metadata: {
+            error: userError instanceof Error ? userError.stack : String(userError)
+          }
+        });
+        
+        throw userError; // Re-throw to be caught by outer catch block
       }
-      
-      // Log successful send
-      logger.info({
-        message: "Successfully sent application SMS",
-        category: "api",
-        source: "twilio",
-        metadata: { messageId: result.messageId, phoneNumber }
-      });
-      
-      return res.status(200).json({
-        success: true,
-        message: "Application sent successfully",
-        messageId: result.messageId,
-        isSimulated: result.isSimulated
-      });
     } catch (error) {
       logger.error({
         message: `Error sending application: ${error instanceof Error ? error.message : String(error)}`,
@@ -1563,196 +1604,217 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           }
         });
         return res.status(400).json({
+          success: false,
           message: "Phone number, merchant ID, and amount are required",
         });
       }
 
+      // Validate numeric inputs
+      const merchantIdNum = parseInt(merchantId);
+      const amountNum = parseFloat(amount);
+      
+      if (isNaN(merchantIdNum) || isNaN(amountNum)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid merchant ID or amount format",
+        });
+      }
+
       // Get merchant
-      const merchant = await storage.getMerchant(parseInt(merchantId));
+      const merchant = await storage.getMerchant(merchantIdNum);
       if (!merchant) {
-        return res.status(404).json({ message: "Merchant not found" });
+        return res.status(404).json({ 
+          success: false, 
+          message: "Merchant not found" 
+        });
       }
 
       // Check for existing pending contracts for this phone number and archive them
-  try {
-    const existingContracts = await storage.getContractsByPhoneNumber(phoneNumber);
-    const pendingContracts = existingContracts.filter(contract => 
-      contract.status === 'pending' && contract.merchantId === parseInt(merchantId)
-    );
-    
-    if (pendingContracts.length > 0) {
-      logger.info({
-        message: `Found ${pendingContracts.length} existing pending contracts for phone ${phoneNumber} - will archive them`,
-        category: "contract",
-        source: "internal",
-        metadata: {
-          phoneNumber,
-          pendingContractIds: pendingContracts.map(c => c.id)
-        }
-      });
-      
-      // Archive each pending contract - never archive active contracts
-      for (const pendingContract of pendingContracts) {
-        // Safety check: never archive active contracts
-        if (pendingContract.status === 'active') {
-          logger.warn({
-            message: `Attempted to archive active contract ${pendingContract.id} - operation skipped`,
+      try {
+        const existingContracts = await storage.getContractsByPhoneNumber(phoneNumber);
+        const pendingContracts = existingContracts.filter(contract => 
+          contract.status === 'pending' && contract.merchantId === merchantIdNum
+        );
+        
+        if (pendingContracts.length > 0) {
+          logger.info({
+            message: `Found ${pendingContracts.length} existing pending contracts for phone ${phoneNumber} - will archive them`,
             category: "contract",
             source: "internal",
             metadata: {
-              contractId: pendingContract.id,
-              status: pendingContract.status,
-              phoneNumber
+              phoneNumber,
+              pendingContractIds: pendingContracts.map(c => c.id)
             }
           });
-          continue; // Skip this contract
+          
+          // Archive each pending contract - never archive active contracts
+          for (const pendingContract of pendingContracts) {
+            // Safety check: never archive active contracts
+            if (pendingContract.status === 'active') {
+              logger.warn({
+                message: `Attempted to archive active contract ${pendingContract.id} - operation skipped`,
+                category: "contract",
+                source: "internal",
+                metadata: {
+                  contractId: pendingContract.id,
+                  status: pendingContract.status,
+                  phoneNumber
+                }
+              });
+              continue; // Skip this contract
+            }
+            
+            await storage.updateContract(pendingContract.id, {
+              archived: true,
+              status: 'cancelled',
+              archived_at: new Date(),
+              archived_reason: 'Superseded by new contract'
+            });
+            
+            logger.info({
+              message: `Archived contract ${pendingContract.id} due to new contract creation`,
+              category: "contract",
+              source: "internal",
+              metadata: {
+                contractId: pendingContract.id,
+                phoneNumber
+              }
+            });
+          }
         }
-        
-        await storage.updateContract(pendingContract.id, {
-          archived: true,
-          status: 'cancelled',
-          archived_at: new Date(),
-          archived_reason: 'Superseded by new contract'
-        });
-        
-        logger.info({
-          message: `Archived contract ${pendingContract.id} due to new contract creation`,
+      } catch (archiveError) {
+        logger.warn({
+          message: `Error checking/archiving existing contracts: ${archiveError instanceof Error ? archiveError.message : String(archiveError)}`,
           category: "contract",
           source: "internal",
           metadata: {
-            contractId: pendingContract.id,
-            phoneNumber
+            phoneNumber,
+            error: archiveError instanceof Error ? archiveError.stack : null
           }
         });
+        // Continue with contract creation despite archiving error
       }
-    }
-  } catch (archiveError) {
-    logger.warn({
-      message: `Error checking/archiving existing contracts: ${archiveError instanceof Error ? archiveError.message : String(archiveError)}`,
-      category: "contract",
-      source: "internal",
-      metadata: {
-        phoneNumber,
-        error: archiveError instanceof Error ? archiveError.stack : null
-      }
-    });
-    // Continue with contract creation despite archiving error
-  }
 
-  // Create a contract for this financing request
-  const contractNumber = generateContractNumber();
-  const termMonths = 24; // Fixed term
-  const interestRate = 0; // 0% APR
-  const downPaymentPercent = 15; // 15% down payment
-  const downPayment = amount * (downPaymentPercent / 100);
-  const financedAmount = amount - downPayment;
-  const monthlyPayment = financedAmount / termMonths;
-
-  console.log("Creating contract with:", {
-    contractNumber,
-    merchantId,
-    amount,
-    downPayment,
-    financedAmount,
-    termMonths,
-    interestRate,
-    monthlyPayment,
-  });
+      // Create a contract for this financing request with proper type conversions
+      const contractNumber = generateContractNumber();
+      const termMonths = 24; // Fixed term
+      const interestRate = 0; // 0% APR
+      const downPaymentPercent = 15; // 15% down payment
+      const downPayment = amountNum * (downPaymentPercent / 100);
+      const financedAmount = amountNum - downPayment;
+      const monthlyPayment = financedAmount / termMonths;
 
       // Find or create a user for this phone number, passing in the email
-      const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
+      try {
+        const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
 
-      logger.info({
-        message: `User for contract: ${customer.id}`,
-        category: "api", 
-        source: "twilio",
-        metadata: JSON.stringify({ 
-          userId: customer.id,
-          email: customer.email,
-          phone: customer.phone 
-        })
-      });
+        if (!customer) {
+          throw new Error("Failed to create or find customer");
+        }
 
-      // Create a new contract
-      const newContract = await storage.createContract({
-        contractNumber,
-        merchantId,
-        customerId: customer.id, // Link to the customer immediately
-        amount,
-        downPayment,
-        financedAmount,
-        termMonths,
-        interestRate,
-        monthlyPayment,
-        status: "pending",
-        currentStep: "terms",
-        phoneNumber: phoneNumber, // Store the phone number directly in the contract
-      });
-
-      // Create application progress for all steps of this contract
-      const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
-
-      for (const step of applicationSteps) {
-        await storage.createApplicationProgress({
-          contractId: newContract.id,
-          step: step as any,
-          completed: false,
-          data: null,
+        logger.info({
+          message: `User for contract: ${customer.id}`,
+          category: "api", 
+          source: "twilio",
+          metadata: { 
+            userId: customer.id,
+            email: customer.email,
+            phone: customer.phone 
+          }
         });
 
-        // Log the creation of each step
-        console.log(`Created application progress for contract ${newContract.id}, step ${step}`);
-      }
+        // Create a new contract
+        const newContract = await storage.createContract({
+          contractNumber,
+          merchantId: merchantIdNum,
+          customerId: customer.id, // Link to the customer immediately
+          amount: amountNum,
+          downPayment,
+          financedAmount,
+          termMonths,
+          interestRate,
+          monthlyPayment,
+          status: "pending",
+          currentStep: "terms",
+          phoneNumber: phoneNumber, // Store the phone number directly in the contract
+        });
 
-      // Get the application base URL from Replit - include both contract ID and merchant ID
-      const replitDomain = getAppDomain();
-      const applicationUrl = `https://${replitDomain}/apply/${newContract.id}?mid=${merchantId}`;
+        // Create application progress for all steps of this contract
+        const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
 
-      // Prepare the SMS message
-      const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
+        for (const step of applicationSteps) {
+          await storage.createApplicationProgress({
+            contractId: newContract.id,
+            step: step as any,
+            completed: false,
+            data: null,
+          });
+        }
 
-      try {
+        // Get the application base URL from Replit - include both contract ID and merchant ID
+        const replitDomain = getAppDomain();
+        const applicationUrl = `https://${replitDomain}/apply/${newContract.id}?mid=${merchantIdNum}`;
+
+        // Prepare the SMS message
+        const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amountNum.toFixed(2)}. Click here to apply: ${applicationUrl}`;
+
         // Send SMS using our Twilio service
         const result = await twilioService.sendSMS({
           to: phoneNumber,
           body: messageText,
         });
 
-        if (result.isSimulated) {
-          console.log(`Simulated SMS to ${phoneNumber}: ${messageText}`);
-        } else if (result.success) {
-          console.log(
-            `Successfully sent SMS to ${phoneNumber}, Message ID: ${result.messageId}`,
-          );
-        } else {
-          console.error(`Failed to send SMS: ${result.error}`);
-          throw new Error(result.error);
+        if (!result.success) {
+          logger.error({
+            message: `Failed to send SMS: ${result.error}`,
+            category: "api",
+            source: "twilio",
+            metadata: {
+              phoneNumber,
+              contractId: newContract.id
+            }
+          });
+          
+          return res.status(500).json({
+            success: false,
+            message: "Failed to send SMS",
+            error: result.error
+          });
         }
-      } catch (twilioError) {
-        console.error("Twilio service error:", twilioError);
-        throw twilioError;
-      }
 
-      // Create log for SMS sending
-      await storage.createLog({
-        level: "info",
-        category: "api",
-        source: "twilio",
-        message: `SMS sent to ${phoneNumber}`,
-        metadata: JSON.stringify({
-          merchantId,
-          amount,
+        // Create log for SMS sending
+        await storage.createLog({
+          level: "info",
+          category: "api",
+          source: "twilio",
+          message: `SMS sent to ${phoneNumber}`,
+          metadata: JSON.stringify({
+            merchantId,
+            amount: amountNum,
+            contractId: newContract.id,
+            customerEmail: customer.email
+          }),
+        });
+
+        return res.json({ 
+          success: true, 
+          message: "SMS sent successfully",
           contractId: newContract.id,
-          customerEmail: customer.email
-        }),
-      });
-
-      res.json({ 
-        success: true, 
-        message: "SMS sent successfully",
-        contractId: newContract.id,
-        applicationUrl
-      });
+          applicationUrl,
+          isSimulated: result.isSimulated
+        });
+      } catch (customerError) {
+        logger.error({
+          message: `Error creating customer or contract: ${customerError instanceof Error ? customerError.message : String(customerError)}`,
+          category: "api",
+          source: "internal",
+          metadata: {
+            error: customerError instanceof Error ? customerError.stack : String(customerError)
+          }
+        });
+        
+        throw customerError; // Re-throw to be caught by outer catch block
+      }
     } catch (error) {
       console.error("Send SMS error:", error);
 
@@ -1764,10 +1826,11 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         message: `Failed to send SMS: ${error instanceof Error ? error.message : String(error)}`,
         metadata: JSON.stringify({
           error: error instanceof Error ? error.stack : null,
+          requestBody: req.body
         }),
       });
 
-      res.status(500).json({ 
+      return res.status(500).json({ 
         success: false,
         message: "Failed to send application",
         error: error instanceof Error ? error.message : "Unknown error"
