@@ -26,6 +26,7 @@ export interface IStorage {
   getUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   findOrCreateUserByPhone(phone: string): Promise<User>;
+  getAllUsers(): Promise<User[]>;
 
   // Add to the IStorage interface
   updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined>;
@@ -805,8 +806,8 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Helper method to check if data already exists
-  private async getAllUsers(): Promise<User[]> {
+  // Method to get all users
+  async getAllUsers(): Promise<User[]> {
     try {
       return await db.select().from(users);
     } catch (error) {

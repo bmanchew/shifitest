@@ -28,6 +28,8 @@ export default function AdminDashboard() {
     placeholderData: {
       success: true,
       data: {
+        totalUsers: 0,
+        totalMerchants: 0,
         activeMerchants: 0,
         activeContracts: 0,
         pendingContracts: 0,
@@ -36,6 +38,8 @@ export default function AdminDashboard() {
   });
 
   // Extract values from the nested data structure from the API
+  const totalUsers = stats?.data?.totalUsers || 0;
+  const totalMerchants = stats?.data?.totalMerchants || 0;
   const activeMerchants = stats?.data?.activeMerchants || 0;
   const activeContracts = stats?.data?.activeContracts || 0;
   const pendingContracts = stats?.data?.pendingContracts || 0;
@@ -169,15 +173,33 @@ export default function AdminDashboard() {
 
             <TabsContent value="overview">
               {/* Stats cards */}
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mt-6">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 mt-6">
+                <StatCard
+                  title="Total Users"
+                  value={totalUsers}
+                  icon={<Users />}
+                  iconBgColor="bg-blue-100"
+                  iconColor="text-blue-600"
+                  linkText="View all users"
+                  linkHref="/admin/users"
+                />
+                <StatCard
+                  title="Total Merchants"
+                  value={totalMerchants}
+                  icon={<Users />}
+                  iconBgColor="bg-indigo-100"
+                  iconColor="text-indigo-600"
+                  linkText="View all merchants"
+                  linkHref="/admin/merchants"
+                />
                 <StatCard
                   title="Active Merchants"
                   value={activeMerchants}
                   icon={<Users />}
                   iconBgColor="bg-primary-100"
                   iconColor="text-primary-600"
-                  linkText="View all merchants"
-                  linkHref="/admin/merchants"
+                  linkText="View active merchants"
+                  linkHref="/admin/merchants?status=active"
                 />
                 <StatCard
                   title="Active Contracts"
@@ -185,8 +207,8 @@ export default function AdminDashboard() {
                   icon={<FileText />}
                   iconBgColor="bg-green-100"
                   iconColor="text-green-600"
-                  linkText="View all contracts"
-                  linkHref="/admin/contracts"
+                  linkText="View active contracts"
+                  linkHref="/admin/contracts?status=active"
                 />
                 <StatCard
                   title="Contracts Pending"
