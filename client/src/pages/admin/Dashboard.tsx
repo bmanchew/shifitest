@@ -26,15 +26,19 @@ export default function AdminDashboard() {
       return res.json();
     },
     placeholderData: {
-      activeMerchants: 0,
-      activeContracts: 0,
-      pendingContracts: 0,
+      success: true,
+      data: {
+        activeMerchants: 0,
+        activeContracts: 0,
+        pendingContracts: 0,
+      }
     },
   });
 
-  const activeMerchants = stats?.activeMerchants || 0;
-  const activeContracts = stats?.activeContracts || 0;
-  const pendingContracts = stats?.pendingContracts || 0;
+  // Extract values from the nested data structure from the API
+  const activeMerchants = stats?.data?.activeMerchants || 0;
+  const activeContracts = stats?.data?.activeContracts || 0;
+  const pendingContracts = stats?.data?.pendingContracts || 0;
 
   // const { data: merchants = [] } = useQuery<Merchant[]>({
   //   queryKey: ["/api/merchants"],

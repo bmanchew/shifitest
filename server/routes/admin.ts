@@ -22,6 +22,14 @@ adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
     const totalUsers = await storage.user.count();
 
     const totalMerchants = await storage.merchant.count();
+    
+    // Count active merchants (where active = true and archived = false)
+    const activeMerchants = await storage.merchant.count({
+      where: { 
+        active: true,
+        archived: false
+      }
+    });
 
     const activeContracts = await storage.contract.count({
       where: { status: "active" }
@@ -34,6 +42,7 @@ adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
         pendingContracts,
         totalUsers,
         totalMerchants,
+        activeMerchants,  // Add the active merchants count
         activeContracts
       }
     });
