@@ -4,8 +4,12 @@ import { cfpbService } from "../services/cfpbService";
 import { portfolioMonitorService } from "../services/portfolioMonitor";
 import { aiAnalyticsService } from "../services/aiAnalytics";
 import { logger } from "../services/logger";
+import { authenticateAdmin } from "../middleware/auth";
 
 export const adminReportsRouter = express.Router();
+
+// Apply authentication middleware to all routes in this router
+adminReportsRouter.use(authenticateAdmin);
 
 // Get CFPB complaint trends
 adminReportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {

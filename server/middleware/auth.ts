@@ -9,8 +9,9 @@ export const authenticateAdmin = async (
   next: NextFunction
 ) => {
   try {
-    // Check various possible sources for the user ID
+    // Check various possible sources for the user ID, including cookies
     const userId = 
+      req.cookies.userId || 
       req.headers.userid as string || 
       req.headers['user-id'] as string || 
       req.query.userId as string || 

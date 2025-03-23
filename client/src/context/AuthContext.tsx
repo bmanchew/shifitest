@@ -59,6 +59,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
+        credentials: "include", // Add this to allow cookies to be sent and stored
       });
 
       if (!response.ok) {

@@ -3,9 +3,11 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { logger, requestLogger } from "./services/logger";
 import { storage } from "./storage";
+import cookieParser from "cookie-parser";
 
 const app = express();
 app.use(express.json());
+app.use(cookieParser()); // Add cookie-parser middleware
 
 // Validate required environment variables
 const requiredEnvVars = [
@@ -32,11 +34,12 @@ if (missingEnvVars.length > 0) {
 
 app.use(express.urlencoded({ extended: false }));
 
-// Enable CORS for all routes
+// Enable CORS for all routes with credentials support
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
   next();
 });
 

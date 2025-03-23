@@ -86,6 +86,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Instead, we'll just return the user object without password
       const { password: _, ...userWithoutPassword } = user;
 
+      // Set cookies for authentication
+      res.cookie('userId', user.id.toString(), { 
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/'
+      });
+      
+      res.cookie('userRole', user.role, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/'
+      });
+
       // Create log for user login
       await storage.createLog({
         level: "info",
@@ -97,10 +110,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }),
       });
 
-      res.json({ user: userWithoutPassword });
+      res.json({ 
+        success: true, 
+        user: userWithoutPassword 
+      });
     } catch (error) {
       console.error("Login error:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ 
+        success: false, 
+        message: "Internal server error" 
+      });
     }
   });
 
