@@ -1507,8 +1507,23 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         }
       });
       
-      // Archive each pending contract
+      // Archive each pending contract - never archive active contracts
       for (const pendingContract of pendingContracts) {
+        // Safety check: never archive active contracts
+        if (pendingContract.status === 'active') {
+          logger.warn({
+            message: `Attempted to archive active contract ${pendingContract.id} - operation skipped`,
+            category: "contract",
+            source: "internal",
+            metadata: {
+              contractId: pendingContract.id,
+              status: pendingContract.status,
+              phoneNumber
+            }
+          });
+          continue; // Skip this contract
+        }
+        
         await storage.updateContract(pendingContract.id, {
           archived: true,
           status: 'cancelled',
