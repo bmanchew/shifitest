@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest, getQueryFn } from '@/lib/queryClient';
+import { apiRequest, getQueryFn } from '@/lib/api'; // Corrected import
 
 interface ApiKeyStatus {
   configured: boolean;
@@ -299,7 +299,7 @@ export default function ApiKeyStatus() {
                 </Button>
               </div>
             </div>
-            
+
             {/* DiDit */}
             <div className="rounded-lg border p-4 shadow-sm">
               <div className="flex justify-between items-center mb-3">
@@ -326,7 +326,7 @@ export default function ApiKeyStatus() {
                 </Button>
               </div>
             </div>
-            
+
             {/* Plaid */}
             <div className="rounded-lg border p-4 shadow-sm">
               <div className="flex justify-between items-center mb-3">
@@ -353,7 +353,7 @@ export default function ApiKeyStatus() {
                 </Button>
               </div>
             </div>
-            
+
             {/* Thanks Roger */}
             <div className="rounded-lg border p-4 shadow-sm">
               <div className="flex justify-between items-center mb-3">

@@ -1,43 +1,8 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { apiRequest } from "./api";
 
-async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    try {
-      // First try to parse as JSON (most of our API endpoints return JSON errors)
-      const errorData = await res.json();
-      const errorMessage =
-        errorData.message || errorData.error || JSON.stringify(errorData);
-      throw new Error(`${res.status}: ${errorMessage}`);
-    } catch (e) {
-      // If parsing as JSON fails, fall back to plain text
-      const text = (await res.text()) || res.statusText;
-      throw new Error(`${res.status}: ${text}`);
-    }
-  }
-}
-
-export async function apiRequest<T = Response>(
-  method: string,
-  url: string,
-  data?: unknown | undefined,
-): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
-
-  await throwIfResNotOk(res);
-
-  // If T is Response (the default), just return the response object
-  if (method === "HEAD" || method === "DELETE" || res.status === 204) {
-    return res as unknown as T;
-  }
-
-  // Otherwise, parse as JSON
-  return (await res.json()) as T;
-}
+// Re-export apiRequest to maintain backward compatibility
+export { apiRequest };
 
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
