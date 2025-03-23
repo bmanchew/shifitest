@@ -462,9 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  import adminRouter from "./routes/admin";
-
-// Archive a merchant
+  // Archive a merchant
   apiRouter.post("/merchants/:id/archive", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
