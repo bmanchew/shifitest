@@ -1501,10 +1501,10 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         message: `Found ${pendingContracts.length} existing pending contracts for phone ${phoneNumber} - will archive them`,
         category: "contract",
         source: "internal",
-        metadata: JSON.stringify({
+        metadata: {
           phoneNumber,
           pendingContractIds: pendingContracts.map(c => c.id)
-        })
+        }
       });
       
       // Archive each pending contract
@@ -1520,10 +1520,10 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           message: `Archived contract ${pendingContract.id} due to new contract creation`,
           category: "contract",
           source: "internal",
-          metadata: JSON.stringify({
+          metadata: {
             contractId: pendingContract.id,
             phoneNumber
-          })
+          }
         });
       }
     }
@@ -1532,10 +1532,10 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       message: `Error checking/archiving existing contracts: ${archiveError instanceof Error ? archiveError.message : String(archiveError)}`,
       category: "contract",
       source: "internal",
-      metadata: JSON.stringify({
+      metadata: {
         phoneNumber,
         error: archiveError instanceof Error ? archiveError.stack : null
-      })
+      }
     });
     // Continue with contract creation despite archiving error
   }
