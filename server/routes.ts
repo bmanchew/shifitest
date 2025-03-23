@@ -6040,7 +6040,28 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
     });
   });
 
-  // Mount the index routes - these are additional routes from the /routes folder
+  // Add health route directly
+  apiRouter.get('/health', async (req, res) => {
+    try {
+      // Check database connection
+      await db.execute(sql`SELECT 1`);
+      
+      return res.json({
+        status: 'ok',
+        message: 'API is healthy',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      return res.status(500).json({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+  
+  // Mount the index routes - these contain other modular routes
+  console.log("Mounting index routes...");
   apiRouter.use(indexRoutes);
 
   // Mount the API router
