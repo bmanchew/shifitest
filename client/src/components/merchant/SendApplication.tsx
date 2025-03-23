@@ -59,16 +59,33 @@ export default function SendApplication() {
         title: "Application Sent!",
         description: `Financing application sent to ${phoneNumber}`
       });
-    } catch (error) {
-      console.error("Error sending application:", error);
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    } catch (t) {
+            // Enhanced error logging
+            console.error("Error sending application:", t);
 
-      toast({
-        title: "Error Sending Application",
-        description: errorMessage,
-        variant: "destructive"
-      });
-    } finally {
+            // Log detailed error information
+            console.error("Error details:", {
+                errorType: t.constructor.name,
+                errorMessage: t instanceof Error ? t.message : String(t),
+                errorStack: t instanceof Error ? t.stack : undefined,
+                requestData: {
+                    phoneNumber,
+                    email,
+                    merchantId,
+                    amount: parseFloat(amount)
+                }
+            });
+
+            // Create user-friendly error message
+            const o = t instanceof Error ? t.message : "An unknown error occurred";
+
+            // Show error toast to user
+            toast({
+                title: "Error Sending Application",
+                description: o,
+                variant: "destructive"
+            });
+        } finally {
       setIsSubmitting(false);
     }
   };
