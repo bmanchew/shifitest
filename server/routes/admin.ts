@@ -172,4 +172,4 @@ router.post('/merchants/:id/reset-password', async (req, res) => {
   }
 });
 // Export the router
-module.exports = router;
+export default router;
