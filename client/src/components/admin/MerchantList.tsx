@@ -41,7 +41,7 @@ export default function MerchantList() {
   // From the second implementation - these states are needed
   const [merchants, setMerchants] = useState<IMerchant[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Use React Query for data fetching
   const { data: merchantsData = [], isLoading, isError, error, refetch } = useQuery<Merchant[]>({
@@ -54,7 +54,7 @@ export default function MerchantList() {
       throw new Error("Failed to fetch merchants");
     },
     onError: (err) => {
-      setError("Error fetching merchants: " + (err instanceof Error ? err.message : String(err)));
+      setErrorMessage("Error fetching merchants: " + (err instanceof Error ? err.message : String(err)));
     },
     onSettled: () => {
       setLoading(false);
@@ -64,7 +64,7 @@ export default function MerchantList() {
   useEffect(() => {
     setLoading(isLoading);
     if (isError && error) {
-      setError("Error fetching merchants: " + (error instanceof Error ? error.message : String(error)));
+      setErrorMessage("Error fetching merchants: " + (error instanceof Error ? error.message : String(error)));
     }
   }, [isLoading, isError, error]);
 
@@ -261,7 +261,7 @@ export default function MerchantList() {
 
   if (loading) return <div className="text-center py-8">Loading merchants...</div>;
 
-  if (error) return <div className="text-center py-8 text-red-600">{error}</div>;
+  if (errorMessage) return <div className="text-center py-8 text-red-600">{errorMessage}</div>;
 
   return (
     <div>
