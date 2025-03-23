@@ -4,6 +4,8 @@ import { fromZodError } from "zod-validation-error";
 import { ZodError } from "zod";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import {
   insertUserSchema,
   insertMerchantSchema,
@@ -29,7 +31,6 @@ import merchantRouter from "./routes/merchant";
 import notificationRouter from "./routes/notification";
 import paymentRouter from "./routes/payments";
 import indexRoutes from "./routes/index"; // Import routes from index.ts
-import healthRouter from "./routes/health"; // Import health routes directly
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available
@@ -6040,7 +6041,7 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
     });
   });
 
-  // Add health route directly
+  // Add direct health route
   apiRouter.get('/health', async (req, res) => {
     try {
       // Check database connection
