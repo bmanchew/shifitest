@@ -1,8 +1,9 @@
-
 import express, { Request, Response } from "express";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
 import { authenticateAdmin } from "../middleware/auth";
+import crypto from 'crypto';
+import emailService from '../services/email';
 
 const adminRouter = express.Router();
 
@@ -97,79 +98,55 @@ adminRouter.get("/merchants/:id", async (req: Request, res: Response) => {
   }
 });
 
-export default adminRouter;
-
-
-import crypto from 'crypto';
-import express from 'express';
-import { storage } from '../storage';
-import emailService from '../services/email';
-import { logger } from '../services/logger';
-
 const router = express.Router();
 
 // Admin route to reset merchant password
 router.post('/merchants/:id/reset-password', async (req, res) => {
+  const merchantId = req.params.id;
+
   try {
-    const merchantId = parseInt(req.params.id);
-    
-    // Get merchant details
+    // Generate a random password
+    const newPassword = crypto.randomBytes(8).toString('hex');
+
+    // Hash the password before storing
+    const hashedPassword = await crypto.createHash('sha256').update(newPassword).digest('hex');
+
+    // Update the merchant's password
+    await storage.updateMerchant(merchantId, { password: hashedPassword });
+
+    // Get the merchant's email
     const merchant = await storage.getMerchant(merchantId);
-    if (!merchant || !merchant.userId) {
-      return res.status(404).json({
-        success: false,
-        message: 'Merchant not found'
-      });
+
+    if (!merchant || !merchant.email) {
+      return res.status(404).json({ error: 'Merchant not found' });
     }
 
-    // Get user details
-    const user = await storage.getUser(merchant.userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    // Send the new password to the merchant's email
+    await emailService.sendPasswordReset(merchant.email, newPassword);
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    
-    // Store reset token with expiration (24 hours)
-    await storage.storePasswordResetToken(user.id, resetToken);
-
-    // Send reset email
-    await emailService.sendMerchantPasswordReset(
-      user.email,
-      merchant.contactName,  
-      resetToken
-    );
-
-    await logger.info({
-      message: `Password reset email sent to merchant: ${user.email}`,
-      category: 'security',
-      metadata: {
-        merchantId: merchant.id,
-        userId: user.id
-      }
+    logger.info({
+      message: `Password reset for merchant ${merchantId}`,
+      category: 'admin',
+      source: 'api'
     });
 
-    res.json({
-      success: true,
-      message: 'Password reset email sent successfully'
-    });
-
+    res.json({ success: true });
   } catch (error) {
-    await logger.error({
-      message: `Error sending password reset email: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'security',
-      metadata: { error: error instanceof Error ? error.stack : String(error) }
+    logger.error({
+      message: `Failed to reset password for merchant ${merchantId}: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'admin',
+      source: 'api',
+      metadata: {
+        merchantId,
+        error: error instanceof Error ? error.stack : null
+      }
     });
 
     res.status(500).json({
       success: false,
-      message: 'Failed to send password reset email'
+      message: 'Failed to reset password'
     });
   }
 });
-// Export the router
-export default router;
+
+export default adminRouter;
