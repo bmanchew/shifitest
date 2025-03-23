@@ -233,6 +233,65 @@ class ThanksRogerService {
   getApiStatus = (): string => {
     return this.initialized ? 'initialized' : 'not initialized';
   }
+
+  /**
+   * Update the status of a contract in Thanks Roger
+   */
+  async updateContractStatus(options: {
+    contractId: string;
+    status: string;
+    completedAt?: string;
+  }): Promise<boolean> {
+    if (!this.isInitialized()) {
+      logger.warn({
+        message: 'Cannot update contract status: Thanks Roger service not initialized',
+        category: 'api',
+        source: 'thanksroger',
+        metadata: { contractId: options.contractId }
+      });
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/workspaces/${this.defaultWorkspaceId}/contracts/${options.contractId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: options.status,
+          completedAt: options.completedAt || new Date().toISOString()
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Thanks Roger API error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      logger.info({
+        message: `Successfully updated contract status in Thanks Roger: ${options.contractId} to ${options.status}`,
+        category: 'contract',
+        source: 'thanksroger',
+        metadata: { contractId: options.contractId, status: options.status }
+      });
+
+      return true;
+    } catch (error) {
+      logger.error({
+        message: `Error updating Thanks Roger contract status: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'contract',
+        source: 'thanksroger',
+        metadata: { 
+          contractId: options.contractId,
+          status: options.status,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      return false;
+    }
+  }
 }
 
 export default new ThanksRogerService();

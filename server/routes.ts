@@ -2368,18 +2368,27 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
 
         // Update the contract status in Thanks Roger to mark it as completed
         try {
-          await thanksRogerService.updateContractStatus({
+          const success = await thanksRogerService.updateContractStatus({
             contractId: thankRogerContractId,
             status: "completed",
             completedAt: new Date().toISOString()
           });
           
-          logger.info({
-            message: `Contract ${contractId} marked as completed in Thanks Roger`,
-            category: "contract",
-            source: "thanksroger",
-            metadata: { contractId, thankRogerContractId }
-          });
+          if (success) {
+            logger.info({
+              message: `Contract ${contractId} marked as completed in Thanks Roger`,
+              category: "contract",
+              source: "thanksroger",
+              metadata: { contractId, thankRogerContractId }
+            });
+          } else {
+            logger.warn({
+              message: `Failed to update contract status in Thanks Roger (API returned false)`,
+              category: "contract",
+              source: "thanksroger",
+              metadata: { contractId, thankRogerContractId }
+            });
+          }
         } catch (statusUpdateError) {
           logger.warn({
             message: `Failed to update contract status in Thanks Roger: ${statusUpdateError instanceof Error ? statusUpdateError.message : String(statusUpdateError)}`,
