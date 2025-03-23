@@ -2235,6 +2235,30 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         await storage.updateContractStep(Number(contractId), "completed");
         await storage.updateContractStatus(Number(contractId), "active");
 
+        // Update the contract status in Thanks Roger to mark it as completed
+        try {
+          await thanksRogerService.updateContractStatus({
+            contractId: thankRogerContractId,
+            status: "completed",
+            completedAt: new Date().toISOString()
+          });
+          
+          logger.info({
+            message: `Contract ${contractId} marked as completed in Thanks Roger`,
+            category: "contract",
+            source: "thanksroger",
+            metadata: { contractId, thankRogerContractId }
+          });
+        } catch (statusUpdateError) {
+          logger.warn({
+            message: `Failed to update contract status in Thanks Roger: ${statusUpdateError instanceof Error ? statusUpdateError.message : String(statusUpdateError)}`,
+            category: "contract",
+            source: "thanksroger",
+            metadata: { contractId, thankRogerContractId }
+          });
+          // Continue despite the status update error - we've already got the signature
+        }
+
         // Return success response
         return res.json({
           success: true,
@@ -2242,7 +2266,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           signatureId: signResult.signatureId,
           signingLink,
           signedAt: signResult.signedAt,
-          status: signResult.status,
+          status: "completed", // Update status to reflect completion
           message: "Contract signed successfully",
         });
       } catch (error) {

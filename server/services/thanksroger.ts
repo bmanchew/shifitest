@@ -525,6 +525,89 @@ class ThanksRogerService {
       });
       return false;
     }
+
+  /**
+   * Update the status of a contract in Thanks Roger
+   */
+  async updateContractStatus(options: {
+    contractId: string;
+    status: string;
+    completedAt?: string;
+  }): Promise<boolean> {
+    if (!this.isInitialized()) {
+      logger.error({
+        message: 'Cannot update contract status: Thanks Roger service not initialized',
+        category: 'api',
+        source: 'thanksroger'
+      });
+      return false;
+    }
+
+    try {
+      const url = `${this.baseUrl}/workspaces/${this.defaultWorkspaceId}/contracts/${options.contractId}/status`;
+      
+      const requestBody = {
+        status: options.status,
+        completedAt: options.completedAt || new Date().toISOString()
+      };
+      
+      if (this.debugMode) {
+        logger.info({
+          message: 'ThanksRoger API status update request',
+          category: 'api',
+          source: 'thanksroger',
+          metadata: {
+            url,
+            method: 'PUT',
+            requestBody,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey ? this.apiKey.substring(0, 5) + '...' : 'undefined'}`
+            }
+          }
+        });
+      }
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to update contract status: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      logger.info({
+        message: `Contract status updated successfully to ${options.status}`,
+        category: 'api',
+        source: 'thanksroger',
+        metadata: {
+          contractId: options.contractId,
+          status: options.status
+        }
+      });
+      
+      return true;
+    } catch (error) {
+      logger.error({
+        message: `Failed to update contract status: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'thanksroger',
+        metadata: { 
+          contractId: options.contractId,
+          status: options.status,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      return false;
+    }
+  }
+
   }
 
   /**
