@@ -1,12 +1,11 @@
-import express from "express";
-import { Request, Response } from "express";
+import express, { Request, Response, Router } from "express";
 import { authenticateAdmin } from "../middleware/auth";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
 import crypto from 'crypto';
 import emailService from '../services/email';
 
-const adminRouter = express.Router();
+const adminRouter = Router();
 
 // Apply admin authentication middleware to all admin routes
 adminRouter.use(authenticateAdmin);
@@ -64,37 +63,20 @@ adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
 });
 
 // Get all merchants
-adminRouter.get("/merchants", async (req: Request, res: Response) => {
+adminRouter.get("/merchants", async (_req: Request, res: Response) => {
   try {
-    const merchants = await storage.merchant.findMany({
-      include: {
-        contracts: {
-          select: {
-            id: true,
-            status: true,
-            contractNumber: true
-          }
-        }
-      }
-    });
+    const merchants = await storage.getAllMerchants();
 
-    res.json({
+    return res.json({
       success: true,
-      data: merchants
+      merchants
     });
   } catch (error) {
-    logger.error({
-      message: `Failed to fetch merchants: ${error instanceof Error ? error.message : String(error)}`,
-      category: "api",
-      source: "internal",
-      metadata: {
-        error: error instanceof Error ? error.stack : null
-      }
-    });
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch merchants"
+    console.error("Error fetching merchants:", error);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch merchants",
+      error: error instanceof Error ? error.message : String(error)
     });
   }
 });

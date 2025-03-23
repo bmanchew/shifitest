@@ -88,6 +88,9 @@ export default function MerchantList() {
     if (isError && error) {
       console.error("Merchant list component error:", error);
       setErrorMessage("Error fetching merchants: " + (error instanceof Error ? error.message : String(error)));
+    } else if (!isLoading && !isError) {
+      // Clear any previous error messages when data loads successfully
+      setErrorMessage("");
     }
   }, [isLoading, isError, error]);
 
@@ -458,6 +461,19 @@ export default function MerchantList() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md my-4">
+          <h3 className="font-semibold mb-1">Error</h3>
+          <p className="text-sm">{errorMessage}</p>
+          <button 
+            onClick={() => refetch()} 
+            className="mt-2 px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-800 rounded-md transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
 
       <DataTable
         columns={columns}
