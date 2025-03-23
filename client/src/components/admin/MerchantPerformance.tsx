@@ -458,12 +458,28 @@ export default function MerchantPerformance() {
                               : ''
                           }`} />
                         </Button>
+                        {updateMerchantMutation.isError && selectedMerchantId === merchant.merchantId && (
+                          <div className="text-red-500 text-xs mt-1">
+                            Update failed: {updateMerchantMutation.error instanceof Error 
+                              ? updateMerchantMutation.error.message 
+                              : 'Unknown error'}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+          )}
+          {isError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md my-4">
+              <h3 className="font-semibold mb-1">Error loading merchant data</h3>
+              <p className="text-sm">{error instanceof Error ? error.message : 'An unknown error occurred'}</p>
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
+                Try Again
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

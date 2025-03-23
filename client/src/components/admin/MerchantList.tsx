@@ -47,23 +47,46 @@ export default function MerchantList() {
   const { data: merchantsData = [], isLoading, isError, error, refetch } = useQuery<Merchant[]>({
     queryKey: ["/api/admin/merchants"],
     queryFn: async () => {
-      const response = await axios.get("/api/admin/merchants");
-      if (response.data.success) {
-        return response.data.merchants;
+      try {
+        const response = await axios.get("/api/admin/merchants");
+        if (response.data.success) {
+          return response.data.merchants;
+        }
+        // Log server-reported error if available
+        if (response.data.message) {
+          console.error("Server error:", response.data.message);
+          throw new Error(response.data.message);
+        }
+        throw new Error("Failed to fetch merchants");
+      } catch (error) {
+        // Enhance error handling for network and axios errors
+        if (axios.isAxiosError(error)) {
+          console.error("Axios error:", error.response?.data || error.message);
+          if (error.response?.status === 500) {
+            throw new Error(`Server error (500): ${error.response?.data?.message || "Internal server error"}`);
+          }
+          throw new Error(`Network error: ${error.message}`);
+        }
+        // Re-throw other errors
+        throw error;
       }
-      throw new Error("Failed to fetch merchants");
     },
     onError: (err) => {
+      console.error("Merchant list error:", err);
       setErrorMessage("Error fetching merchants: " + (err instanceof Error ? err.message : String(err)));
     },
     onSettled: () => {
       setLoading(false);
-    }
+    },
+    // Add retry logic to handle temporary network issues
+    retry: 1,
+    retryDelay: 1000
   });
 
   useEffect(() => {
     setLoading(isLoading);
     if (isError && error) {
+      console.error("Merchant list component error:", error);
       setErrorMessage("Error fetching merchants: " + (error instanceof Error ? error.message : String(error)));
     }
   }, [isLoading, isError, error]);

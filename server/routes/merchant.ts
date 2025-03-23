@@ -154,6 +154,121 @@ router.post('/signup', upload.any(), async (req, res) => {
   }
 });
 
+// Get merchant by ID with better error handling
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const merchantId = parseInt(req.params.id);
+    if (isNaN(merchantId)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid merchant ID format" 
+      });
+    }
+
+    const merchant = await storage.getMerchant(merchantId);
+    if (!merchant) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Merchant not found" 
+      });
+    }
+
+    return res.json({
+      success: true,
+      merchant
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error fetching merchant: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId: req.params.id,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch merchant details"
+    });
+  }
+});
+
+// Update merchant with enhanced error handling
+router.patch("/:id", async (req: Request, res: Response) => {
+  try {
+    const merchantId = parseInt(req.params.id);
+    if (isNaN(merchantId)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid merchant ID format" 
+      });
+    }
+
+    // Validate merchant exists
+    const merchant = await storage.getMerchant(merchantId);
+    if (!merchant) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Merchant not found" 
+      });
+    }
+
+    // Extract fields to update
+    const updateData = {};
+    const allowedFields = ['name', 'contactName', 'email', 'phone', 'address', 'active'];
+    
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid fields to update"
+      });
+    }
+
+    // Update the merchant
+    const updatedMerchant = await storage.updateMerchant(merchantId, updateData);
+
+    // Log the successful update
+    logger.info({
+      message: `Merchant ${merchantId} updated successfully`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId,
+        fields: Object.keys(updateData)
+      }
+    });
+
+    return res.json({
+      success: true,
+      merchant: updatedMerchant
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error updating merchant: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId: req.params.id,
+        requestBody: req.body,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update merchant"
+    });
+  }
+});
+
 // Test email route (for development purposes)
 router.post('/test-email', async (req, res) => {
   try {
