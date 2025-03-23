@@ -327,6 +327,244 @@ class UnderwritingService {
    * Process Plaid data into a format suitable for underwriting
    */
   private processPlaidData(plaidData: any): any {
+    // If no data, return null
+    if (!plaidData) return null;
+    
+    const processedData: any = {
+      income: null,
+      assets: null,
+      liabilities: null,
+      employment: null,
+      housing: null
+    };
+    
+    // Process income data
+    if (plaidData.income) {
+      processedData.income = {
+        annualIncome: plaidData.income.yearly_income || 0,
+        monthlyIncome: plaidData.income.monthly_income || 0,
+        incomeStreams: plaidData.income.income_streams || []
+      };
+    }
+    
+    // Process assets (accounts)
+    if (plaidData.accounts && plaidData.accounts.length > 0) {
+      const totalBalance = plaidData.accounts.reduce(
+        (sum: number, account: any) => sum + (account.balances?.current || 0), 
+        0
+      );
+      
+      processedData.assets = {
+        totalBalance,
+        accounts: plaidData.accounts.map((account: any) => ({
+          accountId: account.account_id,
+          accountName: account.name,
+          accountType: account.type,
+          accountSubtype: account.subtype,
+          balance: account.balances?.current || 0,
+          availableBalance: account.balances?.available || 0
+        }))
+      };
+    }
+    
+    // Process liabilities
+    if (plaidData.liabilities) {
+      const allLiabilities: any[] = [];
+      let totalMonthlyPayments = 0;
+      
+      // Credit cards
+      if (plaidData.liabilities.credit) {
+        plaidData.liabilities.credit.forEach((credit: any) => {
+          allLiabilities.push({
+            type: 'credit',
+            accountId: credit.account_id,
+            balance: credit.balances?.current || 0,
+            limit: credit.balances?.limit || 0,
+            minimumPayment: credit.minimum_payment || 0,
+            aprs: credit.aprs || []
+          });
+          
+          totalMonthlyPayments += credit.minimum_payment || 0;
+        });
+      }
+      
+      // Mortgages
+      if (plaidData.liabilities.mortgages) {
+        plaidData.liabilities.mortgages.forEach((mortgage: any) => {
+          allLiabilities.push({
+            type: 'mortgage',
+            accountId: mortgage.account_id,
+            balance: mortgage.balances?.current || 0,
+            originationPrincipal: mortgage.origination_principal || 0,
+            originationDate: mortgage.origination_date || '',
+            maturityDate: mortgage.maturity_date || '',
+            interestRate: mortgage.interest_rate?.percentage || 0,
+            monthlyPayment: mortgage.monthly_payment || 0
+          });
+          
+          totalMonthlyPayments += mortgage.monthly_payment || 0;
+        });
+      }
+      
+      // Student loans
+      if (plaidData.liabilities.student) {
+        plaidData.liabilities.student.forEach((loan: any) => {
+          allLiabilities.push({
+            type: 'student',
+            accountId: loan.account_id,
+            balance: loan.balances?.current || 0,
+            originationPrincipal: loan.origination_principal || 0,
+            interestRate: loan.interest_rate?.percentage || 0,
+            monthlyPayment: loan.minimum_payment || 0,
+            loanStatus: loan.loan_status?.type || '',
+            loanName: loan.loan_name || ''
+          });
+          
+          totalMonthlyPayments += loan.minimum_payment || 0;
+        });
+      }
+      
+      // Delinquency analysis from transactions
+      const delinquencies = {
+        total: 0,
+        last30Days: 0,
+        last90Days: 0,
+        last12Months: 0
+      };
+      
+      if (plaidData.transactions && plaidData.transactions.length > 0) {
+        // Get current date for comparisons
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        const twelveMonthsAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        
+        // Look for transactions that might indicate late fees or missed payments
+        plaidData.transactions.forEach((transaction: any) => {
+          const transactionDate = new Date(transaction.date);
+          const description = transaction.name.toLowerCase();
+          
+          // Simple heuristic - look for keywords suggesting late fees or penalties
+          if (
+            description.includes('late fee') || 
+            description.includes('penalty') || 
+            description.includes('past due') ||
+            description.includes('overdue')
+          ) {
+            delinquencies.total++;
+            
+            if (transactionDate >= thirtyDaysAgo) {
+              delinquencies.last30Days++;
+            }
+            
+            if (transactionDate >= ninetyDaysAgo) {
+              delinquencies.last90Days++;
+            }
+            
+            if (transactionDate >= twelveMonthsAgo) {
+              delinquencies.last12Months++;
+            }
+          }
+        });
+      }
+      
+      processedData.liabilities = {
+        items: allLiabilities,
+        totalMonthlyPayments,
+        delinquencies
+      };
+    }
+    
+    // Process employment data
+    if (plaidData.employment && plaidData.employment.length > 0) {
+      processedData.employment = plaidData.employment.map((emp: any) => {
+        // Calculate months at employer if possible
+        let monthsEmployed = 0;
+        if (emp.start_date) {
+          const startDate = new Date(emp.start_date);
+          const currentDate = new Date();
+          const diffMonths = (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                             (currentDate.getMonth() - startDate.getMonth());
+          monthsEmployed = Math.max(0, diffMonths);
+        }
+        
+        return {
+          employer: emp.employer,
+          title: emp.title,
+          startDate: emp.start_date || null,
+          endDate: emp.end_date || null,
+          monthsEmployed
+        };
+      });
+    }
+    
+    // Infer housing information from transactions and accounts
+    if (plaidData.transactions && plaidData.transactions.length > 0) {
+      const housingRelatedTransactions = plaidData.transactions.filter((transaction: any) => {
+        const description = transaction.name.toLowerCase();
+        return (
+          description.includes('rent') || 
+          description.includes('mortgage') ||
+          description.includes('hoa') ||
+          description.includes('housing') ||
+          description.includes('lease')
+        );
+      });
+      
+      if (housingRelatedTransactions.length > 0) {
+        // Get the most frequent payment amount for housing
+        const paymentAmounts: {[key: string]: number} = {};
+        housingRelatedTransactions.forEach((transaction: any) => {
+          const amount = Math.abs(transaction.amount).toFixed(2);
+          paymentAmounts[amount] = (paymentAmounts[amount] || 0) + 1;
+        });
+        
+        let mostFrequentAmount = 0;
+        let highestFrequency = 0;
+        
+        Object.entries(paymentAmounts).forEach(([amount, frequency]) => {
+          if (frequency > highestFrequency) {
+            highestFrequency = frequency;
+            mostFrequentAmount = parseFloat(amount);
+          }
+        });
+        
+        // Infer housing status
+        let housingStatus = 'unknown';
+        if (plaidData.liabilities && plaidData.liabilities.mortgages && plaidData.liabilities.mortgages.length > 0) {
+          housingStatus = 'mortgage';
+        } else if (mostFrequentAmount > 0) {
+          housingStatus = 'rent';
+        }
+        
+        // Calculate on-time payment percentage
+        const totalPayments = housingRelatedTransactions.length;
+        const regularPayments = housingRelatedTransactions.filter((transaction: any) => {
+          // Look for regular payment pattern (same day of month or within 3 days)
+          const transactionDate = new Date(transaction.date);
+          const dayOfMonth = transactionDate.getDate();
+          
+          // Simple heuristic - most housing payments are between 1st and 15th
+          return dayOfMonth <= 15;
+        }).length;
+        
+        const onTimePayments = regularPayments / totalPayments;
+        
+        processedData.housing = {
+          status: housingStatus,
+          estimatedMonthlyPayment: mostFrequentAmount,
+          paymentHistory: {
+            totalPayments,
+            regularPayments,
+            onTimePayments
+          }
+        };
+      }
+    }
+    
+    return processedData;
+  }
+  private processPlaidData(plaidData: any): any {
     // Process raw Plaid data into a structured format for underwriting
     // This is a placeholder implementation and should be expanded based on actual Plaid data structure
     if (!plaidData) return null;
