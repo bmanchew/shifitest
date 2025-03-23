@@ -51,11 +51,17 @@ export default function AdminDashboard() {
   const { data: merchants = [] } = useQuery({
     queryKey: ["/api/merchants"],
     queryFn: async () => {
-      const res = await fetch("/api/merchants", {
-        credentials: "include"
-      });
-      if (!res.ok) throw new Error("Failed to fetch merchants");
-      return res.json();
+      try {
+        const res = await fetch("/api/merchants", {
+          credentials: "include"
+        });
+        if (!res.ok) throw new Error(`Failed to fetch merchants: ${res.status}`);
+        const data = await res.json();
+        return data || [];
+      } catch (error) {
+        console.error("Error fetching merchants:", error);
+        return [];
+      }
     }
   });
 

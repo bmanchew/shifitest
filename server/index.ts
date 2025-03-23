@@ -54,6 +54,40 @@ app.use((req, res, next) => {
   next();
 });
 
+// Authentication middleware to extract user from cookies
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.cookies?.userId;
+    const userRole = req.cookies?.userRole;
+    
+    if (userId) {
+      const user = await storage.getUser(parseInt(userId));
+      if (user) {
+        // Add user to request object for later use
+        (req as any).user = {
+          id: user.id,
+          role: user.role,
+          email: user.email,
+          merchantId: user.merchantId
+        };
+      }
+    }
+    next();
+  } catch (error) {
+    // Just log the error and continue - don't block requests if auth fails
+    logger.warn({
+      message: `Auth middleware error: ${error instanceof Error ? error.message : String(error)}`,
+      category: "auth",
+      source: "internal",
+      metadata: {
+        path: req.path,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    next();
+  }
+});
+
 // Add the request logger middleware for enhanced logging
 app.use(requestLogger);
 

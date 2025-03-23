@@ -76,10 +76,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   apiRouter.post("/auth/login", async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Email and password are required" 
+        });
+      }
+      
       const user = await storage.getUserByEmail(email);
 
       if (!user || user.password !== password) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        return res.status(401).json({ 
+          success: false,
+          message: "Invalid credentials" 
+        });
       }
 
       // In a real app, we would generate a JWT token here
@@ -115,7 +126,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: userWithoutPassword 
       });
     } catch (error) {
-      console.error("Login error:", error);
+      logger.error({
+        message: `Login error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "auth",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
       res.status(500).json({ 
         success: false, 
         message: "Internal server error" 

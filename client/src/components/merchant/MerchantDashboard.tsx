@@ -13,14 +13,23 @@ export default function MerchantDashboard() {
   const { data: contracts = [] } = useQuery<Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
     queryFn: async () => {
-      const res = await fetch(`/api/contracts?merchantId=${merchantId}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error("Failed to fetch contracts");
+      try {
+        const res = await fetch(`/api/contracts?merchantId=${merchantId}`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          console.error(`Failed to fetch contracts: ${res.status}`);
+          return [];
+        }
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Error fetching contracts:", error);
+        return [];
       }
-      return res.json();
     },
+    retry: 1,
+    retryDelay: 1000,
   });
 
   // Calculate statistics
