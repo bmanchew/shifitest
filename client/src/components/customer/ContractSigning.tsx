@@ -134,37 +134,34 @@ export default function ContractSigning({
   // Submit the signed contract
   const handleSubmitSignature = async () => {
     if (!signatureData) {
-      toast({
-        title: "Signature Required",
-        description: "Please sign the contract to continue.",
-        variant: "destructive",
-      });
+      setSigningError("Please provide a signature before submitting");
       return;
     }
-    console.log("Submitting signature...");
-    setSigningError(null);
+
     setIsSubmitting(true);
+    setSigningError("");
 
     try {
-      // Call the API to sign the contract using ThanksRoger service
-      const signingResponse = await apiRequest<{
-        success: boolean;
-        contractId: string;
-        signingLink: string;
-        signatureId: string;
-        signedAt: string;
-        status: string;
-        message: string;
-      }>("POST", "/api/contract-signing", {
+      // Get the customer's name for the signature
+      const customerName = `${firstName || ""} ${lastName || ""}`.trim() || "Customer";
+
+      console.log("Submitting signature for contract:", contractId, "customer:", customerName);
+
+      // Submit signature to API
+      const signingResponse = await apiRequest("POST", "/api/contract-signing", {
         contractId,
         contractNumber,
         customerName,
         signatureData,
+        phoneNumber
       });
 
-      if (!signingResponse.success) {
-        throw new Error(signingResponse.message || "Signing service error");
+      // Verify response
+      if (!signingResponse || !signingResponse.success) {
+        throw new Error(signingResponse?.message || "Failed to process signature");
       }
+
+      console.log("Signature submission successful:", signingResponse);
 
       // Prepare the signature data to store
       const signatureDataToStore = {
