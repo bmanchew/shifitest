@@ -29,6 +29,7 @@ import merchantRouter from "./routes/merchant";
 import notificationRouter from "./routes/notification";
 import paymentRouter from "./routes/payments";
 import indexRoutes from "./routes/index"; // Import routes from index.ts
+import healthRouter from "./routes/health"; // Import health routes directly
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available
@@ -6038,6 +6039,9 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
       path: req.originalUrl
     });
   });
+
+  // Mount the index routes - these are additional routes from the /routes folder
+  apiRouter.use(indexRoutes);
 
   // Mount the API router
   app.use("/api", apiRouter);
