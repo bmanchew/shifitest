@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
-export default function SendApplication() {
+export default function SendApplication(props) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
@@ -20,10 +20,15 @@ export default function SendApplication() {
     setIsSubmitting(true);
 
     try {
-      // Make sure we have a merchantId, even if user is not available
-      const merchantId = (user?.merchantId || 49); // Default to Shiloh Finance ID
+      // Get the merchant ID from props or user context
+      const currentMerchantId = props?.merchantId || (user?.merchantId as number);
 
-      console.log("Sending application with merchantId:", merchantId);
+      // Validate merchantId exists before sending request
+      if (!currentMerchantId) {
+        throw new Error("Merchant ID is required but not available");
+      }
+
+      console.log("Sending application with merchantId:", currentMerchantId);
 
       // Ensure amount is a valid number
       const parsedAmount = parseFloat(amount);
@@ -39,7 +44,7 @@ export default function SendApplication() {
         body: JSON.stringify({
           phoneNumber,
           email,
-          merchantId,
+          merchantId: currentMerchantId,
           amount: parsedAmount
         }),
       });
@@ -71,7 +76,7 @@ export default function SendApplication() {
                 requestData: {
                     phoneNumber,
                     email,
-                    merchantId,
+                    merchantId: currentMerchantId,
                     amount: parseFloat(amount)
                 }
             });
