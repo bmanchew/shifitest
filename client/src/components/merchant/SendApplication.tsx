@@ -50,86 +50,52 @@ export default function SendApplication() {
     }).format(value);
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!user?.merchantId) {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneNumber || !amount) {
       toast({
-        title: "Error",
-        description: "Merchant ID not found",
+        title: "Missing Information",
+        description: "Please enter both phone number and amount",
         variant: "destructive",
       });
       return;
     }
 
-    if (!phoneNumber) {
-      toast({
-        title: "Error",
-        description: "Phone number is required",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!purchaseAmount || isNaN(purchaseAmount) || purchaseAmount <= 0) {
-      toast({
-        title: "Error",
-        description: "Valid purchase amount is required",
-        variant: "destructive",
-      });
-      return;
-    }
+    setIsSubmitting(true);
 
     try {
-      setIsSubmitting(true);
-
-      // Format phone number to ensure consistency
-      const formattedPhone = phoneNumber.replace(/\D/g, '');
-
-      // Make sure we have a valid phone number with at least 10 digits
-      if (formattedPhone.length < 10) {
-        throw new Error("Please enter a valid phone number with at least 10 digits");
-      }
-
+      // Send application via API
       const response = await apiRequest("/api/send-sms", {
         method: "POST",
         data: {
-          phoneNumber: formattedPhone,
-          email: email || undefined, // Only include email if provided
-          merchantId: user.merchantId,
-          amount: purchaseAmount.toString(), // Ensure amount is sent as string to prevent precision issues
+          phoneNumber,
+          email, // Include optional email
+          merchantId: user?.merchantId || 49, // Default merchant ID if not available
+          amount: parseFloat(amount),
         },
       });
 
-      if (response.data && response.data.success) {
-        toast({
-          title: "Success",
-          description: response.data.isSimulated 
-            ? "Application would be sent (simulation mode)" 
-            : "Application sent successfully",
-        });
-
-        // Clear form fields
-        setPhoneNumber("");
-        setEmail("");
-        setAmount("");
-        setShowCalculator(false);
-      } else {
-        throw new Error(
-          (response.data && response.data.message) || 
-          (response.data && response.data.error) || 
-          "Failed to send application"
-        );
+      if (!response.success) {
+        throw new Error(response.message || "Failed to send application");
       }
-    } catch (error: any) {
+
+      // Reset form
+      setPhoneNumber("");
+      setEmail("");
+      setAmount("");
+
+      // Show success message
+      toast({
+        title: "Application Sent!",
+        description: `Financing application sent to ${phoneNumber}`,
+      });
+    } catch (error) {
       console.error("Error sending application:", error);
 
-      // Extract the most useful error message
-      const errorMessage = 
-        (error.response && error.response.data && error.response.data.message) ||
-        (error.response && error.response.data && error.response.data.error) ||
-        (error.message) ||
-        "Failed to send application. Please try again.";
-
+      // Get more specific error message
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "An unknown error occurred";
       toast({
         title: "Error Sending Application",
         description: errorMessage,
