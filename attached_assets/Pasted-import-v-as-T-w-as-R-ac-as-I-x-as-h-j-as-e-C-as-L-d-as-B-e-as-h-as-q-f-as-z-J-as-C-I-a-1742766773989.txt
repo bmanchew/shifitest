@@ -1,0 +1,532 @@
+import {v as T, w as R, ac as I, x as h, j as e, C as L, d as B, e as $, h as q, f as z, J as C, I as S, r as w, ad as H, ae as O, af as J, N as _, S as k, O as Q, Q as V, V as A, W as p, Z as W, _ as m, q as K, t as Z, u as G, F as X, U as Y} from "./index-Duzn0n2f.js";
+import {M as ee} from "./MerchantLayout-BGZNDpUn.js";
+import {S as F} from "./StatCard-BWPuo2Wh.js";
+import {D as se} from "./dollar-sign-fxG0qPix.js";
+import "./arrow-up-DKhZhnlC.js";
+/**
+ * @license lucide-react v0.453.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const P = T("Calculator", [["rect", {
+    width: "16",
+    height: "20",
+    x: "4",
+    y: "2",
+    rx: "2",
+    key: "1nb95v"
+}], ["line", {
+    x1: "8",
+    x2: "16",
+    y1: "6",
+    y2: "6",
+    key: "x4nwl0"
+}], ["line", {
+    x1: "16",
+    x2: "16",
+    y1: "14",
+    y2: "18",
+    key: "wjye3r"
+}], ["path", {
+    d: "M16 10h.01",
+    key: "1m94wz"
+}], ["path", {
+    d: "M12 10h.01",
+    key: "1nrarc"
+}], ["path", {
+    d: "M8 10h.01",
+    key: "19clt8"
+}], ["path", {
+    d: "M12 14h.01",
+    key: "1etili"
+}], ["path", {
+    d: "M8 14h.01",
+    key: "6423bh"
+}], ["path", {
+    d: "M12 18h.01",
+    key: "mhygvu"
+}], ["path", {
+    d: "M8 18h.01",
+    key: "lrp35t"
+}]]);
+/**
+ * @license lucide-react v0.453.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const ae = T("SendHorizontal", [["path", {
+    d: "M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z",
+    key: "117uat"
+}], ["path", {
+    d: "M6 12h16",
+    key: "s4cdu5"
+}]]);
+function te() {
+    const {toast: n} = R()
+      , {user: r} = I()
+      , [i,f] = h.useState("")
+      , [j,u] = h.useState("")
+      , [x,a] = h.useState("")
+      , [o,y] = h.useState(!1)
+      , [g,M] = h.useState(!1)
+      , s = 24
+      , t = 0
+      , d = 15
+      , l = parseFloat(x) || 0
+      , N = H(l, d)
+      , D = O(l, N)
+      , U = J(D, s)
+      , b = c => new Intl.NumberFormat("en-US",{
+        style: "currency",
+        currency: "USD"
+    }).format(c);
+    return e.jsxs(L, {
+        className: "shadow",
+        children: [e.jsxs(B, {
+            className: "pb-3",
+            children: [e.jsxs($, {
+                className: "text-xl flex items-center",
+                children: [e.jsx(ae, {
+                    className: "h-5 w-5 mr-2 text-primary"
+                }), "Send Financing Application"]
+            }), e.jsx(q, {
+                children: "Send a 24-month 0% APR financing application to your customer via SMS"
+            })]
+        }), e.jsx(z, {
+            children: e.jsxs("div", {
+                className: "grid md:grid-cols-2 gap-6",
+                children: [e.jsx("div", {
+                    children: e.jsxs("form", {
+                        onSubmit: async c => {
+                            c.preventDefault();
+                            try {
+                                const v = await fetch("/api/send-application", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        phoneNumber: i,
+                                        merchantId: (r == null ? void 0 : r.merchantId) || 49,
+                                        amount: l || 0
+                                    })
+                                });
+                                if (!v.ok)
+                                    throw new Error("Failed to send SMS");
+                                const E = await v.json();
+                                if (!(await fetch("/api/initiate-call", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        phoneNumber: i,
+                                        applicationUrl: E.applicationUrl || `${window.location.origin}/apply`,
+                                        merchantName: (r == null ? void 0 : r.name) || "ShiFi Financing",
+                                        merchantId: (r == null ? void 0 : r.merchantId) || 49
+                                    })
+                                })).ok)
+                                    throw new Error("Failed to initiate call");
+                                n({
+                                    title: "Success",
+                                    description: "Application sent and call initiated"
+                                })
+                            } catch (v) {
+                                console.error("Error:", v),
+                                n({
+                                    title: "Error",
+                                    description: "Failed to send application",
+                                    variant: "destructive"
+                                })
+                            }
+                        }
+                        ,
+                        className: "space-y-4",
+                        children: [e.jsxs("div", {
+                            className: "grid gap-2",
+                            children: [e.jsx(C, {
+                                htmlFor: "customer-phone",
+                                children: "Customer Phone Number"
+                            }), e.jsx(S, {
+                                id: "customer-phone",
+                                type: "tel",
+                                placeholder: "(123) 456-7890",
+                                value: i,
+                                onChange: c => f(c.target.value),
+                                className: "h-10",
+                                required: !0
+                            }), e.jsx("p", {
+                                className: "text-xs text-muted-foreground",
+                                children: "The customer will receive a text message with a link to apply"
+                            })]
+                        }), e.jsxs("div", {
+                            className: "grid gap-2",
+                            children: [e.jsx(C, {
+                                htmlFor: "customer-email",
+                                children: "Customer Email"
+                            }), e.jsx(S, {
+                                id: "customer-email",
+                                type: "email",
+                                placeholder: "customer@example.com",
+                                value: j,
+                                onChange: c => u(c.target.value),
+                                className: "h-10"
+                            }), e.jsx("p", {
+                                className: "text-xs text-muted-foreground"
+                            })]
+                        }), e.jsxs("div", {
+                            className: "grid gap-2",
+                            children: [e.jsx(C, {
+                                htmlFor: "amount",
+                                children: "Purchase Amount"
+                            }), e.jsx(S, {
+                                id: "amount",
+                                type: "number",
+                                placeholder: "0.00",
+                                value: x,
+                                onChange: c => {
+                                    a(c.target.value),
+                                    parseFloat(c.target.value) > 0 && y(!0)
+                                }
+                                ,
+                                className: "h-10",
+                                step: "0.01",
+                                min: "0",
+                                required: !0
+                            })]
+                        }), e.jsxs("div", {
+                            className: "flex space-x-3 pt-1",
+                            children: [e.jsx(w, {
+                                type: "submit",
+                                className: "w-full",
+                                disabled: g,
+                                children: g ? "Sending..." : "Send Application"
+                            }), e.jsx(w, {
+                                type: "button",
+                                variant: "outline",
+                                className: "px-3",
+                                onClick: () => y(!o),
+                                children: e.jsx(P, {
+                                    className: "h-5 w-5"
+                                })
+                            })]
+                        })]
+                    })
+                }), o && e.jsxs("div", {
+                    className: "p-4 bg-muted/50 rounded-lg",
+                    children: [e.jsxs("div", {
+                        className: "flex items-center justify-between mb-3",
+                        children: [e.jsxs("h3", {
+                            className: "font-medium flex items-center",
+                            children: [e.jsx(P, {
+                                className: "h-4 w-4 mr-2 text-primary"
+                            }), "Payment Calculator"]
+                        }), e.jsxs(w, {
+                            size: "sm",
+                            variant: "ghost",
+                            className: "h-7 w-7 p-0",
+                            onClick: () => y(!1),
+                            children: [e.jsx("span", {
+                                className: "sr-only",
+                                children: "Close"
+                            }), "×"]
+                        })]
+                    }), e.jsxs("div", {
+                        className: "space-y-3 text-sm",
+                        children: [e.jsxs("div", {
+                            className: "flex justify-between py-1 border-b border-border/50",
+                            children: [e.jsx("span", {
+                                children: "Financing Term:"
+                            }), e.jsxs("span", {
+                                className: "font-medium",
+                                children: [s, " months"]
+                            })]
+                        }), e.jsxs("div", {
+                            className: "flex justify-between py-1 border-b border-border/50",
+                            children: [e.jsx("span", {
+                                children: "Interest Rate:"
+                            }), e.jsxs("span", {
+                                className: "font-medium",
+                                children: [t, "% APR"]
+                            })]
+                        }), e.jsxs("div", {
+                            className: "flex justify-between py-1 border-b border-border/50",
+                            children: [e.jsx("span", {
+                                children: "Purchase Amount:"
+                            }), e.jsx("span", {
+                                className: "font-medium",
+                                children: b(l)
+                            })]
+                        }), e.jsxs("div", {
+                            className: "flex justify-between py-1 border-b border-border/50",
+                            children: [e.jsx("span", {
+                                children: "Down Payment (15%):"
+                            }), e.jsx("span", {
+                                className: "font-medium",
+                                children: b(N)
+                            })]
+                        }), e.jsxs("div", {
+                            className: "flex justify-between py-1 border-b border-border/50",
+                            children: [e.jsx("span", {
+                                children: "Amount Financed:"
+                            }), e.jsx("span", {
+                                className: "font-medium",
+                                children: b(D)
+                            })]
+                        }), e.jsxs("div", {
+                            className: "flex justify-between py-2 mt-1 font-semibold",
+                            children: [e.jsx("span", {
+                                children: "Monthly Payment:"
+                            }), e.jsx("span", {
+                                className: "text-primary",
+                                children: b(U)
+                            })]
+                        })]
+                    })]
+                })]
+            })
+        })]
+    })
+}
+function ne({contracts: n, isLoading: r, onSendApplication: i}) {
+    const [f,j] = _()
+      , [u,x] = h.useState({});
+    h.useEffect( () => {
+        const s = [...new Set(n.map(t => t.customerId).filter(Boolean))];
+        s.length > 0 && Promise.all(s.map(t => fetch(`/api/customers/${t}`).then(d => d.ok ? d.json() : null).catch(d => (console.error(`Error fetching customer ${t}:`, d),
+        null)))).then(t => {
+            const d = {};
+            t.forEach(l => {
+                if (l && l.id) {
+                    const N = l.firstName && l.lastName ? `${l.firstName} ${l.lastName}` : l.name || "Unknown";
+                    d[l.id] = {
+                        name: N,
+                        email: l.email || ""
+                    }
+                }
+            }
+            ),
+            x(d)
+        }
+        )
+    }
+    , [n]);
+    const a = s => new Intl.NumberFormat("en-US",{
+        style: "currency",
+        currency: "USD"
+    }).format(s)
+      , o = s => {
+        switch (s) {
+        case "completed":
+            return "success";
+        case "in_progress":
+            return "warning";
+        case "pending":
+            return "secondary";
+        case "cancelled":
+            return "destructive";
+        default:
+            return "outline"
+        }
+    }
+      , y = s => {
+        var t;
+        return s ? ((t = u[s]) == null ? void 0 : t.name) || "Loading..." : "No Customer"
+    }
+      , g = s => {
+        var t;
+        return s && ((t = u[s]) == null ? void 0 : t.email) || ""
+    }
+      , M = s => {
+        j(`/merchant/contracts/${s.id}`)
+    }
+    ;
+    return r ? e.jsxs("div", {
+        className: "space-y-3",
+        children: [e.jsx(k, {
+            className: "h-10 w-full"
+        }), e.jsx(k, {
+            className: "h-20 w-full"
+        }), e.jsx(k, {
+            className: "h-20 w-full"
+        })]
+    }) : e.jsx("div", {
+        className: "rounded-md border",
+        children: e.jsxs(Q, {
+            children: [e.jsx(V, {
+                children: e.jsxs(A, {
+                    children: [e.jsx(p, {
+                        children: "Customer"
+                    }), e.jsx(p, {
+                        children: "Contract ID"
+                    }), e.jsx(p, {
+                        children: "Amount"
+                    }), e.jsx(p, {
+                        children: "Status"
+                    }), e.jsx(p, {
+                        children: "Created"
+                    }), e.jsx(p, {
+                        children: "Actions"
+                    })]
+                })
+            }), e.jsx(W, {
+                children: n.length === 0 ? e.jsx(A, {
+                    children: e.jsx(m, {
+                        colSpan: 6,
+                        className: "text-center py-6 text-muted-foreground",
+                        children: "No contracts found"
+                    })
+                }) : n.map(s => e.jsxs(A, {
+                    className: "cursor-pointer",
+                    onClick: () => M(s),
+                    children: [e.jsx(m, {
+                        children: e.jsxs("div", {
+                            className: "flex flex-col",
+                            children: [e.jsx("div", {
+                                className: "font-medium",
+                                children: y(s.customerId)
+                            }), e.jsx("div", {
+                                className: "text-gray-500 text-sm",
+                                children: g(s.customerId)
+                            })]
+                        })
+                    }), e.jsx(m, {
+                        children: s.contractNumber
+                    }), e.jsx(m, {
+                        children: a(s.amount)
+                    }), e.jsx(m, {
+                        children: e.jsx(K, {
+                            variant: o(s.status),
+                            children: s.status.charAt(0).toUpperCase() + s.status.slice(1)
+                        })
+                    }), e.jsx(m, {
+                        children: Z(new Date(s.createdAt), "MMM d, yyyy")
+                    }), e.jsx(m, {
+                        onClick: t => t.stopPropagation(),
+                        children: i && s.status === "completed" && e.jsx(w, {
+                            size: "sm",
+                            variant: "outline",
+                            onClick: () => i(s),
+                            children: "Send Application"
+                        })
+                    })]
+                }, s.id))
+            })]
+        })
+    })
+}
+function re() {
+    const {user: n} = I()
+      , r = (n == null ? void 0 : n.merchantId) || 49
+      , {data: i=[]} = G({
+        queryKey: ["/api/contracts", {
+            merchantId: r
+        }],
+        queryFn: async () => {
+            try {
+                const a = await fetch(`/api/contracts?merchantId=${r}`, {
+                    credentials: "include"
+                });
+                if (!a.ok)
+                    return console.error(`Failed to fetch contracts: ${a.status}`),
+                    [];
+                const o = await a.json();
+                return Array.isArray(o) ? o : []
+            } catch (a) {
+                return console.error("Error fetching contracts:", a),
+                []
+            }
+        }
+        ,
+        retry: 1,
+        retryDelay: 1e3
+    })
+      , f = i.filter(a => a.status === "active").length
+      , j = i.filter(a => a.status === "active" || a.status === "completed").reduce( (a, o) => a + o.financedAmount, 0)
+      , u = i.filter(a => a.status === "pending").length
+      , x = a => new Intl.NumberFormat("en-US",{
+        style: "currency",
+        currency: "USD"
+    }).format(a);
+    return e.jsxs("div", {
+        className: "max-w-7xl mx-auto py-6 sm:px-6 lg:px-8",
+        children: [e.jsx("div", {
+            className: "px-4 py-5 sm:px-0",
+            children: e.jsxs("div", {
+                className: "bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-6 mb-6 text-white",
+                children: [e.jsx("h1", {
+                    className: "text-2xl font-bold",
+                    children: "Welcome to ShiFi Dashboard"
+                }), e.jsxs("p", {
+                    className: "mt-2 text-blue-100",
+                    children: ["Hello, ", (n == null ? void 0 : n.name) || "Merchant", "! Manage your financing contracts and help your customers get the financing they need."]
+                }), e.jsxs("div", {
+                    className: "mt-4 flex space-x-3",
+                    children: [e.jsxs("div", {
+                        className: "bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2",
+                        children: [e.jsx("div", {
+                            className: "text-sm text-blue-100",
+                            children: "Current Date"
+                        }), e.jsx("div", {
+                            className: "font-medium",
+                            children: new Date().toLocaleDateString("en-US", {
+                                month: "long",
+                                day: "numeric",
+                                year: "numeric"
+                            })
+                        })]
+                    }), e.jsxs("div", {
+                        className: "bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2",
+                        children: [e.jsx("div", {
+                            className: "text-sm text-blue-100",
+                            children: "Last Login"
+                        }), e.jsxs("div", {
+                            className: "font-medium",
+                            children: ["Today,", " ", new Date().toLocaleTimeString("en-US", {
+                                hour: "numeric",
+                                minute: "2-digit"
+                            })]
+                        })]
+                    })]
+                })]
+            })
+        }), e.jsxs("div", {
+            className: "mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3",
+            children: [e.jsx(F, {
+                title: "Active Contracts",
+                value: f,
+                icon: e.jsx(X, {}),
+                iconBgColor: "bg-primary-100",
+                iconColor: "text-primary-600"
+            }), e.jsx(F, {
+                title: "Total Financed",
+                value: x(j),
+                icon: e.jsx(se, {}),
+                iconBgColor: "bg-green-100",
+                iconColor: "text-green-600"
+            }), e.jsx(F, {
+                title: "Pending Applications",
+                value: u,
+                icon: e.jsx(Y, {}),
+                iconBgColor: "bg-yellow-100",
+                iconColor: "text-yellow-600"
+            })]
+        }), e.jsx("div", {
+            className: "mt-8",
+            children: e.jsx(te, {})
+        }), e.jsx("div", {
+            className: "mt-8",
+            children: e.jsx(ne, {
+                contracts: i
+            })
+        })]
+    })
+}
+function he() {
+    return e.jsx(ee, {
+        children: e.jsx(re, {})
+    })
+}
+export {he as default};
