@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Check, X, PlusCircle, ExternalLink, Pencil } from "lucide-react";
 import { Link } from "wouter";
+import axios from "axios";
 
 export default function MerchantList() {
   const { toast } = useToast();
@@ -37,9 +38,36 @@ export default function MerchantList() {
   });
   const [isEditing, setIsEditing] = useState(false);
 
-  const { data: merchants = [], refetch } = useQuery<Merchant[]>({
+  // From the second implementation - these states are needed
+  const [merchants, setMerchants] = useState<IMerchant[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Keep both data fetching approaches (depending on which one you actually use)
+  const { data: merchantsData = [], refetch } = useQuery<Merchant[]>({
     queryKey: ["/api/merchants"],
   });
+
+  // From the second implementation - fetch merchants
+  useEffect(() => {
+    const fetchMerchants = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get("/api/admin/merchants");
+        if (response.data.success) {
+          setMerchants(response.data.merchants);
+        } else {
+          setError("Failed to fetch merchants");
+        }
+      } catch (err) {
+        setError("Error fetching merchants: " + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMerchants();
+  }, []);
 
   const columns: ColumnDef<Merchant>[] = [
     {
@@ -84,9 +112,9 @@ export default function MerchantList() {
         const merchant = row.original;
         return (
           <div className="flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               className="flex items-center gap-1"
               onClick={() => handleEditClick(merchant)}
             >
@@ -215,6 +243,26 @@ export default function MerchantList() {
     });
     setIsEditing(false);
   };
+
+  // Get status badge color based on Plaid status
+  const getStatusBadgeClass = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "completed":
+        return "bg-green-100 text-green-800";
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "in_progress":
+        return "bg-blue-100 text-blue-800";
+      case "rejected":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  if (loading) return <div className="text-center py-8">Loading merchants...</div>;
+
+  if (error) return <div className="text-center py-8 text-red-600">{error}</div>;
 
   return (
     <div>
@@ -391,121 +439,24 @@ export default function MerchantList() {
 
       <DataTable
         columns={columns}
-        data={merchants}
+        data={merchantsData.length > 0 ? merchantsData : merchants}
         searchField="name"
         searchPlaceholder="Search merchants..."
       />
     </div>
   );
 }
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import axios from "axios";
 
+// Define any missing interface
 interface IMerchant {
   id: number;
   name: string;
-  email: string;
-  phone: string;
-  contactName: string;
-  active: boolean;
-  createdAt: string;
-  plaidStatus: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  status?: string;
+  createdAt?: string;
+  plaidStatus?: string;
+  active?: boolean;
+  // Add other properties used in your component
 }
-
-const MerchantList: React.FC = () => {
-  const [merchants, setMerchants] = useState<IMerchant[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchMerchants = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get("/api/admin/merchants");
-        if (response.data.success) {
-          setMerchants(response.data.merchants);
-        } else {
-          setError("Failed to fetch merchants");
-        }
-      } catch (err) {
-        setError("Error fetching merchants: " + (err instanceof Error ? err.message : String(err)));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMerchants();
-  }, []);
-
-  // Get status badge color based on Plaid status
-  const getStatusBadgeClass = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "completed":
-        return "bg-green-100 text-green-800";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "in_progress":
-        return "bg-blue-100 text-blue-800";
-      case "rejected":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  if (loading) return <div className="text-center py-8">Loading merchants...</div>;
-  
-  if (error) return <div className="text-center py-8 text-red-600">{error}</div>;
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full bg-white">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-            <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-            <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-            <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-            <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-            <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200">
-          {merchants.length === 0 ? (
-            <tr>
-              <td colSpan={7} className="py-4 px-4 text-center text-gray-500">
-                No merchants found
-              </td>
-            </tr>
-          ) : (
-            merchants.map((merchant) => (
-              <tr key={merchant.id}>
-                <td className="py-4 px-4 whitespace-nowrap">{merchant.name}</td>
-                <td className="py-4 px-4 whitespace-nowrap">{merchant.contactName}</td>
-                <td className="py-4 px-4 whitespace-nowrap">{merchant.email}</td>
-                <td className="py-4 px-4 whitespace-nowrap">{merchant.phone}</td>
-                <td className="py-4 px-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(merchant.plaidStatus)}`}>
-                    {merchant.plaidStatus}
-                  </span>
-                </td>
-                <td className="py-4 px-4 whitespace-nowrap">
-                  {new Date(merchant.createdAt).toLocaleDateString()}
-                </td>
-                <td className="py-4 px-4 whitespace-nowrap text-sm font-medium">
-                  <Link to={`/admin/merchants/${merchant.id}`} className="text-indigo-600 hover:text-indigo-900">
-                    View Details
-                  </Link>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
-export default MerchantList;
