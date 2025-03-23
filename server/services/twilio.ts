@@ -77,6 +77,22 @@ class TwilioService {
     error?: string;
     isSimulated?: boolean;
   }> {
+    // Validate phone number format
+    const normalizedPhone = message.to.replace(/\D/g, '');
+    if (normalizedPhone.length < 10) {
+      logger.warn({
+        message: `Invalid phone number format: ${message.to}`,
+        category: "api",
+        source: "twilio"
+      });
+      
+      return {
+        success: false,
+        error: `Invalid phone number format: ${message.to}`
+      };
+    }
+    
+    // If Twilio is not initialized, use simulation mode
     if (!this.isInitialized() || !this.client) {
       logger.warn({
         message: `Twilio not initialized - Simulating SMS to ${message.to}`,
@@ -103,23 +119,35 @@ class TwilioService {
       const fromNumber = message.from || this.twilioPhone;
 
       if (!fromNumber) {
-        throw new Error("No 'from' phone number provided and TWILIO_PHONE_NUMBER is not set");
+        logger.error({
+          message: "No 'from' phone number provided and TWILIO_PHONE_NUMBER is not set",
+          category: "api",
+          source: "twilio"
+        });
+        
+        return {
+          success: false,
+          error: "No 'from' phone number provided and TWILIO_PHONE_NUMBER is not set"
+        };
       }
 
+      // Format the phone number for Twilio if it doesn't start with +
+      const formattedTo = normalizedPhone.startsWith('+') ? normalizedPhone : `+1${normalizedPhone}`;
+      
       logger.info({
-        message: `Sending SMS to ${message.to} from ${fromNumber}`,
+        message: `Sending SMS to ${formattedTo} from ${fromNumber}`,
         category: "api",
         source: "twilio"
       });
 
       const result = await this.client.messages.create({
         body: message.body,
-        to: message.to,
+        to: formattedTo,
         from: fromNumber
       });
 
       logger.info({
-        message: `SMS sent successfully to ${message.to}, SID: ${result.sid}`,
+        message: `SMS sent successfully to ${formattedTo}, SID: ${result.sid}`,
         category: "api",
         source: "twilio",
         metadata: {
@@ -133,19 +161,29 @@ class TwilioService {
         messageId: result.sid
       };
     } catch (error) {
+      // Twilio can return various error types - handle them gracefully
+      let errorMessage = "Unknown Twilio error";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        // Handle Twilio API error objects
+        errorMessage = JSON.stringify(error);
+      }
+      
       logger.error({
-        message: `Failed to send SMS to ${message.to}: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to send SMS to ${message.to}: ${errorMessage}`,
         category: "api", 
         source: "twilio",
         metadata: {
-          error: error instanceof Error ? error.stack : null,
+          error: error instanceof Error ? error.stack : JSON.stringify(error),
           to: message.to
         }
       });
 
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMessage
       };
     }
   }
