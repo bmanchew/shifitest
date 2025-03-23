@@ -311,10 +311,14 @@ underwritingRouter.post("/process/:contractId", async (req: Request, res: Respon
       });
     }
 
-    // Return success
+    // Get contract details to include in the response
+    const contract = await storage.getContract(parseInt(req.params.contractId));
+    
+    // Return success with both underwriting and contract data
     res.json({
       success: true,
       data: underwritingData,
+      contract: contract || null,
       message: "Underwriting process completed successfully"
     });
   } catch (error) {

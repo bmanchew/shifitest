@@ -104,9 +104,12 @@ class UnderwritingService {
         });
       }
 
+      // Process Plaid asset report data into a format suitable for our underwriting algorithm
+      const processedPlaidData = plaidData ? this.processPlaidData(plaidData) : null;
+      
       // Calculate underwriting score based on available data
       // Priority: Use Plaid assets data first, then credit score from PreFi
-      const underwritingResult = this.calculateUnderwritingScore(plaidData, creditScore);
+      const underwritingResult = this.calculateUnderwritingScore(processedPlaidData, creditScore);
 
       // Store underwriting results in database
       const newUnderwritingData = await db.insert(underwritingTable).values({
@@ -163,7 +166,7 @@ class UnderwritingService {
   private calculateUnderwritingScore(plaidData: any, creditScore: number) {
     // Initialize result with default values
     const result = {
-      creditTier: 'D',
+      creditTier: 'declined',
       totalPoints: 0,
       annualIncome: 0,
       annualIncomePoints: 0,
@@ -306,22 +309,15 @@ class UnderwritingService {
       result.delinquencyPoints;
 
     // Determine credit tier based on total points
-    if (result.totalPoints >= 90) {
-      result.creditTier = 'A+';
-    } else if (result.totalPoints >= 80) {
-      result.creditTier = 'A';
-    } else if (result.totalPoints >= 70) {
-      result.creditTier = 'B+';
+    // Map the score to the schema's enum values: 'tier1', 'tier2', 'tier3', 'declined'
+    if (result.totalPoints >= 80) {
+      result.creditTier = 'tier1';  // High quality (A+, A)
     } else if (result.totalPoints >= 60) {
-      result.creditTier = 'B';
-    } else if (result.totalPoints >= 50) {
-      result.creditTier = 'C+';
-    } else if (result.totalPoints >= 40) {
-      result.creditTier = 'C';
+      result.creditTier = 'tier2';  // Medium quality (B+, B, C+)
     } else if (result.totalPoints >= 30) {
-      result.creditTier = 'D+';
+      result.creditTier = 'tier3';  // Lower quality but acceptable (C, D+)
     } else {
-      result.creditTier = 'D';
+      result.creditTier = 'declined'; // Below threshold
     }
 
     return result;
@@ -348,3 +344,86 @@ class UnderwritingService {
 }
 
 export const underwritingService = new UnderwritingService();
+
+  /**
+   * Process Plaid financial profile data for underwriting analysis
+   * This standardizes the Plaid data structure for our underwriting algorithm
+   */
+  private processPlaidData(plaidData: any): any {
+    // If data is already in expected format, return as is
+    if (!plaidData) return null;
+    
+    try {
+      // Create a standardized structure for our underwriting algorithm
+      const processedData: any = {
+        income: {
+          annualIncome: 0,
+          monthlyIncome: 0,
+          confidence: 0
+        },
+        employment: [],
+        housing: {
+          status: 'unknown',
+          paymentHistory: null
+        },
+        liabilities: {
+          totalMonthlyPayments: 0,
+          delinquencies: {
+            total: 0
+          }
+        }
+      };
+      
+      // Extract income data
+      if (plaidData.income) {
+        processedData.income = {
+          annualIncome: plaidData.income.annualIncome || 0,
+          monthlyIncome: plaidData.income.monthlyIncome || (plaidData.income.annualIncome ? plaidData.income.annualIncome / 12 : 0),
+          confidence: plaidData.income.confidence || 0
+        };
+      }
+      
+      // Extract employment data
+      if (plaidData.employment) {
+        // Convert various employment data formats to a standardized format
+        if (Array.isArray(plaidData.employment)) {
+          processedData.employment = plaidData.employment.map((job: any) => ({
+            name: job.name || 'Unknown Employer',
+            monthsEmployed: job.monthsEmployed || job.months || 0
+          }));
+        } else if (plaidData.employment.employmentMonths) {
+          // If we have the analyzed format from Plaid service
+          processedData.employment = [{
+            name: 'Primary Employer',
+            monthsEmployed: plaidData.employment.employmentMonths
+          }];
+        }
+      }
+      
+      // Extract housing information
+      if (plaidData.housing) {
+        processedData.housing = {
+          status: plaidData.housing.housingStatus || plaidData.housing.status || 'unknown',
+          paymentHistory: plaidData.housing.paymentHistory || { onTimePayments: 0 }
+        };
+      }
+      
+      // Extract liability information
+      if (plaidData.debt) {
+        processedData.liabilities = {
+          totalMonthlyPayments: plaidData.debt.totalDebt / 12 || 0,
+          delinquencies: {
+            total: 0 // Default if no delinquency data
+          }
+        };
+      } else if (plaidData.liabilities) {
+        processedData.liabilities = plaidData.liabilities;
+      }
+      
+      return processedData;
+    } catch (error) {
+      // If there's an error processing the data, log it and return null
+      console.error('Error processing Plaid data for underwriting:', error);
+      return null;
+    }
+  }
