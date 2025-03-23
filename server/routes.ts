@@ -21,6 +21,7 @@ import { nlpearlService } from './services';
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
+import adminRouter from "./routes/admin";
 import contractsRouter from "./routes/contracts";
 import customersRouter from "./routes/customers";
 import underwritingRouter from "./routes/underwriting";
@@ -4898,6 +4899,9 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Mount the admin reports routers
   apiRouter.use("/admin/reports", reportsRouter);
   apiRouter.use("/admin", adminReportsRouter);
+  
+  // Mount the admin router
+  apiRouter.use("/admin", adminRouter);
 
   // Mount the underwriting router
   apiRouter.use("/underwriting", underwritingRouter);

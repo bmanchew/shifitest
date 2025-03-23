@@ -43,31 +43,30 @@ export default function MerchantList() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Keep both data fetching approaches (depending on which one you actually use)
-  const { data: merchantsData = [], refetch } = useQuery<Merchant[]>({
-    queryKey: ["/api/merchants"],
+  // Use React Query for data fetching
+  const { data: merchantsData = [], isLoading, isError, error, refetch } = useQuery<Merchant[]>({
+    queryKey: ["/api/admin/merchants"],
+    queryFn: async () => {
+      const response = await axios.get("/api/admin/merchants");
+      if (response.data.success) {
+        return response.data.merchants;
+      }
+      throw new Error("Failed to fetch merchants");
+    },
+    onError: (err) => {
+      setError("Error fetching merchants: " + (err instanceof Error ? err.message : String(err)));
+    },
+    onSettled: () => {
+      setLoading(false);
+    }
   });
 
-  // From the second implementation - fetch merchants
   useEffect(() => {
-    const fetchMerchants = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get("/api/admin/merchants");
-        if (response.data.success) {
-          setMerchants(response.data.merchants);
-        } else {
-          setError("Failed to fetch merchants");
-        }
-      } catch (err) {
-        setError("Error fetching merchants: " + (err instanceof Error ? err.message : String(err)));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMerchants();
-  }, []);
+    setLoading(isLoading);
+    if (isError && error) {
+      setError("Error fetching merchants: " + (error instanceof Error ? error.message : String(error)));
+    }
+  }, [isLoading, isError, error]);
 
   const columns: ColumnDef<Merchant>[] = [
     {
@@ -439,9 +438,10 @@ export default function MerchantList() {
 
       <DataTable
         columns={columns}
-        data={merchantsData.length > 0 ? merchantsData : merchants}
+        data={merchantsData}
         searchField="name"
         searchPlaceholder="Search merchants..."
+        isLoading={isLoading}
       />
     </div>
   );
