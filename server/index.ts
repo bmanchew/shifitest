@@ -34,30 +34,19 @@ if (missingEnvVars.length > 0) {
 
 app.use(express.urlencoded({ extended: false }));
 
-// Enable CORS for all routes with credentials support, especially for .replit.dev domain
+// Enable CORS for all routes with credentials support
 app.use((req, res, next) => {
-  // Get the Replit ID from environment variables
-  const replitId = process.env.REPL_ID || '';
-  
-  // Create a list of allowed origins that includes both the .replit.dev domain and dynamic origins
   const allowedOrigins = [
-    `https://${replitId}.replit.dev`,
-    req.headers.origin || '*'
+    req.headers.origin || "*",
+    process.env.PUBLIC_URL || "*"
   ];
   
-  // Set the appropriate CORS headers
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  } else {
-    res.header("Access-Control-Allow-Origin", allowedOrigins[0]);
-  }
-  
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   res.header("Access-Control-Allow-Credentials", "true");
   
-  // Handle preflight requests
+  // Handle preflight OPTIONS requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -195,6 +184,19 @@ async function startServer() {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
 
+      // Capture Plaid-specific errors for better debugging
+      let errorDetails = {};
+      
+      if (err.response?.data) {
+        errorDetails = {
+          plaidError: true,
+          errorCode: err.response.data.error_code,
+          errorType: err.response.data.error_type,
+          errorMessage: err.response.data.error_message,
+          displayMessage: err.response.data.display_message
+        };
+      }
+
       // Log the error with our enhanced logger
       logger.error({
         message: `Error: ${message}`,
@@ -203,10 +205,15 @@ async function startServer() {
         metadata: {
           stack: err.stack,
           error: err instanceof Error ? err.message : String(err),
+          errorDetails: Object.keys(errorDetails).length > 0 ? errorDetails : undefined
         },
       });
 
-      res.status(status).json({ message });
+      res.status(status).json({ 
+        success: false,
+        message,
+        ...(Object.keys(errorDetails).length > 0 ? { errorDetails } : {})
+      });
     });
 
     // importantly only setup vite in development and after
@@ -327,7 +334,7 @@ async function startServer() {
       },
     });
     // Release startup lock to allow for restart attempts
-    (global as any)[globalStartupLock] = false;
+    (global as any)["server_startup_lock"] = false;
   }
 }
 
