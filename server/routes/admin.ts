@@ -101,9 +101,12 @@ export default adminRouter;
 
 
 import crypto from 'crypto';
+import express from 'express';
 import { storage } from '../storage';
 import emailService from '../services/email';
 import { logger } from '../services/logger';
+
+const router = express.Router();
 
 // Admin route to reset merchant password
 router.post('/merchants/:id/reset-password', async (req, res) => {
@@ -168,3 +171,4 @@ router.post('/merchants/:id/reset-password', async (req, res) => {
     });
   }
 });
+export default router;
