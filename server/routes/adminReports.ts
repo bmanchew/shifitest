@@ -1,4 +1,3 @@
-
 import express, { Request, Response } from "express";
 import { storage } from "../storage";
 import { cfpbService } from "../services/cfpbService";
@@ -11,11 +10,28 @@ export const adminReportsRouter = express.Router();
 // Get CFPB complaint trends
 adminReportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
   try {
+    logger.info({
+      message: "Fetching CFPB complaint trends for admin dashboard",
+      category: "api",
+      source: "internal",
+    });
+
     const complaintTrends = await cfpbService.getComplaintTrends();
-    
+
+    // Check if we got data with an error
+    if ('error' in complaintTrends) {
+      logger.warn({
+        message: `CFPB API warning: ${complaintTrends.error}`,
+        category: "api",
+        source: "internal",
+      });
+    }
+
     res.json({
       success: true,
-      data: complaintTrends
+      data: complaintTrends,
+      // If we have no data, include a flag that tells the frontend
+      isEmpty: (!complaintTrends.personalLoans?.hits?.total && !complaintTrends.merchantCashAdvance?.hits?.total)
     });
   } catch (error) {
     logger.error({
@@ -26,10 +42,12 @@ adminReportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
         error: error instanceof Error ? error.stack : null
       }
     });
-    
+
+    // Return empty structure with error
     res.status(500).json({
       success: false,
-      message: "Failed to get CFPB complaint trends"
+      message: "Failed to get CFPB complaint trends",
+      error: error instanceof Error ? error.message : String(error)
     });
   }
 });

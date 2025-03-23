@@ -52,48 +52,88 @@ export class CFPBService {
   }
 
   async getPersonalLoanComplaints() {
-    const params = new URLSearchParams({
-      product: 'Personal loan',
-      date_received_min: '2023-01-01',
-      date_received_max: new Date().toISOString().split('T')[0],
-      size: '100',
-      sort: 'date_received:desc',
-      field: ['date_received', 'sub_product', 'issue', 'complaint_what_happened']
-    });
-    return this.getCFPBData(params);
+    try {
+      const params = new URLSearchParams({
+        product: 'consumer loan',
+        sub_product: 'personal loan',
+        date_received_min: '2023-01-01',
+        date_received_max: new Date().toISOString().split('T')[0],
+        size: '100',
+        sort: 'date_received:desc',
+        field: 'date_received,sub_product,issue,complaint_what_happened'
+      });
+      return this.getCFPBData(params);
+    } catch (error) {
+      logger.error({
+        message: `Error fetching personal loan complaints: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'cfpb',
+        metadata: { error: error instanceof Error ? error.stack : null }
+      });
+      throw error;
+    }
   }
 
   async getMerchantCashAdvanceComplaints() {
-    const params = new URLSearchParams({
-      product: 'merchant cash advance',
-      date_received_min: '2023-01-01',
-      date_received_max: new Date().toISOString().split('T')[0],
-      size: '100',
-      sort: 'date_received:desc',
-      field: ['date_received', 'sub_product', 'issue', 'complaint_what_happened']
-    });
-    return this.getCFPBData(params);
+    try {
+      // Use the correct search terms for merchant cash advance
+      const params = new URLSearchParams({
+        search_term: 'merchant cash advance',
+        date_received_min: '2023-01-01',
+        date_received_max: new Date().toISOString().split('T')[0],
+        size: '100',
+        sort: 'date_received:desc',
+        field: 'date_received,sub_product,issue,complaint_what_happened'
+      });
+      return this.getCFPBData(params);
+    } catch (error) {
+      logger.error({
+        message: `Error fetching merchant cash advance complaints: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'cfpb',
+        metadata: { error: error instanceof Error ? error.stack : null }
+      });
+      throw error;
+    }
   }
   
   async getComplaintTrends() {
     try {
-      const personalLoanComplaints = await this.getPersonalLoanComplaints();
-      const merchantCashAdvanceComplaints = await this.getMerchantCashAdvanceComplaints();
+      // Fetch both types of complaints in parallel
+      const [personalLoanComplaints, merchantCashAdvanceComplaints] = await Promise.all([
+        this.getPersonalLoanComplaints(),
+        this.getMerchantCashAdvanceComplaints()
+      ]);
+      
+      // Log what we got from the API
+      logger.info({
+        message: 'Successfully fetched complaint trends data',
+        category: 'api',
+        source: 'cfpb',
+        metadata: {
+          personalLoanCount: personalLoanComplaints?.hits?.total || 0,
+          merchantCashAdvanceCount: merchantCashAdvanceComplaints?.hits?.total || 0
+        }
+      });
       
       return {
-        personalLoans: personalLoanComplaints,
-        merchantCashAdvance: merchantCashAdvanceComplaints
+        personalLoans: personalLoanComplaints || { hits: { total: 0, hits: [] } },
+        merchantCashAdvance: merchantCashAdvanceComplaints || { hits: { total: 0, hits: [] } }
       };
     } catch (error) {
       logger.error({
         message: `Error fetching complaint trends: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
         source: 'cfpb',
-        metadata: {
-          error: error instanceof Error ? error.stack : null
-        }
+        metadata: { error: error instanceof Error ? error.stack : null }
       });
-      throw error;
+      
+      // Instead of propagating the error, return empty results
+      return {
+        personalLoans: { hits: { total: 0, hits: [] } },
+        merchantCashAdvance: { hits: { total: 0, hits: [] } },
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   }
 }

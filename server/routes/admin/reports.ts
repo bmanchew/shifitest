@@ -1,11 +1,119 @@
-import { Router, Request, Response } from "express";
+import express, { Request, Response } from "express";
 import { storage } from "../../storage";
-import { logger } from "../../services/logger";
 import { cfpbService } from "../../services/cfpbService";
-import { AIAnalyticsService } from "../../services/aiAnalytics";
+import { aiAnalyticsService } from "../../services";
+import { logger } from "../../services/logger";
 
-export const reportsRouter = Router();
-const aiAnalyticsService = new AIAnalyticsService();
+export const reportsRouter = express.Router();
+
+// Get CFPB complaint trends
+reportsRouter.get("/complaint-trends", async (req: Request, res: Response) => {
+  try {
+    logger.info({
+      message: "Fetching complaint trends data",
+      category: "api",
+      source: "internal",
+    });
+
+    // Get real data from CFPB
+    const trends = await cfpbService.getComplaintTrends();
+
+    // Check if there was an error
+    if ('error' in trends) {
+      logger.warn({
+        message: `CFPB data fetch had an error, but returning partial data: ${trends.error}`,
+        category: "api",
+        source: "internal",
+      });
+    }
+
+    // Return the results with success status
+    return res.json({
+      success: true,
+      data: trends,
+      isMockData: false
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error fetching complaint trends: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : null,
+      },
+    });
+
+    // Return mock data as fallback
+    const mockData = {
+      personalLoans: {
+        hits: {
+          total: 120,
+          hits: Array(15).fill(0).map((_, i) => ({
+            _source: {
+              date_received: new Date(Date.now() - i * 86400000).toISOString().split('T')[0],
+              issue: ["High interest", "Unexpected fees", "Difficult application process"][i % 3],
+              sub_product: "Unsecured personal loan"
+            }
+          }))
+        }
+      },
+      merchantCashAdvance: {
+        hits: {
+          total: 85,
+          hits: Array(10).fill(0).map((_, i) => ({
+            _source: {
+              date_received: new Date(Date.now() - i * 86400000).toISOString().split('T')[0],
+              issue: ["High fees", "Confusing terms", "Collection practices"][i % 3],
+              sub_product: "Merchant cash advance"
+            }
+          }))
+        }
+      },
+      isMockData: true
+    };
+
+    res.json({
+      success: true,
+      data: mockData,
+      isMockData: true,
+      error: "Used mock data due to API error",
+      errorDetails: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Get CFPB complaint trends with analysis
+reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
+  try {
+    logger.info({
+      message: "Starting CFPB complaint trends analysis",
+      category: "api",
+      source: "internal",
+    });
+
+    // Get real data from CFPB API
+    const analysisResults = await aiAnalyticsService.analyzeComplaintTrends();
+
+    return res.json({
+      success: true,
+      data: analysisResults,
+    });
+  } catch (error) {
+    logger.error({
+      message: `Failed to get CFPB complaint trends: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : null,
+      },
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to get CFPB complaint trends",
+    });
+  }
+});
 
 reportsRouter.get("/portfolio-health", async (req, res) => {
   // In a real application, this would fetch data from a database or other service
@@ -63,71 +171,4 @@ reportsRouter.get("/portfolio-health", async (req, res) => {
       },
     ],
   });
-});
-
-reportsRouter.get("/complaint-trends", async (req, res) => {
-  try {
-    logger.info({
-      message: "Fetching complaint trends data",
-      category: "api",
-      source: "internal",
-    });
-
-    // Get real data from CFPB
-    const trends = await aiAnalyticsService.analyzeComplaintTrends();
-
-    // Return the results with success status
-    return res.json({
-      success: true,
-      data: trends,
-    });
-  } catch (error) {
-    logger.error({
-      message: `Error fetching complaint trends: ${error instanceof Error ? error.message : String(error)}`,
-      category: "api",
-      source: "internal",
-      metadata: {
-        error: error instanceof Error ? error.stack : null,
-      },
-    });
-
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch complaint trends",
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-});
-
-// Get CFPB complaint trends
-reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
-  try {
-    logger.info({
-      message: "Starting CFPB complaint trends analysis",
-      category: "api",
-      source: "internal",
-    });
-
-    // Get real data from CFPB API
-    const analysisResults = await aiAnalyticsService.analyzeComplaintTrends();
-
-    return res.json({
-      success: true,
-      data: analysisResults,
-    });
-  } catch (error) {
-    logger.error({
-      message: `Failed to get CFPB complaint trends: ${error instanceof Error ? error.message : String(error)}`,
-      category: "api",
-      source: "internal",
-      metadata: {
-        error: error instanceof Error ? error.stack : null,
-      },
-    });
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to get CFPB complaint trends",
-    });
-  }
 });
