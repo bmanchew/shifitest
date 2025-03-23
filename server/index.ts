@@ -34,12 +34,34 @@ if (missingEnvVars.length > 0) {
 
 app.use(express.urlencoded({ extended: false }));
 
-// Enable CORS for all routes with credentials support
+// Enable CORS for all routes with credentials support, especially for .replit.dev domain
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  // Get the Replit ID from environment variables
+  const replitId = process.env.REPL_ID || '';
+  
+  // Create a list of allowed origins that includes both the .replit.dev domain and dynamic origins
+  const allowedOrigins = [
+    `https://${replitId}.replit.dev`,
+    req.headers.origin || '*'
+  ];
+  
+  // Set the appropriate CORS headers
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  } else {
+    res.header("Access-Control-Allow-Origin", allowedOrigins[0]);
+  }
+  
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   res.header("Access-Control-Allow-Credentials", "true");
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   next();
 });
 

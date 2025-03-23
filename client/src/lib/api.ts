@@ -35,6 +35,9 @@ export const updatePaymentSchedule = async (customerId: string, scheduleData: an
 };
 import { QueryFunction } from "@tanstack/react-query";
 
+// Get the API URL from environment variables, defaulting to relative path if not available
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     try {
@@ -51,12 +54,31 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// Helper to build full URL with API base URL if it's an API endpoint
+function buildUrl(url: string): string {
+  // If it's already an absolute URL or API_BASE_URL is not set, return it as is
+  if (url.startsWith('http') || !API_BASE_URL) {
+    return url;
+  }
+  
+  // If it's an API call that doesn't already include /api, add the API base URL
+  if (url.startsWith('/api/')) {
+    // Replace /api/ with the full API base URL
+    return `${API_BASE_URL}${url.substring(4)}`;
+  }
+  
+  // For other relative URLs, use them as is (relative to current domain)
+  return url;
+}
+
 export async function apiRequest<T = Response>(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<T> {
-  const res = await fetch(url, {
+  const fullUrl = buildUrl(url);
+  
+  const res = await fetch(fullUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
