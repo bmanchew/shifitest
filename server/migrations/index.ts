@@ -1,4 +1,5 @@
 import { migrateName } from "./name-to-first-last-name";
+import { updateLogSourceEnum } from "./update-log-source-enum";
 import { logger } from "../services/logger";
 
 export async function runMigrations() {
@@ -9,6 +10,7 @@ export async function runMigrations() {
     });
 
     await migrateName();
+    await updateLogSourceEnum();
 
     logger.info({
       message: "Database migrations completed successfully",
