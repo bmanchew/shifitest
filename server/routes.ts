@@ -1512,8 +1512,8 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         await storage.updateContract(pendingContract.id, {
           archived: true,
           status: 'cancelled',
-          archivedAt: new Date(),
-          archivedReason: 'Superseded by new contract'
+          archived_at: new Date(),
+          archived_reason: 'Superseded by new contract'
         });
         
         logger.info({
