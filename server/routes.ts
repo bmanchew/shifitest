@@ -1593,7 +1593,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         }
       });
 
-      if (!phoneNumber || !merchantId || !amount) {
+      if (!phoneNumber || merchantId === undefined || !amount) {
         logger.warn({
           message: "Missing required fields for SMS",
           category: "sms",
@@ -1610,8 +1610,11 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       }
 
       // Validate numeric inputs
-      const merchantIdNum = parseInt(merchantId);
-      const amountNum = parseFloat(amount);
+      const merchantIdNum = parseInt(String(merchantId));
+      const amountNum = parseFloat(String(amount));
+      
+      // Add additional debugging
+      console.log("Processing application with merchant ID:", merchantId, "→", merchantIdNum);
       
       if (isNaN(merchantIdNum) || isNaN(amountNum)) {
         return res.status(400).json({
