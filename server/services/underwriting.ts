@@ -163,6 +163,166 @@ class UnderwritingService {
   /**
    * Calculate underwriting score based on available data
    */
+  private calculateUnderwritingScore(plaidData: any, creditScore: number) {
+    // Initialize result with default values
+    const result = {
+      creditTier: 'declined',
+      totalPoints: 0,
+      annualIncome: 0,
+      annualIncomePoints: 0,
+      employmentHistoryMonths: 0,
+      employmentHistoryPoints: 0,
+      creditScorePoints: 0,
+      dtiRatio: 0,
+      dtiRatioPoints: 0,
+      housingStatus: '',
+      housingPaymentHistory: null,
+      housingStatusPoints: 0,
+      delinquencyHistory: null,
+      delinquencyPoints: 0
+    };
+
+    // Calculate points based on Plaid assets data
+    if (plaidData) {
+      // Income analysis
+      if (plaidData.income && plaidData.income.annualIncome) {
+        result.annualIncome = plaidData.income.annualIncome;
+        if (result.annualIncome > 100000) {
+          result.annualIncomePoints = 30;
+        } else if (result.annualIncome > 75000) {
+          result.annualIncomePoints = 25;
+        } else if (result.annualIncome > 50000) {
+          result.annualIncomePoints = 20;
+        } else if (result.annualIncome > 30000) {
+          result.annualIncomePoints = 15;
+        } else {
+          result.annualIncomePoints = 10;
+        }
+      }
+
+      // Employment history
+      if (plaidData.employment && plaidData.employment.length > 0) {
+        // Calculate total months of employment history
+        // This is a simplified calculation
+        result.employmentHistoryMonths = plaidData.employment.reduce(
+          (total: number, job: any) => total + (job.monthsEmployed || 0), 
+          0
+        );
+
+        if (result.employmentHistoryMonths > 60) {
+          result.employmentHistoryPoints = 20;
+        } else if (result.employmentHistoryMonths > 36) {
+          result.employmentHistoryPoints = 15;
+        } else if (result.employmentHistoryMonths > 24) {
+          result.employmentHistoryPoints = 10;
+        } else if (result.employmentHistoryMonths > 12) {
+          result.employmentHistoryPoints = 5;
+        } else {
+          result.employmentHistoryPoints = 0;
+        }
+      }
+
+      // Housing status and payment history
+      if (plaidData.housing) {
+        result.housingStatus = plaidData.housing.status;
+        result.housingPaymentHistory = plaidData.housing.paymentHistory;
+
+        // Points for housing status
+        if (result.housingStatus === 'own') {
+          result.housingStatusPoints = 15;
+        } else if (result.housingStatus === 'mortgage') {
+          result.housingStatusPoints = 10;
+        } else if (result.housingStatus === 'rent') {
+          result.housingStatusPoints = 5;
+        }
+
+        // Add more points for good payment history
+        if (result.housingPaymentHistory && result.housingPaymentHistory.onTimePayments > 0.9) {
+          result.housingStatusPoints += 10;
+        }
+      }
+
+      // DTI Ratio calculation
+      if (plaidData.income && plaidData.income.annualIncome && plaidData.liabilities) {
+        const monthlyIncome = plaidData.income.annualIncome / 12;
+        const monthlyDebt = plaidData.liabilities.totalMonthlyPayments || 0;
+
+        result.dtiRatio = monthlyIncome > 0 ? (monthlyDebt / monthlyIncome) : 0;
+
+        if (result.dtiRatio < 0.2) {
+          result.dtiRatioPoints = 20;
+        } else if (result.dtiRatio < 0.3) {
+          result.dtiRatioPoints = 15;
+        } else if (result.dtiRatio < 0.4) {
+          result.dtiRatioPoints = 10;
+        } else if (result.dtiRatio < 0.5) {
+          result.dtiRatioPoints = 5;
+        } else {
+          result.dtiRatioPoints = 0;
+        }
+      }
+
+      // Delinquency history
+      if (plaidData.liabilities && plaidData.liabilities.delinquencies) {
+        result.delinquencyHistory = plaidData.liabilities.delinquencies;
+
+        const totalDelinquencies = result.delinquencyHistory.total || 0;
+
+        if (totalDelinquencies === 0) {
+          result.delinquencyPoints = 20;
+        } else if (totalDelinquencies <= 1) {
+          result.delinquencyPoints = 15;
+        } else if (totalDelinquencies <= 3) {
+          result.delinquencyPoints = 10;
+        } else if (totalDelinquencies <= 5) {
+          result.delinquencyPoints = 5;
+        } else {
+          result.delinquencyPoints = 0;
+        }
+      }
+    }
+
+    // Add credit score points from PreFi data
+    if (creditScore > 0) {
+      if (creditScore >= 750) {
+        result.creditScorePoints = 30;
+      } else if (creditScore >= 700) {
+        result.creditScorePoints = 25;
+      } else if (creditScore >= 650) {
+        result.creditScorePoints = 20;
+      } else if (creditScore >= 600) {
+        result.creditScorePoints = 15;
+      } else if (creditScore >= 550) {
+        result.creditScorePoints = 10;
+      } else {
+        result.creditScorePoints = 5;
+      }
+    }
+
+    // Calculate total points
+    result.totalPoints = 
+      result.annualIncomePoints + 
+      result.employmentHistoryPoints + 
+      result.creditScorePoints + 
+      result.dtiRatioPoints + 
+      result.housingStatusPoints + 
+      result.delinquencyPoints;
+
+    // Determine credit tier based on total points
+    // Map the score to the schema's enum values: 'tier1', 'tier2', 'tier3', 'declined'
+    if (result.totalPoints >= 80) {
+      result.creditTier = 'tier1';  // High quality (A+, A)
+    } else if (result.totalPoints >= 60) {
+      result.creditTier = 'tier2';  // Medium quality (B+, B, C+)
+    } else if (result.totalPoints >= 30) {
+      result.creditTier = 'tier3';  // Lower quality but acceptable (C, D+)
+    } else {
+      result.creditTier = 'declined'; // Below threshold
+    }
+
+    return result;
+  }
+
   /**
    * Process Plaid data into a format suitable for underwriting
    */
