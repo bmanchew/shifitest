@@ -37,13 +37,24 @@ try {
             variant: "destructive",
           });
         }
-      } catch (error) {
-        console.error("Error sending application:", error);
-        toast({
-          title: "Error",
-          description: "Something went wrong. Please try again.",
-          variant: "destructive",
-        });
+      } catch (a) {
+            console.error("Error sending application:", a),
+            console.error("Error details:", {
+                errorType: a.constructor.name,
+                errorMessage: a instanceof Error ? a.message : String(a),
+                errorStack: a instanceof Error ? a.stack : void 0,
+                requestData: {
+                    phoneNumber: s,
+                    email: r,
+                    merchantId: o || 2, // Use the passed merchantId (o) or fallback to 2
+                    amount: parseFloat(u)
+                }
+            });
+            toast({
+              title: "Error",
+              description: "Something went wrong. Please try again.",
+              variant: "destructive",
+            });
       } finally {
         setIsSubmitting(false);
       }
