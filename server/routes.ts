@@ -6016,6 +6016,28 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
     }
   });
 
+  // Add a 404 handler for API routes that don't match any defined endpoint
+  apiRouter.use((req: Request, res: Response) => {
+    logger.warn({
+      message: `API 404: Endpoint not found - ${req.method} ${req.originalUrl}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        method: req.method,
+        url: req.originalUrl,
+        ip: req.ip,
+        params: req.params,
+        query: req.query,
+      },
+    });
+    
+    res.status(404).json({
+      success: false,
+      message: "API endpoint not found",
+      path: req.originalUrl
+    });
+  });
+
   // Mount the API router
   app.use("/api", apiRouter);
 
