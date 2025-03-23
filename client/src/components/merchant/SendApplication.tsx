@@ -31,7 +31,7 @@ export default function SendApplication() {
         throw new Error("Please enter a valid amount");
       }
 
-      const response = await fetch("/api/twilio/send-application", {
+      const response = await fetch("/api/send-sms", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
