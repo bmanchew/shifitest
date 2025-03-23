@@ -102,7 +102,7 @@ export default adminRouter;
 
 import crypto from 'crypto';
 import { storage } from '../storage';
-import { emailService } from '../services/email';
+import emailService from '../services/email';
 import { logger } from '../services/logger';
 
 // Admin route to reset merchant password
