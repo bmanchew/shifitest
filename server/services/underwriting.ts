@@ -163,6 +163,81 @@ class UnderwritingService {
   /**
    * Calculate underwriting score based on available data
    */
+  /**
+   * Process Plaid data into a format suitable for underwriting
+   */
+  private processPlaidData(plaidData: any): any {
+    // Process raw Plaid data into a structured format for underwriting
+    // This is a placeholder implementation and should be expanded based on actual Plaid data structure
+    if (!plaidData) return null;
+    
+    const result: any = {
+      income: { annualIncome: 0 },
+      employment: [],
+      housing: { status: '', paymentHistory: null },
+      liabilities: { totalMonthlyPayments: 0, delinquencies: { total: 0 } }
+    };
+    
+    // Extract income data if available
+    if (plaidData.income) {
+      result.income.annualIncome = plaidData.income.annual_income || 0;
+    }
+    
+    // Extract employment data if available
+    if (plaidData.employment && Array.isArray(plaidData.employment)) {
+      result.employment = plaidData.employment.map((job: any) => ({
+        employer: job.employer || '',
+        monthsEmployed: job.months_employed || 0
+      }));
+    }
+    
+    // Extract housing data if available
+    if (plaidData.accounts) {
+      // Attempt to determine housing status from accounts
+      const mortgageAccount = plaidData.accounts.find((acc: any) => 
+        acc.subtype === 'mortgage' || acc.subtype === 'home loan'
+      );
+      
+      if (mortgageAccount) {
+        result.housing.status = 'mortgage';
+      } else {
+        // Default to rent if no mortgage is found
+        // This is a simplification - in a real implementation you'd want more logic
+        result.housing.status = 'rent';
+      }
+      
+      // Payment history could be determined from transactions
+      if (plaidData.transactions && plaidData.transactions.length > 0) {
+        // This is a simplification - in reality you'd analyze transaction patterns
+        result.housing.paymentHistory = { onTimePayments: 1.0 };
+      }
+    }
+    
+    // Extract liability data if available
+    if (plaidData.liabilities) {
+      let totalMonthlyPayments = 0;
+      let totalDelinquencies = 0;
+      
+      // Calculate total monthly payments
+      if (plaidData.liabilities.credit && Array.isArray(plaidData.liabilities.credit)) {
+        plaidData.liabilities.credit.forEach((credit: any) => {
+          if (credit.minimum_payment) {
+            totalMonthlyPayments += credit.minimum_payment;
+          }
+          if (credit.is_overdue) {
+            totalDelinquencies++;
+          }
+        });
+      }
+      
+      // Add other liability types as needed
+      result.liabilities.totalMonthlyPayments = totalMonthlyPayments;
+      result.liabilities.delinquencies = { total: totalDelinquencies };
+    }
+    
+    return result;
+  }
+
   private calculateUnderwritingScore(plaidData: any, creditScore: number) {
     // Initialize result with default values
     const result = {
