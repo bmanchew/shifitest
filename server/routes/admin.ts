@@ -1,157 +1,219 @@
-import express, { Request, Response } from "express";
+
+import express from "express";
+import { Request, Response } from "express";
+import { authenticateAdmin } from "../middleware/auth";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
-import { authenticateAdmin } from "../middleware/auth";
 import crypto from 'crypto';
 import emailService from '../services/email';
 
-import { Router, Request, Response } from "express";
-import { authenticateAdmin } from "../middleware/auth";
-import storage from "../storage";
-import logger from "../services/logger";
+const adminRouter = express.Router();
 
-const adminRouter = Router();
-
-// Middleware to ensure only admins can access these routes
+// Apply admin authentication middleware to all admin routes
 adminRouter.use(authenticateAdmin);
 
-// Get admin dashboard stats
+// Get dashboard statistics
 adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
   try {
-    const merchants = await storage.getAllMerchants();
-    const contracts = await storage.getAllContracts();
+    // Fetch dashboard statistics from database
+    const pendingContracts = await storage.contract.count({
+      where: { status: "pending" }
+    });
     
-    // Calculate statistics
-    const totalMerchants = merchants.length;
-    const activeMerchants = merchants.filter(m => !m.archived).length;
-    const totalContracts = contracts.length;
-    const activeContracts = contracts.filter(c => c.status === "active").length;
-    const pendingContracts = contracts.filter(c => c.status === "pending").length;
+    const totalUsers = await storage.user.count();
     
-    // Calculate total funded amount
-    const totalFunded = contracts
-      .filter(c => c.status === "active" || c.status === "completed")
-      .reduce((sum, contract) => sum + contract.financedAmount, 0);
+    const totalMerchants = await storage.merchant.count();
     
-    res.status(200).json({
+    const activeContracts = await storage.contract.count({
+      where: { status: "active" }
+    });
+
+    // Return dashboard statistics
+    res.json({
       success: true,
-      stats: {
-        totalMerchants,
-        activeMerchants,
-        totalContracts,
-        activeContracts,
+      data: {
         pendingContracts,
-        totalFunded
+        totalUsers,
+        totalMerchants,
+        activeContracts
       }
     });
   } catch (error) {
     logger.error({
-      message: `Failed to fetch admin dashboard stats: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Failed to fetch dashboard stats: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
+      source: "internal",
       metadata: {
-        error: error instanceof Error ? error.stack : String(error),
-      },
-    });
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch admin dashboard stats",
-    });
-  }
-});
-
-// Get all merchants with status (including Plaid onboarding status)
-adminRouter.get("/merchants", async (req: Request, res: Response) => {
-  try {
-    const merchants = await storage.getAllMerchants();
-
-    // Get Plaid statuses for all merchants
-    const merchantsWithStatus = await Promise.all(
-      merchants.map(async (merchant) => {
-        let status = "Not Started";
-
-        // Check if merchant has Plaid integration
-        const plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchant.id);
-
-        if (plaidMerchant) {
-          status = plaidMerchant.onboardingStatus || "pending";
-        }
-
-        return {
-          ...merchant,
-          plaidStatus: status,
-        };
-      })
-    );
-
-    res.status(200).json({
-      success: true,
-      merchants: merchantsWithStatus,
-    });
-  } catch (error) {
-    logger.error({
-      message: `Failed to fetch merchants for admin: ${error instanceof Error ? error.message : String(error)}`,
-      category: "api",
-      metadata: {
-        error: error instanceof Error ? error.stack : String(error),
-      },
-    });
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch merchants",
-    });
-  }
-});
-
-// Admin route to reset merchant password
-adminRouter.post('/merchants/:id/reset-password', async (req: Request, res: Response) => {
-  const merchantId = parseInt(req.params.id);
-
-  try {
-    // Generate a random password
-    const newPassword = crypto.randomBytes(8).toString('hex');
-
-    // Hash the password before storing
-    const hashedPassword = crypto.createHash('sha256').update(newPassword).digest('hex');
-
-    // Update the merchant's password
-    await storage.updateMerchant(merchantId, { password: hashedPassword });
-
-    // Get the merchant's email
-    const merchant = await storage.getMerchant(merchantId);
-
-    if (!merchant || !merchant.email) {
-      return res.status(404).json({ error: 'Merchant not found' });
-    }
-
-    // Send the new password to the merchant's email
-    await emailService.sendPasswordReset(merchant.email, newPassword);
-
-    logger.info({
-      message: `Password reset for merchant ${merchantId}`,
-      category: 'admin',
-      source: 'api'
-    });
-
-    res.json({ success: true });
-  } catch (error) {
-    logger.error({
-      message: `Failed to reset password for merchant ${merchantId}: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'admin',
-      source: 'api',
-      metadata: {
-        merchantId,
         error: error instanceof Error ? error.stack : null
       }
     });
-
+    
     res.status(500).json({
       success: false,
-      message: 'Failed to reset password'
+      message: "Failed to fetch dashboard statistics"
     });
   }
 });
 
-export default adminRouter;
+// Get all merchants
+adminRouter.get("/merchants", async (req: Request, res: Response) => {
+  try {
+    const merchants = await storage.merchant.findMany({
+      include: {
+        contracts: {
+          select: {
+            id: true,
+            status: true,
+            contractNumber: true
+          }
+        }
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: merchants
+    });
+  } catch (error) {
+    logger.error({
+      message: `Failed to fetch merchants: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : null
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch merchants"
+    });
+  }
+});
+
+// Get a specific merchant by ID
+adminRouter.get("/merchants/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    const merchant = await storage.merchant.findUnique({
+      where: { id },
+      include: {
+        contracts: {
+          select: {
+            id: true,
+            status: true,
+            contractNumber: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        }
+      }
+    });
+    
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found"
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: merchant
+    });
+  } catch (error) {
+    logger.error({
+      message: `Failed to fetch merchant: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : null
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch merchant details"
+    });
+  }
+});
+
+// Create a new merchant account
+adminRouter.post("/merchants", async (req: Request, res: Response) => {
+  try {
+    const { name, email, businessType, address, phoneNumber } = req.body;
+    
+    // Validate required fields
+    if (!name || !email || !businessType) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields"
+      });
+    }
+    
+    // Check if merchant already exists
+    const existingMerchant = await storage.merchant.findFirst({
+      where: { email }
+    });
+    
+    if (existingMerchant) {
+      return res.status(409).json({
+        success: false,
+        message: "Merchant with this email already exists"
+      });
+    }
+    
+    // Create new merchant
+    const merchant = await storage.merchant.create({
+      data: {
+        name,
+        email,
+        businessType,
+        address,
+        phoneNumber,
+        status: "active"
+      }
+    });
+    
+    // Generate a temporary password for the merchant
+    const tempPassword = crypto.randomBytes(8).toString('hex');
+    
+    // Create user account for merchant
+    await storage.user.create({
+      data: {
+        email,
+        password: tempPassword, // This should be hashed in a real app
+        role: "merchant",
+        merchantId: merchant.id
+      }
+    });
+    
+    // Send welcome email with temporary password
+    await emailService.sendMerchantWelcomeEmail(email, {
+      merchantName: name,
+      tempPassword
+    });
+    
+    res.status(201).json({
+      success: true,
+      data: merchant
+    });
+  } catch (error) {
+    logger.error({
+      message: `Failed to create merchant: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : null
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to create merchant account"
+    });
+  }
+});
+
 export default adminRouter;
