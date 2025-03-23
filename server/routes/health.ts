@@ -1,8 +1,30 @@
 
 import { Router } from 'express';
 import { preFiService } from '../services/prefi';
+import { db } from '../db';
+import { sql } from 'drizzle-orm';
 
 const healthRouter = Router();
+
+// Main health check endpoint
+healthRouter.get('/', async (req, res) => {
+  try {
+    // Check database connection
+    await db.execute(sql`SELECT 1`);
+    
+    return res.json({
+      status: 'ok',
+      message: 'API is healthy',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
 
 healthRouter.get('/prefi', async (req, res) => {
   try {
