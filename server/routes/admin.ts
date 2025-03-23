@@ -21,7 +21,7 @@ adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
     const totalUsers = await storage.user.count();
 
     const totalMerchants = await storage.merchant.count();
-    
+
     // Count active merchants (where active = true and archived = false)
     const activeMerchants = await storage.merchant.count({
       where: { 
@@ -57,7 +57,8 @@ adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
 
     res.status(500).json({
       success: false,
-      message: "Failed to fetch dashboard statistics"
+      message: "Failed to fetch dashboard statistics",
+      error: error instanceof Error ? error.message : String(error) //Added more detailed error information
     });
   }
 });
