@@ -5,10 +5,60 @@ import { authenticateAdmin } from "../middleware/auth";
 import crypto from 'crypto';
 import emailService from '../services/email';
 
-const adminRouter = express.Router();
+import { Router, Request, Response } from "express";
+import { authenticateAdmin } from "../middleware/auth";
+import storage from "../storage";
+import logger from "../services/logger";
+
+const adminRouter = Router();
 
 // Middleware to ensure only admins can access these routes
 adminRouter.use(authenticateAdmin);
+
+// Get admin dashboard stats
+adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
+  try {
+    const merchants = await storage.getAllMerchants();
+    const contracts = await storage.getAllContracts();
+    
+    // Calculate statistics
+    const totalMerchants = merchants.length;
+    const activeMerchants = merchants.filter(m => !m.archived).length;
+    const totalContracts = contracts.length;
+    const activeContracts = contracts.filter(c => c.status === "active").length;
+    const pendingContracts = contracts.filter(c => c.status === "pending").length;
+    
+    // Calculate total funded amount
+    const totalFunded = contracts
+      .filter(c => c.status === "active" || c.status === "completed")
+      .reduce((sum, contract) => sum + contract.financedAmount, 0);
+    
+    res.status(200).json({
+      success: true,
+      stats: {
+        totalMerchants,
+        activeMerchants,
+        totalContracts,
+        activeContracts,
+        pendingContracts,
+        totalFunded
+      }
+    });
+  } catch (error) {
+    logger.error({
+      message: `Failed to fetch admin dashboard stats: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error),
+      },
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch admin dashboard stats",
+    });
+  }
+});
 
 // Get all merchants with status (including Plaid onboarding status)
 adminRouter.get("/merchants", async (req: Request, res: Response) => {
@@ -103,4 +153,5 @@ adminRouter.post('/merchants/:id/reset-password', async (req: Request, res: Resp
   }
 });
 
+export default adminRouter;
 export default adminRouter;

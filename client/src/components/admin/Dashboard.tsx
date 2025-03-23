@@ -19,24 +19,38 @@ import { Link } from "wouter";
 
 export default function AdminDashboard() {
   const { data: merchants = [] } = useQuery<Merchant[]>({
-    queryKey: ["/api/merchants"],
+    queryKey: ["/api/admin/merchants"],
     queryFn: async () => {
-      const res = await fetch("/api/merchants", {
+      const res = await fetch("/api/admin/merchants", {
         credentials: "include"
       });
       if (!res.ok) throw new Error("Failed to fetch merchants");
-      return res.json();
+      const data = await res.json();
+      return data.merchants || [];
     }
   });
 
   const { data: contracts = [] } = useQuery<Contract[]>({
     queryKey: ["/api/contracts"],
     queryFn: async () => {
-      const res = await fetch("/api/contracts", {
+      const res = await fetch("/api/contracts?admin=true", {
         credentials: "include"
       });
       if (!res.ok) throw new Error("Failed to fetch contracts");
       return res.json();
+    }
+  });
+  
+  // Get dashboard stats
+  const { data: dashboardStats } = useQuery({
+    queryKey: ["/api/admin/dashboard-stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/dashboard-stats", {
+        credentials: "include"
+      });
+      if (!res.ok) throw new Error("Failed to fetch dashboard stats");
+      const data = await res.json();
+      return data.stats || {};
     }
   });
 

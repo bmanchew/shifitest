@@ -195,7 +195,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Merchant routes
+  // Admin routes
+  apiRouter.use("/admin", adminRouter);
+
+// Merchant routes
   apiRouter.post("/merchants", async (req: Request, res: Response) => {
     try {
       const merchantData = insertMerchantSchema.parse(req.body);
@@ -459,7 +462,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Archive a merchant
+  import adminRouter from "./routes/admin";
+
+// Archive a merchant
   apiRouter.post("/merchants/:id/archive", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
@@ -485,6 +490,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Archive merchant error:", error);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Get contracts (with admin support)
+  apiRouter.get("/contracts", async (req: Request, res: Response) => {
+    try {
+      const isAdminRequest = req.query.admin === "true";
+      const merchantId = req.query.merchantId ? parseInt(req.query.merchantId as string) : undefined;
+      
+      // Check authentication for admin requests
+      if (isAdminRequest) {
+        const user = (req as any).user;
+        if (!user || user.role !== "admin") {
+          return res.status(401).json({ 
+            success: false, 
+            message: "Unauthorized: Admin access required" 
+          });
+        }
+        
+        // Return all contracts for admin users
+        const contracts = await storage.getAllContracts();
+        return res.json(contracts);
+      }
+      
+      // For merchant-specific requests, return only their contracts
+      if (merchantId) {
+        const contracts = await storage.getContractsByMerchantId(merchantId);
+        return res.json(contracts);
+      }
+      
+      // Default: return empty array if no merchantId provided
+      return res.json([]);
+    } catch (error) {
+      console.error("Get contracts error:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Failed to fetch contracts" 
+      });
     }
   });
 
