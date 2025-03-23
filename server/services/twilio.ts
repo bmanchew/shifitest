@@ -92,6 +92,22 @@ class TwilioService {
       };
     }
     
+    // Check message length - Twilio has a 1600 character limit
+    if (message.body && message.body.length > 1600) {
+      logger.warn({
+        message: `SMS message too long (${message.body.length} chars)`,
+        category: "api",
+        source: "twilio",
+        metadata: {
+          messageLength: message.body.length,
+          limit: 1600
+        }
+      });
+      
+      // Truncate message if too long
+      message.body = message.body.substring(0, 1590) + "...";
+    }
+    
     // If Twilio is not initialized, use simulation mode
     if (!this.isInitialized() || !this.client) {
       logger.warn({
@@ -137,7 +153,10 @@ class TwilioService {
       logger.info({
         message: `Sending SMS to ${formattedTo} from ${fromNumber}`,
         category: "api",
-        source: "twilio"
+        source: "twilio",
+        metadata: {
+          messageLength: message.body.length
+        }
       });
 
       const result = await this.client.messages.create({
