@@ -1,4 +1,3 @@
-
 import express from "express";
 import { Request, Response } from "express";
 import { authenticateAdmin } from "../middleware/auth";
@@ -19,11 +18,11 @@ adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
     const pendingContracts = await storage.contract.count({
       where: { status: "pending" }
     });
-    
+
     const totalUsers = await storage.user.count();
-    
+
     const totalMerchants = await storage.merchant.count();
-    
+
     const activeContracts = await storage.contract.count({
       where: { status: "active" }
     });
@@ -47,7 +46,7 @@ adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
         error: error instanceof Error ? error.stack : null
       }
     });
-    
+
     res.status(500).json({
       success: false,
       message: "Failed to fetch dashboard statistics"
@@ -69,7 +68,7 @@ adminRouter.get("/merchants", async (req: Request, res: Response) => {
         }
       }
     });
-    
+
     res.json({
       success: true,
       data: merchants
@@ -83,7 +82,7 @@ adminRouter.get("/merchants", async (req: Request, res: Response) => {
         error: error instanceof Error ? error.stack : null
       }
     });
-    
+
     res.status(500).json({
       success: false,
       message: "Failed to fetch merchants"
@@ -95,7 +94,7 @@ adminRouter.get("/merchants", async (req: Request, res: Response) => {
 adminRouter.get("/merchants/:id", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    
+
     const merchant = await storage.merchant.findUnique({
       where: { id },
       include: {
@@ -110,14 +109,14 @@ adminRouter.get("/merchants/:id", async (req: Request, res: Response) => {
         }
       }
     });
-    
+
     if (!merchant) {
       return res.status(404).json({
         success: false,
         message: "Merchant not found"
       });
     }
-    
+
     res.json({
       success: true,
       data: merchant
@@ -131,7 +130,7 @@ adminRouter.get("/merchants/:id", async (req: Request, res: Response) => {
         error: error instanceof Error ? error.stack : null
       }
     });
-    
+
     res.status(500).json({
       success: false,
       message: "Failed to fetch merchant details"
@@ -143,7 +142,7 @@ adminRouter.get("/merchants/:id", async (req: Request, res: Response) => {
 adminRouter.post("/merchants", async (req: Request, res: Response) => {
   try {
     const { name, email, businessType, address, phoneNumber } = req.body;
-    
+
     // Validate required fields
     if (!name || !email || !businessType) {
       return res.status(400).json({
@@ -151,19 +150,19 @@ adminRouter.post("/merchants", async (req: Request, res: Response) => {
         message: "Missing required fields"
       });
     }
-    
+
     // Check if merchant already exists
     const existingMerchant = await storage.merchant.findFirst({
       where: { email }
     });
-    
+
     if (existingMerchant) {
       return res.status(409).json({
         success: false,
         message: "Merchant with this email already exists"
       });
     }
-    
+
     // Create new merchant
     const merchant = await storage.merchant.create({
       data: {
@@ -175,10 +174,10 @@ adminRouter.post("/merchants", async (req: Request, res: Response) => {
         status: "active"
       }
     });
-    
+
     // Generate a temporary password for the merchant
     const tempPassword = crypto.randomBytes(8).toString('hex');
-    
+
     // Create user account for merchant
     await storage.user.create({
       data: {
@@ -188,13 +187,13 @@ adminRouter.post("/merchants", async (req: Request, res: Response) => {
         merchantId: merchant.id
       }
     });
-    
+
     // Send welcome email with temporary password
     await emailService.sendMerchantWelcomeEmail(email, {
       merchantName: name,
       tempPassword
     });
-    
+
     res.status(201).json({
       success: true,
       data: merchant
@@ -208,7 +207,7 @@ adminRouter.post("/merchants", async (req: Request, res: Response) => {
         error: error instanceof Error ? error.stack : null
       }
     });
-    
+
     res.status(500).json({
       success: false,
       message: "Failed to create merchant account"
