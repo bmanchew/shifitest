@@ -28,14 +28,14 @@ export interface IStorage {
   findOrCreateUserByPhone(phone: string): Promise<User>;
 
   // Add to the IStorage interface
-updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined>;
+  updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined>;
 
   // Merchant operations
   getMerchant(id: number): Promise<Merchant | undefined>;
   getMerchantByUserId(userId: number): Promise<Merchant | undefined>;
   getAllMerchants(): Promise<Merchant[]>;
   createMerchant(merchant: InsertMerchant): Promise<Merchant>;
-  
+
   // Plaid Platform Merchant operations
   getPlaidMerchant(id: number): Promise<PlaidMerchant | undefined>;
   getPlaidMerchantByMerchantId(merchantId: number): Promise<PlaidMerchant | undefined>;
@@ -43,7 +43,7 @@ updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport |
   createPlaidMerchant(data: InsertPlaidMerchant): Promise<PlaidMerchant>;
   updatePlaidMerchant(id: number, data: Partial<InsertPlaidMerchant>): Promise<PlaidMerchant | undefined>;
   getPlaidMerchantsByStatus(status: string): Promise<PlaidMerchant[]>;
-  
+
   // Plaid Transfer operations
   createPlaidTransfer(transfer: InsertPlaidTransfer): Promise<PlaidTransfer>;
   getPlaidTransferById(id: number): Promise<PlaidTransfer | undefined>;
@@ -61,6 +61,8 @@ updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport |
   updateContractStatus(id: number, status: string): Promise<Contract | undefined>;
   updateContractStep(id: number, step: string): Promise<Contract | undefined>;
   updateContractCustomerId(id: number, customerId: number): Promise<Contract | undefined>;
+  getContractsByPhoneNumber(phoneNumber: string): Promise<Contract[]>; // Added method
+  updateContract(id: number, data: Partial<Contract>): Promise<Contract>; //Added method
 
   // Application Progress operations
   getApplicationProgress(id: number): Promise<ApplicationProgress | undefined>;
@@ -95,31 +97,31 @@ updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport |
   saveComplaintsData(complaints: any[]): Promise<ComplaintsData[]>;
   getComplaintsData(options?: { product?: string; company?: string; limit?: number; offset?: number }): Promise<ComplaintsData[]>;
   updateUserName(userId: number, firstName?: string, lastName?: string): Promise<User | null>;
-  
+
   // Merchant Business Details operations
   getMerchantBusinessDetails(id: number): Promise<MerchantBusinessDetails | undefined>;
   getMerchantBusinessDetailsByMerchantId(merchantId: number): Promise<MerchantBusinessDetails | undefined>;
   createMerchantBusinessDetails(details: InsertMerchantBusinessDetails): Promise<MerchantBusinessDetails>;
   updateMerchantBusinessDetails(id: number, details: Partial<InsertMerchantBusinessDetails>): Promise<MerchantBusinessDetails | undefined>;
-  
+
   // Merchant Documents operations
   getMerchantDocument(id: number): Promise<MerchantDocument | undefined>;
   getMerchantDocumentsByMerchantId(merchantId: number): Promise<MerchantDocument[]>;
   getMerchantDocumentsByType(merchantId: number, type: string): Promise<MerchantDocument[]>;
   createMerchantDocument(document: InsertMerchantDocument): Promise<MerchantDocument>;
   updateMerchantDocumentVerification(id: number, verified: boolean, verifiedBy?: number): Promise<MerchantDocument | undefined>;
-  
+
   // Notification operations
   createNotification(notification: InsertNotification): Promise<number>; // Return notification ID
   getNotification(id: number): Promise<Notification | undefined>;
   getNotificationsByRecipient(recipientId: number, recipientType: string): Promise<Notification[]>;
   updateNotification(data: { id: number, status: string, updatedAt: Date }): Promise<Notification | undefined>;
-  
+
   // Notification Channel operations
   createNotificationChannel(channel: InsertNotificationChannel): Promise<NotificationChannel>;
   updateNotificationChannel(data: { notificationId: number, channel: string, status: string, updatedAt: Date, errorMessage?: string }): Promise<NotificationChannel | undefined>;
   getNotificationChannels(notificationId: number): Promise<NotificationChannel[]>;
-  
+
   // In-App Notification operations
   createInAppNotification(notification: InsertInAppNotification): Promise<InAppNotification>;
   getInAppNotifications(userId: number, userType: string, options?: { unreadOnly?: boolean, limit?: number, offset?: number }): Promise<InAppNotification[]>;
@@ -139,14 +141,14 @@ export class DatabaseStorage implements IStorage {
       const dataToUpdate = {
         ...updateData
       };
-      
+
       // Execute the update query
       const [updatedMerchant] = await db
         .update(merchants)
         .set(dataToUpdate)
         .where(eq(merchants.id, id))
         .returning();
-        
+
       return updatedMerchant;
     } catch (error) {
       console.error(`Error updating merchant ${id}:`, error);
@@ -160,7 +162,7 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(merchants)
         .where(eq(merchants.email, email));
-        
+
       return merchant || undefined;
     } catch (error) {
       console.error(`Error getting merchant by email ${email}:`, error);
@@ -182,24 +184,24 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
     if (!phone) return undefined;
-    
+
     try {
       // Normalize phone number by removing non-digits
       const normalizedPhone = phone.replace(/\D/g, '');
-      
+
       // First try exact match with normalized phone
       let [user] = await db.select().from(users).where(
         eq(users.phone, normalizedPhone)
       );
-      
+
       if (user) return user;
-      
+
       // If not found, try original format
       if (normalizedPhone !== phone) {
         const [originalUser] = await db.select().from(users).where(eq(users.phone, phone));
         if (originalUser) return originalUser;
       }
-      
+
       // If still not found, try a more flexible search with partial matching
       // This helps with different formats like with/without country code
       const possibleUsers = await db.select().from(users).where(
@@ -208,13 +210,13 @@ export class DatabaseStorage implements IStorage {
           like(users.phone, `%${normalizedPhone.substring(1)}%`) // Try without first digit (potential country code)
         )
       );
-      
+
       // If we found users, return the first one
       if (possibleUsers && possibleUsers.length > 0) {
         console.log(`Found user by phone number partial match: ${phone} -> ${possibleUsers[0].phone}`);
         return possibleUsers[0];
       }
-      
+
       // Special handling for the specific problematic number 2676012031
       if (normalizedPhone === '2676012031' || normalizedPhone.endsWith('2676012031')) {
         // If there's a user with this ID match from our historical records, we know this should be user ID 9
@@ -225,7 +227,7 @@ export class DatabaseStorage implements IStorage {
           return specialUser;
         }
       }
-      
+
       return undefined;
     } catch (error) {
       console.error("Error in getUserByPhone:", error);
@@ -241,7 +243,7 @@ export class DatabaseStorage implements IStorage {
   async findOrCreateUserByPhone(phone: string, email?: string): Promise<User> {
     // Normalize phone number by removing non-digits
     const normalizedPhone = phone.replace(/\D/g, '');
-  
+
     // First, try to find the user by normalized phone
     const existingUser = await this.getUserByPhone(normalizedPhone);
     if (existingUser) {
@@ -250,29 +252,29 @@ export class DatabaseStorage implements IStorage {
         await db.update(users)
           .set({ phone: normalizedPhone })
           .where(eq(users.id, existingUser.id));
-  
+
         // Return the updated user with updated phone
         return { ...existingUser, phone: normalizedPhone };
       }
-      
+
       // If email is provided and user has a default email, update it
       if (email && existingUser.email && existingUser.email.includes('@shifi.com')) {
         await db.update(users)
           .set({ email })
           .where(eq(users.id, existingUser.id));
-          
+
         // Return the user with updated email
         return { ...existingUser, email };
       }
-      
+
       return existingUser;
     }
-  
+
     // If not found, create a new user with provided email or generate a unique one
     // Generate a unique temporary email with timestamp to avoid collisions
     const timestamp = Date.now();
     const tempEmail = email || `temp_${normalizedPhone}_${timestamp}@shifi.com`;
-    
+
     // Create the new user
     const newUser: InsertUser = {
       email: tempEmail,
@@ -281,7 +283,7 @@ export class DatabaseStorage implements IStorage {
       role: 'customer',
       name: `Customer ${normalizedPhone}`,
     };
-  
+
     return await this.createUser(newUser);
   }
 
@@ -345,12 +347,20 @@ export class DatabaseStorage implements IStorage {
       currentStep: contracts.currentStep,
       createdAt: contracts.createdAt,
       completedAt: contracts.completedAt,
-      phoneNumber: contracts.phoneNumber
+      phoneNumber: contracts.phoneNumber,
+      archived: contracts.archived // Added field
     }).from(contracts).where(eq(contracts.merchantId, merchantId));
   }
 
   async getContractsByCustomerId(customerId: number): Promise<Contract[]> {
     return await db.select().from(contracts).where(eq(contracts.customerId, customerId));
+  }
+
+  async getContractsByPhoneNumber(phoneNumber: string): Promise<Contract[]> {
+    // Normalize the phone number by removing non-digits
+    const normalizedPhone = phoneNumber.replace(/\D/g, '');
+
+    return db.select().from(contracts).where(eq(contracts.phoneNumber, normalizedPhone)).orderBy(desc(contracts.createdAt));
   }
 
   async createContract(contract: InsertContract): Promise<Contract> {
@@ -403,6 +413,15 @@ export class DatabaseStorage implements IStorage {
     return updatedContract;
   }
 
+  async updateContract(id: number, data: Partial<Contract>): Promise<Contract> {
+    const [updatedContract] = await db
+      .update(contracts)
+      .set(data)
+      .where(eq(contracts.id, id))
+      .returning();
+    return updatedContract;
+  }
+
   // Application Progress methods
   async getApplicationProgress(id: number): Promise<ApplicationProgress | undefined> {
     const [progress] = await db.select().from(applicationProgress).where(eq(applicationProgress.id, id));
@@ -443,7 +462,7 @@ export class DatabaseStorage implements IStorage {
 
     return updatedProgress;
   }
-  
+
   // Method to get specific application progress step by contract ID and step
   async getApplicationProgressByContractIdAndStep(
     contractId: number,
@@ -458,7 +477,7 @@ export class DatabaseStorage implements IStorage {
 
     return progress || null;
   }
-  
+
   // Method to update application progress with any data
   async updateApplicationProgress(
     progressId: number,
@@ -470,7 +489,7 @@ export class DatabaseStorage implements IStorage {
         .set(data)
         .where(eq(applicationProgress.id, progressId))
         .returning();
-        
+
       return result[0] || null;
     } catch (error) {
       console.error('Error updating application progress:', error);
@@ -741,7 +760,9 @@ export class DatabaseStorage implements IStorage {
           interestRate: 0,
           monthlyPayment: 159.38,
           status: "active" as const,
-          currentStep: "completed" as const
+          currentStep: "completed" as const,
+          phoneNumber: "555-123-4567", // Added phone number
+          archived: false // Added archived status
         },
         {
           contractNumber: "SHI-0022",
@@ -754,7 +775,9 @@ export class DatabaseStorage implements IStorage {
           interestRate: 0,
           monthlyPayment: 97.40,
           status: "pending" as const,
-          currentStep: "terms" as const
+          currentStep: "terms" as const,
+          phoneNumber: "555-987-6543", // Added phone number
+          archived: false // Added archived status
         },
         {
           contractNumber: "SHI-0021",
@@ -767,7 +790,9 @@ export class DatabaseStorage implements IStorage {
           interestRate: 0,
           monthlyPayment: 113.33,
           status: "declined" as const,
-          currentStep: "kyc" as const
+          currentStep: "kyc" as const,
+          phoneNumber: "555-456-7890", // Added phone number
+          archived: false // Added archived status
         }
       ];
 
@@ -820,21 +845,21 @@ export class DatabaseStorage implements IStorage {
   // Method to get completed KYC verifications by user ID
   async getCompletedKycVerificationsByUserId(userId: number): Promise<ApplicationProgress[]> {
     if (!userId) return [];
-    
+
     try {
       // Get all contracts for this user
       const userContracts = await this.getContractsByCustomerId(userId);
       let contractsToCheck = [...(userContracts || [])];
       let linkedByPhone = false;
-      
+
       // Get user details to check phone-based linkage
       const user = await this.getUser(userId);
       let userPhone = null;
-      
+
       if (user && user.phone) {
         userPhone = user.phone.replace(/\D/g, '');
       }
-      
+
       // If no contracts found or we have a phone number, check for phone-linked contracts
       if ((contractsToCheck.length === 0 || userPhone) && userPhone) {
         // Find contracts with this phone number (could be linked to different user IDs)
@@ -842,7 +867,7 @@ export class DatabaseStorage implements IStorage {
           .select()
           .from(contracts)
           .where(eq(contracts.phoneNumber, userPhone));
-          
+
         if (phoneContracts && phoneContracts.length > 0) {
           // Add unique contracts to our list (avoid duplicates)
           for (const contract of phoneContracts) {
@@ -853,7 +878,7 @@ export class DatabaseStorage implements IStorage {
           }
         }
       }
-      
+
       // Also check if this user's phone number appears in other contracts
       // This is a crucial check for returning users with new applications
       if (userPhone) {
@@ -867,15 +892,15 @@ export class DatabaseStorage implements IStorage {
               like(users.phone, `%${userPhone}%`)
             )
           );
-          
+
         // Get contracts for these users
         if (usersWithSamePhone && usersWithSamePhone.length > 0) {
           const linkedUserIds = usersWithSamePhone.map(u => u.id);
-          
+
           for (const linkedUserId of linkedUserIds) {
             if (linkedUserId !== userId) {
               const linkedUserContracts = await this.getContractsByCustomerId(linkedUserId);
-              
+
               if (linkedUserContracts && linkedUserContracts.length > 0) {
                 // Add unique contracts to our list
                 for (const contract of linkedUserContracts) {
@@ -889,7 +914,7 @@ export class DatabaseStorage implements IStorage {
           }
         }
       }
-      
+
       // If still no contracts found, check any contract with matching phone
       if (contractsToCheck.length === 0 && userPhone) {
         // Direct search for contracts with this phone
@@ -902,21 +927,21 @@ export class DatabaseStorage implements IStorage {
               like(contracts.phoneNumber, `%${userPhone}%`)
             )
           );
-          
+
         if (phoneContracts && phoneContracts.length > 0) {
           contractsToCheck.push(...phoneContracts);
           linkedByPhone = true;
         }
       }
-      
+
       // If still no contracts found, return empty array
       if (contractsToCheck.length === 0) {
         return [];
       }
-      
+
       // Extract contract IDs, ensuring no duplicates
       const contractIds = [...new Set(contractsToCheck.map(contract => contract.id))];
-      
+
       // Find all KYC steps that are completed for any of the user's contracts
       const completedKyc = await db
         .select()
@@ -928,12 +953,12 @@ export class DatabaseStorage implements IStorage {
             inArray(applicationProgress.contractId, contractIds)
           )
         );
-      
+
       // Additional logging for phone-linked verification
       if (linkedByPhone && completedKyc.length > 0) {
         console.log(`Found ${completedKyc.length} completed KYC verifications linked by phone for user ${userId} with phone ${userPhone}`);
       }
-      
+
       return completedKyc;
     } catch (error) {
       console.error(`Error getting completed KYC verifications for user ${userId}:`, error);
@@ -951,10 +976,10 @@ export class DatabaseStorage implements IStorage {
     const [plaidMerchant] = await db.select().from(plaidMerchants).where(eq(plaidMerchants.merchantId, merchantId));
     return plaidMerchant || undefined;
   }
-  
+
   async getPlaidMerchantByOriginatorId(originatorId: string): Promise<PlaidMerchant | undefined> {
     if (!originatorId) return undefined;
-    
+
     const [plaidMerchant] = await db.select().from(plaidMerchants).where(eq(plaidMerchants.originatorId, originatorId));
     return plaidMerchant || undefined;
   }
@@ -1025,7 +1050,7 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
   }
-  
+
   // Merchant Business Details methods
   async getMerchantBusinessDetails(id: number): Promise<MerchantBusinessDetails | undefined> {
     const [details] = await db.select().from(merchantBusinessDetails).where(eq(merchantBusinessDetails.id, id));
@@ -1053,10 +1078,10 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(merchantBusinessDetails.id, id))
       .returning();
-      
+
     return updatedDetails;
   }
-  
+
   // Merchant Documents methods
   async getMerchantDocument(id: number): Promise<MerchantDocument | undefined> {
     const [document] = await db.select().from(merchantDocuments).where(eq(merchantDocuments.id, id));
@@ -1085,16 +1110,16 @@ export class DatabaseStorage implements IStorage {
       verified,
       verifiedAt: verified ? new Date() : null,
     };
-    
+
     if (verified && verifiedBy) {
       updateData.verifiedBy = verifiedBy;
     }
-    
+
     const [updatedDocument] = await db.update(merchantDocuments)
       .set(updateData)
       .where(eq(merchantDocuments.id, id))
       .returning();
-      
+
     return updatedDocument;
   }
 
@@ -1103,12 +1128,12 @@ export class DatabaseStorage implements IStorage {
     const [result] = await db.insert(notifications).values(notification).returning();
     return result.id;
   }
-  
+
   async getNotification(id: number): Promise<Notification | undefined> {
     const [notification] = await db.select().from(notifications).where(eq(notifications.id, id));
     return notification || undefined;
   }
-  
+
   async getNotificationsByRecipient(recipientId: number, recipientType: string): Promise<Notification[]> {
     return await db.select().from(notifications).where(
       and(
@@ -1117,7 +1142,7 @@ export class DatabaseStorage implements IStorage {
       )
     ).orderBy(desc(notifications.sentAt));
   }
-  
+
   async updateNotification(data: { id: number, status: string, updatedAt: Date }): Promise<Notification | undefined> {
     const [updated] = await db
       .update(notifications)
@@ -1129,18 +1154,18 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return updated;
   }
-  
+
   // Notification Channel operations
   async createNotificationChannel(channel: InsertNotificationChannel): Promise<NotificationChannel> {
     const [newChannel] = await db.insert(notificationChannels).values(channel).returning();
     return newChannel;
   }
-  
+
   async updateNotificationChannel(
     data: { notificationId: number, channel: string, status: string, updatedAt: Date, errorMessage?: string }
   ): Promise<NotificationChannel | undefined> {
     const { notificationId, channel: channelType, status, updatedAt, errorMessage } = data;
-    
+
     // Find the channel record
     const [existingChannel] = await db.select().from(notificationChannels).where(
       and(
@@ -1148,46 +1173,46 @@ export class DatabaseStorage implements IStorage {
         eq(notificationChannels.channel, channelType as any)
       )
     );
-    
+
     if (!existingChannel) return undefined;
-    
+
     // Update data
     const updateData: any = {
       status: status as any,
       updatedAt
     };
-    
+
     if (errorMessage !== undefined) {
       updateData.errorMessage = errorMessage;
     }
-    
+
     // If status is failed, increment retry count
     if (status === 'failed') {
       updateData.retryCount = existingChannel.retryCount + 1;
     }
-    
+
     // Update the channel
     const [updated] = await db
       .update(notificationChannels)
       .set(updateData)
       .where(eq(notificationChannels.id, existingChannel.id))
       .returning();
-      
+
     return updated;
   }
-  
+
   async getNotificationChannels(notificationId: number): Promise<NotificationChannel[]> {
     return await db.select().from(notificationChannels)
       .where(eq(notificationChannels.notificationId, notificationId))
       .orderBy(notificationChannels.channel);
   }
-  
+
   // In-App Notification operations
   async createInAppNotification(notification: InsertInAppNotification): Promise<InAppNotification> {
     const [newNotification] = await db.insert(inAppNotifications).values(notification).returning();
     return newNotification;
   }
-  
+
   async getInAppNotifications(
     userId: number, 
     userType: string, 
@@ -1199,25 +1224,25 @@ export class DatabaseStorage implements IStorage {
         eq(inAppNotifications.userType, userType as any)
       )
     );
-    
+
     // Apply unreadOnly filter if specified
     if (options?.unreadOnly) {
       query = query.where(eq(inAppNotifications.isRead, false));
     }
-    
+
     // Apply pagination if specified
     if (options?.limit) {
       query = query.limit(options.limit);
-      
+
       if (options?.offset) {
         query = query.offset(options.offset);
       }
     }
-    
+
     // Order by creation date, newest first
     return await query.orderBy(desc(inAppNotifications.createdAt));
   }
-  
+
   async markInAppNotificationAsRead(id: number): Promise<InAppNotification | undefined> {
     const [updated] = await db
       .update(inAppNotifications)
@@ -1230,28 +1255,28 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
   // Add this method to your DatabaseStorage class
-async updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined> {
-  try {
-    // Set updated timestamp
-    const updatedData = {
-      ...data,
-      refreshedAt: new Date()
-    };
-    
-    // Execute the update query
-    const [updatedReport] = await db
-      .update(assetReports)
-      .set(updatedData)
-      .where(eq(assetReports.id, id))
-      .returning();
-      
-    return updatedReport;
-  } catch (error) {
-    console.error(`Error updating asset report ${id}:`, error);
-    return undefined;
+  async updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined> {
+    try {
+      // Set updated timestamp
+      const updatedData = {
+        ...data,
+        refreshedAt: new Date()
+      };
+
+      // Execute the update query
+      const [updatedReport] = await db
+        .update(assetReports)
+        .set(updatedData)
+        .where(eq(assetReports.id, id))
+        .returning();
+
+      return updatedReport;
+    } catch (error) {
+      console.error(`Error updating asset report ${id}:`, error);
+      return undefined;
+    }
   }
-}
-  
+
   async markAllInAppNotificationsAsRead(userId: number, userType: string): Promise<number> {
     const result = await db
       .update(inAppNotifications)
@@ -1266,7 +1291,7 @@ async updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetRe
           eq(inAppNotifications.isRead, false)
         )
       );
-    
+
     // Return number of rows affected
     return result.rowCount || 0;
   }

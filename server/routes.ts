@@ -1489,25 +1489,76 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         return res.status(404).json({ message: "Merchant not found" });
       }
 
-      // Create a contract for this financing request
-      const contractNumber = generateContractNumber();
-      const termMonths = 24; // Fixed term
-      const interestRate = 0; // 0% APR
-      const downPaymentPercent = 15; // 15% down payment
-      const downPayment = amount * (downPaymentPercent / 100);
-      const financedAmount = amount - downPayment;
-      const monthlyPayment = financedAmount / termMonths;
-
-      console.log("Creating contract with:", {
-        contractNumber,
-        merchantId,
-        amount,
-        downPayment,
-        financedAmount,
-        termMonths,
-        interestRate,
-        monthlyPayment,
+      // Check for existing pending contracts for this phone number and archive them
+  try {
+    const existingContracts = await storage.getContractsByPhoneNumber(phoneNumber);
+    const pendingContracts = existingContracts.filter(contract => 
+      contract.status === 'pending' && contract.merchantId === parseInt(merchantId)
+    );
+    
+    if (pendingContracts.length > 0) {
+      logger.info({
+        message: `Found ${pendingContracts.length} existing pending contracts for phone ${phoneNumber} - will archive them`,
+        category: "contract",
+        source: "internal",
+        metadata: JSON.stringify({
+          phoneNumber,
+          pendingContractIds: pendingContracts.map(c => c.id)
+        })
       });
+      
+      // Archive each pending contract
+      for (const pendingContract of pendingContracts) {
+        await storage.updateContract(pendingContract.id, {
+          archived: true,
+          status: 'cancelled',
+          archivedAt: new Date(),
+          archivedReason: 'Superseded by new contract'
+        });
+        
+        logger.info({
+          message: `Archived contract ${pendingContract.id} due to new contract creation`,
+          category: "contract",
+          source: "internal",
+          metadata: JSON.stringify({
+            contractId: pendingContract.id,
+            phoneNumber
+          })
+        });
+      }
+    }
+  } catch (archiveError) {
+    logger.warn({
+      message: `Error checking/archiving existing contracts: ${archiveError instanceof Error ? archiveError.message : String(archiveError)}`,
+      category: "contract",
+      source: "internal",
+      metadata: JSON.stringify({
+        phoneNumber,
+        error: archiveError instanceof Error ? archiveError.stack : null
+      })
+    });
+    // Continue with contract creation despite archiving error
+  }
+
+  // Create a contract for this financing request
+  const contractNumber = generateContractNumber();
+  const termMonths = 24; // Fixed term
+  const interestRate = 0; // 0% APR
+  const downPaymentPercent = 15; // 15% down payment
+  const downPayment = amount * (downPaymentPercent / 100);
+  const financedAmount = amount - downPayment;
+  const monthlyPayment = financedAmount / termMonths;
+
+  console.log("Creating contract with:", {
+    contractNumber,
+    merchantId,
+    amount,
+    downPayment,
+    financedAmount,
+    termMonths,
+    interestRate,
+    monthlyPayment,
+  });
 
       // Find or create a user for this phone number, passing in the email
       const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);

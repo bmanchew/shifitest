@@ -137,6 +137,9 @@ export const contracts = pgTable("contracts", {
   status: contractStatusEnum("status").notNull().default("pending"),
   currentStep: applicationStepEnum("current_step").notNull().default("terms"),
   purchasedByShifi: boolean("purchased_by_shifi").notNull().default(false), // Whether contract has been purchased by ShiFi Fund
+  archived: boolean("archived").default(false), // Whether this contract is archived
+  archivedAt: timestamp("archived_at"), // When the contract was archived
+  archivedReason: text("archived_reason"), // Reason for archiving
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
   phoneNumber: text("phone_number"), // Store customer phone number directly in contract
