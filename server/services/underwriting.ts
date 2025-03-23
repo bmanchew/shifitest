@@ -106,7 +106,7 @@ class UnderwritingService {
 
       // Process Plaid asset report data into a format suitable for our underwriting algorithm
       const processedPlaidData = plaidData ? this.processPlaidData(plaidData) : null;
-      
+
       // Calculate underwriting score based on available data
       // Priority: Use Plaid assets data first, then credit score from PreFi
       const underwritingResult = this.calculateUnderwritingScore(processedPlaidData, creditScore);
@@ -327,473 +327,82 @@ class UnderwritingService {
    * Process Plaid data into a format suitable for underwriting
    */
   private processPlaidData(plaidData: any): any {
-    // If no data, return null
+    // If data is already in expected format, return as is
     if (!plaidData) return null;
-    
-    const processedData: any = {
-      income: null,
-      assets: null,
-      liabilities: null,
-      employment: null,
-      housing: null
-    };
-    
-    // Process income data
-    if (plaidData.income) {
-      processedData.income = {
-        annualIncome: plaidData.income.yearly_income || 0,
-        monthlyIncome: plaidData.income.monthly_income || 0,
-        incomeStreams: plaidData.income.income_streams || []
-      };
-    }
-    
-    // Process assets (accounts)
-    if (plaidData.accounts && plaidData.accounts.length > 0) {
-      const totalBalance = plaidData.accounts.reduce(
-        (sum: number, account: any) => sum + (account.balances?.current || 0), 
-        0
-      );
-      
-      processedData.assets = {
-        totalBalance,
-        accounts: plaidData.accounts.map((account: any) => ({
-          accountId: account.account_id,
-          accountName: account.name,
-          accountType: account.type,
-          accountSubtype: account.subtype,
-          balance: account.balances?.current || 0,
-          availableBalance: account.balances?.available || 0
-        }))
-      };
-    }
-    
-    // Process liabilities
-    if (plaidData.liabilities) {
-      const allLiabilities: any[] = [];
-      let totalMonthlyPayments = 0;
-      
-      // Credit cards
-      if (plaidData.liabilities.credit) {
-        plaidData.liabilities.credit.forEach((credit: any) => {
-          allLiabilities.push({
-            type: 'credit',
-            accountId: credit.account_id,
-            balance: credit.balances?.current || 0,
-            limit: credit.balances?.limit || 0,
-            minimumPayment: credit.minimum_payment || 0,
-            aprs: credit.aprs || []
-          });
-          
-          totalMonthlyPayments += credit.minimum_payment || 0;
-        });
-      }
-      
-      // Mortgages
-      if (plaidData.liabilities.mortgages) {
-        plaidData.liabilities.mortgages.forEach((mortgage: any) => {
-          allLiabilities.push({
-            type: 'mortgage',
-            accountId: mortgage.account_id,
-            balance: mortgage.balances?.current || 0,
-            originationPrincipal: mortgage.origination_principal || 0,
-            originationDate: mortgage.origination_date || '',
-            maturityDate: mortgage.maturity_date || '',
-            interestRate: mortgage.interest_rate?.percentage || 0,
-            monthlyPayment: mortgage.monthly_payment || 0
-          });
-          
-          totalMonthlyPayments += mortgage.monthly_payment || 0;
-        });
-      }
-      
-      // Student loans
-      if (plaidData.liabilities.student) {
-        plaidData.liabilities.student.forEach((loan: any) => {
-          allLiabilities.push({
-            type: 'student',
-            accountId: loan.account_id,
-            balance: loan.balances?.current || 0,
-            originationPrincipal: loan.origination_principal || 0,
-            interestRate: loan.interest_rate?.percentage || 0,
-            monthlyPayment: loan.minimum_payment || 0,
-            loanStatus: loan.loan_status?.type || '',
-            loanName: loan.loan_name || ''
-          });
-          
-          totalMonthlyPayments += loan.minimum_payment || 0;
-        });
-      }
-      
-      // Delinquency analysis from transactions
-      const delinquencies = {
-        total: 0,
-        last30Days: 0,
-        last90Days: 0,
-        last12Months: 0
-      };
-      
-      if (plaidData.transactions && plaidData.transactions.length > 0) {
-        // Get current date for comparisons
-        const now = new Date();
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        const twelveMonthsAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-        
-        // Look for transactions that might indicate late fees or missed payments
-        plaidData.transactions.forEach((transaction: any) => {
-          const transactionDate = new Date(transaction.date);
-          const description = transaction.name.toLowerCase();
-          
-          // Simple heuristic - look for keywords suggesting late fees or penalties
-          if (
-            description.includes('late fee') || 
-            description.includes('penalty') || 
-            description.includes('past due') ||
-            description.includes('overdue')
-          ) {
-            delinquencies.total++;
-            
-            if (transactionDate >= thirtyDaysAgo) {
-              delinquencies.last30Days++;
-            }
-            
-            if (transactionDate >= ninetyDaysAgo) {
-              delinquencies.last90Days++;
-            }
-            
-            if (transactionDate >= twelveMonthsAgo) {
-              delinquencies.last12Months++;
-            }
+
+    try {
+      // Create a standardized structure for our underwriting algorithm
+      const processedData: any = {
+        income: {
+          annualIncome: 0,
+          monthlyIncome: 0,
+          confidence: 0
+        },
+        employment: [],
+        housing: {
+          status: 'unknown',
+          paymentHistory: null
+        },
+        liabilities: {
+          totalMonthlyPayments: 0,
+          delinquencies: {
+            total: 0
           }
-        });
-      }
-      
-      processedData.liabilities = {
-        items: allLiabilities,
-        totalMonthlyPayments,
-        delinquencies
-      };
-    }
-    
-    // Process employment data
-    if (plaidData.employment && plaidData.employment.length > 0) {
-      processedData.employment = plaidData.employment.map((emp: any) => {
-        // Calculate months at employer if possible
-        let monthsEmployed = 0;
-        if (emp.start_date) {
-          const startDate = new Date(emp.start_date);
-          const currentDate = new Date();
-          const diffMonths = (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
-                             (currentDate.getMonth() - startDate.getMonth());
-          monthsEmployed = Math.max(0, diffMonths);
         }
-        
-        return {
-          employer: emp.employer,
-          title: emp.title,
-          startDate: emp.start_date || null,
-          endDate: emp.end_date || null,
-          monthsEmployed
-        };
-      });
-    }
-    
-    // Infer housing information from transactions and accounts
-    if (plaidData.transactions && plaidData.transactions.length > 0) {
-      const housingRelatedTransactions = plaidData.transactions.filter((transaction: any) => {
-        const description = transaction.name.toLowerCase();
-        return (
-          description.includes('rent') || 
-          description.includes('mortgage') ||
-          description.includes('hoa') ||
-          description.includes('housing') ||
-          description.includes('lease')
-        );
-      });
-      
-      if (housingRelatedTransactions.length > 0) {
-        // Get the most frequent payment amount for housing
-        const paymentAmounts: {[key: string]: number} = {};
-        housingRelatedTransactions.forEach((transaction: any) => {
-          const amount = Math.abs(transaction.amount).toFixed(2);
-          paymentAmounts[amount] = (paymentAmounts[amount] || 0) + 1;
-        });
-        
-        let mostFrequentAmount = 0;
-        let highestFrequency = 0;
-        
-        Object.entries(paymentAmounts).forEach(([amount, frequency]) => {
-          if (frequency > highestFrequency) {
-            highestFrequency = frequency;
-            mostFrequentAmount = parseFloat(amount);
-          }
-        });
-        
-        // Infer housing status
-        let housingStatus = 'unknown';
-        if (plaidData.liabilities && plaidData.liabilities.mortgages && plaidData.liabilities.mortgages.length > 0) {
-          housingStatus = 'mortgage';
-        } else if (mostFrequentAmount > 0) {
-          housingStatus = 'rent';
-        }
-        
-        // Calculate on-time payment percentage
-        const totalPayments = housingRelatedTransactions.length;
-        const regularPayments = housingRelatedTransactions.filter((transaction: any) => {
-          // Look for regular payment pattern (same day of month or within 3 days)
-          const transactionDate = new Date(transaction.date);
-          const dayOfMonth = transactionDate.getDate();
-          
-          // Simple heuristic - most housing payments are between 1st and 15th
-          return dayOfMonth <= 15;
-        }).length;
-        
-        const onTimePayments = regularPayments / totalPayments;
-        
-        processedData.housing = {
-          status: housingStatus,
-          estimatedMonthlyPayment: mostFrequentAmount,
-          paymentHistory: {
-            totalPayments,
-            regularPayments,
-            onTimePayments
-          }
+      };
+
+      // Extract income data
+      if (plaidData.income) {
+        processedData.income = {
+          annualIncome: plaidData.income.annualIncome || 0,
+          monthlyIncome: plaidData.income.monthlyIncome || (plaidData.income.annualIncome ? plaidData.income.annualIncome / 12 : 0),
+          confidence: plaidData.income.confidence || 0
         };
       }
-    }
-    
-    return processedData;
-  }
-  private processPlaidData(plaidData: any): any {
-    // Process raw Plaid data into a structured format for underwriting
-    // This is a placeholder implementation and should be expanded based on actual Plaid data structure
-    if (!plaidData) return null;
-    
-    const result: any = {
-      income: { annualIncome: 0 },
-      employment: [],
-      housing: { status: '', paymentHistory: null },
-      liabilities: { totalMonthlyPayments: 0, delinquencies: { total: 0 } }
-    };
-    
-    // Extract income data if available
-    if (plaidData.income) {
-      result.income.annualIncome = plaidData.income.annual_income || 0;
-    }
-    
-    // Extract employment data if available
-    if (plaidData.employment && Array.isArray(plaidData.employment)) {
-      result.employment = plaidData.employment.map((job: any) => ({
-        employer: job.employer || '',
-        monthsEmployed: job.months_employed || 0
-      }));
-    }
-    
-    // Extract housing data if available
-    if (plaidData.accounts) {
-      // Attempt to determine housing status from accounts
-      const mortgageAccount = plaidData.accounts.find((acc: any) => 
-        acc.subtype === 'mortgage' || acc.subtype === 'home loan'
-      );
-      
-      if (mortgageAccount) {
-        result.housing.status = 'mortgage';
-      } else {
-        // Default to rent if no mortgage is found
-        // This is a simplification - in a real implementation you'd want more logic
-        result.housing.status = 'rent';
-      }
-      
-      // Payment history could be determined from transactions
-      if (plaidData.transactions && plaidData.transactions.length > 0) {
-        // This is a simplification - in reality you'd analyze transaction patterns
-        result.housing.paymentHistory = { onTimePayments: 1.0 };
-      }
-    }
-    
-    // Extract liability data if available
-    if (plaidData.liabilities) {
-      let totalMonthlyPayments = 0;
-      let totalDelinquencies = 0;
-      
-      // Calculate total monthly payments
-      if (plaidData.liabilities.credit && Array.isArray(plaidData.liabilities.credit)) {
-        plaidData.liabilities.credit.forEach((credit: any) => {
-          if (credit.minimum_payment) {
-            totalMonthlyPayments += credit.minimum_payment;
-          }
-          if (credit.is_overdue) {
-            totalDelinquencies++;
-          }
-        });
-      }
-      
-      // Add other liability types as needed
-      result.liabilities.totalMonthlyPayments = totalMonthlyPayments;
-      result.liabilities.delinquencies = { total: totalDelinquencies };
-    }
-    
-    return result;
-  }
 
-  private calculateUnderwritingScore(plaidData: any, creditScore: number) {
-    // Initialize result with default values
-    const result = {
-      creditTier: 'declined',
-      totalPoints: 0,
-      annualIncome: 0,
-      annualIncomePoints: 0,
-      employmentHistoryMonths: 0,
-      employmentHistoryPoints: 0,
-      creditScorePoints: 0,
-      dtiRatio: 0,
-      dtiRatioPoints: 0,
-      housingStatus: '',
-      housingPaymentHistory: null,
-      housingStatusPoints: 0,
-      delinquencyHistory: null,
-      delinquencyPoints: 0
-    };
-
-    // Calculate points based on Plaid assets data
-    if (plaidData) {
-      // Income analysis
-      if (plaidData.income && plaidData.income.annualIncome) {
-        result.annualIncome = plaidData.income.annualIncome;
-        if (result.annualIncome > 100000) {
-          result.annualIncomePoints = 30;
-        } else if (result.annualIncome > 75000) {
-          result.annualIncomePoints = 25;
-        } else if (result.annualIncome > 50000) {
-          result.annualIncomePoints = 20;
-        } else if (result.annualIncome > 30000) {
-          result.annualIncomePoints = 15;
-        } else {
-          result.annualIncomePoints = 10;
+      // Extract employment data
+      if (plaidData.employment) {
+        // Convert various employment data formats to a standardized format
+        if (Array.isArray(plaidData.employment)) {
+          processedData.employment = plaidData.employment.map((job: any) => ({
+            name: job.name || 'Unknown Employer',
+            monthsEmployed: job.monthsEmployed || job.months || 0
+          }));
+        } else if (plaidData.employment.employmentMonths) {
+          // If we have the analyzed format from Plaid service
+          processedData.employment = [{
+            name: 'Primary Employer',
+            monthsEmployed: plaidData.employment.employmentMonths
+          }];
         }
       }
 
-      // Employment history
-      if (plaidData.employment && plaidData.employment.length > 0) {
-        // Calculate total months of employment history
-        // This is a simplified calculation
-        result.employmentHistoryMonths = plaidData.employment.reduce(
-          (total: number, job: any) => total + (job.monthsEmployed || 0), 
-          0
-        );
-
-        if (result.employmentHistoryMonths > 60) {
-          result.employmentHistoryPoints = 20;
-        } else if (result.employmentHistoryMonths > 36) {
-          result.employmentHistoryPoints = 15;
-        } else if (result.employmentHistoryMonths > 24) {
-          result.employmentHistoryPoints = 10;
-        } else if (result.employmentHistoryMonths > 12) {
-          result.employmentHistoryPoints = 5;
-        } else {
-          result.employmentHistoryPoints = 0;
-        }
-      }
-
-      // Housing status and payment history
+      // Extract housing information
       if (plaidData.housing) {
-        result.housingStatus = plaidData.housing.status;
-        result.housingPaymentHistory = plaidData.housing.paymentHistory;
-
-        // Points for housing status
-        if (result.housingStatus === 'own') {
-          result.housingStatusPoints = 15;
-        } else if (result.housingStatus === 'mortgage') {
-          result.housingStatusPoints = 10;
-        } else if (result.housingStatus === 'rent') {
-          result.housingStatusPoints = 5;
-        }
-
-        // Add more points for good payment history
-        if (result.housingPaymentHistory && result.housingPaymentHistory.onTimePayments > 0.9) {
-          result.housingStatusPoints += 10;
-        }
+        processedData.housing = {
+          status: plaidData.housing.housingStatus || plaidData.housing.status || 'unknown',
+          paymentHistory: plaidData.housing.paymentHistory || { onTimePayments: 0 }
+        };
       }
 
-      // DTI Ratio calculation
-      if (plaidData.income && plaidData.income.annualIncome && plaidData.liabilities) {
-        const monthlyIncome = plaidData.income.annualIncome / 12;
-        const monthlyDebt = plaidData.liabilities.totalMonthlyPayments || 0;
-
-        result.dtiRatio = monthlyIncome > 0 ? (monthlyDebt / monthlyIncome) : 0;
-
-        if (result.dtiRatio < 0.2) {
-          result.dtiRatioPoints = 20;
-        } else if (result.dtiRatio < 0.3) {
-          result.dtiRatioPoints = 15;
-        } else if (result.dtiRatio < 0.4) {
-          result.dtiRatioPoints = 10;
-        } else if (result.dtiRatio < 0.5) {
-          result.dtiRatioPoints = 5;
-        } else {
-          result.dtiRatioPoints = 0;
-        }
+      // Extract liability information
+      if (plaidData.debt) {
+        processedData.liabilities = {
+          totalMonthlyPayments: plaidData.debt.totalDebt / 12 || 0,
+          delinquencies: {
+            total: 0 // Default if no delinquency data
+          }
+        };
+      } else if (plaidData.liabilities) {
+        processedData.liabilities = plaidData.liabilities;
       }
 
-      // Delinquency history
-      if (plaidData.liabilities && plaidData.liabilities.delinquencies) {
-        result.delinquencyHistory = plaidData.liabilities.delinquencies;
-
-        const totalDelinquencies = result.delinquencyHistory.total || 0;
-
-        if (totalDelinquencies === 0) {
-          result.delinquencyPoints = 20;
-        } else if (totalDelinquencies <= 1) {
-          result.delinquencyPoints = 15;
-        } else if (totalDelinquencies <= 3) {
-          result.delinquencyPoints = 10;
-        } else if (totalDelinquencies <= 5) {
-          result.delinquencyPoints = 5;
-        } else {
-          result.delinquencyPoints = 0;
-        }
-      }
+      return processedData;
+    } catch (error) {
+      // If there's an error processing the data, log it and return null
+      console.error('Error processing Plaid data for underwriting:', error);
+      return null;
     }
-
-    // Add credit score points from PreFi data
-    if (creditScore > 0) {
-      if (creditScore >= 750) {
-        result.creditScorePoints = 30;
-      } else if (creditScore >= 700) {
-        result.creditScorePoints = 25;
-      } else if (creditScore >= 650) {
-        result.creditScorePoints = 20;
-      } else if (creditScore >= 600) {
-        result.creditScorePoints = 15;
-      } else if (creditScore >= 550) {
-        result.creditScorePoints = 10;
-      } else {
-        result.creditScorePoints = 5;
-      }
-    }
-
-    // Calculate total points
-    result.totalPoints = 
-      result.annualIncomePoints + 
-      result.employmentHistoryPoints + 
-      result.creditScorePoints + 
-      result.dtiRatioPoints + 
-      result.housingStatusPoints + 
-      result.delinquencyPoints;
-
-    // Determine credit tier based on total points
-    // Map the score to the schema's enum values: 'tier1', 'tier2', 'tier3', 'declined'
-    if (result.totalPoints >= 80) {
-      result.creditTier = 'tier1';  // High quality (A+, A)
-    } else if (result.totalPoints >= 60) {
-      result.creditTier = 'tier2';  // Medium quality (B+, B, C+)
-    } else if (result.totalPoints >= 30) {
-      result.creditTier = 'tier3';  // Lower quality but acceptable (C, D+)
-    } else {
-      result.creditTier = 'declined'; // Below threshold
-    }
-
-    return result;
   }
 
   /**
@@ -817,86 +426,3 @@ class UnderwritingService {
 }
 
 export const underwritingService = new UnderwritingService();
-
-  /**
-   * Process Plaid financial profile data for underwriting analysis
-   * This standardizes the Plaid data structure for our underwriting algorithm
-   */
-  private processPlaidData(plaidData: any): any {
-    // If data is already in expected format, return as is
-    if (!plaidData) return null;
-    
-    try {
-      // Create a standardized structure for our underwriting algorithm
-      const processedData: any = {
-        income: {
-          annualIncome: 0,
-          monthlyIncome: 0,
-          confidence: 0
-        },
-        employment: [],
-        housing: {
-          status: 'unknown',
-          paymentHistory: null
-        },
-        liabilities: {
-          totalMonthlyPayments: 0,
-          delinquencies: {
-            total: 0
-          }
-        }
-      };
-      
-      // Extract income data
-      if (plaidData.income) {
-        processedData.income = {
-          annualIncome: plaidData.income.annualIncome || 0,
-          monthlyIncome: plaidData.income.monthlyIncome || (plaidData.income.annualIncome ? plaidData.income.annualIncome / 12 : 0),
-          confidence: plaidData.income.confidence || 0
-        };
-      }
-      
-      // Extract employment data
-      if (plaidData.employment) {
-        // Convert various employment data formats to a standardized format
-        if (Array.isArray(plaidData.employment)) {
-          processedData.employment = plaidData.employment.map((job: any) => ({
-            name: job.name || 'Unknown Employer',
-            monthsEmployed: job.monthsEmployed || job.months || 0
-          }));
-        } else if (plaidData.employment.employmentMonths) {
-          // If we have the analyzed format from Plaid service
-          processedData.employment = [{
-            name: 'Primary Employer',
-            monthsEmployed: plaidData.employment.employmentMonths
-          }];
-        }
-      }
-      
-      // Extract housing information
-      if (plaidData.housing) {
-        processedData.housing = {
-          status: plaidData.housing.housingStatus || plaidData.housing.status || 'unknown',
-          paymentHistory: plaidData.housing.paymentHistory || { onTimePayments: 0 }
-        };
-      }
-      
-      // Extract liability information
-      if (plaidData.debt) {
-        processedData.liabilities = {
-          totalMonthlyPayments: plaidData.debt.totalDebt / 12 || 0,
-          delinquencies: {
-            total: 0 // Default if no delinquency data
-          }
-        };
-      } else if (plaidData.liabilities) {
-        processedData.liabilities = plaidData.liabilities;
-      }
-      
-      return processedData;
-    } catch (error) {
-      // If there's an error processing the data, log it and return null
-      console.error('Error processing Plaid data for underwriting:', error);
-      return null;
-    }
-  }
