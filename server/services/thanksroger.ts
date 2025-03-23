@@ -45,7 +45,7 @@ class ThanksRogerService {
   private defaultWorkspaceId: string | undefined;
   private initialized = false;
   private baseUrl = 'https://app.thanksroger.com/api/v3';
-  
+
   // For debugging purposes, log raw API responses
   private debugMode: boolean = process.env.DEBUG_API === 'true';
 
@@ -58,7 +58,7 @@ class ThanksRogerService {
    */
   private initialize() {
     this.apiKey = process.env.THANKSROGER_API_KEY;
-    
+
     // Get workspace ID from environment variables
     this.defaultWorkspaceId = process.env.THANKSROGER_WORKSPACE_ID || 'wvEOhUlU8rHy5EXAwNn1';
 
@@ -77,7 +77,7 @@ class ThanksRogerService {
         source: 'thanksroger'
       });
     }
-    
+
     if (!this.defaultWorkspaceId) {
       logger.warn({
         message: 'Thanks Roger workspace ID is not set - THANKSROGER_WORKSPACE_ID is not set',
@@ -258,7 +258,7 @@ class ThanksRogerService {
 
     try {
       const url = `${this.baseUrl}/workspaces/${workspaceId}/contracts`;
-      
+
       const requestBody = {
         templateId: options.templateId,
         templateValues: options.templateValues,
@@ -266,7 +266,7 @@ class ThanksRogerService {
         name: options.name,
         email: options.email || false // Default to false to avoid sending emails
       };
-      
+
       if (this.debugMode) {
         logger.info({
           message: 'ThanksRoger API request',
@@ -283,7 +283,7 @@ class ThanksRogerService {
           }
         });
       }
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -295,7 +295,7 @@ class ThanksRogerService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        
+
         if (response.status === 401) {
           logger.error({
             message: 'Authentication failed with Thanks Roger API: Invalid API key or insufficient permissions',
@@ -322,12 +322,12 @@ class ThanksRogerService {
           });
           throw new Error('Resource not found: Invalid workspace ID or template ID');
         }
-        
+
         throw new Error(`Failed to create contract: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      
+
       logger.info({
         message: 'Contract created successfully',
         category: 'api',
@@ -337,7 +337,7 @@ class ThanksRogerService {
           workspaceId: data.workspaceId
         }
       });
-      
+
       return data;
     } catch (error) {
       logger.error({
@@ -369,7 +369,7 @@ class ThanksRogerService {
     try {
       // Call the Thanks Roger API to apply the signature
       const url = `${this.baseUrl}/workspaces/${this.defaultWorkspaceId}/contracts/${options.contractId}/signatures`;
-      
+
       logger.info({
         message: `Attempting to sign contract ${options.contractId}`,
         category: 'api',
@@ -379,13 +379,13 @@ class ThanksRogerService {
           signerName: options.signerName
         }
       });
-      
+
       const requestBody = {
         signatureData: options.signatureData,
         signerName: options.signerName,
         signatureDate: options.signatureDate || new Date().toISOString()
       };
-      
+
       if (this.debugMode) {
         logger.info({
           message: 'ThanksRoger API signing request',
@@ -405,7 +405,7 @@ class ThanksRogerService {
           }
         });
       }
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -417,7 +417,7 @@ class ThanksRogerService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        
+
         if (response.status === 401) {
           logger.error({
             message: 'Authentication failed with Thanks Roger API: Invalid API key or insufficient permissions',
@@ -430,12 +430,12 @@ class ThanksRogerService {
           });
           throw new Error('Authentication failed: Invalid API key or insufficient permissions');
         }
-        
+
         throw new Error(`Failed to sign contract: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      
+
       logger.info({
         message: 'Contract signed successfully',
         category: 'api',
@@ -445,7 +445,7 @@ class ThanksRogerService {
           signatureId: data.signatureId
         }
       });
-      
+
       return {
         success: true,
         contractId: options.contractId,
@@ -475,7 +475,7 @@ class ThanksRogerService {
     if (!this.isInitialized()) {
       return false;
     }
-    
+
     if (!this.defaultWorkspaceId) {
       logger.error({
         message: 'Cannot validate credentials: No workspace ID configured',
@@ -489,7 +489,7 @@ class ThanksRogerService {
       // We'll use a simple GET request to check if our API key is valid
       const workspaceId = this.defaultWorkspaceId;
       const url = `${this.baseUrl}/workspaces/${workspaceId}`;
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -505,7 +505,7 @@ class ThanksRogerService {
         });
         return false;
       }
-      
+
       if (response.status === 404) {
         logger.error({
           message: 'API key validation failed: Workspace not found',
@@ -525,6 +525,7 @@ class ThanksRogerService {
       });
       return false;
     }
+  }
 
   /**
    * Update the status of a contract in Thanks Roger
@@ -545,12 +546,12 @@ class ThanksRogerService {
 
     try {
       const url = `${this.baseUrl}/workspaces/${this.defaultWorkspaceId}/contracts/${options.contractId}/status`;
-      
+
       const requestBody = {
         status: options.status,
         completedAt: options.completedAt || new Date().toISOString()
       };
-      
+
       if (this.debugMode) {
         logger.info({
           message: 'ThanksRoger API status update request',
@@ -567,7 +568,7 @@ class ThanksRogerService {
           }
         });
       }
-      
+
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
@@ -591,7 +592,7 @@ class ThanksRogerService {
           status: options.status
         }
       });
-      
+
       return true;
     } catch (error) {
       logger.error({
@@ -650,23 +651,23 @@ class ThanksRogerService {
     // Format currency values
     const formatCurrency = (value: number) => 
       value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-    
+
     const formattedAmount = formatCurrency(amount);
     const formattedDownPayment = formatCurrency(downPayment);
     const formattedFinancedAmount = formatCurrency(financedAmount);
     const formattedMonthlyPayment = formatCurrency(monthlyPayment);
-    
+
     // Create payment schedule for installments
     const paymentSchedule = Array.from({ length: termMonths }, (_, i) => {
       const paymentNumber = i + 1;
       const paymentDate = new Date();
       paymentDate.setMonth(paymentDate.getMonth() + paymentNumber);
-      
+
       return `Payment #${paymentNumber}: ${formattedMonthlyPayment} due on ${paymentDate.toLocaleDateString()}`;
     }).join('\n');
 
     const contractName = `Financing Agreement - ${customerName} - ${contractNumber}`;
-    
+
     // Prepare the email configuration if sending is enabled
     const emailConfig = sendEmail ? {
       subject: `Financing Agreement Ready for Signature - ${contractNumber}`,
