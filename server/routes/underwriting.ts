@@ -79,7 +79,7 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
           });
           return;
         }
-        
+
         // Get merchant details for merchant name
         const merchant = await storage.getMerchant(contract.merchantId);
         if (!merchant || !merchant.name) {
@@ -91,7 +91,7 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
           });
           return;
         }
-        
+
         // Generate application URL based on current host
         const applicationUrl = `${req.protocol}://${req.get('host')}/apply/${contractId}`;
         const callResult = await nlpearlService.initiateApplicationCall(
@@ -129,8 +129,7 @@ underwritingRouter.get("/contract/:contractId", async (req: Request, res: Respon
       } catch (error) {
         logger.error({
           message: `NLPearl call failed: ${error instanceof Error ? error.message : String(error)}`,
-          category: "api",
-          source: "nlpearl",
+          category: "nlpearl",
           metadata: { contractId, error: error instanceof Error ? error.stack : null }
         });
         return;
@@ -312,13 +311,13 @@ underwritingRouter.post("/process/:contractId", async (req: Request, res: Respon
     }
 
     // Get contract details to include in the response
-    const contract = await storage.getContract(parseInt(req.params.contractId));
-    
+    const contractDetails = await storage.getContract(parseInt(req.params.contractId));
+
     // Return success with both underwriting and contract data
     res.json({
       success: true,
       data: underwritingData,
-      contract: contract || null,
+      contract: contractDetails || null,
       message: "Underwriting process completed successfully"
     });
   } catch (error) {
