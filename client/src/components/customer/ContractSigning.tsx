@@ -142,21 +142,18 @@ export default function ContractSigning({
     setSigningError("");
 
     try {
-      // Extract customer name from component state or props
+      // Use the customerName prop directly
       // If no name is available, use "Customer" as default
-      const customerName = customer ? 
-        `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || "Customer" : 
-        "Customer";
+      const customerNameToUse = customerName?.trim() || "Customer";
 
-      console.log("Submitting signature for contract:", contractId, "customer:", customerName);
+      console.log("Submitting signature for contract:", contractId, "customer:", customerNameToUse);
 
       // Submit signature to API
       const signingResponse = await apiRequest("POST", "/api/contract-signing", {
         contractId,
         contractNumber,
-        customerName,
-        signatureData,
-        phoneNumber
+        customerName: customerNameToUse,
+        signatureData
       });
 
       // Verify response
