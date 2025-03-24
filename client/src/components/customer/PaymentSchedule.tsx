@@ -2,11 +2,16 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { CreditCard, Plus } from "lucide-react";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
@@ -50,10 +55,38 @@ function PaymentScheduleContent({
   const [isLoading, setIsLoading] = useState(true);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   
+  // Split payment state
+  const [enableSplitPayment, setEnableSplitPayment] = useState(false);
+  const [firstCardAmount, setFirstCardAmount] = useState<number>(downPayment);
+  const [secondCardAmount, setSecondCardAmount] = useState<number>(0);
+  const [activeCardTab, setActiveCardTab] = useState<'first' | 'second'>('first');
+  const [firstCardPaid, setFirstCardPaid] = useState(false);
+  
   const stripe = useStripe();
   const elements = useElements();
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
+
+  // Update second card amount when split payment is toggled
+  useEffect(() => {
+    if (enableSplitPayment) {
+      setSecondCardAmount(downPayment - firstCardAmount);
+    } else {
+      setFirstCardAmount(downPayment);
+      setSecondCardAmount(0);
+    }
+  }, [enableSplitPayment, firstCardAmount, downPayment]);
+
+  // Validate split payment amounts
+  useEffect(() => {
+    if (enableSplitPayment) {
+      // If first card amount changes, adjust second card amount
+      const calculatedSecondAmount = downPayment - firstCardAmount;
+      if (calculatedSecondAmount !== secondCardAmount) {
+        setSecondCardAmount(calculatedSecondAmount);
+      }
+    }
+  }, [firstCardAmount, downPayment, enableSplitPayment, secondCardAmount]);
 
   // Load the correct progress ID when component mounts
   useEffect(() => {
@@ -122,13 +155,18 @@ function PaymentScheduleContent({
       setPaymentProcessing(true);
       setCardError(null);
       
+      // Calculate the amount to charge on the current card
+      let amountToCharge = enableSplitPayment
+        ? (activeCardTab === 'first' ? firstCardAmount : secondCardAmount)
+        : downPayment;
+      
       // Create payment intent
       const response = await fetch('/api/payments/create-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           contractId,
-          amount: downPayment
+          amount: amountToCharge
         })
       });
       
@@ -153,22 +191,61 @@ function PaymentScheduleContent({
       }
 
       if (result.paymentIntent?.status === 'succeeded') {
-        // Payment successful, update progress and move to next step
+        // Payment successful
+        
+        // Store the payment data
+        let paymentData: any = {
+          paymentIntentId: result.paymentIntent.id,
+          amount: amountToCharge,
+          status: result.paymentIntent.status,
+          completedAt: new Date().toISOString()
+        };
+        
+        // If using split payment and this is the first card
+        if (enableSplitPayment && activeCardTab === 'first') {
+          // Mark first card as paid and switch to second card
+          setFirstCardPaid(true);
+          setActiveCardTab('second');
+          
+          toast({
+            title: "First payment successful",
+            description: `${formatCurrency(firstCardAmount)} has been processed. Please enter your second card details.`
+          });
+          
+          // Store payment data temporarily but don't complete the process yet
+          paymentData.splitPayment = true;
+          paymentData.firstCardPaymentId = result.paymentIntent.id;
+          paymentData.firstCardAmount = firstCardAmount;
+          
+          // Don't complete the process yet, waiting for second card
+          setPaymentProcessing(false);
+          return;
+        }
+        
+        // If using split payment and this is the second card
+        if (enableSplitPayment && activeCardTab === 'second') {
+          // Include both payments in the data
+          paymentData.splitPayment = true;
+          paymentData.firstCardPaymentId = paymentData.firstCardPaymentId || "unknown";
+          paymentData.firstCardAmount = firstCardAmount;
+          paymentData.secondCardPaymentId = result.paymentIntent.id; 
+          paymentData.secondCardAmount = secondCardAmount;
+          paymentData.totalAmount = firstCardAmount + secondCardAmount;
+        }
+        
+        // Update progress and move to next step
         if (actualProgressId) {
           await apiRequest("PATCH", `/api/application-progress/${actualProgressId}`, {
             completed: true,
-            data: JSON.stringify({
-              paymentIntentId: result.paymentIntent.id,
-              amount: downPayment,
-              status: result.paymentIntent.status,
-              completedAt: new Date().toISOString()
-            })
+            data: JSON.stringify(paymentData)
           });
         }
 
         toast({
           title: "Payment successful",
-          description: "Your down payment has been processed successfully."
+          description: enableSplitPayment && activeCardTab === 'second' 
+            ? "Both payments have been processed successfully."
+            : "Your down payment has been processed successfully."
         });
 
         onComplete();
@@ -253,37 +330,183 @@ function PaymentScheduleContent({
           <h2 className="text-2xl font-bold mb-4">Down Payment</h2>
           <p className="mb-4">Please complete your down payment of {formatCurrency(downPayment)} to proceed.</p>
           
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Card Information</label>
-            <div className="p-3 border rounded-md">
-              <CardElement 
-                options={{
-                  style: {
-                    base: {
-                      fontSize: '16px',
-                      color: '#424770',
-                      '::placeholder': {
-                        color: '#aab7c4',
-                      },
-                    },
-                    invalid: {
-                      color: '#9e2146',
-                    },
-                  },
-                }}
-              />
-            </div>
-            {cardError && <p className="text-red-600 text-sm mt-2">{cardError}</p>}
+          <div className="flex items-center space-x-2 mb-4">
+            <Switch
+              id="split-payment"
+              checked={enableSplitPayment}
+              onCheckedChange={setEnableSplitPayment}
+            />
+            <Label htmlFor="split-payment" className="cursor-pointer">
+              Split payment across two cards
+            </Label>
           </div>
           
-          <div className="flex justify-between mt-6">
-            <Button variant="outline" onClick={() => setShowPaymentForm(false)} disabled={paymentProcessing}>
-              Back
-            </Button>
-            <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements}>
-              {paymentProcessing ? "Processing..." : `Pay ${formatCurrency(downPayment)}`}
-            </Button>
-          </div>
+          {!enableSplitPayment ? (
+            /* Single card payment */
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">Card Information</label>
+              <div className="p-3 border rounded-md">
+                <CardElement 
+                  options={{
+                    style: {
+                      base: {
+                        fontSize: '16px',
+                        color: '#424770',
+                        '::placeholder': {
+                          color: '#aab7c4',
+                        },
+                      },
+                      invalid: {
+                        color: '#9e2146',
+                      },
+                    },
+                  }}
+                />
+              </div>
+              {cardError && <p className="text-red-600 text-sm mt-2">{cardError}</p>}
+              
+              <div className="flex justify-between mt-6">
+                <Button variant="outline" onClick={() => setShowPaymentForm(false)} disabled={paymentProcessing}>
+                  Back
+                </Button>
+                <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements}>
+                  {paymentProcessing ? "Processing..." : `Pay ${formatCurrency(downPayment)}`}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* Split payment across two cards */
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="firstCardAmount" className="text-sm font-medium">
+                  Amount for first card
+                </Label>
+                <div className="flex items-center mt-1">
+                  <Input
+                    id="firstCardAmount"
+                    type="number"
+                    value={firstCardAmount}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      if (!isNaN(value) && value >= 0 && value <= downPayment) {
+                        setFirstCardAmount(value);
+                      }
+                    }}
+                    className="w-full"
+                    min={1}
+                    max={downPayment - 1}
+                    step={0.01}
+                    disabled={paymentProcessing || firstCardPaid}
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="secondCardAmount" className="text-sm font-medium">
+                  Amount for second card
+                </Label>
+                <div className="flex items-center mt-1">
+                  <Input
+                    id="secondCardAmount"
+                    type="number"
+                    value={secondCardAmount}
+                    disabled={true}
+                    className="w-full bg-gray-50"
+                  />
+                </div>
+              </div>
+              
+              {firstCardAmount <= 0 || secondCardAmount <= 0 ? (
+                <p className="text-yellow-600 text-sm">
+                  Both cards must have a positive amount. Please adjust the values.
+                </p>
+              ) : null}
+              
+              <Tabs value={activeCardTab} onValueChange={(val) => setActiveCardTab(val as 'first' | 'second')} className="mt-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="first" disabled={firstCardPaid} className="flex items-center">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Card 1 {firstCardPaid ? '(Paid)' : ''}
+                  </TabsTrigger>
+                  <TabsTrigger value="second" disabled={!firstCardPaid} className="flex items-center">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Card 2
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="first" className="mt-4">
+                  <div className={`p-3 border rounded-md ${firstCardPaid ? 'bg-gray-100 opacity-50' : ''}`}>
+                    {!firstCardPaid ? (
+                      <CardElement 
+                        options={{
+                          style: {
+                            base: {
+                              fontSize: '16px',
+                              color: '#424770',
+                              '::placeholder': {
+                                color: '#aab7c4',
+                              },
+                            },
+                            invalid: {
+                              color: '#9e2146',
+                            },
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="text-center py-2 text-gray-500">
+                        Card information processed successfully
+                      </div>
+                    )}
+                  </div>
+                  {cardError && <p className="text-red-600 text-sm mt-2">{cardError}</p>}
+                  
+                  <div className="flex justify-between mt-4">
+                    <Button variant="outline" onClick={() => setEnableSplitPayment(false)} disabled={paymentProcessing}>
+                      Use Single Card
+                    </Button>
+                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || firstCardAmount <= 0 || firstCardPaid}>
+                      {paymentProcessing ? "Processing..." : `Pay ${formatCurrency(firstCardAmount)}`}
+                    </Button>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="second" className="mt-4">
+                  <div className="p-3 border rounded-md">
+                    <CardElement 
+                      options={{
+                        style: {
+                          base: {
+                            fontSize: '16px',
+                            color: '#424770',
+                            '::placeholder': {
+                              color: '#aab7c4',
+                            },
+                          },
+                          invalid: {
+                            color: '#9e2146',
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                  {cardError && <p className="text-red-600 text-sm mt-2">{cardError}</p>}
+                  
+                  <div className="flex justify-between mt-4">
+                    <Button variant="outline" onClick={() => {
+                      setFirstCardPaid(false);
+                      setActiveCardTab('first');
+                    }} disabled={paymentProcessing}>
+                      Back to First Card
+                    </Button>
+                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || secondCardAmount <= 0}>
+                      {paymentProcessing ? "Processing..." : `Pay ${formatCurrency(secondCardAmount)}`}
+                    </Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
         </Card>
       )}
     </div>
