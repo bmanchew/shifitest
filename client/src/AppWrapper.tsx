@@ -24,8 +24,10 @@ export default function AppWrapper() {
   // Log the configuration for debugging
   console.log("App configuration:", { apiBaseUrl: API_URL, appDomain: APP_DOMAIN });
   
-  // Force reload if we're not on the .replit.dev domain
+  // Temporarily disable the redirection logic to prevent redirect loops
   useEffect(() => {
+    // Commenting out the redirection code to debug deployment issues
+    /*
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
       const isReplitDev = hostname.endsWith('.replit.dev');
@@ -39,6 +41,8 @@ export default function AppWrapper() {
         window.location.href = newUrl;
       }
     }
+    */
+    console.log("Domain redirection disabled to prevent loops");
   }, []);
   
   return (
