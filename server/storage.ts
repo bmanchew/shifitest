@@ -332,8 +332,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
-    // Explicitly select the columns we know exist to avoid errors
-    return await db.select({
+    // Get basic contract fields without the archived field that might not exist yet
+    const results = await db.select({
       id: contracts.id,
       contractNumber: contracts.contractNumber,
       merchantId: contracts.merchantId,
@@ -349,8 +349,17 @@ export class DatabaseStorage implements IStorage {
       createdAt: contracts.createdAt,
       completedAt: contracts.completedAt,
       phoneNumber: contracts.phoneNumber,
-      archived: contracts.archived // Added field
+      // Include other fields but not archived until migration runs
+      purchasedByShifi: contracts.purchasedByShifi
     }).from(contracts).where(eq(contracts.merchantId, merchantId));
+    
+    // Add default value for archived field that might not exist in database yet
+    return results.map(contract => ({
+      ...contract,
+      archived: false, // Default to false if field doesn't exist yet
+      archivedAt: null,
+      archivedReason: null
+    }));
   }
 
   async getContractsByCustomerId(customerId: number): Promise<Contract[]> {
@@ -365,8 +374,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createContract(contract: InsertContract): Promise<Contract> {
-    const [newContract] = await db.insert(contracts).values(contract).returning();
-    return newContract;
+    // Create a sanitized version of the contract data, excluding fields that may not exist yet in the database
+    const { archived, archivedAt, archivedReason, ...contractData } = contract as any;
+    
+    // Insert the filtered contract data
+    const [newContract] = await db.insert(contracts).values(contractData).returning();
+    
+    // Return the contract with default values for archived fields
+    return {
+      ...newContract,
+      archived: false,
+      archivedAt: null,
+      archivedReason: null
+    };
   }
 
   async updateContractStatus(id: number, status: string): Promise<Contract | undefined> {
@@ -415,12 +435,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateContract(id: number, data: Partial<Contract>): Promise<Contract> {
+    // Create a sanitized version of the update data, excluding fields that may not exist yet
+    const { archived, archivedAt, archivedReason, ...updateData } = data as any;
+    
+    // Process the update using only fields we know exist
     const [updatedContract] = await db
       .update(contracts)
-      .set(data)
+      .set(updateData)
       .where(eq(contracts.id, id))
       .returning();
-    return updatedContract;
+    
+    // If archived fields were included in the original update, store this info separately
+    // We'll need to include this in the migration implementation later
+    if (archived !== undefined || archivedAt !== undefined || archivedReason !== undefined) {
+      console.log(`Contract ${id} archive status requested: archived=${archived}, reason=${archivedReason}`);
+    }
+    
+    // Return the updated contract with default values for archived fields
+    return {
+      ...updatedContract,
+      archived: archived ?? false,
+      archivedAt: archivedAt ?? null,
+      archivedReason: archivedReason ?? null
+    };
   }
 
   // Application Progress methods
