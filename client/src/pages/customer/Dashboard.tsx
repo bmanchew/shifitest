@@ -40,11 +40,41 @@ export default function CustomerDashboard() {
   const [, setLocation] = useLocation();
   const [showBankDialog, setShowBankDialog] = useState(false);
   const [activeBankContractId, setActiveBankContractId] = useState<number | null>(null);
+  const [bankConnectionDetails, setBankConnectionDetails] = useState<any>(null);
+  const [isCheckingBankConnection, setIsCheckingBankConnection] = useState(false);
   
   // Handle opening the bank connection dialog
-  const handleViewBankConnection = (contractId: number) => {
+  const handleViewBankConnection = async (contractId: number) => {
     setActiveBankContractId(contractId);
-    setShowBankDialog(true);
+    setIsCheckingBankConnection(true);
+    
+    try {
+      // Check if this contract already has a bank connection
+      const response = await fetch(`/api/plaid/bank-connection/${contractId}`, {
+        credentials: "include",
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.hasConnection) {
+          // We have an existing connection, save the details
+          setBankConnectionDetails(data.connectionDetails);
+        } else {
+          // No existing connection
+          setBankConnectionDetails(null);
+        }
+      } else {
+        // Error checking connection status
+        console.error("Error checking bank connection status");
+        setBankConnectionDetails(null);
+      }
+    } catch (error) {
+      console.error("Error checking bank connection:", error);
+      setBankConnectionDetails(null);
+    } finally {
+      setIsCheckingBankConnection(false);
+      setShowBankDialog(true);
+    }
   };
 
   // Fetch contract details

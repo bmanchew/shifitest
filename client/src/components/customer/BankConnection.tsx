@@ -9,14 +9,27 @@ import {
   Building,
   ChevronRight,
   ShieldCheck,
+  RefreshCw,
 } from "lucide-react";
 import { usePlaidLink } from "react-plaid-link";
+
+interface BankConnectionDetails {
+  accountId: string;
+  accountName: string;
+  accountType: string;
+  accountSubtype: string;
+  accountMask: string;
+  bankName: string;
+  connected: boolean;
+  connectedAt: string;
+}
 
 interface BankConnectionProps {
   contractId: number;
   progressId: number;
   onComplete: () => void;
   onBack: () => void;
+  existingConnection?: BankConnectionDetails;
 }
 
 export default function BankConnection({
@@ -24,10 +37,13 @@ export default function BankConnection({
   progressId,
   onComplete,
   onBack,
+  existingConnection,
 }: BankConnectionProps) {
   const { toast } = useToast();
   const [isConnecting, setIsConnecting] = useState(false);
-  const [step, setStep] = useState<"intro" | "connecting" | "success">("intro");
+  const [step, setStep] = useState<"intro" | "connecting" | "success">(
+    existingConnection ? "success" : "intro"
+  );
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [isLoadingToken, setIsLoadingToken] = useState(false);
 
@@ -246,9 +262,19 @@ export default function BankConnection({
 
   // Success step
   if (step === "success") {
+    // Check if we have existing connection details
+    const connectionDetails = existingConnection || {
+      accountName: "Your Bank Account",
+      accountMask: "****",
+      accountType: "checking",
+      accountSubtype: "checking",
+      bankName: "Your Bank",
+      connectedAt: new Date().toISOString()
+    };
+
     return (
-      <div className="p-6 text-center">
-        <div className="py-12">
+      <div className="p-6">
+        <div className="text-center py-6 mb-4">
           <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-green-100 mb-4">
             <CheckCircle className="h-10 w-10 text-green-600" />
           </div>
@@ -256,9 +282,60 @@ export default function BankConnection({
             Bank Connected Successfully!
           </h3>
           <p className="text-sm text-gray-600">
-            Your bank account has been successfully connected for automatic
-            payments.
+            Your bank account has been connected for automatic payments.
           </p>
+        </div>
+
+        {/* Connection Details */}
+        <div className="bg-gray-50 rounded-lg p-4 mb-6">
+          <h4 className="text-sm font-medium text-gray-900 mb-3">
+            Connected Account Details
+          </h4>
+          <ul className="space-y-3">
+            <li className="flex justify-between text-sm">
+              <span className="text-gray-500">Bank</span>
+              <span className="font-medium">{connectionDetails.bankName}</span>
+            </li>
+            <li className="flex justify-between text-sm">
+              <span className="text-gray-500">Account</span>
+              <span className="font-medium">
+                {connectionDetails.accountName || `${connectionDetails.accountType} Account`}
+              </span>
+            </li>
+            <li className="flex justify-between text-sm">
+              <span className="text-gray-500">Account Number</span>
+              <span className="font-medium">
+                {connectionDetails.accountMask ? `****${connectionDetails.accountMask}` : "********"}
+              </span>
+            </li>
+            <li className="flex justify-between text-sm">
+              <span className="text-gray-500">Connected On</span>
+              <span className="font-medium">
+                {new Date(connectionDetails.connectedAt).toLocaleDateString()}
+              </span>
+            </li>
+          </ul>
+        </div>
+
+        {/* Button to reconnect if needed */}
+        <div className="mt-4 flex justify-between">
+          <Button variant="outline" onClick={onBack}>
+            Close
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={handleConnectBank}
+            disabled={!ready || isLoadingToken}
+          >
+            {isLoadingToken ? (
+              <>Loading...</>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reconnect Bank
+              </>
+            )}
+          </Button>
         </div>
       </div>
     );
