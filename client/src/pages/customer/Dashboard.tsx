@@ -24,7 +24,8 @@ import {
   Lightbulb,
   CheckCircle,
   Building,
-  User
+  User,
+  RefreshCw
 } from "lucide-react";
 import BankConnection from "@/components/customer/BankConnection";
 import { Logo } from "@/components/ui/logo";
@@ -617,7 +618,14 @@ export default function CustomerDashboard(): React.ReactNode {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {financialData?.hasPlaidData && financialData?.cashFlow ? (
+                {isLoadingFinancialData || (!financialData && !bankConnectionDetails) ? (
+                  // Show loading state when financial data is loading
+                  <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+                    <p className="text-sm text-gray-500">Loading your financial data...</p>
+                  </div>
+                ) : financialData?.hasPlaidData && financialData?.cashFlow ? (
+                  // Show cash flow data if available
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-500">Monthly Income</span>
@@ -691,10 +699,38 @@ export default function CustomerDashboard(): React.ReactNode {
                       </div>
                     )}
                   </div>
+                ) : bankConnectionDetails ? (
+                  // Bank is connected but financial data is still loading or missing
+                  <div className="space-y-3">
+                    <div className="bg-blue-50 p-3 rounded-md">
+                      <div className="flex items-center text-blue-800 mb-2">
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        <span className="text-sm font-medium">Your bank account is connected</span>
+                      </div>
+                      <p className="text-xs text-blue-700">
+                        {bankConnectionDetails.bankName} - {bankConnectionDetails.accountName || 'Account'} 
+                        {bankConnectionDetails.accountMask ? ` (${bankConnectionDetails.accountMask})` : ''}
+                      </p>
+                      
+                      {/* Show refresh option if financial data is missing */}
+                      {!financialData?.hasPlaidData && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="mt-3 w-full"
+                          onClick={() => refetchFinancialData()}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                          Refresh Financial Data
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 ) : (
+                  // No bank connection found
                   <div className="flex flex-col items-center justify-center py-4 text-center">
                     <BarChart className="h-10 w-10 mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-500">Connect your accounts to view cash flow analysis</p>
+                    <p className="text-sm text-gray-500">We couldn't find your bank information</p>
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -717,7 +753,14 @@ export default function CustomerDashboard(): React.ReactNode {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {financialData?.hasPlaidData ? (
+                {isLoadingFinancialData || (!financialData && !bankConnectionDetails) ? (
+                  // Show loading state when financial data is loading
+                  <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+                    <p className="text-sm text-gray-500">Loading savings opportunities...</p>
+                  </div>
+                ) : financialData?.hasPlaidData ? (
+                  // When we have Plaid data, show insights
                   <div className="space-y-3">
                     {/* Display AI-generated savings insights if available */}
                     {financialData?.insights && financialData.insights
@@ -744,10 +787,41 @@ export default function CustomerDashboard(): React.ReactNode {
                       </div>
                     )}
                   </div>
+                ) : bankConnectionDetails ? (
+                  // Bank is connected but financial data is still loading or missing
+                  <div className="space-y-3">
+                    <div className="bg-green-50 p-3 rounded-md">
+                      <h4 className="text-sm font-medium text-green-800">Analyzing Your Finances</h4>
+                      <p className="text-xs text-green-700 mt-1">
+                        We're analyzing your bank data to identify potential savings opportunities.
+                        Check back soon for personalized recommendations.
+                      </p>
+                      {!financialData?.hasPlaidData && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="mt-3 w-full"
+                          onClick={() => refetchFinancialData()}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                          Refresh Savings Analysis
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 ) : (
+                  // No bank connection found
                   <div className="flex flex-col items-center justify-center py-4 text-center">
                     <PiggyBank className="h-10 w-10 mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-500">Connect your accounts to discover savings opportunities</p>
+                    <p className="text-sm text-gray-500">We couldn't find your bank information</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-3"
+                      onClick={() => handleViewBankConnection(contract?.id || 0)}
+                    >
+                      Connect Bank Account
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -767,7 +841,19 @@ export default function CustomerDashboard(): React.ReactNode {
             )}
           </h2>
           <div className="grid gap-4 md:grid-cols-2">
-            {financialData?.hasPlaidData && financialData?.suggestions && financialData.suggestions.length > 0 ? (
+            {isLoadingFinancialData || (!financialData && !bankConnectionDetails) ? (
+              // Show loading state when financial data is loading
+              <Card className="md:col-span-2">
+                <CardContent className="flex flex-col items-center justify-center p-6 text-center">
+                  <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+                  <h3 className="font-medium mb-2">Loading Your Personal Recommendations</h3>
+                  <p className="text-sm text-gray-500">
+                    We're retrieving your financial data to generate tailored suggestions
+                  </p>
+                </CardContent>
+              </Card>
+            ) : financialData?.hasPlaidData && financialData?.suggestions && financialData.suggestions.length > 0 ? (
+              // Show suggestions when we have Plaid data and suggestions are available
               financialData.suggestions.map((suggestion: any, index: number) => (
                 <Card key={index} className="border-l-4 border-l-amber-500">
                   <CardContent className="p-4">
@@ -790,19 +876,41 @@ export default function CustomerDashboard(): React.ReactNode {
                   </CardContent>
                 </Card>
               ))
+            ) : bankConnectionDetails ? (
+              // Bank is connected but suggestions aren't available yet
+              <Card className="md:col-span-2">
+                <CardContent className="flex flex-col items-center justify-center p-6 text-center">
+                  <Lightbulb className="h-12 w-12 mb-3 text-amber-500" />
+                  <h3 className="font-medium mb-2">
+                    Analyzing Your Financial Data
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    We're analyzing your transaction history to generate personalized recommendations. 
+                    Check back soon for insights tailored to your financial habits.
+                  </p>
+                  {!financialData?.hasPlaidData && (
+                    <Button 
+                      className="mt-4" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => refetchFinancialData()}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      Refresh Analysis
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
             ) : (
+              // No bank connection found
               <Card className="md:col-span-2">
                 <CardContent className="flex flex-col items-center justify-center p-6 text-center">
                   <Lightbulb className="h-12 w-12 mb-3 text-amber-200" />
                   <h3 className="font-medium mb-2">
-                    {financialData?.hasPlaidData 
-                      ? "Analyzing Your Financial Data..." 
-                      : "Personalized Suggestions Require Banking Data"}
+                    We Couldn't Find Your Banking Data
                   </h3>
                   <p className="text-sm text-gray-500">
-                    {financialData?.hasPlaidData 
-                      ? "We're analyzing your financial data to generate personalized suggestions. Check back soon!"
-                      : "Connect your financial accounts to receive customized suggestions based on your spending patterns and financial goals."}
+                    Connect your financial accounts to receive customized suggestions based on your spending patterns and financial goals.
                   </p>
                   <Button 
                     className="mt-4" 
@@ -810,7 +918,7 @@ export default function CustomerDashboard(): React.ReactNode {
                     size="sm"
                     onClick={() => handleViewBankConnection(contract?.id || 0)}
                   >
-                    View Bank Details
+                    Connect Bank Account
                   </Button>
                 </CardContent>
               </Card>
