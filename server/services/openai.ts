@@ -7,7 +7,7 @@ import { logger } from './logger';
 export class OpenAIService {
   private client: OpenAI | null = null;
   private initialized = false;
-  private model = "gpt-4";  // Using GPT-4 model for enhanced financial insights
+  private model = "gpt-3.5-turbo";  // Using GPT-3.5 Turbo model for financial insights
 
   constructor() {
     this.initialize();
@@ -83,7 +83,7 @@ export class OpenAIService {
       logger.warn({
         message: 'Cannot generate insights: OpenAI service not initialized',
         category: 'api',
-        source: 'openai'
+        source: 'internal'
       });
       return [];
     }
@@ -121,7 +121,7 @@ export class OpenAIService {
       logger.info({
         message: 'Successfully generated AI financial insights',
         category: 'api',
-        source: 'openai',
+        source: 'internal',
         metadata: {
           insightsCount: parsedResponse.insights ? parsedResponse.insights.length : 0
         }
@@ -132,7 +132,7 @@ export class OpenAIService {
       logger.error({
         message: `Failed to generate financial insights: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
-        source: 'openai',
+        source: 'internal',
         metadata: {
           error: error instanceof Error ? error.stack : null
         }
@@ -151,7 +151,7 @@ export class OpenAIService {
       logger.warn({
         message: 'Cannot generate suggestions: OpenAI service not initialized',
         category: 'api',
-        source: 'openai'
+        source: 'internal'
       });
       return [];
     }
@@ -189,7 +189,7 @@ export class OpenAIService {
       logger.info({
         message: 'Successfully generated AI financial suggestions',
         category: 'api',
-        source: 'openai',
+        source: 'internal',
         metadata: {
           suggestionsCount: parsedResponse.suggestions ? parsedResponse.suggestions.length : 0
         }
@@ -200,7 +200,7 @@ export class OpenAIService {
       logger.error({
         message: `Failed to generate financial suggestions: ${error instanceof Error ? error.message : String(error)}`,
         category: 'api',
-        source: 'openai',
+        source: 'internal',
         metadata: {
           error: error instanceof Error ? error.stack : null
         }
