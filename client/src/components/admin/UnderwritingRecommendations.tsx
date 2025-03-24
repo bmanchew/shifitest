@@ -20,7 +20,7 @@ export default function UnderwritingRecommendations() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>AI Underwriting Recommendations</CardTitle>
+          <CardTitle>GPT-4.5 Underwriting Recommendations</CardTitle>
           <CardDescription>Loading recommendations...</CardDescription>
         </CardHeader>
       </Card>
@@ -31,13 +31,13 @@ export default function UnderwritingRecommendations() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>AI Underwriting Recommendations</CardTitle>
+          <CardTitle>GPT-4.5 Underwriting Recommendations</CardTitle>
           <CardDescription>Error loading recommendations</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center text-destructive">
             <AlertCircle className="h-4 w-4 mr-2" />
-            <span>Failed to load AI recommendations. Please try again later.</span>
+            <span>Failed to load GPT-4.5 recommendations. Please try again later.</span>
           </div>
         </CardContent>
       </Card>
@@ -50,8 +50,8 @@ export default function UnderwritingRecommendations() {
   return (
     <Card className="col-span-2">
       <CardHeader>
-        <CardTitle>AI Underwriting Recommendations</CardTitle>
-        <CardDescription>GPT-4.5 powered suggestions to optimize your underwriting model</CardDescription>
+        <CardTitle>GPT-4.5 Underwriting Recommendations</CardTitle>
+        <CardDescription>Advanced model-powered suggestions to optimize your underwriting model</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">

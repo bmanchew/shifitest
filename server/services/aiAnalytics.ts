@@ -1,6 +1,7 @@
 import { logger } from './logger';
 import { cfpbService } from './cfpbService';
 import { storage } from '../storage';
+import { openaiService } from './openai';
 
 /**
  * Service to analyze complaint data and provide AI-driven insights
@@ -450,9 +451,9 @@ export class AIAnalyticsService {
       const recentComplaints = await storage.getComplaintsData({
         limit: 500
       });
-
-      // Generate recommendations based on the data
-      const recommendations = [
+      
+      // Default recommendations in case OpenAI fails
+      let recommendations = [
         {
           factor: "Debt-to-Income Ratio",
           currentThreshold: "< 45%",
@@ -478,6 +479,99 @@ export class AIAnalyticsService {
           reasoning: "Newly opened accounts show 3x higher risk of payment issues in first 6 months of loan."
         }
       ];
+      
+      // Try to use OpenAI to generate more insightful recommendations if the service is available
+      if (openaiService.isInitialized()) {
+        try {
+          logger.info({
+            message: 'Generating underwriting recommendations with OpenAI GPT-4.5',
+            category: 'api',
+            source: 'openai'
+          });
+          
+          // Extract relevant data for the prompt
+          const complaintsData = recentComplaints.slice(0, 20).map(complaint => ({
+            product: complaint.product,
+            issue: complaint.issue,
+            company: complaint.company,
+            date: complaint.date_received
+          }));
+          
+          // Create the prompt
+          const prompt = `
+          As a financial risk analyst, analyze the following data to provide recommendations for adjusting our underwriting model.
+          
+          PORTFOLIO METRICS:
+          ${JSON.stringify(portfolioMetrics, null, 2)}
+          
+          RECENT COMPLAINTS SAMPLE:
+          ${JSON.stringify(complaintsData, null, 2)}
+          
+          Based on this data, generate 4 specific underwriting model adjustment recommendations.
+          For each recommendation, include:
+          1. The factor to adjust (e.g., "Debt-to-Income Ratio", "Credit Score Weight")
+          2. The current threshold or setting
+          3. The recommended threshold or setting
+          4. A brief reasoning based on the data
+          
+          Return your response as a JSON array of recommendation objects, where each object has "factor", "currentThreshold", "recommendedThreshold", and "reasoning" fields.
+          `;
+          
+          // Call OpenAI
+          const completion = await openaiService.client!.chat.completions.create({
+            model: openaiService.model,
+            messages: [
+              {
+                role: "system",
+                content: "You are a financial risk analyst specializing in credit risk modeling and underwriting optimization.",
+              },
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            temperature: 0.7,
+            max_tokens: 800,
+            response_format: { type: "json_object" }
+          });
+          
+          const response = completion.choices[0].message.content;
+          
+          if (response) {
+            // Parse the response
+            const parsedResponse = JSON.parse(response);
+            
+            if (Array.isArray(parsedResponse.recommendations) && parsedResponse.recommendations.length > 0) {
+              recommendations = parsedResponse.recommendations;
+              
+              logger.info({
+                message: 'Successfully generated AI underwriting recommendations with OpenAI',
+                category: 'api',
+                source: 'openai',
+                metadata: {
+                  recommendationsCount: recommendations.length
+                }
+              });
+            }
+          }
+        } catch (error) {
+          logger.error({
+            message: `Error using OpenAI for underwriting recommendations: ${error instanceof Error ? error.message : String(error)}`,
+            category: 'api',
+            source: 'openai',
+            metadata: {
+              error: error instanceof Error ? error.stack : null
+            }
+          });
+          // Will fall back to default recommendations
+        }
+      } else {
+        logger.warn({
+          message: 'OpenAI service not initialized, using fallback recommendations',
+          category: 'system',
+          source: 'analytics'
+        });
+      }
 
       return {
         recommendations,
