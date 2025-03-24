@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,11 @@ import { useToast } from "@/components/ui/use-toast";
 import { Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
-export default function SendApplication(props) {
+interface SendApplicationProps {
+  merchantId?: number;
+}
+
+export default function SendApplication(props: SendApplicationProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
@@ -15,20 +19,20 @@ export default function SendApplication(props) {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
       // Get the merchant ID from props or user context
-      const currentMerchantId = props?.merchantId || (user?.merchantId as number);
+      const merchantId = props?.merchantId || (user?.merchantId as number);
 
       // Validate merchantId exists before sending request
-      if (!currentMerchantId) {
+      if (!merchantId) {
         throw new Error("Merchant ID is required but not available");
       }
 
-      console.log("Sending application with merchantId:", currentMerchantId);
+      console.log("Sending application with merchantId:", merchantId);
 
       // Ensure amount is a valid number
       const parsedAmount = parseFloat(amount);
@@ -44,7 +48,7 @@ export default function SendApplication(props) {
         body: JSON.stringify({
           phoneNumber,
           email,
-          merchantId: currentMerchantId,
+          merchantId: merchantId,
           amount: parsedAmount
         }),
       });
@@ -64,20 +68,30 @@ export default function SendApplication(props) {
         title: "Application Sent!",
         description: `Financing application sent to ${phoneNumber}`
       });
-    } catch (error) {
+    } catch (error: unknown) {
             // Enhanced error logging
             console.error("Error sending application:", error);
 
             // Log detailed error information
+            const merchantId = props?.merchantId || (user?.merchantId as number);
+            // Get parsedAmount safely
+            let parsedAmountValue: number;
+            try {
+              parsedAmountValue = parseFloat(amount);
+              if (isNaN(parsedAmountValue)) parsedAmountValue = 0;
+            } catch {
+              parsedAmountValue = 0;
+            }
+            
             console.error("Error details:", {
-                errorType: error.constructor.name,
+                errorType: error instanceof Error ? error.constructor.name : "Unknown",
                 errorMessage: error instanceof Error ? error.message : String(error),
                 errorStack: error instanceof Error ? error.stack : undefined,
                 requestData: {
                     phoneNumber,
                     email,
-                    merchantId: currentMerchantId, 
-                    amount: parsedAmount || parseFloat(amount)
+                    merchantId: merchantId, 
+                    amount: parsedAmountValue
                 }
             });
 
