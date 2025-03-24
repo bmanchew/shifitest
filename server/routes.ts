@@ -551,13 +551,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Return all contracts for admin users
         const contracts = await storage.getAllContracts();
-        return res.json(contracts);
+        
+        // Add underwriting data to each contract
+        const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
+          const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
+          // Use the most recent underwriting data if available
+          const mostRecentUnderwriting = underwritingData.length > 0 ? 
+            underwritingData.sort((a, b) => 
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            )[0] : null;
+          
+          return {
+            ...contract,
+            creditTier: mostRecentUnderwriting?.creditTier || null
+          };
+        }));
+        
+        return res.json(contractsWithTiers);
       }
       
-      // For merchant-specific requests, return only their contracts
+      // For merchant-specific requests, return only their contracts with credit tiers
       if (merchantId) {
         const contracts = await storage.getContractsByMerchantId(merchantId);
-        return res.json(contracts);
+        
+        // Add underwriting data to each contract
+        const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
+          const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
+          // Use the most recent underwriting data if available
+          const mostRecentUnderwriting = underwritingData.length > 0 ? 
+            underwritingData.sort((a, b) => 
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            )[0] : null;
+          
+          return {
+            ...contract,
+            creditTier: mostRecentUnderwriting?.creditTier || null
+          };
+        }));
+        
+        return res.json(contractsWithTiers);
       }
       
       // Default: return empty array if no merchantId provided
