@@ -13,7 +13,7 @@ interface DocumentViewProps {
 const DocumentView: React.FC<DocumentViewProps> = ({ contractId }) => {
   // Fetch contract document using the same endpoint we created earlier
   const { data: documentData, isLoading, error } = useQuery({
-    queryKey: ['/api/contracts/document', contractId],
+    queryKey: ['/api/contracts', contractId, 'document'],
     queryFn: async () => {
       if (!contractId) return null;
       
