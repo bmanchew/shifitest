@@ -64,15 +64,15 @@ export default function SendApplication(props) {
         title: "Application Sent!",
         description: `Financing application sent to ${phoneNumber}`
       });
-    } catch (t) {
+    } catch (error) {
             // Enhanced error logging
-            console.error("Error sending application:", t);
+            console.error("Error sending application:", error);
 
             // Log detailed error information
             console.error("Error details:", {
-                errorType: t.constructor.name,
-                errorMessage: t instanceof Error ? t.message : String(t),
-                errorStack: t instanceof Error ? t.stack : undefined,
+                errorType: error.constructor.name,
+                errorMessage: error instanceof Error ? error.message : String(error),
+                errorStack: error instanceof Error ? error.stack : undefined,
                 requestData: {
                     phoneNumber,
                     email,
@@ -82,7 +82,7 @@ export default function SendApplication(props) {
             });
 
             // Create user-friendly error message
-            const o = t instanceof Error ? t.message : "An unknown error occurred";
+            const o = error instanceof Error ? error.message : "An unknown error occurred";
 
             // Show error toast to user
             toast({
