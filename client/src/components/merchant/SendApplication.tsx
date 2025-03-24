@@ -76,8 +76,8 @@ export default function SendApplication(props) {
                 requestData: {
                     phoneNumber,
                     email,
-                    merchantId: currentMerchantId,
-                    amount: parseFloat(amount)
+                    merchantId: currentMerchantId, 
+                    amount: parsedAmount || parseFloat(amount)
                 }
             });
 
