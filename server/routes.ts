@@ -6575,6 +6575,20 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
       // Track if we have any real Plaid asset report data
       let hasPlaidData = false;
       
+      // First, try to get asset reports directly by user ID
+      const userAssetReports = await storage.getAssetReportsByUserId(parseInt(customerId));
+      
+      if (userAssetReports && userAssetReports.length > 0) {
+        // Add asset reports from user ID lookup
+        for (const report of userAssetReports) {
+          if (report.analysisData) {
+            assetReports.push(report);
+            hasPlaidData = true;
+          }
+        }
+      }
+      
+      // Then also check each contract for additional asset reports
       for (const contract of contracts) {
         // Get asset reports for this contract
         const contractAssetReports = await storage.getAssetReportsByContractId(contract.id);

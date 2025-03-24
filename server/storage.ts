@@ -618,6 +618,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(assetReports).where(eq(assetReports.contractId, contractId)).orderBy(desc(assetReports.createdAt));
   }
 
+  async getAssetReportsByUserId(userId: number) {
+    return await db.select().from(assetReports).where(eq(assetReports.userId, userId)).orderBy(desc(assetReports.createdAt));
+  }
+
   async getAssetReportsByAssetReportId(assetReportId: string) {
     return await db.select().from(assetReports).where(eq(assetReports.assetReportId, assetReportId)).orderBy(desc(assetReports.createdAt));
   }
