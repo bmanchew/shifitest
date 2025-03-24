@@ -1,4 +1,4 @@
-import express, { type Express, Request, Response } from "express";
+import express, { type Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { ZodError } from "zod";
@@ -12,6 +12,8 @@ import {
   insertContractSchema,
   insertApplicationProgressSchema,
   insertLogSchema,
+  insertCustomerSatisfactionSurveySchema,
+  type InsertCustomerSatisfactionSurvey
 } from "@shared/schema";
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
@@ -19,7 +21,7 @@ import { plaidService } from "./services/plaid";
 import thanksRogerService from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
-import { nlpearlService } from './services';
+import { nlpearlService, notificationService } from './services';
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
@@ -6226,6 +6228,275 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
       });
       
       res.redirect('/merchant/signup?error=verification_redirect');
+    }
+  });
+
+  // Customer Satisfaction Survey Endpoints
+  
+  // Submit survey response
+  apiRouter.post("/surveys/submit", async (req: Request, res: Response) => {
+    try {
+      const { contractId, customerId, rating, feedback, responseSource } = req.body;
+      
+      if (!contractId || !customerId || rating === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields: contractId, customerId, and rating are required"
+        });
+      }
+      
+      // Validate rating is between 1-10
+      const ratingNum = parseInt(rating);
+      if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
+        return res.status(400).json({
+          success: false,
+          message: "Rating must be a number between 1 and 10"
+        });
+      }
+      
+      // Check if the contract exists
+      const contract = await storage.getContract(parseInt(contractId));
+      if (!contract) {
+        return res.status(404).json({
+          success: false,
+          message: "Contract not found"
+        });
+      }
+      
+      // Create the survey response
+      const surveyData: InsertCustomerSatisfactionSurvey = {
+        contractId: parseInt(contractId),
+        customerId: parseInt(customerId),
+        rating: ratingNum,
+        feedback: feedback || null,
+        responseSource: responseSource || "web",
+        respondedAt: new Date(),
+      };
+      
+      const survey = await storage.createSatisfactionSurvey(surveyData);
+      
+      logger.info({
+        message: "Customer satisfaction survey submitted",
+        category: "user",
+        source: "contract",
+        metadata: {
+          contractId,
+          customerId,
+          rating: ratingNum,
+          responseSource
+        }
+      });
+      
+      return res.status(201).json({
+        success: true,
+        message: "Survey response recorded successfully",
+        data: survey
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error submitting customer survey: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error),
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "An error occurred while recording your survey response"
+      });
+    }
+  });
+
+  // Get survey for a specific contract
+  apiRouter.get("/surveys/contract/:contractId", async (req: Request, res: Response) => {
+    try {
+      const { contractId } = req.params;
+      
+      if (!contractId) {
+        return res.status(400).json({
+          success: false,
+          message: "Contract ID is required"
+        });
+      }
+      
+      const surveys = await storage.getSatisfactionSurveysByContractId(parseInt(contractId));
+      
+      return res.status(200).json({
+        success: true,
+        data: surveys
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error fetching contract surveys: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          contractId: req.params.contractId,
+          error: error instanceof Error ? error.stack : String(error),
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "An error occurred while fetching the surveys"
+      });
+    }
+  });
+
+  // Get surveys for a specific customer
+  apiRouter.get("/surveys/customer/:customerId", async (req: Request, res: Response) => {
+    try {
+      const { customerId } = req.params;
+      
+      if (!customerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Customer ID is required"
+        });
+      }
+      
+      const surveys = await storage.getSatisfactionSurveysByCustomerId(parseInt(customerId));
+      
+      return res.status(200).json({
+        success: true,
+        data: surveys
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error fetching customer surveys: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          customerId: req.params.customerId,
+          error: error instanceof Error ? error.stack : String(error),
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "An error occurred while fetching the surveys"
+      });
+    }
+  });
+
+  // Endpoint to trigger sending surveys for eligible contracts
+  apiRouter.post("/admin/trigger-satisfaction-surveys", async (req: Request, res: Response) => {
+    try {
+      // Check if the user is an admin (you may want to enhance this with proper auth middleware)
+      if (req.session.user?.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: "Only admin users can trigger surveys"
+        });
+      }
+      
+      const { daysActive } = req.body;
+      
+      // Default to 30 days if not specified
+      const daysToCheck = daysActive ? parseInt(daysActive) : 30;
+      
+      // Get contracts that are eligible for survey
+      const eligibleContracts = await storage.getActiveContractsDueForSurvey(daysToCheck);
+      
+      if (eligibleContracts.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: "No eligible contracts found for survey",
+          data: { count: 0 }
+        });
+      }
+      
+      // Track successfully sent surveys
+      const sentSurveys = [];
+      
+      // For each eligible contract, send a survey notification
+      for (const contract of eligibleContracts) {
+        try {
+          // Get the customer details
+          const customer = await storage.getUser(contract.customerId);
+          
+          if (!customer) {
+            console.warn(`Customer not found for contract ${contract.id}`);
+            continue;
+          }
+          
+          // Send survey notification via SMS and in-app
+          await notificationService.sendNotification('customer_satisfaction_survey', {
+            recipientId: customer.id,
+            recipientType: 'customer',
+            recipientPhone: customer.phone || undefined,
+            data: {
+              customerName: customer.firstName || customer.name || "Valued Customer",
+              contractNumber: contract.contractNumber,
+              contractId: contract.id,
+              customerId: customer.id
+            },
+            channels: ['sms', 'in_app']
+          });
+          
+          // Create a survey record with null rating (to be filled by customer)
+          const surveyData: InsertCustomerSatisfactionSurvey = {
+            contractId: contract.id,
+            customerId: customer.id,
+            rating: null, // Will be filled when customer responds
+            respondedAt: null,
+            sentAt: new Date()
+          };
+          
+          await storage.createSatisfactionSurvey(surveyData);
+          
+          sentSurveys.push({
+            contractId: contract.id,
+            customerId: customer.id,
+            contractNumber: contract.contractNumber
+          });
+          
+          logger.info({
+            message: `Satisfaction survey sent for contract ${contract.contractNumber}`,
+            category: "system",
+            source: "notification",
+            metadata: {
+              contractId: contract.id,
+              customerId: customer.id
+            }
+          });
+        } catch (error) {
+          logger.error({
+            message: `Error sending survey for contract ${contract.id}: ${error instanceof Error ? error.message : String(error)}`,
+            category: "system",
+            source: "notification",
+            metadata: {
+              contractId: contract.id,
+              error: error instanceof Error ? error.stack : String(error)
+            }
+          });
+        }
+      }
+      
+      return res.status(200).json({
+        success: true,
+        message: `Successfully sent ${sentSurveys.length} customer satisfaction surveys`,
+        data: {
+          count: sentSurveys.length,
+          sentSurveys
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error triggering satisfaction surveys: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "An error occurred while triggering satisfaction surveys"
+      });
     }
   });
 

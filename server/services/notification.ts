@@ -393,9 +393,19 @@ export class NotificationService {
         return `Your financing agreement has been signed and approved. Funds will be disbursed within 1-2 business days.`;
         
       case 'customer_satisfaction_survey':
+        const customerName = options.data?.customerName || recipientName;
         const contractNumber = options.data?.contractNumber || "your contract";
-        const surveyUrl = options.data?.surveyUrl || "";
-        return `ShiFi values your feedback! Please rate your satisfaction with ${contractNumber} on a scale of 1-10 by clicking this link: ${surveyUrl}`;
+        const contractId = options.data?.contractId || "";
+        const customerId = options.data?.customerId || "";
+        
+        // Build survey reply URLs for each rating (1-10)
+        const ratingLinks = [];
+        for (let i = 1; i <= 10; i++) {
+          const surveyUrl = `${process.env.APP_URL || "https://shifi.app"}/api/surveys/submit?contractId=${contractId}&customerId=${customerId}&rating=${i}&responseSource=sms`;
+          ratingLinks.push(`${i}: ${surveyUrl}`);
+        }
+        
+        return `Hi ${customerName}, ShiFi values your feedback! How satisfied are you with your financing experience (Contract #${contractNumber})? Please rate 1-10 (1=Poor, 10=Excellent) by replying with a number or using this link: ${process.env.APP_URL || "https://shifi.app"}/customer/survey/${contractId}/${customerId}`;
         
       default:
         // Generic message for other notification types
