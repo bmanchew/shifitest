@@ -19,9 +19,10 @@ interface TemplateValueObject {
 }
 
 interface ThanksRogerCreateContractResponse {
-  workspaceId: string;
+  workspaceId?: string;
   contractId: string;
   signingLink: string;
+  status?: string;
 }
 
 interface ThanksRogerSignContractOptions {
@@ -149,6 +150,7 @@ class ThanksRogerService {
 
       const data = await response.json();
       return {
+        workspaceId: workspaceId,
         contractId: data.contractId,
         signingLink: data.signingLink,
         status: 'created'
@@ -307,6 +309,67 @@ class ThanksRogerService {
       return false;
     }
   }
+
+  /**
+   * Create a financing contract with Thanks Roger
+   * This is a specialized wrapper around createContract that formats the template values for a financing contract
+   */
+  async createFinancingContract(options: {
+    templateId: string;
+    customerName: string;
+    customerEmail: string;
+    merchantName: string;
+    contractNumber: string;
+    amount: number;
+    downPayment: number;
+    financedAmount: number;
+    termMonths: number;
+    interestRate: number;
+    monthlyPayment: number;
+    sendEmail: boolean;
+  }): Promise<ThanksRogerCreateContractResponse | null> {
+    if (!this.isInitialized()) {
+      logger.error({
+        message: 'Cannot create financing contract: Thanks Roger service not initialized',
+        category: 'api',
+        source: 'thanksroger'
+      });
+      return null;
+    }
+
+    // Format financial values for the template
+    const formattedAmount = options.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    const formattedDownPayment = options.downPayment.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    const formattedFinancedAmount = options.financedAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    const formattedMonthlyPayment = options.monthlyPayment.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    
+    // Create template values for Thanks Roger
+    const templateValues = {
+      customer_name: { type: 'singletext', value: options.customerName },
+      merchant_name: { type: 'singletext', value: options.merchantName },
+      contract_number: { type: 'singletext', value: options.contractNumber },
+      total_amount: { type: 'singletext', value: formattedAmount },
+      down_payment: { type: 'singletext', value: formattedDownPayment },
+      financed_amount: { type: 'singletext', value: formattedFinancedAmount },
+      term_months: { type: 'singletext', value: options.termMonths.toString() },
+      interest_rate: { type: 'singletext', value: options.interestRate.toString() + '%' },
+      monthly_payment: { type: 'singletext', value: formattedMonthlyPayment },
+      todays_date: { type: 'singletext', value: new Date().toLocaleDateString('en-US') }
+    };
+
+    // Create the contract using the general purpose contract creation method
+    return this.createContract({
+      templateId: options.templateId,
+      templateValues: templateValues as Record<string, TemplateValueObject>,
+      createdBy: 'ShiFi Financing',
+      name: `Financing Contract #${options.contractNumber}`,
+      email: options.sendEmail ? {
+        subject: 'Your ShiFi Financing Contract',
+        message: `Dear ${options.customerName},\n\nPlease find attached your financing contract #${options.contractNumber}.\n\nThank you for choosing ShiFi.`,
+        logoUrl: 'https://app.shifi.com/logo.png'
+      } : false
+    });
+  }
 }
 
-export default new ThanksRogerService();
+export const thanksRogerService = new ThanksRogerService();

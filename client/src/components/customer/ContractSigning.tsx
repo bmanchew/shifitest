@@ -145,15 +145,40 @@ export default function ContractSigning({
       // Use the customerName prop directly
       // If no name is available, use "Customer" as default
       const customerNameToUse = customerName?.trim() || "Customer";
+      
+      // Parse the customer name into first and last names if possible
+      let firstName = customerNameToUse;
+      let lastName = "";
+      
+      // Try to split the name into first and last
+      if (customerNameToUse && customerNameToUse !== "Customer") {
+        const nameParts = customerNameToUse.split(" ");
+        if (nameParts.length > 1) {
+          firstName = nameParts[0];
+          lastName = nameParts.slice(1).join(" ");
+        }
+      }
 
       console.log("Submitting signature for contract:", contractId, "customer:", customerNameToUse);
 
       // Submit signature to API
-      const signingResponse = await apiRequest("POST", "/api/contract-signing", {
+      const signingResponse = await apiRequest<{
+        success: boolean;
+        message?: string;
+        contractId?: string;
+        signatureId?: string;
+        signingLink?: string;
+        signedAt?: string;
+        status?: string;
+      }>("POST", "/api/contract-signing", {
         contractId,
         contractNumber,
         customerName: customerNameToUse,
-        signatureData
+        firstName,
+        lastName,
+        signatureData,
+        // We don't have a phone number in the props, but the API accepts null
+        phoneNumber: null 
       });
 
       // Verify response
