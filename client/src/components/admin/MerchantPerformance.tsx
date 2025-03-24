@@ -54,7 +54,7 @@ export default function MerchantPerformance() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Query for all merchant performances
-  const { data: merchants = [], isLoading } = useQuery<MerchantPerformance[]>({
+  const { data: merchants = [], isLoading, isError, error, refetch } = useQuery<MerchantPerformance[]>({
     queryKey: ['/api/admin/merchant-performances'],
     queryFn: async () => {
       const res = await fetch('/api/admin/merchant-performances', {

@@ -7,7 +7,8 @@ async function testOpenAIIntegration() {
     console.log('🔍 Testing OpenAI integration with admin login...');
     
     // Login as admin user
-    const loginRes = await fetch('http://localhost:5000/api/auth/login', {
+    const appUrl = process.env.APP_URL || 'https://8dc3f57a-133b-45a5-ba2b-9e2b16042657-00-572nlsfm974b.janeway.replit.dev';
+    const loginRes = await fetch(`${appUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -32,7 +33,7 @@ async function testOpenAIIntegration() {
     
     // Test the underwriting recommendations endpoint
     console.log('🔍 Testing AI-powered underwriting recommendations...');
-    const recommendationsRes = await fetch('http://localhost:5000/api/admin/reports/underwriting-recommendations', {
+    const recommendationsRes = await fetch('http://localhost:5000/api/admin/underwriting-recommendations', {
       headers: { 'Cookie': cookies }
     });
     
