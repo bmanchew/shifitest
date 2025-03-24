@@ -94,7 +94,7 @@ export default function CustomerDashboard(): React.ReactNode {
   };
 
   // Fetch contract details
-  const { data: contract, isLoading: isLoadingContract } = useQuery({
+  const { data: contractData, isLoading: isLoadingContract } = useQuery({
     queryKey: ["/api/contracts", contractId],
     queryFn: async () => {
       if (!contractId) return null;
@@ -107,54 +107,31 @@ export default function CustomerDashboard(): React.ReactNode {
           throw new Error("Failed to fetch contract");
         }
         
-        // Get response text first to see raw data
-        const responseText = await res.text();
-        console.log("Raw contract response:", responseText);
+        // Parse response JSON
+        const responseData = await res.json();
         
-        // Parse text to JSON
-        const responseData = JSON.parse(responseText);
-        console.log("Parsed response:", responseData);
-        
-        // Extract the actual contract object based on response structure
-        let contractData;
+        // Extract contract data from the response
+        // API returns { contract: {...}, progress: [...] }
         if (responseData.contract) {
-          // If API returns {contract: {...}}
-          contractData = responseData.contract;
+          return responseData.contract;
         } else if (responseData.message) {
-          // If API returns error format
-          console.error("API returned message:", responseData.message);
+          // API returned an error message
+          console.error("API error:", responseData.message);
           return null;
         } else {
-          // If API returns the contract object directly
-          contractData = responseData;
+          // Unexpected response format
+          console.error("Unexpected API response format:", responseData);
+          return null;
         }
-        
-        console.log("Final contract data:", contractData);
-        
-        // Ensure number values are properly parsed
-        if (contractData) {
-          // Convert string values to numbers if needed
-          if (typeof contractData.monthlyPayment === "string") {
-            contractData.monthlyPayment = parseFloat(contractData.monthlyPayment);
-          }
-          
-          if (typeof contractData.financedAmount === "string") {
-            contractData.financedAmount = parseFloat(contractData.financedAmount);
-          }
-          
-          console.log("Monthly payment:", contractData.monthlyPayment, 
-            "Type:", typeof contractData.monthlyPayment);
-          console.log("Financed amount:", contractData.financedAmount, 
-            "Type:", typeof contractData.financedAmount);
-        }
-          
-        return contractData;
       } catch (error) {
         console.error("Error fetching contract:", error);
         return null;
       }
     },
   });
+  
+  // Rename for clarity throughout the component
+  const contract = contractData;
   
   // Auto-check for bank connection when contract loads
   useEffect(() => {
