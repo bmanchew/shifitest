@@ -6608,13 +6608,32 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
               ? JSON.parse(latestReport.analysisData) 
               : latestReport.analysisData;
             
-            // Add accounts data
-            if (analysisData.accounts) {
+            // Add accounts and transactions data
+            // In Plaid asset reports, accounts and transactions are nested under items[].accounts
+            if (analysisData.items && analysisData.items.length > 0) {
+              // Process each item (institution)
+              for (const item of analysisData.items) {
+                // Process accounts in this item
+                if (item.accounts && item.accounts.length > 0) {
+                  accountsData.push(...item.accounts);
+                  
+                  // Extract transactions from each account
+                  for (const account of item.accounts) {
+                    if (account.transactions && account.transactions.length > 0) {
+                      // We found transactions, add them to our analysis
+                      analysisData.transactions = analysisData.transactions || [];
+                      analysisData.transactions.push(...account.transactions);
+                    }
+                  }
+                }
+              }
+            } else if (analysisData.accounts) {
+              // Fallback to old structure if it exists
               accountsData.push(...analysisData.accounts);
             }
             
             // Analyze transactions data
-            if (analysisData.transactions) {
+            if (analysisData.transactions && analysisData.transactions.length > 0) {
               // Extract income and spending amounts
               const currentDate = new Date();
               const lastMonthStart = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
