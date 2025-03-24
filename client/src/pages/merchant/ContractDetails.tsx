@@ -157,8 +157,12 @@ export default function ContractDetails() {
             <TabsTrigger value="details">Contract Details</TabsTrigger>
             <TabsTrigger value="application">Application Progress</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="underwriting">Underwriting</TabsTrigger>
-            <TabsTrigger value="payments">Payment Schedule</TabsTrigger>
+            {user?.role === 'admin' && (
+              <>
+                <TabsTrigger value="underwriting">Underwriting</TabsTrigger>
+                <TabsTrigger value="payments">Payment Schedule</TabsTrigger>
+              </>
+            )}
           </TabsList>
 
           <TabsContent value="details" className="space-y-6">
@@ -255,36 +259,40 @@ export default function ContractDetails() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="underwriting">
-            <Card>
-              <CardHeader>
-                <CardTitle>Underwriting Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <UnderwritingViewFactory 
-                  userRole={user?.role || 'merchant'} 
-                  contractId={parseInt(contractId!)} 
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {user?.role === 'admin' && (
+            <TabsContent value="underwriting">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Underwriting Information</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <UnderwritingViewFactory 
+                    userRole={user?.role || 'merchant'} 
+                    contractId={parseInt(contractId!)} 
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
-          <TabsContent value="payments">
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Schedule</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PaymentSchedule 
-                  amount={contract.financedAmount} 
-                  downPayment={contract.downPayment}
-                  termMonths={contract.termMonths} 
-                  interestRate={contract.interestRate} 
-                  contractId={parseInt(contractId!)}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {user?.role === 'admin' && (
+            <TabsContent value="payments">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Payment Schedule</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <PaymentSchedule 
+                    amount={contract.financedAmount} 
+                    downPayment={contract.downPayment}
+                    termMonths={contract.termMonths} 
+                    interestRate={contract.interestRate} 
+                    contractId={parseInt(contractId!)}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </MerchantLayout>
