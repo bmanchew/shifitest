@@ -412,17 +412,22 @@ export default function CustomerDashboard(): React.ReactNode {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-4 text-center">
-                    <PiggyBank className="h-10 w-10 mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-500">Connect your bank accounts to view your financial summary</p>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="mt-3"
-                      onClick={() => handleViewBankConnection(contract?.id || 0)}
-                    >
-                      Connect Bank
-                    </Button>
+                  <div className="space-y-3">
+                    <div className="flex items-center text-sm text-green-600 mb-2">
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      <span className="font-medium">Bank Connected</span>
+                    </div>
+                    <div className="bg-gray-50 rounded p-3">
+                      <p className="text-sm text-gray-600">Your bank account is connected. View details or make changes to your connection.</p>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-3 w-full"
+                        onClick={() => handleViewBankConnection(contract?.id || 0)}
+                      >
+                        View Bank Details
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -510,21 +515,14 @@ export default function CustomerDashboard(): React.ReactNode {
                     <p className="text-sm text-gray-500">
                       {financialData?.hasPlaidData ? "No recurring bills detected" : "Connect your bank accounts to detect recurring bills"}
                     </p>
-                    {!financialData?.hasPlaidData ? (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="mt-3"
-                        onClick={() => handleViewBankConnection(contract?.id || 0)}
-                      >
-                        Connect Bank
-                      </Button>
-                    ) : (
-                      <div className="mt-3 text-xs bg-green-50 text-green-800 p-2 rounded-md flex items-center">
-                        <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
-                        Bank connected
-                      </div>
-                    )}
+                        <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-3"
+                      onClick={() => handleViewBankConnection(contract?.id || 0)}
+                    >
+                      View Bank Details
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -581,16 +579,14 @@ export default function CustomerDashboard(): React.ReactNode {
                       ? "We're analyzing your financial data to generate personalized suggestions. Check back soon!"
                       : "Connect your financial accounts to receive customized suggestions based on your spending patterns and financial goals."}
                   </p>
-                  {!financialData?.hasPlaidData && (
-                    <Button 
-                      className="mt-4" 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleViewBankConnection(contract?.id || 0)}
-                    >
-                      Connect Accounts
-                    </Button>
-                  )}
+                  <Button 
+                    className="mt-4" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewBankConnection(contract?.id || 0)}
+                  >
+                    View Bank Details
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -606,9 +602,7 @@ export default function CustomerDashboard(): React.ReactNode {
           <DialogTitle>
             {isCheckingBankConnection 
               ? "Checking Bank Connection..." 
-              : bankConnectionDetails 
-                ? "Your Bank Connection" 
-                : "Connect Your Bank Account"
+              : "Your Bank Connection"
             }
           </DialogTitle>
         </DialogHeader>
@@ -618,9 +612,9 @@ export default function CustomerDashboard(): React.ReactNode {
             <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-sm text-gray-600">Checking for existing bank connections...</p>
           </div>
-        ) : activeBankContractId && (
+        ) : (
           <BankConnection 
-            contractId={activeBankContractId} 
+            contractId={activeBankContractId || 0} 
             progressId={0}
             existingConnection={bankConnectionDetails}
             onComplete={() => {
