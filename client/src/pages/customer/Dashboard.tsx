@@ -66,17 +66,10 @@ export default function CustomerDashboard(): React.ReactNode {
             
             // Update the financial data if needed
             if (!financialData || !financialData.hasPlaidData) {
-              // Create a minimal financial data object from the Plaid data
-              const minimalFinancialData = {
-                hasPlaidData: true,
-                accounts: {
-                  totalBalance: data.plaidData.totalBalance || 0,
-                  totalAvailableBalance: data.plaidData.totalAvailableBalance || 0,
-                  totalAccounts: data.plaidData.totalAccounts || 1
-                }
-              };
-              
-              // This could be enhanced to include more data as needed
+              // Refetch financial data to get complete cash flow and bills information
+              if (contract?.customerId) {
+                refetchFinancialData();
+              }
             }
           }
         } else {
@@ -146,6 +139,12 @@ export default function CustomerDashboard(): React.ReactNode {
                 // Also save the Plaid data if available
                 if (data.plaidData) {
                   setPlaidAccountData(data.plaidData);
+                  
+                  // If we have bank connection but no financial data with Plaid details,
+                  // trigger a refresh of financial data to get cash flow and bills information
+                  if (!financialData || !financialData.hasPlaidData) {
+                    refetchFinancialData();
+                  }
                 }
               }
             }
@@ -160,7 +159,7 @@ export default function CustomerDashboard(): React.ReactNode {
   }, [contract, bankConnectionDetails, isCheckingBankConnection]);
 
   // Fetch customer's financial data (includes points, accounts, transactions, insights)
-  const { data: financialData, isLoading: isLoadingFinancialData } = useQuery({
+  const { data: financialData, isLoading: isLoadingFinancialData, refetch: refetchFinancialData } = useQuery({
     queryKey: ["/api/customer/financial-data", contract?.customerId],
     queryFn: async () => {
       if (!contract?.customerId) return null;
