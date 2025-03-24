@@ -174,6 +174,21 @@ class ThanksRogerService {
       throw new Error('Thanks Roger service not initialized');
     }
 
+    // Ensure signerName is not empty or undefined
+    const signerName = options.signerName && options.signerName.trim() ? 
+                        options.signerName : 
+                        "Customer";
+                        
+    logger.debug({
+      message: `Signing contract with Thanks Roger`,
+      category: 'contract',
+      source: 'thanksroger',
+      metadata: { 
+        contractId: options.contractId,
+        signerName 
+      }
+    });
+
     try {
       const response = await fetch(`${this.baseUrl}/workspaces/${this.defaultWorkspaceId}/contracts/${options.contractId}/sign`, {
         method: 'POST',
@@ -183,7 +198,7 @@ class ThanksRogerService {
         },
         body: JSON.stringify({
           signature: options.signatureData,
-          signerName: options.signerName,
+          signerName: signerName,
           signedAt: options.signatureDate
         })
       });
