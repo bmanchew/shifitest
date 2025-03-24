@@ -26,6 +26,7 @@ export type NotificationType =
   | 'customer_payment_reminder'
   | 'customer_payment_confirmation'
   | 'customer_contract_signed'
+  | 'customer_satisfaction_survey' // New notification type for satisfaction surveys
   
   // Admin notifications
   | 'admin_new_merchant'
@@ -391,6 +392,11 @@ export class NotificationService {
       case 'customer_contract_signed':
         return `Your financing agreement has been signed and approved. Funds will be disbursed within 1-2 business days.`;
         
+      case 'customer_satisfaction_survey':
+        const contractNumber = options.data?.contractNumber || "your contract";
+        const surveyUrl = options.data?.surveyUrl || "";
+        return `ShiFi values your feedback! Please rate your satisfaction with ${contractNumber} on a scale of 1-10 by clicking this link: ${surveyUrl}`;
+        
       default:
         // Generic message for other notification types
         return options.data?.message || `You have a new notification from ShiFi.`;
@@ -627,6 +633,10 @@ export class NotificationService {
         subject = 'Your ShiFi Contract Has Been Signed';
         break;
         
+      case 'customer_satisfaction_survey':
+        subject = 'Your ShiFi Feedback Is Important to Us';
+        break;
+        
       // Admin notifications
       case 'admin_new_merchant':
         subject = 'New Merchant Registration on ShiFi';
@@ -692,6 +702,8 @@ export class NotificationService {
         return 'Payment Confirmed';
       case 'customer_contract_signed':
         return 'Contract Signed';
+      case 'customer_satisfaction_survey':
+        return 'Your Feedback Matters';
       case 'admin_new_merchant':
         return 'New Merchant';
       case 'admin_document_review':
@@ -742,6 +754,8 @@ export class NotificationService {
         return 'Your payment has been successfully processed.';
       case 'customer_contract_signed':
         return 'Your contract has been signed and is now active.';
+      case 'customer_satisfaction_survey':
+        return 'Please take a moment to rate your satisfaction with our services (1-10). Your feedback helps us improve.';
       case 'admin_new_merchant':
         return 'A new merchant has registered and requires review.';
       case 'admin_document_review':
