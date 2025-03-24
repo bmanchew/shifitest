@@ -33,8 +33,180 @@ import {
   ResponsiveContainer 
 } from "recharts";
 
-// Placeholder -  This component needs to be implemented
-const MerchantPerformanceCard = () => <div>Merchant Performance Card (Implementation Needed)</div>;
+// Merchant Performance Card using real data
+const MerchantPerformanceCard = ({ merchantId }: { merchantId: number }) => {
+  const { data: merchantPerformance, isLoading } = useQuery({
+    queryKey: ["/api/merchant", merchantId, "analytics"],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`/api/merchant/${merchantId}/analytics`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          // Return default structure if API not available yet
+          return {
+            score: 0,
+            grade: 'N/A',
+            metrics: {
+              defaultRate: 0,
+              latePaymentRate: 0,
+              avgContractValue: 0,
+              totalContracts: 0,
+              activeContracts: 0,
+              completedContracts: 0,
+              cancelledContracts: 0,
+              riskAdjustedReturn: 0,
+              customerSatisfactionScore: 0
+            }
+          };
+        }
+        return res.json();
+      } catch (error) {
+        console.error("Error fetching merchant analytics:", error);
+        // Return default structure if API fails
+        return {
+          score: 0,
+          grade: 'N/A',
+          metrics: {
+            defaultRate: 0,
+            latePaymentRate: 0,
+            avgContractValue: 0,
+            totalContracts: 0,
+            activeContracts: 0,
+            completedContracts: 0,
+            cancelledContracts: 0,
+            riskAdjustedReturn: 0,
+            customerSatisfactionScore: 0
+          }
+        };
+      }
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-40" />
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div><Skeleton className="h-20 w-full" /></div>
+            <div><Skeleton className="h-20 w-full" /></div>
+            <div><Skeleton className="h-20 w-full" /></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const formatPercent = (value: number) => `${value.toFixed(1)}%`;
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(amount);
+  };
+
+  const getGradeColor = (grade: string) => {
+    switch (grade) {
+      case 'A': return 'text-green-600 bg-green-100';
+      case 'B': return 'text-blue-600 bg-blue-100';
+      case 'C': return 'text-yellow-600 bg-yellow-100';
+      case 'D': return 'text-orange-600 bg-orange-100';
+      case 'F': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const metrics = merchantPerformance?.metrics || {
+    defaultRate: 0,
+    latePaymentRate: 0,
+    avgContractValue: 0,
+    totalContracts: 0,
+    activeContracts: 0,
+    completedContracts: 0,
+    cancelledContracts: 0,
+    riskAdjustedReturn: 0,
+    customerSatisfactionScore: 0
+  };
+
+  const score = merchantPerformance?.score || 0;
+  const grade = merchantPerformance?.grade || 'N/A';
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-center">
+          <div>
+            <CardTitle>Merchant Performance</CardTitle>
+            <CardDescription>Overall financing performance metrics</CardDescription>
+          </div>
+          <div className={`px-4 py-2 rounded-full font-bold text-2xl ${getGradeColor(grade)}`}>
+            {grade}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-sm font-medium text-gray-500">Risk Metrics</h3>
+            <div className="mt-2 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Default Rate</span>
+                <span className="font-semibold">{formatPercent(metrics.defaultRate)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Late Payment Rate</span>
+                <span className="font-semibold">{formatPercent(metrics.latePaymentRate)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Risk-Adjusted Return</span>
+                <span className="font-semibold">{formatPercent(metrics.riskAdjustedReturn)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-sm font-medium text-gray-500">Volume Metrics</h3>
+            <div className="mt-2 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Total Contracts</span>
+                <span className="font-semibold">{metrics.totalContracts}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Active Contracts</span>
+                <span className="font-semibold">{metrics.activeContracts}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Completed Contracts</span>
+                <span className="font-semibold">{metrics.completedContracts}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-sm font-medium text-gray-500">Value Metrics</h3>
+            <div className="mt-2 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Avg Contract Value</span>
+                <span className="font-semibold">{formatCurrency(metrics.avgContractValue)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Customer Satisfaction</span>
+                <span className="font-semibold">{metrics.customerSatisfactionScore.toFixed(1)}/10</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Performance Score</span>
+                <span className="font-semibold">{score.toFixed(1)}/100</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 
 export default function Reports() {
@@ -272,7 +444,7 @@ export default function Reports() {
 
         {/* Merchant Performance Card */}
         <div className="px-4 sm:px-0 mb-6">
-          <MerchantPerformanceCard />
+          <MerchantPerformanceCard merchantId={merchantId} />
         </div>
 
         {isLoading ? (
