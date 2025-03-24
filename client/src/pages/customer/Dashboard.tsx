@@ -294,7 +294,7 @@ export default function CustomerDashboard() {
             <CardContent>
               {financialData?.insights && financialData.insights.length > 0 ? (
                 <div className="space-y-3">
-                  {financialData.insights.slice(0, 2).map((insight, index) => (
+                  {financialData.insights.slice(0, 2).map((insight: any, index: number) => (
                     <div key={index} className="bg-white p-3 rounded-lg shadow-sm">
                       <h3 className="text-sm font-medium text-amber-800">{insight.title}</h3>
                       <p className="text-sm text-gray-600">{insight.description}</p>
@@ -322,343 +322,180 @@ export default function CustomerDashboard() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </div>
-  );
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-primary-600 text-white p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center">
-            <Logo size={32} variant="white" className="mr-2" />
-            <h1 className="text-2xl font-bold">ShiFi</h1>
-          </div>
-          <div className="mt-8">
-            <h2 className="text-xl font-semibold">Your Financing Contract</h2>
-            <p className="text-sm opacity-90 mt-1">
-              {contract.merchantName} • Contract #{contract.contractNumber}
-            </p>
-          </div>
-          <div className="mt-4 bg-white/10 p-4 rounded-lg grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <p className="text-sm opacity-75">Remaining Balance</p>
-              <p className="text-2xl font-bold">{formatCurrency(remainingBalance)}</p>
-            </div>
-            <div>
-              <p className="text-sm opacity-75">Next Payment</p>
-              <p className="text-2xl font-bold">{formatCurrency(contract.monthlyPayment)}</p>
-              <p className="text-xs opacity-75">Due {format(addMonths(new Date(), 1), "MMM d, yyyy")}</p>
-            </div>
-            <div className="flex justify-end items-center">
-              <Button 
-                className="bg-white text-primary-600 hover:bg-white/90"
-                onClick={handleMakePayment}
-              >
-                <CreditCard className="mr-2 h-4 w-4" />
-                Make Payment
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Points Banner */}
-      {pointsData?.points > 0 && (
-        <div className="bg-green-100 p-4 text-center">
-          <p className="text-green-800">
-            Congratulations! You earned {pointsData.points} points for setting up automatic payments!
-          </p>
-        </div>
-      )}
-
-      <div className="max-w-6xl mx-auto p-6">
-        <Tabs defaultValue="overview" className="mt-6">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="payments">Payment Schedule</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Contract Details</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Purchase Amount</span>
-                      <span className="text-sm font-medium">{formatCurrency(contract.amount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Down Payment</span>
-                      <span className="text-sm font-medium">{formatCurrency(contract.downPayment)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Financed Amount</span>
-                      <span className="text-sm font-medium">{formatCurrency(contract.financedAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Term</span>
-                      <span className="text-sm font-medium">{contract.termMonths} Months</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Interest Rate</span>
-                      <span className="text-sm font-medium">{contract.interestRate}%</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t border-gray-100">
-                      <span className="text-sm font-medium">Monthly Payment</span>
-                      <span className="text-sm font-medium">{formatCurrency(contract.monthlyPayment)}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Payment Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Original Balance</span>
-                      <span className="text-sm font-medium">{formatCurrency(contract.financedAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Paid to Date</span>
-                      <span className="text-sm font-medium">{formatCurrency(contract.financedAmount - remainingBalance)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500">Remaining Payments</span>
-                      <span className="text-sm font-medium">{contract.termMonths - 0}</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t border-gray-100">
-                      <span className="text-sm font-medium">Current Balance</span>
-                      <span className="text-sm font-medium">{formatCurrency(remainingBalance)}</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <Button 
-                      variant="outline" 
-                      className="w-full"
-                      onClick={handleEarlyPayoff}
-                    >
-                      <DollarSign className="mr-2 h-4 w-4" />
-                      Pay Off Early
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Merchant Information</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div>
-                      <span className="text-sm text-gray-500 block">Merchant</span>
-                      <span className="text-sm font-medium">{contract.merchantName}</span>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-500 block">Contract Number</span>
-                      <span className="text-sm font-medium">{contract.contractNumber}</span>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-500 block">Status</span>
-                      <Badge variant="success" className="mt-1">Active</Badge>
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <Button 
-                      variant="outline" 
-                      className="w-full" 
-                      onClick={() => window.open('https://techsolutionsinc.com', '_blank')}
-                    >
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Visit Merchant
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card className="mt-6">
+        {/* Cash Management Tools and Financial Data Section */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold mb-4 flex items-center">
+            <Wallet className="mr-2 h-5 w-5 text-primary" />
+            Cash Management Tools
+          </h2>
+          <div className="grid gap-6 md:grid-cols-3">
+            {/* Account Balance Overview */}
+            <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Next Payment</CardTitle>
+                <CardTitle className="text-base flex items-center">
+                  <PiggyBank className="h-4 w-4 mr-2 text-primary" />
+                  Account Summary
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="bg-gray-50 rounded-lg p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center">
-                  <div className="mb-4 sm:mb-0">
-                    <p className="text-sm text-gray-500">Payment Amount</p>
-                    <p className="text-xl font-medium">{formatCurrency(contract.monthlyPayment)}</p>
-                  </div>
-                  <div className="mb-4 sm:mb-0">
-                    <p className="text-sm text-gray-500">Due Date</p>
-                    <p className="text-xl font-medium">{format(addMonths(new Date(), 1), "MMMM d, yyyy")}</p>
-                  </div>
-                  <div className="mb-4 sm:mb-0">
-                    <p className="text-sm text-gray-500">Status</p>
-                    <Badge variant="warning" className="mt-1">Upcoming</Badge>
-                  </div>
-                  <div>
-                    <Button onClick={handleMakePayment}>
-                      Make Payment
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="payments" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Schedule</CardTitle>
-                <CardDescription>
-                  Your complete payment schedule for the contract term
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-lg border overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3">
-                    <div className="grid grid-cols-5 text-sm font-medium text-gray-500">
-                      <div>Payment #</div>
-                      <div>Due Date</div>
-                      <div>Amount</div>
-                      <div>Status</div>
-                      <div></div>
+                {financialData?.accounts ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Total Balance</span>
+                      <span className="font-medium">
+                        {formatCurrency(financialData.accounts.totalBalance || 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Available Balance</span>
+                      <span className="font-medium">
+                        {formatCurrency(financialData.accounts.totalAvailableBalance || 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Accounts</span>
+                      <span className="font-medium">{financialData.accounts.totalAccounts || 0}</span>
                     </div>
                   </div>
-                  <div className="divide-y">
-                    {paymentSchedule.map((payment) => (
-                      <div key={payment.paymentNumber} className="px-4 py-3">
-                        <div className="grid grid-cols-5 text-sm items-center">
-                          <div>{payment.paymentNumber}</div>
-                          <div>{format(payment.dueDate, "MMM d, yyyy")}</div>
-                          <div>{formatCurrency(payment.amount)}</div>
-                          <div>
-                            {payment.status === "paid" && (
-                              <Badge variant="success">Paid</Badge>
-                            )}
-                            {payment.status === "upcoming" && (
-                              <Badge variant="warning">Upcoming</Badge>
-                            )}
-                            {payment.status === "scheduled" && (
-                              <Badge variant="secondary">Scheduled</Badge>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            {payment.status === "upcoming" && (
-                              <Button size="sm" onClick={handleMakePayment}>Pay Now</Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="documents" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Contract Documents</CardTitle>
-                <CardDescription>
-                  View and download your contract documents
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingDocument ? (
-                  <div className="flex justify-center items-center py-8">
-                    <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
-                    <span className="ml-2 text-sm text-gray-500">Loading document...</span>
-                  </div>
-                ) : !documentData || !documentData.success ? (
-                  <Alert className="mb-4">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Document Not Available</AlertTitle>
-                    <AlertDescription>
-                      {documentData?.message || "Your signed contract document is not yet available."}
-                    </AlertDescription>
-                  </Alert>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="border rounded-lg p-4 flex justify-between items-center">
-                      <div className="flex items-center">
-                        <FileText className="h-8 w-8 text-gray-400 mr-3" />
-                        <div>
-                          <p className="font-medium">Signed Financing Contract</p>
-                          <p className="text-sm text-gray-500">
-                            Signed on {documentData.signedAt 
-                              ? format(new Date(documentData.signedAt), "MMM d, yyyy") 
-                              : format(new Date(), "MMM d, yyyy")}
-                          </p>
-                        </div>
-                      </div>
-                      <Button variant="outline" onClick={handleDownloadContract}>
-                        <Download className="mr-2 h-4 w-4" />
-                        View Document
-                      </Button>
-                    </div>
-
-                    <div className="border rounded-lg p-4 flex justify-between items-center">
-                      <div className="flex items-center">
-                        <FileText className="h-8 w-8 text-gray-400 mr-3" />
-                        <div>
-                          <p className="font-medium">Terms & Conditions</p>
-                          <p className="text-sm text-gray-500">General contract terms</p>
-                        </div>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        disabled={!documentData || !documentData.success}
-                        onClick={() => {
-                          toast({
-                            title: "Document Access",
-                            description: "Terms & Conditions are included in your signed contract document.",
-                          });
-                          handleDownloadContract();
-                        }}
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        View
-                      </Button>
-                    </div>
-
-                    <div className="border rounded-lg p-4 flex justify-between items-center">
-                      <div className="flex items-center">
-                        <CalendarRange className="h-8 w-8 text-gray-400 mr-3" />
-                        <div>
-                          <p className="font-medium">Payment Schedule</p>
-                          <p className="text-sm text-gray-500">Full payment schedule</p>
-                        </div>
-                      </div>
-                      <Button 
-                        variant="outline"
-                        onClick={() => {
-                          toast({
-                            title: "Payment Schedule",
-                            description: "Your payment schedule can be viewed in the Payments tab.",
-                          });
-                        }}
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        View
-                      </Button>
-                    </div>
+                  <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <PiggyBank className="h-10 w-10 mb-2 text-gray-400" />
+                    <p className="text-sm text-gray-500">Connect your bank accounts to view your financial summary</p>
+                    <Button variant="outline" size="sm" className="mt-3">
+                      Connect Bank
+                    </Button>
                   </div>
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+
+            {/* Cash Flow and Insights */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center">
+                  <TrendingUp className="h-4 w-4 mr-2 text-primary" />
+                  Cash Flow
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {financialData?.cashFlow ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Monthly Income</span>
+                      <div className="flex items-center">
+                        <ArrowUp className="h-3 w-3 mr-1 text-green-500" />
+                        <span className="font-medium text-green-600">
+                          {formatCurrency(financialData.cashFlow.monthlyIncome || 0)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Monthly Expenses</span>
+                      <div className="flex items-center">
+                        <ArrowDown className="h-3 w-3 mr-1 text-red-500" />
+                        <span className="font-medium text-red-600">
+                          {formatCurrency(financialData.cashFlow.monthlyExpenses || 0)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Net Cash Flow</span>
+                        <span className={`font-medium ${
+                          (financialData.cashFlow.monthlyIncome || 0) - 
+                          (financialData.cashFlow.monthlyExpenses || 0) > 0 
+                            ? 'text-green-600' 
+                            : 'text-red-600'
+                        }`}>
+                          {formatCurrency(
+                            (financialData.cashFlow.monthlyIncome || 0) - 
+                            (financialData.cashFlow.monthlyExpenses || 0)
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <BarChart className="h-10 w-10 mb-2 text-gray-400" />
+                    <p className="text-sm text-gray-500">Connect your accounts to view cash flow analysis</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Upcoming Bills */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center">
+                  <CalendarRange className="h-4 w-4 mr-2 text-primary" />
+                  Upcoming Bills
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {financialData?.upcomingBills && financialData.upcomingBills.length > 0 ? (
+                  <div className="space-y-3">
+                    {financialData.upcomingBills.slice(0, 3).map((bill: any, index: number) => (
+                      <div key={index} className="flex justify-between items-center py-1">
+                        <div>
+                          <p className="text-sm font-medium">{bill.name}</p>
+                          <p className="text-xs text-gray-500">{format(new Date(bill.dueDate), "MMM d, yyyy")}</p>
+                        </div>
+                        <span className="text-sm font-medium">{formatCurrency(bill.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <CalendarRange className="h-10 w-10 mb-2 text-gray-400" />
+                    <p className="text-sm text-gray-500">No upcoming bills detected</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Personalized Financial Suggestions */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold mb-4 flex items-center">
+            <Lightbulb className="mr-2 h-5 w-5 text-amber-500" />
+            Personalized Suggestions
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            {financialData?.suggestions && financialData.suggestions.length > 0 ? (
+              financialData.suggestions.map((suggestion: any, index: number) => (
+                <Card key={index} className="border-l-4 border-l-amber-500">
+                  <CardContent className="p-4">
+                    <h3 className="font-medium mb-1">{suggestion.title}</h3>
+                    <p className="text-sm text-gray-600 mb-3">{suggestion.description}</p>
+                    {suggestion.actionUrl && (
+                      <Button variant="link" className="text-amber-600 p-0 h-auto" asChild>
+                        <a href={suggestion.actionUrl}>
+                          {suggestion.actionText || "Learn more"} <ExternalLink className="ml-1 h-3 w-3" />
+                        </a>
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card className="md:col-span-2">
+                <CardContent className="flex flex-col items-center justify-center p-6 text-center">
+                  <Lightbulb className="h-12 w-12 mb-3 text-amber-200" />
+                  <h3 className="font-medium mb-2">Personalized Suggestions Coming Soon</h3>
+                  <p className="text-sm text-gray-500">
+                    Connect your financial accounts to receive customized suggestions based on your spending patterns and financial goals.
+                  </p>
+                  <Button className="mt-4" variant="outline" size="sm">
+                    Connect Accounts
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
