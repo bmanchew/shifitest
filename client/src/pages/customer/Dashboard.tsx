@@ -106,7 +106,16 @@ export default function CustomerDashboard(): React.ReactNode {
         if (!res.ok) {
           throw new Error("Failed to fetch contract");
         }
-        return res.json();
+        const contractData = await res.json();
+        
+        // Log contract data to debug NaN issues
+        console.log("Contract data:", contractData);
+        console.log("Monthly payment:", contractData.monthlyPayment, 
+          "Type:", typeof contractData.monthlyPayment);
+        console.log("Financed amount:", contractData.financedAmount, 
+          "Type:", typeof contractData.financedAmount);
+          
+        return contractData;
       } catch (error) {
         console.error("Error fetching contract:", error);
         return null;
@@ -181,12 +190,15 @@ export default function CustomerDashboard(): React.ReactNode {
   });
 
 
-  // Format currency values
-  const formatCurrency = (value: number) => {
+  // Format currency values with validation for NaN and undefined
+  const formatCurrency = (value: number | undefined | null) => {
+    // Ensure we have a valid number (handles NaN, null, undefined)
+    const validValue = (typeof value === 'number' && !isNaN(value)) ? value : 0;
+    
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
-    }).format(value);
+    }).format(validValue);
   };
 
   // Generate payment schedule
@@ -205,12 +217,22 @@ export default function CustomerDashboard(): React.ReactNode {
   // Payment schedule
   const paymentSchedule = generatePaymentSchedule();
 
-  // Calculate remaining balance
+  // Calculate remaining balance with validation for NaN values
   const calculateRemainingBalance = () => {
     if (!contract) return 0;
-
+    
+    // Get financed amount with validation
+    const financedAmount = (typeof contract.financedAmount === 'number' && !isNaN(contract.financedAmount)) 
+      ? contract.financedAmount 
+      : 0;
+      
+    // Get monthly payment with validation
+    const monthlyPayment = (typeof contract.monthlyPayment === 'number' && !isNaN(contract.monthlyPayment))
+      ? contract.monthlyPayment
+      : 0;
+    
     const totalPayments = paymentSchedule.filter(p => p.status === "paid").length;
-    return contract.financedAmount - (totalPayments * contract.monthlyPayment);
+    return financedAmount - (totalPayments * monthlyPayment);
   };
 
   const remainingBalance = calculateRemainingBalance();
