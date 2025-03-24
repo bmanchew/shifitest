@@ -13,12 +13,27 @@ app.use(cookieParser()); // Add cookie-parser middleware
 const requiredEnvVars = [
   "PLAID_CLIENT_ID",
   "PLAID_SECRET",
+  "PLAID_ENVIRONMENT", // Explicitly require PLAID_ENVIRONMENT
   "PREFI_API_KEY",
   "NLPEARL_ACCOUNT_ID",
   "NLPEARL_API_KEY",
   "NLPEARL_CAMPAIGN_ID",
   // The CFPB API is public and doesn't require an API key
 ];
+
+// Validate Plaid environment format
+const validPlaidEnvironments = ['sandbox', 'development', 'production'];
+if (process.env.PLAID_ENVIRONMENT && !validPlaidEnvironments.includes(process.env.PLAID_ENVIRONMENT)) {
+  logger.error({
+    message: `Invalid PLAID_ENVIRONMENT value: ${process.env.PLAID_ENVIRONMENT}. Must be one of: ${validPlaidEnvironments.join(', ')}`,
+    category: "system",
+    metadata: {
+      currentValue: process.env.PLAID_ENVIRONMENT,
+      validValues: validPlaidEnvironments
+    },
+    tags: ["startup", "configuration", "error"]
+  });
+}
 
 const missingEnvVars = requiredEnvVars.filter(
   (varName) => !process.env[varName],
@@ -297,10 +312,22 @@ async function startServer() {
     // Increase max listeners to prevent warnings
     server.setMaxListeners(20);
 
-    // Improved port selection logic that doesn't create multiple server instances
-    const basePort = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
+    // Production deployment must use port 5000 consistently for Cloud Run
+    const isProd = process.env.NODE_ENV === 'production';
+    const basePort = isProd ? 5000 : (process.env.PORT ? parseInt(process.env.PORT, 10) : 5000);
     let currentPort = basePort;
-    const maxPortAttempts = 10; // Limit port attempts to prevent infinite loops
+    const maxPortAttempts = isProd ? 1 : 10; // In production, don't attempt different ports
+    
+    // Log important configuration on startup
+    logger.info({
+      message: `Starting server in environment: ${process.env.NODE_ENV || 'development'}`,
+      category: "system",
+      metadata: {
+        plaidEnvironment: process.env.PLAID_ENVIRONMENT || 'not set',
+        portConfiguration: 'internal 5000 → external 80'
+      },
+      tags: ["startup", "configuration"]
+    });
 
     const findAvailablePort = async (): Promise<number> => {
       return new Promise((resolve, reject) => {
@@ -343,29 +370,33 @@ async function startServer() {
     try {
       // Find an available port first
       currentPort = await findAvailablePort();
-
+      
+      // For production deployment, always use port 5000 which is mapped to 80 externally
+      const serverPort = isProd ? 5000 : currentPort;
+      
       // Start the server only once on the available port
       const httpServer = server.listen(
         {
-          port: currentPort,
+          port: serverPort,
           host: "0.0.0.0",
           reusePort: false,
         },
         () => {
           const serverAddress = httpServer.address();
-          const serverPort =
+          const actualPort =
             typeof serverAddress === "object" && serverAddress
               ? serverAddress.port
-              : currentPort;
-          log(`Server listening on http://0.0.0.0:${serverPort}`);
+              : serverPort;
+          log(`Server listening on http://0.0.0.0:${actualPort}`);
           logger.info({
-            message: `ShiFi server started on port ${serverPort}`,
+            message: `ShiFi server started on port ${actualPort}`,
             category: "system",
             metadata: {
               environment: app.get("env"),
               nodeVersion: process.version,
               address: "0.0.0.0",
-              port: serverPort,
+              port: actualPort,
+              deployment: isProd ? 'cloud-run' : 'development'
             },
             tags: ["startup", "server"],
           });
