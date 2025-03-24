@@ -1,26 +1,18 @@
 import { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 
 interface FinancingCalculatorProps {
   amount: number;
-  open: boolean;
-  onClose: () => void;
   onConfirm: () => void;
+  isSubmitting?: boolean;
 }
 
 export default function FinancingCalculator({
   amount,
-  open,
-  onClose,
   onConfirm,
+  isSubmitting = false
 }: FinancingCalculatorProps) {
   // Default values
   const [downPaymentPercent] = useState(15); // 15% down payment
@@ -46,58 +38,59 @@ export default function FinancingCalculator({
     }
   }, [amount, downPaymentPercent, termMonths, interestRate]);
   
+  if (amount <= 0) {
+    return null;
+  }
+  
   return (
-    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Financing Calculator</DialogTitle>
-        </DialogHeader>
-        
-        <div className="space-y-4 my-4">
-          <div className="bg-gray-50 p-4 rounded-md">
-            <div className="flex justify-between mb-2">
-              <span className="text-sm text-gray-600">Purchase Amount</span>
-              <span className="font-medium">{formatCurrency(amount)}</span>
-            </div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm text-gray-600">Down Payment ({downPaymentPercent}%)</span>
-              <span className="font-medium">{formatCurrency(downPayment)}</span>
-            </div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm text-gray-600">Financed Amount</span>
-              <span className="font-medium">{formatCurrency(financedAmount)}</span>
-            </div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm text-gray-600">Term</span>
-              <span className="font-medium">{termMonths} months</span>
-            </div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm text-gray-600">Interest Rate</span>
-              <span className="font-medium">{interestRate}%</span>
-            </div>
-            <div className="flex justify-between pt-2 border-t border-gray-200 mt-2">
-              <span className="font-medium">Monthly Payment</span>
-              <span className="font-medium">{formatCurrency(monthlyPayment)}</span>
-            </div>
+    <Card className="shadow h-full">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-xl">Financing Calculator</CardTitle>
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        <div className="bg-gray-50 p-4 rounded-md">
+          <div className="flex justify-between mb-2">
+            <span className="text-sm text-gray-600">Purchase Amount</span>
+            <span className="font-medium">{formatCurrency(amount)}</span>
           </div>
-          
-          <div className="text-sm text-gray-600">
-            <p>
-              Your customer will be offered a {termMonths}-month financing option 
-              with {interestRate}% interest and a {downPaymentPercent}% down payment.
-            </p>
+          <div className="flex justify-between mb-2">
+            <span className="text-sm text-gray-600">Down Payment ({downPaymentPercent}%)</span>
+            <span className="font-medium">{formatCurrency(downPayment)}</span>
+          </div>
+          <div className="flex justify-between mb-2">
+            <span className="text-sm text-gray-600">Financed Amount</span>
+            <span className="font-medium">{formatCurrency(financedAmount)}</span>
+          </div>
+          <div className="flex justify-between mb-2">
+            <span className="text-sm text-gray-600">Term</span>
+            <span className="font-medium">{termMonths} months</span>
+          </div>
+          <div className="flex justify-between mb-2">
+            <span className="text-sm text-gray-600">Interest Rate</span>
+            <span className="font-medium">{interestRate}%</span>
+          </div>
+          <div className="flex justify-between pt-2 border-t border-gray-200 mt-2">
+            <span className="font-medium">Monthly Payment</span>
+            <span className="font-medium">{formatCurrency(monthlyPayment)}</span>
           </div>
         </div>
         
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={onConfirm}>
-            Send Application
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className="text-sm text-gray-600">
+          <p>
+            Your customer will be offered a {termMonths}-month financing option 
+            with {interestRate}% interest and a {downPaymentPercent}% down payment.
+          </p>
+        </div>
+        
+        <Button 
+          onClick={onConfirm} 
+          className="w-full mt-4"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Sending..." : "Send Application"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

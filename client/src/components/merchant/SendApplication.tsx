@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,12 +36,11 @@ export default function SendApplication(props: SendApplicationProps) {
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showCalculator, setShowCalculator] = useState(false);
   const [parsedAmount, setParsedAmount] = useState(0);
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Validates form fields and shows calculator if valid
+  // Validates form fields
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -73,9 +72,8 @@ export default function SendApplication(props: SendApplicationProps) {
         throw new Error("Please enter a valid phone number with at least 10 digits");
       }
       
-      // Store parsed amount for calculator and show it
+      // Store parsed amount for calculator
       setParsedAmount(parsedAmount);
-      setShowCalculator(true);
       
     } catch (error) {
       // Create user-friendly error message
@@ -124,7 +122,7 @@ export default function SendApplication(props: SendApplicationProps) {
       setPhoneNumber("");
       setEmail("");
       setAmount("");
-      setShowCalculator(false);
+      setParsedAmount(0);
 
       toast({
         title: "Application Sent!",
@@ -171,47 +169,54 @@ export default function SendApplication(props: SendApplicationProps) {
     }
   };
 
+  // Calculate amount whenever the input changes
+  useEffect(() => {
+    if (amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0) {
+      setParsedAmount(parseFloat(amount));
+    }
+  }, [amount]);
+  
   return (
-    <Card className="shadow">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-xl flex items-center">
-          <Send className="h-5 w-5 mr-2 text-primary" />
-          Send Financing Application
-        </CardTitle>
-        <CardDescription>
-          Send a 24-month 0% APR financing application to your customer via SMS
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="phone">Customer Phone Number</Label>
-            <Input 
-              id="phone" 
-              type="tel" 
-              placeholder="(555) 123-4567" 
-              inputMode="tel"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              required
-            />
-          </div>
+    <div className="grid md:grid-cols-2 gap-6">
+      <Card className="shadow">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xl flex items-center">
+            <Send className="h-5 w-5 mr-2 text-primary" />
+            Send Financing Application
+          </CardTitle>
+          <CardDescription>
+            Send a 24-month 0% APR financing application to your customer via SMS
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="phone">Customer Phone Number</Label>
+              <Input 
+                id="phone" 
+                type="tel" 
+                placeholder="(555) 123-4567" 
+                inputMode="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                required
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Customer Email (Optional)</Label>
-            <Input 
-              id="email" 
-              type="email" 
-              placeholder="customer@example.com" 
-              inputMode="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Customer Email (Optional)</Label>
+              <Input 
+                id="email" 
+                type="email" 
+                placeholder="customer@example.com" 
+                inputMode="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="amount">Amount</Label>
-            <div className="relative">
+            <div className="space-y-2">
+              <Label htmlFor="amount">Amount</Label>
               <Input 
                 id="amount" 
                 type="number" 
@@ -223,41 +228,27 @@ export default function SendApplication(props: SendApplicationProps) {
                 onChange={(e) => setAmount(e.target.value)}
                 required
               />
-              {amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0 && (
-                <Button 
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                  onClick={() => {
-                    setParsedAmount(parseFloat(amount));
-                    setShowCalculator(true);
-                  }}
-                >
-                  <Calculator className="h-4 w-4" />
-                  <span className="sr-only">View payment calculator</span>
-                </Button>
-              )}
             </div>
-          </div>
 
-          <Button 
-            type="submit" 
-            className="w-full"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? "Sending..." : "Calculate & Send Application"}
-          </Button>
-        </form>
-      </CardContent>
+            <Button 
+              type="submit" 
+              className="w-full"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Validating..." : "Validate & Calculate"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
       
-      {/* Financing Calculator Dialog */}
-      <FinancingCalculator
-        amount={parsedAmount}
-        open={showCalculator}
-        onClose={() => setShowCalculator(false)}
-        onConfirm={handleSendApplication}
-      />
-    </Card>
+      {/* Side-by-side Financing Calculator */}
+      {parsedAmount > 0 && (
+        <FinancingCalculator
+          amount={parsedAmount}
+          onConfirm={handleSendApplication}
+          isSubmitting={isSubmitting}
+        />
+      )}
+    </div>
   );
 }
