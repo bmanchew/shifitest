@@ -594,28 +594,18 @@ export default function Application() {
                 You'll receive a confirmation email with all the details and a
                 copy of your signed contract.
               </p>
-              <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <div className="flex justify-center">
                 <Button
                   onClick={() => {
                     toast({
-                      title: "Success",
-                      description:
-                        "Your contract details have been emailed to you.",
+                      title: "Navigating",
+                      description: "Going to your customer dashboard...",
                     });
+                    navigateToDashboard();
                   }}
+                  className="px-8"
                 >
-                  Download Contract
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    toast({
-                      title: "Redirecting",
-                      description: "Returning to merchant website...",
-                    });
-                  }}
-                >
-                  Return to Merchant
+                  Go to Dashboard
                 </Button>
               </div>
             </div>
