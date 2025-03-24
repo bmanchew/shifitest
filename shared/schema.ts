@@ -63,7 +63,8 @@ export const logSourceEnum = pgEnum("log_source", [
   "nlpearl",
   "signing",
   "analytics",
-  "notification"
+  "notification",
+  "openai"
 ]);
 export const verificationTypeEnum = pgEnum("verification_type", [
   "identity",
