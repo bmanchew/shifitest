@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ export default function CustomerDashboard() {
   const { contractId: contractIdParam } = useParams();
   const contractId = parseInt(contractIdParam || "0");
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   // Fetch contract details
   const { data: contract, isLoading: isLoadingContract } = useQuery({
@@ -158,7 +158,7 @@ export default function CustomerDashboard() {
 
   // Don't show return to merchant screen if we have contract data
   if (!isLoadingContract && !contract) {
-    navigate('/');
+    setLocation('/');
     return null;
   }
 
