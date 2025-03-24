@@ -34,19 +34,54 @@ if (missingEnvVars.length > 0) {
 
 app.use(express.urlencoded({ extended: false }));
 
-// Enable CORS for all routes with credentials support
+// Enable CORS for all routes with credentials support, with special handling for .replit.dev domain
 app.use((req, res, next) => {
-  const allowedOrigins = [
-    req.headers.origin || "*",
-    process.env.PUBLIC_URL || "*"
-  ];
+  // Get the Replit ID from environment variables
+  const replitId = process.env.REPL_ID || '';
   
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  // Create a list of allowed origins that includes .replit.dev domain and other domains
+  const allowedOrigins = [
+    // Primary domain (.replit.dev)
+    `https://${replitId}.replit.dev`,
+    // Janeway domain (for development)
+    process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined,
+    // Current origin (if any)
+    req.headers.origin || "*",
+    // Public URL if set
+    process.env.PUBLIC_URL || "*"
+  ].filter(Boolean); // Remove any undefined entries
+  
+  // Log origins in dev mode
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`Incoming request from origin: ${req.headers.origin}`);
+    console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
+  }
+  
+  // Handle CORS headers
+  const origin = req.headers.origin;
+  if (origin) {
+    // Check if the origin is allowed
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      origin.endsWith('.replit.dev') || 
+                      origin.includes('.replit.co');
+    
+    if (isAllowed) {
+      // Allow the specific origin that made the request
+      res.header("Access-Control-Allow-Origin", origin);
+    } else {
+      // Fall back to the .replit.dev domain
+      res.header("Access-Control-Allow-Origin", `https://${replitId}.replit.dev`);
+    }
+  } else {
+    // No origin header, use the default .replit.dev domain
+    res.header("Access-Control-Allow-Origin", `https://${replitId}.replit.dev`);
+  }
+  
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
   res.header("Access-Control-Allow-Credentials", "true");
   
-  // Handle preflight OPTIONS requests
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }

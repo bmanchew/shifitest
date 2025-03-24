@@ -34,9 +34,7 @@ export const updatePaymentSchedule = async (customerId: string, scheduleData: an
   return response.json();
 };
 import { QueryFunction } from "@tanstack/react-query";
-
-// Get the API URL from environment variables, defaulting to relative path if not available
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+import { API_URL } from '../env';
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -56,15 +54,18 @@ async function throwIfResNotOk(res: Response) {
 
 // Helper to build full URL with API base URL if it's an API endpoint
 function buildUrl(url: string): string {
-  // If it's already an absolute URL or API_BASE_URL is not set, return it as is
-  if (url.startsWith('http') || !API_BASE_URL) {
+  // If it's already an absolute URL, return it as is
+  if (url.startsWith('http')) {
     return url;
   }
   
-  // If it's an API call that doesn't already include /api, add the API base URL
+  // If it's an API call that starts with /api/, replace it with the full API URL
   if (url.startsWith('/api/')) {
-    // Replace /api/ with the full API base URL
-    return `${API_BASE_URL}${url.substring(4)}`;
+    if (API_URL) {
+      return `${API_URL}${url.substring(4)}`;
+    }
+    // Fall back to relative URL if API_URL is not available
+    return url;
   }
   
   // For other relative URLs, use them as is (relative to current domain)
@@ -77,6 +78,11 @@ export async function apiRequest<T = Response>(
   data?: unknown | undefined,
 ): Promise<T> {
   const fullUrl = buildUrl(url);
+  
+  // Log API requests in development for debugging
+  if (import.meta.env.DEV) {
+    console.log(`API Request: ${method} ${fullUrl}`);
+  }
   
   const res = await fetch(fullUrl, {
     method,

@@ -1,26 +1,27 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { apiRequest } from "./api";
+import { API_URL } from '../env';
 
 // Re-export apiRequest to maintain backward compatibility
 export { apiRequest };
 
-// Get API base URL from environment variables, defaulting to relative URLs if not available
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-
 // Helper to build full URL with API base URL if it's an API endpoint
 function buildUrl(url: string): string {
-  // If it's already an absolute URL or API_BASE_URL is not set, return it as is
-  if (url.startsWith('http') || !API_BASE_URL) {
+  // If it's already an absolute URL, return it as is
+  if (url.startsWith('http')) {
     return url;
   }
   
-  // If it's an API call that already includes /api, add the API base URL
+  // If it's an API call that starts with /api/, replace with full API URL
   if (url.startsWith('/api/')) {
-    // Replace /api/ with the full API base URL
-    return `${API_BASE_URL}${url.substring(4)}`;
+    if (API_URL) {
+      return `${API_URL}${url.substring(4)}`;
+    }
+    // Fall back to relative URL if API_URL is not available
+    return url;
   }
   
-  // For other relative URLs, use them as is (relative to current domain)
+  // For other relative URLs, use them as is
   return url;
 }
 
@@ -48,7 +49,11 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const url = buildUrl(queryKey[0] as string);
-    console.log(`Making API request to: ${url} (original: ${queryKey[0]})`);
+    
+    // Log API requests in development for debugging
+    if (import.meta.env.DEV) {
+      console.log(`Query request to: ${url} (original: ${queryKey[0]})`);
+    }
     
     const res = await fetch(url, {
       credentials: "include",
