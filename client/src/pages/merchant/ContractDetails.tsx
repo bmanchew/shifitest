@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Contract } from "@shared/schema";
 import UnderwritingViewFactory from "@/components/underwriting/UnderwritingViewFactory";
 import { ApplicationProgress } from "@/components/contract/ApplicationProgress";
-import PaymentSchedule from "@/components/customer/PaymentSchedule";
+import PaymentSchedule from "@/components/contract/PaymentSchedule";
 
 export default function ContractDetails() {
   const { contractId } = useParams();

@@ -86,6 +86,7 @@ function App() {
             <Route path="/merchant" component={MerchantDashboard} />
             <Route path="/merchant/dashboard" component={MerchantDashboard} />
             <Route path="/merchant/contracts" component={MerchantContracts} />
+            <Route path="/merchant/contracts/:contractId" component={lazy(() => import("@/pages/merchant/ContractDetails"))} />
             <Route path="/merchant/reports" component={MerchantReports} />
             <Route path="/merchant/settings" component={MerchantSettings} />
           </>
