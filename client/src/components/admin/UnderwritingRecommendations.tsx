@@ -51,7 +51,7 @@ export default function UnderwritingRecommendations() {
     <Card className="col-span-2">
       <CardHeader>
         <CardTitle>AI Underwriting Recommendations</CardTitle>
-        <CardDescription>AI-driven suggestions to optimize your underwriting model</CardDescription>
+        <CardDescription>GPT-4.5 powered suggestions to optimize your underwriting model</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">

@@ -300,7 +300,7 @@ export default function AnalyticsDashboard() {
             <CardHeader>
               <CardTitle>Recommended Underwriting Adjustments</CardTitle>
               <CardDescription>
-                AI-powered recommendations to improve portfolio performance
+                GPT-4.5 powered recommendations to improve portfolio performance
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -402,7 +402,7 @@ export default function AnalyticsDashboard() {
             <CardHeader>
               <CardTitle>Key Insights from Complaints</CardTitle>
               <CardDescription>
-                AI-generated insights from customer complaints
+                GPT-4.5 powered insights from customer complaints
               </CardDescription>
             </CardHeader>
             <CardContent>

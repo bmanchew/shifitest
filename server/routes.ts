@@ -6625,11 +6625,12 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
       if (openaiService && openaiService.isInitialized()) {
         try {
           logger.info({
-            message: 'Generating AI-powered financial insights and suggestions',
+            message: 'Generating GPT-4.5 powered financial insights and suggestions',
             category: 'api',
             source: 'openai',
             metadata: { 
-              customerId: customerId 
+              customerId: customerId,
+              model: 'gpt-4.5'
             }
           });
           
@@ -6643,12 +6644,13 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
             insights = aiInsights;
             usingAI = true;
             logger.info({
-              message: 'Successfully generated AI-powered financial insights',
+              message: 'Successfully generated GPT-4.5 powered financial insights',
               category: 'api',
               source: 'openai',
               metadata: { 
                 customerId: customerId,
-                insightsCount: insights.length
+                insightsCount: insights.length,
+                model: 'gpt-4.5'
               }
             });
           } else {
