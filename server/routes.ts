@@ -6411,6 +6411,291 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
       });
     }
   });
+  
+  // Get customer financial data (accounts, balances, transactions summary) for dashboard
+  apiRouter.get("/customer/:customerId/financial-data", async (req: Request, res: Response) => {
+    try {
+      const { customerId } = req.params;
+      
+      if (!customerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Customer ID is required",
+        });
+      }
+      
+      // Get the customer's active contracts
+      const contracts = await storage.getContractsByCustomerId(parseInt(customerId));
+      
+      if (!contracts || contracts.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "No contracts found for this customer",
+        });
+      }
+      
+      // Get asset reports for the customer's contracts
+      const assetReports = [];
+      const accountsData = [];
+      const transactionsSummary = {
+        incomeLastMonth: 0,
+        spendingLastMonth: 0,
+        categories: {},
+        upcomingBills: [],
+        recentTransactions: []
+      };
+      
+      for (const contract of contracts) {
+        // Get asset reports for this contract
+        const contractAssetReports = await storage.getAssetReportsByContractId(contract.id);
+        
+        if (contractAssetReports && contractAssetReports.length > 0) {
+          // Get most recent asset report with analysis data
+          const latestReport = contractAssetReports
+            .filter(report => report.analysisData)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+          
+          if (latestReport && latestReport.analysisData) {
+            assetReports.push(latestReport);
+            
+            // Parse analysis data
+            const analysisData = typeof latestReport.analysisData === 'string' 
+              ? JSON.parse(latestReport.analysisData) 
+              : latestReport.analysisData;
+            
+            // Add accounts data
+            if (analysisData.accounts) {
+              accountsData.push(...analysisData.accounts);
+            }
+            
+            // Analyze transactions data
+            if (analysisData.transactions) {
+              // Extract income and spending amounts
+              const currentDate = new Date();
+              const lastMonthStart = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+              const lastMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+              
+              // Filter transactions from last month
+              const lastMonthTransactions = analysisData.transactions.filter((transaction: any) => {
+                const txDate = new Date(transaction.date);
+                return txDate >= lastMonthStart && txDate <= lastMonthEnd;
+              });
+              
+              // Calculate income and spending
+              for (const transaction of lastMonthTransactions) {
+                if (transaction.amount < 0) {
+                  // Income (negative amount means money coming in)
+                  transactionsSummary.incomeLastMonth += Math.abs(transaction.amount);
+                } else {
+                  // Spending (positive amount means money going out)
+                  transactionsSummary.spendingLastMonth += transaction.amount;
+                  
+                  // Categorize spending
+                  if (transaction.category) {
+                    const category = transaction.category[0] || 'Other';
+                    if (!transactionsSummary.categories[category]) {
+                      transactionsSummary.categories[category] = 0;
+                    }
+                    transactionsSummary.categories[category] += transaction.amount;
+                  }
+                }
+              }
+              
+              // Find upcoming recurring payments (potential bills)
+              // This is a simplified version - in a real app, this would involve more complex pattern detection
+              const knownBillNames = ['rent', 'mortgage', 'electric', 'gas', 'water', 'internet', 'phone', 'insurance'];
+              const recurringTransactions = analysisData.transactions
+                .filter((t: any) => t.amount > 0 && knownBillNames.some(term => t.name.toLowerCase().includes(term)))
+                .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .slice(0, 10);
+              
+              if (recurringTransactions.length > 0) {
+                for (const tx of recurringTransactions) {
+                  const lastDate = new Date(tx.date);
+                  // Predict next occurrence (typically monthly)
+                  const nextDate = new Date(lastDate);
+                  nextDate.setMonth(nextDate.getMonth() + 1);
+                  
+                  transactionsSummary.upcomingBills.push({
+                    name: tx.name,
+                    amount: tx.amount,
+                    predictedDate: nextDate,
+                    category: tx.category ? tx.category[0] : 'Other'
+                  });
+                }
+              }
+              
+              // Get recent transactions for display
+              const recentTransactions = analysisData.transactions
+                .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .slice(0, 10);
+              
+              transactionsSummary.recentTransactions = recentTransactions;
+            }
+          }
+        }
+      }
+      
+      // Calculate rewards points based on contract status and payments
+      const totalPoints = calculateCustomerPoints(contracts);
+      
+      // Generate financial insights and recommendations
+      const insights = generateFinancialInsights(contracts, accountsData, transactionsSummary);
+      
+      return res.status(200).json({
+        success: true,
+        data: {
+          contracts: contracts,
+          accounts: accountsData,
+          transactionsSummary,
+          rewardsPoints: totalPoints,
+          insights
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Failed to fetch customer financial data: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: { 
+          customerId: req.params.customerId,
+          error: error instanceof Error ? error.stack : String(error)
+        },
+      });
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch financial data"
+      });
+    }
+  });
+
+  // Helper function to calculate customer reward points
+  function calculateCustomerPoints(contracts: Contract[]): number {
+    let totalPoints = 0;
+    
+    for (const contract of contracts) {
+      // Points for active contracts
+      if (contract.status === 'active') {
+        totalPoints += 100;
+        
+        // Points for on-time payments
+        // This would ideally come from payment history, but for simplicity we'll estimate
+        const estimatedMonthsActive = Math.floor(
+          (Date.now() - new Date(contract.createdAt).getTime()) / (30 * 24 * 60 * 60 * 1000)
+        );
+        
+        // Assume on-time payments (each worth 25 points)
+        totalPoints += estimatedMonthsActive * 25;
+      }
+      
+      // Points for auto-pay setup (ACH)
+      if (contract.paymentMethod === 'ach') {
+        totalPoints += 500;
+      }
+    }
+    
+    return totalPoints;
+  }
+
+  // Helper function to generate financial insights
+  function generateFinancialInsights(
+    contracts: Contract[], 
+    accounts: any[], 
+    transactionsSummary: any
+  ): any[] {
+    const insights = [];
+    
+    // Check if customer could benefit from early payoff
+    for (const contract of contracts) {
+      if (contract.status === 'active') {
+        // Find high-interest savings or checking accounts
+        const highBalanceAccounts = accounts.filter(acc => 
+          (acc.type === 'depository' && acc.balance > contract.financedAmount * 0.8)
+        );
+        
+        if (highBalanceAccounts.length > 0) {
+          insights.push({
+            type: 'early_payoff_opportunity',
+            title: 'Early Payoff Opportunity',
+            description: `You have sufficient funds to pay off your contract early and save on interest.`,
+            potentialSavings: contract.financedAmount * (contract.interestRate / 100) * 
+              ((contract.termMonths - estimateRemainingMonths(contract)) / 12),
+            contractId: contract.id,
+            accountId: highBalanceAccounts[0].account_id
+          });
+        }
+      }
+    }
+    
+    // Income vs spending insights
+    if (transactionsSummary.incomeLastMonth > 0 && 
+        transactionsSummary.spendingLastMonth > 0) {
+      const spendingRatio = transactionsSummary.spendingLastMonth / transactionsSummary.incomeLastMonth;
+      
+      if (spendingRatio > 0.9) {
+        insights.push({
+          type: 'high_spending',
+          title: 'High Spending Alert',
+          description: `Your spending last month was ${Math.round(spendingRatio * 100)}% of your income. Consider reducing expenses to build savings.`
+        });
+      } else if (spendingRatio < 0.6) {
+        insights.push({
+          type: 'savings_opportunity',
+          title: 'Savings Opportunity',
+          description: `Great job keeping expenses low! You saved ${Math.round((1 - spendingRatio) * 100)}% of your income last month.`
+        });
+      }
+    }
+    
+    // Upcoming bill insights
+    if (transactionsSummary.upcomingBills && transactionsSummary.upcomingBills.length > 0) {
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      
+      const upcomingBills = transactionsSummary.upcomingBills
+        .filter((bill: any) => new Date(bill.predictedDate) <= nextWeek)
+        .reduce((total: number, bill: any) => total + bill.amount, 0);
+      
+      if (upcomingBills > 0) {
+        insights.push({
+          type: 'upcoming_bills',
+          title: 'Upcoming Bills',
+          description: `You have approximately $${upcomingBills.toFixed(2)} in bills coming due in the next week.`,
+          billsAmount: upcomingBills
+        });
+      }
+    }
+    
+    // Identify top spending category
+    if (transactionsSummary.categories && Object.keys(transactionsSummary.categories).length > 0) {
+      const categories = Object.entries(transactionsSummary.categories)
+        .sort((a: any, b: any) => b[1] - a[1]);
+      
+      if (categories.length > 0) {
+        const topCategory = categories[0];
+        insights.push({
+          type: 'spending_pattern',
+          title: 'Top Spending Category',
+          description: `Your highest spending category last month was ${topCategory[0]} at $${topCategory[1].toFixed(2)}.`
+        });
+      }
+    }
+    
+    return insights;
+  }
+  
+  // Helper to estimate remaining months on a contract
+  function estimateRemainingMonths(contract: Contract): number {
+    if (contract.status !== 'active') return 0;
+    
+    const startDate = new Date(contract.createdAt);
+    const currentDate = new Date();
+    const monthsElapsed = (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                          (currentDate.getMonth() - startDate.getMonth());
+    
+    return Math.max(0, contract.termMonths - monthsElapsed);
+  };
 
   // Endpoint to trigger sending surveys for eligible contracts
   apiRouter.post("/admin/trigger-satisfaction-surveys", async (req: Request, res: Response) => {

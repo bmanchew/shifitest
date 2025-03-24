@@ -7,10 +7,28 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { CalendarRange, Clock, CreditCard, Download, FileText, DollarSign, ExternalLink, AlertCircle } from "lucide-react";
+import { 
+  CalendarRange, 
+  Clock, 
+  CreditCard, 
+  Download, 
+  FileText, 
+  DollarSign, 
+  ExternalLink, 
+  AlertCircle,
+  BarChart,
+  PiggyBank,
+  TrendingUp,
+  Lightbulb,
+  ArrowUp,
+  ArrowDown,
+  Wallet,
+  Gift
+} from "lucide-react";
 import { format, addMonths } from "date-fns";
 import { Logo } from "@/components/ui/logo";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 
 export default function CustomerDashboard() {
   const { contractId: contractIdParam } = useParams();
@@ -39,24 +57,26 @@ export default function CustomerDashboard() {
     },
   });
 
-  //Fetch points data -  Added to fetch points earned.  Placement is arbitrary due to lack of context in original code.
-  const { data: pointsData, isLoading: isLoadingPoints } = useQuery({
-    queryKey: ["/api/points", contractId],
+  // Fetch customer's financial data (includes points, accounts, transactions, insights)
+  const { data: financialData, isLoading: isLoadingFinancialData } = useQuery({
+    queryKey: ["/api/customer/financial-data", contract?.customerId],
     queryFn: async () => {
-      if (!contractId) return null;
+      if (!contract?.customerId) return null;
       try {
-        const res = await fetch(`/api/points/${contractId}`, {
+        const res = await fetch(`/api/customer/${contract.customerId}/financial-data`, {
           credentials: "include",
         });
         if (!res.ok) {
-          throw new Error("Failed to fetch points");
+          throw new Error("Failed to fetch financial data");
         }
-        return res.json();
+        const responseData = await res.json();
+        return responseData.success ? responseData.data : null;
       } catch (error) {
-        console.error("Error fetching points:", error);
+        console.error("Error fetching financial data:", error);
         return null;
       }
     },
+    enabled: !!contract?.customerId,
   });
 
 
@@ -162,7 +182,7 @@ export default function CustomerDashboard() {
     return null;
   }
 
-  if (isLoadingContract || isLoadingPoints) {
+  if (isLoadingContract || isLoadingFinancialData) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
         <div className="flex flex-col items-center">
@@ -191,53 +211,113 @@ export default function CustomerDashboard() {
     );
   }
 
-  // Display points banner if ACH is enabled
+  // Get rewards points from financial data or fallback to estimated calculation
   const hasAutoPayment = contract.paymentMethod === 'ach';
-  const pointsEarned = hasAutoPayment ? 500 : 0;
+  const rewardsPoints = financialData?.rewardsPoints || (hasAutoPayment ? 500 : 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {hasAutoPayment && (
-        <div className="bg-green-100 p-4 text-center mb-6">
-          <p className="text-green-800 font-medium">
-            Congratulations! You earned {pointsEarned} points for setting up automatic payments!
-          </p>
+      {/* Rewards Points Banner */}
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-700 text-white py-8 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="flex items-center mb-4 md:mb-0">
+              <Gift className="h-12 w-12 mr-4" />
+              <div>
+                <h2 className="text-3xl font-bold">{rewardsPoints}</h2>
+                <p className="text-white/80">ShiFi Rewards Points</p>
+              </div>
+            </div>
+            <div className="w-full md:w-2/3 lg:w-1/2">
+              <div className="mb-1 flex justify-between text-sm">
+                <span>Progress to next reward tier</span>
+                <span>{rewardsPoints}/1000 points</span>
+              </div>
+              <Progress value={(rewardsPoints / 1000) * 100} className="h-3 bg-white/20" />
+              <p className="text-white/80 text-sm mt-2">
+                Earn {1000 - rewardsPoints} more points to unlock your next reward tier!
+              </p>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
       
       <div className="max-w-6xl mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-6">Welcome to Your Dashboard</h1>
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Contract Details</CardTitle>
+        <h1 className="text-2xl font-bold mb-6">Your Financial Dashboard</h1>
+        
+        {/* Real Contract Data */}
+        <div className="grid gap-6 md:grid-cols-2 mb-8">
+          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-none shadow-md">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center">
+                <FileText className="h-5 w-5 mr-2 text-blue-600" />
+                Contract Details
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="space-y-2">
-                <div>
-                  <dt className="text-sm text-gray-500">Monthly Payment</dt>
-                  <dd className="text-lg font-medium">${contract.monthlyPayment}</dd>
+                <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                  <dt className="text-sm text-blue-700">Monthly Payment</dt>
+                  <dd className="text-lg font-medium text-blue-900">{formatCurrency(contract.monthlyPayment)}</dd>
                 </div>
-                <div>
-                  <dt className="text-sm text-gray-500">Next Payment Date</dt>
-                  <dd className="text-lg font-medium">{new Date(contract.nextPaymentDate).toLocaleDateString()}</dd>
+                <div className="flex justify-between items-center py-2 border-b border-blue-200">
+                  <dt className="text-sm text-blue-700">Next Payment Date</dt>
+                  <dd className="text-lg font-medium text-blue-900">
+                    {format(addMonths(new Date(), 1), "MMM d, yyyy")}
+                  </dd>
                 </div>
-                <div>
-                  <dt className="text-sm text-gray-500">Payment Method</dt>
-                  <dd className="text-lg font-medium capitalize">{contract.paymentMethod}</dd>
+                <div className="flex justify-between items-center py-2">
+                  <dt className="text-sm text-blue-700">Remaining Balance</dt>
+                  <dd className="text-lg font-medium text-blue-900">{formatCurrency(remainingBalance)}</dd>
                 </div>
               </dl>
+              <div className="mt-4">
+                <Button 
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  onClick={handleMakePayment}
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Make Payment
+                </Button>
+              </div>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader>
-              <CardTitle>Rewards Points</CardTitle>
+          {/* Financial Insights/Suggestions Card */}
+          <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-none shadow-md">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center">
+                <Lightbulb className="h-5 w-5 mr-2 text-amber-600" />
+                Financial Insights
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center">
-                <p className="text-4xl font-bold text-primary">{pointsEarned}</p>
-                <p className="text-sm text-gray-500 mt-2">Points Earned</p>
+              {financialData?.insights && financialData.insights.length > 0 ? (
+                <div className="space-y-3">
+                  {financialData.insights.slice(0, 2).map((insight, index) => (
+                    <div key={index} className="bg-white p-3 rounded-lg shadow-sm">
+                      <h3 className="text-sm font-medium text-amber-800">{insight.title}</h3>
+                      <p className="text-sm text-gray-600">{insight.description}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white p-3 rounded-lg shadow-sm">
+                  <h3 className="text-sm font-medium text-amber-800">Early Payoff Opportunity</h3>
+                  <p className="text-sm text-gray-600">
+                    By paying off your contract early, you could save on interest payments.
+                  </p>
+                </div>
+              )}
+              <div className="mt-4">
+                <Button 
+                  variant="outline" 
+                  className="w-full border-amber-400 text-amber-800 hover:bg-amber-200"
+                  onClick={handleEarlyPayoff}
+                >
+                  <DollarSign className="mr-2 h-4 w-4" />
+                  Early Payoff Options
+                </Button>
               </div>
             </CardContent>
           </Card>
