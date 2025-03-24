@@ -559,12 +559,17 @@ export default function CustomerDashboard(): React.ReactNode {
               </CardContent>
             </Card>
 
-            {/* Cash Flow and Insights */}
+            {/* Enhanced Cash Flow with AI Insights */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center">
                   <TrendingUp className="h-4 w-4 mr-2 text-primary" />
-                  Cash Flow
+                  Cash Flow Analysis
+                  {financialData?.usingAI && (
+                    <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-800 border-blue-300 text-xs">
+                      GPT-4.5 Powered
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -604,51 +609,101 @@ export default function CustomerDashboard(): React.ReactNode {
                         </span>
                       </div>
                     </div>
+                    
+                    {/* AI-generated insights section */}
+                    {financialData?.insights && financialData.insights.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-gray-100">
+                        <h4 className="text-sm font-medium mb-2 flex items-center">
+                          <Lightbulb className="h-3.5 w-3.5 mr-1 text-amber-500" />
+                          Cash Flow Insights
+                        </h4>
+                        <div className="space-y-2">
+                          {financialData.insights
+                            .filter((insight: any) => insight.category === 'cash-flow' || !insight.category)
+                            .slice(0, 2)
+                            .map((insight: any, idx: number) => (
+                              <div key={idx} className="bg-blue-50 p-2 rounded-md">
+                                <p className="text-xs text-blue-800">
+                                  {insight.description || insight.content}
+                                </p>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Top spending categories */}
+                    {financialData?.cashFlow?.categories && financialData.cashFlow.categories.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-gray-100">
+                        <h4 className="text-sm font-medium mb-2">Top Spending Categories</h4>
+                        <div className="space-y-2">
+                          {financialData.cashFlow.categories.slice(0, 3).map((category: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center">
+                              <span className="text-xs text-gray-500">{category.name}</span>
+                              <span className="text-xs font-medium">{formatCurrency(category.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-4 text-center">
                     <BarChart className="h-10 w-10 mb-2 text-gray-400" />
                     <p className="text-sm text-gray-500">Connect your accounts to view cash flow analysis</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Upcoming Bills */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center">
-                  <CalendarRange className="h-4 w-4 mr-2 text-primary" />
-                  Upcoming Bills
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {financialData?.hasPlaidData && financialData?.upcomingBills && financialData.upcomingBills.length > 0 ? (
-                  <div className="space-y-3">
-                    {financialData.upcomingBills.slice(0, 3).map((bill: any, index: number) => (
-                      <div key={index} className="flex justify-between items-center py-1">
-                        <div>
-                          <p className="text-sm font-medium">{bill.name}</p>
-                          <p className="text-xs text-gray-500">{format(new Date(bill.dueDate), "MMM d, yyyy")}</p>
-                        </div>
-                        <span className="text-sm font-medium">{formatCurrency(bill.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-4 text-center">
-                    <CalendarRange className="h-10 w-10 mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-500">
-                      {financialData?.hasPlaidData ? "No recurring bills detected" : "Connect your bank accounts to detect recurring bills"}
-                    </p>
                     <Button 
                       variant="outline" 
                       size="sm" 
                       className="mt-3"
                       onClick={() => handleViewBankConnection(contract?.id || 0)}
                     >
-                      View Bank Details
+                      Connect Bank Account
                     </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
+            {/* Financial Savings Opportunities */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center">
+                  <DollarSign className="h-4 w-4 mr-2 text-primary" />
+                  Savings Opportunities
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {financialData?.hasPlaidData ? (
+                  <div className="space-y-3">
+                    {/* Display AI-generated savings insights if available */}
+                    {financialData?.insights && financialData.insights
+                      .filter((insight: any) => insight.category === 'savings' || insight.title?.toLowerCase().includes('saving'))
+                      .slice(0, 2)
+                      .map((insight: any, idx: number) => (
+                        <div key={idx} className="bg-green-50 p-3 rounded-md">
+                          <h4 className="text-sm font-medium text-green-800">{insight.title}</h4>
+                          <p className="text-xs text-green-700 mt-1">
+                            {insight.description || insight.content}
+                          </p>
+                        </div>
+                      ))}
+                      
+                    {/* Show a generic saving tip if no AI insights for savings */}
+                    {(!financialData?.insights || !financialData.insights.some((i: any) => 
+                      i.category === 'savings' || i.title?.toLowerCase().includes('saving'))) && (
+                      <div className="bg-green-50 p-3 rounded-md">
+                        <h4 className="text-sm font-medium text-green-800">Debt Reduction Strategy</h4>
+                        <p className="text-xs text-green-700 mt-1">
+                          Consider allocating your positive cash flow to reduce your highest interest debt first, 
+                          which could save you {formatCurrency(contract?.monthlyPayment * 0.1)} monthly in interest.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <PiggyBank className="h-10 w-10 mb-2 text-gray-400" />
+                    <p className="text-sm text-gray-500">Connect your accounts to discover savings opportunities</p>
                   </div>
                 )}
               </CardContent>
