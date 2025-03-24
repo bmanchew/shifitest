@@ -33,7 +33,7 @@ async function testOpenAIIntegration() {
     
     // Test the underwriting recommendations endpoint
     console.log('🔍 Testing AI-powered underwriting recommendations...');
-    const recommendationsRes = await fetch('http://localhost:5000/api/admin/underwriting-recommendations', {
+    const recommendationsRes = await fetch(`${appUrl}/api/admin/underwriting-recommendations`, {
       headers: { 'Cookie': cookies }
     });
     
