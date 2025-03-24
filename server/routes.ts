@@ -21,7 +21,7 @@ import { plaidService } from "./services/plaid";
 import thanksRogerService from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
-import { nlpearlService, notificationService } from './services';
+import { nlpearlService, notificationService, merchantAnalyticsService } from './services';
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
@@ -6287,6 +6287,36 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
         }
       });
       
+      // Update merchant performance metrics to reflect the new survey data
+      try {
+        const merchantId = contract.merchantId;
+        // This will recalculate the merchant performance with the new survey data
+        await merchantAnalyticsService.updateMerchantPerformance(merchantId);
+        
+        logger.info({
+          message: "Merchant performance metrics updated with new survey data",
+          category: "system",
+          source: "analytics",
+          metadata: {
+            merchantId,
+            contractId,
+            surveyRating: ratingNum
+          }
+        });
+      } catch (merchantUpdateError) {
+        // Log error but don't fail the request
+        logger.error({
+          message: `Error updating merchant performance after survey submission: ${merchantUpdateError instanceof Error ? merchantUpdateError.message : String(merchantUpdateError)}`,
+          category: "system",
+          source: "analytics",
+          metadata: {
+            contractId,
+            merchantId: contract.merchantId,
+            error: merchantUpdateError instanceof Error ? merchantUpdateError.stack : String(merchantUpdateError)
+          }
+        });
+      }
+      
       return res.status(201).json({
         success: true,
         message: "Survey response recorded successfully",
@@ -6411,6 +6441,9 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
       // Track successfully sent surveys
       const sentSurveys = [];
       
+      // Track merchant IDs to update performance metrics only once per merchant
+      const merchantIdsToUpdate = new Set<number>();
+      
       // For each eligible contract, send a survey notification
       for (const contract of eligibleContracts) {
         try {
@@ -6453,6 +6486,9 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
             contractNumber: contract.contractNumber
           });
           
+          // Add merchant ID to the set of merchants to update
+          merchantIdsToUpdate.add(contract.merchantId);
+          
           logger.info({
             message: `Satisfaction survey sent for contract ${contract.contractNumber}`,
             category: "system",
@@ -6470,6 +6506,38 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
             metadata: {
               contractId: contract.id,
               error: error instanceof Error ? error.stack : String(error)
+            }
+          });
+        }
+      }
+      
+      // Update merchant performance metrics for all affected merchants
+      if (merchantIdsToUpdate.size > 0) {
+        try {
+          // Convert Set to Array for processing
+          const merchantIds = Array.from(merchantIdsToUpdate);
+          
+          for (const merchantId of merchantIds) {
+            await merchantAnalyticsService.updateMerchantPerformance(merchantId);
+            
+            logger.info({
+              message: "Merchant performance metrics updated after sending surveys",
+              category: "system",
+              source: "analytics",
+              metadata: {
+                merchantId,
+                affectedContractsCount: eligibleContracts.filter(c => c.merchantId === merchantId).length
+              }
+            });
+          }
+        } catch (updateError) {
+          logger.error({
+            message: `Error updating merchant performance metrics: ${updateError instanceof Error ? updateError.message : String(updateError)}`,
+            category: "system",
+            source: "analytics",
+            metadata: {
+              merchantIds: Array.from(merchantIdsToUpdate),
+              error: updateError instanceof Error ? updateError.stack : String(updateError)
             }
           });
         }

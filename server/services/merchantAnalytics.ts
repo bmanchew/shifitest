@@ -1,7 +1,7 @@
 
 import { db } from "../db";
-import { merchants, contracts, merchantPerformance } from "@shared/schema";
-import { eq, and, count, avg, sum, sql } from "drizzle-orm";
+import { merchants, contracts, merchantPerformance, customerSatisfactionSurveys } from "@shared/schema";
+import { eq, and, count, avg, sum, sql, isNotNull, desc } from "drizzle-orm";
 import { aiAnalyticsService } from "./aiAnalytics";
 
 interface MerchantPerformanceMetrics {
@@ -38,48 +38,101 @@ class MerchantAnalyticsService {
   
   // Calculate merchant performance metrics
   async calculateMerchantMetrics(merchantId: number): Promise<MerchantPerformanceMetrics> {
-    // Get all contracts for merchant
-    const merchantContracts = await db.select({
-      id: contracts.id,
-      status: contracts.status,
-      amount: contracts.amount,
-      financedAmount: contracts.financedAmount,
-    }).from(contracts)
-      .where(eq(contracts.merchantId, merchantId));
-    
-    // Calculate metrics
-    const totalContracts = merchantContracts.length;
-    const activeContracts = merchantContracts.filter(c => c.status === 'active').length;
-    const completedContracts = merchantContracts.filter(c => c.status === 'completed').length;
-    const cancelledContracts = merchantContracts.filter(c => c.status === 'cancelled').length;
-    
-    // Placeholder for metrics that would come from payment history in a real system
-    // In a production system, these would be calculated from actual payment data
-    const defaultRate = Math.random() * 0.1; // Simulated default rate (0-10%)
-    const latePaymentRate = Math.random() * 0.2; // Simulated late payment rate (0-20%)
-    
-    // Calculate average contract value
-    const totalValue = merchantContracts.reduce((sum, contract) => sum + contract.amount, 0);
-    const avgContractValue = totalContracts > 0 ? totalValue / totalContracts : 0;
-    
-    // Risk-adjusted return (simplified calculation)
-    const riskAdjustedReturn = (completedContracts / (totalContracts || 1)) * (1 - defaultRate) * 100;
-    
-    // Simulated customer satisfaction score (0-100)
-    const customerSatisfactionScore = 85 + (Math.random() * 15);
-    
-    return {
-      merchantId,
-      defaultRate,
-      latePaymentRate,
-      avgContractValue,
-      totalContracts,
-      activeContracts,
-      completedContracts,
-      cancelledContracts,
-      riskAdjustedReturn,
-      customerSatisfactionScore
-    };
+    try {
+      // Get all contracts for merchant
+      const merchantContracts = await db.select({
+        id: contracts.id,
+        status: contracts.status,
+        amount: contracts.amount,
+        financedAmount: contracts.financedAmount,
+      }).from(contracts)
+        .where(eq(contracts.merchantId, merchantId));
+      
+      // Calculate metrics
+      const totalContracts = merchantContracts.length;
+      const activeContracts = merchantContracts.filter(c => c.status === 'active').length;
+      const completedContracts = merchantContracts.filter(c => c.status === 'completed').length;
+      const cancelledContracts = merchantContracts.filter(c => c.status === 'cancelled').length;
+      
+      // Placeholder for metrics that would come from payment history in a real system
+      // In a production system, these would be calculated from actual payment data
+      const defaultRate = Math.random() * 0.1; // Simulated default rate (0-10%)
+      const latePaymentRate = Math.random() * 0.2; // Simulated late payment rate (0-20%)
+      
+      // Calculate average contract value
+      const totalValue = merchantContracts.reduce((sum, contract) => sum + contract.amount, 0);
+      const avgContractValue = totalContracts > 0 ? totalValue / totalContracts : 0;
+      
+      // Risk-adjusted return (simplified calculation)
+      const riskAdjustedReturn = (completedContracts / (totalContracts || 1)) * (1 - defaultRate) * 100;
+      
+      // Get customer satisfaction scores from surveys for this merchant's contracts
+      let customerSatisfactionScore = 0;
+      
+      // Get all contract IDs for this merchant
+      const contractIds = merchantContracts.map(contract => contract.id);
+      
+      if (contractIds.length > 0) {
+        // Get all surveys with valid ratings for these contracts
+        const surveysResult = await db.select({
+          rating: customerSatisfactionSurveys.rating
+        })
+        .from(customerSatisfactionSurveys)
+        .where(
+          and(
+            sql`${customerSatisfactionSurveys.contractId} IN (${contractIds.join(',')})`,
+            isNotNull(customerSatisfactionSurveys.rating)
+          )
+        );
+        
+        // Calculate average satisfaction score
+        if (surveysResult.length > 0) {
+          // Calculate the sum of all ratings
+          const ratingSum = surveysResult.reduce((sum, survey) => {
+            // Convert rating to a 0-100 scale (ratings are 1-10)
+            const normalizedRating = survey.rating ? (survey.rating * 10) : 0; 
+            return sum + normalizedRating;
+          }, 0);
+          
+          // Calculate average score on 0-100 scale
+          customerSatisfactionScore = ratingSum / surveysResult.length;
+        } else {
+          // Default score if no surveys found (neutral score)
+          customerSatisfactionScore = 75;
+        }
+      } else {
+        // Default score if no contracts (neutral score)
+        customerSatisfactionScore = 75;
+      }
+      
+      return {
+        merchantId,
+        defaultRate,
+        latePaymentRate,
+        avgContractValue,
+        totalContracts,
+        activeContracts,
+        completedContracts,
+        cancelledContracts,
+        riskAdjustedReturn,
+        customerSatisfactionScore
+      };
+    } catch (error) {
+      console.error("Error calculating merchant metrics:", error);
+      // Return default values on error
+      return {
+        merchantId,
+        defaultRate: 0.05,
+        latePaymentRate: 0.1,
+        avgContractValue: 0,
+        totalContracts: 0,
+        activeContracts: 0,
+        completedContracts: 0,
+        cancelledContracts: 0,
+        riskAdjustedReturn: 0,
+        customerSatisfactionScore: 75
+      };
+    }
   }
   
   // Calculate overall performance score based on metrics
