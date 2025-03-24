@@ -91,6 +91,32 @@ export default function Contracts() {
     return mockCustomers[customerId]?.email || "";
   };
 
+  // Function to get credit tier badge variant
+  const getCreditTierBadgeVariant = (tier: string | null) => {
+    if (!tier) return "default";
+    
+    switch (tier) {
+      case "tier1":
+        return "success";
+      case "tier2":
+        return "warning";
+      case "tier3":
+        return "secondary";
+      case "declined":
+        return "destructive";
+      default:
+        return "default";
+    }
+  };
+  
+  // Function to format credit tier for display
+  const formatCreditTier = (tier: string | null) => {
+    if (!tier) return "Not Rated";
+    
+    // Convert tier1 to Tier 1, etc.
+    return tier.replace(/tier(\d)/, 'Tier $1').charAt(0).toUpperCase() + tier.slice(1).replace(/tier(\d)/, 'Tier $1');
+  };
+
   const columns: ColumnDef<Contract>[] = [
     {
       accessorKey: "customerId",
@@ -113,6 +139,18 @@ export default function Contracts() {
       accessorKey: "amount",
       header: "Amount",
       cell: ({ row }) => formatCurrency(row.getValue("amount")),
+    },
+    {
+      accessorKey: "creditTier",
+      header: "Credit Tier",
+      cell: ({ row }) => {
+        const creditTier = row.getValue("creditTier") as string | null;
+        return (
+          <Badge variant={getCreditTierBadgeVariant(creditTier)}>
+            {formatCreditTier(creditTier)}
+          </Badge>
+        );
+      },
     },
     {
       accessorKey: "status",
