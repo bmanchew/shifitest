@@ -289,6 +289,11 @@ export default function CustomerDashboard() {
               <CardTitle className="flex items-center">
                 <Lightbulb className="h-5 w-5 mr-2 text-amber-600" />
                 Financial Insights
+                {financialData?.usingAI && (
+                  <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-800 border-blue-300">
+                    AI-Powered
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -296,7 +301,14 @@ export default function CustomerDashboard() {
                 <div className="space-y-3">
                   {financialData.insights.slice(0, 2).map((insight: any, index: number) => (
                     <div key={index} className="bg-white p-3 rounded-lg shadow-sm">
-                      <h3 className="text-sm font-medium text-amber-800">{insight.title}</h3>
+                      <div className="flex justify-between items-start">
+                        <h3 className="text-sm font-medium text-amber-800">{insight.title}</h3>
+                        {financialData?.usingAI && (
+                          <div className="text-blue-500 rounded-full bg-blue-50 p-1 h-5 w-5 flex items-center justify-center ml-2" title="AI-Generated">
+                            <span className="text-xs font-bold">AI</span>
+                          </div>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600">{insight.description}</p>
                     </div>
                   ))}
@@ -469,13 +481,25 @@ export default function CustomerDashboard() {
           <h2 className="text-xl font-bold mb-4 flex items-center">
             <Lightbulb className="mr-2 h-5 w-5 text-amber-500" />
             Personalized Suggestions
+            {financialData?.usingAI && (
+              <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-800 border-blue-300 text-xs">
+                AI-Powered
+              </Badge>
+            )}
           </h2>
           <div className="grid gap-4 md:grid-cols-2">
             {financialData?.hasPlaidData && financialData?.suggestions && financialData.suggestions.length > 0 ? (
               financialData.suggestions.map((suggestion: any, index: number) => (
                 <Card key={index} className="border-l-4 border-l-amber-500">
                   <CardContent className="p-4">
-                    <h3 className="font-medium mb-1">{suggestion.title}</h3>
+                    <div className="flex justify-between">
+                      <h3 className="font-medium mb-1">{suggestion.title}</h3>
+                      {financialData?.usingAI && (
+                        <div className="text-blue-500 rounded-full bg-blue-50 p-1 h-6 w-6 flex items-center justify-center" title="AI-Generated">
+                          <span className="text-xs font-bold">AI</span>
+                        </div>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-600 mb-3">{suggestion.description}</p>
                     {suggestion.actionUrl && (
                       <Button variant="link" className="text-amber-600 p-0 h-auto" asChild>
