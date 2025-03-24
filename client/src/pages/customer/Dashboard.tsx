@@ -106,14 +106,47 @@ export default function CustomerDashboard(): React.ReactNode {
         if (!res.ok) {
           throw new Error("Failed to fetch contract");
         }
-        const contractData = await res.json();
         
-        // Log contract data to debug NaN issues
-        console.log("Contract data:", contractData);
-        console.log("Monthly payment:", contractData.monthlyPayment, 
-          "Type:", typeof contractData.monthlyPayment);
-        console.log("Financed amount:", contractData.financedAmount, 
-          "Type:", typeof contractData.financedAmount);
+        // Get response text first to see raw data
+        const responseText = await res.text();
+        console.log("Raw contract response:", responseText);
+        
+        // Parse text to JSON
+        const responseData = JSON.parse(responseText);
+        console.log("Parsed response:", responseData);
+        
+        // Extract the actual contract object based on response structure
+        let contractData;
+        if (responseData.contract) {
+          // If API returns {contract: {...}}
+          contractData = responseData.contract;
+        } else if (responseData.message) {
+          // If API returns error format
+          console.error("API returned message:", responseData.message);
+          return null;
+        } else {
+          // If API returns the contract object directly
+          contractData = responseData;
+        }
+        
+        console.log("Final contract data:", contractData);
+        
+        // Ensure number values are properly parsed
+        if (contractData) {
+          // Convert string values to numbers if needed
+          if (typeof contractData.monthlyPayment === "string") {
+            contractData.monthlyPayment = parseFloat(contractData.monthlyPayment);
+          }
+          
+          if (typeof contractData.financedAmount === "string") {
+            contractData.financedAmount = parseFloat(contractData.financedAmount);
+          }
+          
+          console.log("Monthly payment:", contractData.monthlyPayment, 
+            "Type:", typeof contractData.monthlyPayment);
+          console.log("Financed amount:", contractData.financedAmount, 
+            "Type:", typeof contractData.financedAmount);
+        }
           
         return contractData;
       } catch (error) {
