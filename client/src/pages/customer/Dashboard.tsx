@@ -23,8 +23,11 @@ import {
   ArrowUp,
   ArrowDown,
   Wallet,
-  Gift
+  Gift,
+  CheckCircle
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import BankConnection from "@/components/customer/BankConnection";
 import { format, addMonths } from "date-fns";
 import { Logo } from "@/components/ui/logo";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -35,6 +38,14 @@ export default function CustomerDashboard() {
   const contractId = parseInt(contractIdParam || "0");
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [showBankDialog, setShowBankDialog] = useState(false);
+  const [activeBankContractId, setActiveBankContractId] = useState<number | null>(null);
+  
+  // Handle opening the bank connection dialog
+  const handleViewBankConnection = (contractId: number) => {
+    setActiveBankContractId(contractId);
+    setShowBankDialog(true);
+  };
 
   // Fetch contract details
   const { data: contract, isLoading: isLoadingContract } = useQuery({
@@ -374,7 +385,12 @@ export default function CustomerDashboard() {
                   <div className="flex flex-col items-center justify-center py-4 text-center">
                     <PiggyBank className="h-10 w-10 mb-2 text-gray-400" />
                     <p className="text-sm text-gray-500">Connect your bank accounts to view your financial summary</p>
-                    <Button variant="outline" size="sm" className="mt-3">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-3"
+                      onClick={() => handleViewBankConnection(contract?.id || 0)}
+                    >
                       Connect Bank
                     </Button>
                   </div>
@@ -464,10 +480,20 @@ export default function CustomerDashboard() {
                     <p className="text-sm text-gray-500">
                       {financialData?.hasPlaidData ? "No recurring bills detected" : "Connect your bank accounts to detect recurring bills"}
                     </p>
-                    {!financialData?.hasPlaidData && (
-                      <Button variant="outline" size="sm" className="mt-3">
+                    {!financialData?.hasPlaidData ? (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-3"
+                        onClick={() => handleViewBankConnection(contract?.id || 0)}
+                      >
                         Connect Bank
                       </Button>
+                    ) : (
+                      <div className="mt-3 text-xs bg-green-50 text-green-800 p-2 rounded-md flex items-center">
+                        <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                        Bank connected
+                      </div>
                     )}
                   </div>
                 )}
@@ -526,7 +552,12 @@ export default function CustomerDashboard() {
                       : "Connect your financial accounts to receive customized suggestions based on your spending patterns and financial goals."}
                   </p>
                   {!financialData?.hasPlaidData && (
-                    <Button className="mt-4" variant="outline" size="sm">
+                    <Button 
+                      className="mt-4" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleViewBankConnection(contract?.id || 0)}
+                    >
                       Connect Accounts
                     </Button>
                   )}
@@ -537,5 +568,33 @@ export default function CustomerDashboard() {
         </div>
       </div>
     </div>
+
+    {/* Bank Connection Dialog */}
+    <Dialog open={showBankDialog} onOpenChange={setShowBankDialog}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Connect Your Bank Account</DialogTitle>
+        </DialogHeader>
+        {activeBankContractId && (
+          <BankConnection 
+            contractId={activeBankContractId} 
+            progressId={0} // Not needed for reconnection
+            onComplete={() => {
+              setShowBankDialog(false);
+              // Refresh financial data after connecting bank
+              if (contract?.customerId) {
+                // Invalidate and refetch the financial data
+                window.location.reload(); // Simple way to refresh data
+              }
+              toast({
+                title: "Bank Connected",
+                description: "Your bank account has been successfully connected. You can now view your financial data.",
+              });
+            }}
+            onBack={() => setShowBankDialog(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
