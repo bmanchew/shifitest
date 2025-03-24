@@ -291,7 +291,7 @@ export default function CustomerDashboard() {
                 Financial Insights
                 {financialData?.usingAI && (
                   <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-800 border-blue-300">
-                    AI-Powered
+                    GPT-4.5 Powered
                   </Badge>
                 )}
               </CardTitle>
@@ -304,7 +304,7 @@ export default function CustomerDashboard() {
                       <div className="flex justify-between items-start">
                         <h3 className="text-sm font-medium text-amber-800">{insight.title}</h3>
                         {financialData?.usingAI && (
-                          <div className="text-blue-500 rounded-full bg-blue-50 p-1 h-5 w-5 flex items-center justify-center ml-2" title="AI-Generated">
+                          <div className="text-blue-500 rounded-full bg-blue-50 p-1 h-5 w-5 flex items-center justify-center ml-2" title="GPT-4.5 Generated">
                             <span className="text-xs font-bold">AI</span>
                           </div>
                         )}
@@ -483,7 +483,7 @@ export default function CustomerDashboard() {
             Personalized Suggestions
             {financialData?.usingAI && (
               <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-800 border-blue-300 text-xs">
-                AI-Powered
+                GPT-4.5 Powered
               </Badge>
             )}
           </h2>
@@ -495,7 +495,7 @@ export default function CustomerDashboard() {
                     <div className="flex justify-between">
                       <h3 className="font-medium mb-1">{suggestion.title}</h3>
                       {financialData?.usingAI && (
-                        <div className="text-blue-500 rounded-full bg-blue-50 p-1 h-6 w-6 flex items-center justify-center" title="AI-Generated">
+                        <div className="text-blue-500 rounded-full bg-blue-50 p-1 h-6 w-6 flex items-center justify-center" title="GPT-4.5 Generated">
                           <span className="text-xs font-bold">AI</span>
                         </div>
                       )}

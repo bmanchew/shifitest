@@ -7,7 +7,7 @@ import { logger } from './logger';
 export class OpenAIService {
   private client: OpenAI | null = null;
   private initialized = false;
-  private model = "gpt-4";  // Default to gpt-4 if 4.5 isn't available
+  private model = "gpt-4.5";  // Using the latest GPT-4.5 model for enhanced financial insights
 
   constructor() {
     this.initialize();

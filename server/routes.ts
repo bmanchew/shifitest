@@ -6671,12 +6671,13 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
             suggestions = aiSuggestions;
             usingAI = true;
             logger.info({
-              message: 'Successfully generated AI-powered financial suggestions',
+              message: 'Successfully generated GPT-4.5 powered financial suggestions',
               category: 'api',
               source: 'openai',
               metadata: { 
                 customerId: customerId,
-                suggestionsCount: suggestions.length
+                suggestionsCount: suggestions.length,
+                model: 'gpt-4.5'
               }
             });
           } else {
