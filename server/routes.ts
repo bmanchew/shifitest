@@ -6605,11 +6605,119 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
       // Calculate rewards points based on contract status and payments
       const totalPoints = calculateCustomerPoints(contracts);
       
-      // Generate financial insights and recommendations based on real data
-      const insights = generateFinancialInsights(contracts, accountsData, transactionsSummary);
+      // Prepare customer data for AI analysis
+      const customerFinancialData = {
+        contracts,
+        accounts: accountsData,
+        cashFlow,
+        upcomingBills: transactionsSummary.upcomingBills,
+        recentTransactions: transactionsSummary.recentTransactions
+      };
+
+      // Import the OpenAI service
+      const { openaiService } = await import('./services');
       
-      // Generate smart suggestions based on financial behavior
-      const suggestions = generateSmartSuggestions(contracts, transactionsSummary, cashFlow);
+      // Try to generate AI-powered insights and suggestions
+      let insights = [];
+      let suggestions = [];
+      let usingAI = false;
+      
+      if (openaiService && openaiService.isInitialized()) {
+        try {
+          logger.info({
+            message: 'Generating AI-powered financial insights and suggestions',
+            category: 'api',
+            source: 'openai',
+            metadata: { 
+              customerId: customerId 
+            }
+          });
+          
+          // Try to get AI-powered insights in parallel
+          const [aiInsights, aiSuggestions] = await Promise.all([
+            openaiService.generateFinancialInsights(customerFinancialData),
+            openaiService.generateFinancialSuggestions(customerFinancialData)
+          ]);
+          
+          if (aiInsights && aiInsights.length > 0) {
+            insights = aiInsights;
+            usingAI = true;
+            logger.info({
+              message: 'Successfully generated AI-powered financial insights',
+              category: 'api',
+              source: 'openai',
+              metadata: { 
+                customerId: customerId,
+                insightsCount: insights.length
+              }
+            });
+          } else {
+            // Fallback to rule-based insights
+            insights = generateFinancialInsights(contracts, accountsData, transactionsSummary);
+            logger.info({
+              message: 'Using fallback rule-based financial insights',
+              category: 'api',
+              source: 'internal',
+              metadata: { 
+                customerId: customerId,
+                reason: 'No AI insights generated'
+              }
+            });
+          }
+          
+          if (aiSuggestions && aiSuggestions.length > 0) {
+            suggestions = aiSuggestions;
+            usingAI = true;
+            logger.info({
+              message: 'Successfully generated AI-powered financial suggestions',
+              category: 'api',
+              source: 'openai',
+              metadata: { 
+                customerId: customerId,
+                suggestionsCount: suggestions.length
+              }
+            });
+          } else {
+            // Fallback to rule-based suggestions
+            suggestions = generateSmartSuggestions(contracts, transactionsSummary, cashFlow);
+            logger.info({
+              message: 'Using fallback rule-based financial suggestions',
+              category: 'api',
+              source: 'internal',
+              metadata: { 
+                customerId: customerId,
+                reason: 'No AI suggestions generated'
+              }
+            });
+          }
+        } catch (aiError) {
+          // If OpenAI processing fails, use our rule-based approach as fallback
+          logger.error({
+            message: `OpenAI processing failed: ${aiError instanceof Error ? aiError.message : String(aiError)}`,
+            category: 'api',
+            source: 'openai',
+            metadata: { 
+              customerId,
+              error: aiError instanceof Error ? aiError.stack : String(aiError)
+            }
+          });
+          
+          // Fallback to rule-based insights and suggestions
+          insights = generateFinancialInsights(contracts, accountsData, transactionsSummary);
+          suggestions = generateSmartSuggestions(contracts, transactionsSummary, cashFlow);
+        }
+      } else {
+        // OpenAI service not available, use rule-based approach
+        logger.warn({
+          message: 'OpenAI service not initialized, using rule-based financial analysis',
+          category: 'api',
+          source: 'openai',
+          metadata: { customerId }
+        });
+        
+        insights = generateFinancialInsights(contracts, accountsData, transactionsSummary);
+        suggestions = generateSmartSuggestions(contracts, transactionsSummary, cashFlow);
+      }
       
       return res.status(200).json({
         success: true,
@@ -6622,7 +6730,8 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
           recentTransactions: transactionsSummary.recentTransactions,
           rewardsPoints: totalPoints,
           insights,
-          suggestions
+          suggestions,
+          usingAI
         }
       });
     } catch (error) {
