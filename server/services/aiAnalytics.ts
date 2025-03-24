@@ -494,7 +494,7 @@ export class AIAnalyticsService {
             product: complaint.product,
             issue: complaint.issue,
             company: complaint.company,
-            date: complaint.date_received
+            date: complaint.dateReceived
           }));
           
           // Create the prompt
@@ -518,8 +518,13 @@ export class AIAnalyticsService {
           `;
           
           // Call OpenAI
-          const completion = await openaiService.client!.chat.completions.create({
-            model: openaiService.model,
+          const openaiClient = openaiService.getClient();
+          if (!openaiClient) {
+            throw new Error('OpenAI client is not available');
+          }
+          
+          const completion = await openaiClient.chat.completions.create({
+            model: openaiService.getModel(),
             messages: [
               {
                 role: "system",

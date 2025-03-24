@@ -58,6 +58,20 @@ export class OpenAIService {
   isInitialized(): boolean {
     return this.initialized && this.client !== null;
   }
+  
+  /**
+   * Get the OpenAI client instance
+   */
+  getClient(): OpenAI | null {
+    return this.client;
+  }
+  
+  /**
+   * Get the model being used
+   */
+  getModel(): string {
+    return this.model;
+  }
 
   /**
    * Generate personalized financial insights based on customer data
