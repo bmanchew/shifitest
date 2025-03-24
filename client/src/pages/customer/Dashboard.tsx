@@ -33,7 +33,7 @@ import { Logo } from "@/components/ui/logo";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 
-export default function CustomerDashboard() {
+export default function CustomerDashboard(): React.ReactNode {
   const { contractId: contractIdParam } = useParams();
   const contractId = parseInt(contractIdParam || "0");
   const { toast } = useToast();
@@ -604,13 +604,12 @@ export default function CustomerDashboard() {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isCheckingBankConnection ? (
-              "Checking Bank Connection..."
-            ) : bankConnectionDetails ? (
-              "Your Bank Connection"
-            ) : (
-              "Connect Your Bank Account"
-            )}
+            {isCheckingBankConnection 
+              ? "Checking Bank Connection..." 
+              : bankConnectionDetails 
+                ? "Your Bank Connection" 
+                : "Connect Your Bank Account"
+            }
           </DialogTitle>
         </DialogHeader>
         
@@ -622,14 +621,12 @@ export default function CustomerDashboard() {
         ) : activeBankContractId && (
           <BankConnection 
             contractId={activeBankContractId} 
-            progressId={0} // Not needed for reconnection
+            progressId={0}
             existingConnection={bankConnectionDetails}
             onComplete={() => {
               setShowBankDialog(false);
-              // Refresh financial data after connecting bank
               if (contract?.customerId) {
-                // Invalidate and refetch the financial data
-                window.location.reload(); // Simple way to refresh data
+                window.location.reload();
               }
               toast({
                 title: "Bank Connected",
