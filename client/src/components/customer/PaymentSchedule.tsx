@@ -345,7 +345,7 @@ function PaymentScheduleContent({
             /* Single card payment */
             <div className="mb-6">
               <label className="block text-sm font-medium mb-2">Card Information</label>
-              <div className="p-3 border rounded-md">
+              <div className="p-3 border rounded-md min-h-[40px] touch-manipulation">
                 <CardElement 
                   options={{
                     style: {
@@ -355,21 +355,29 @@ function PaymentScheduleContent({
                         '::placeholder': {
                           color: '#aab7c4',
                         },
+                        ":-webkit-autofill": {
+                          color: "#424770"
+                        },
+                        // Increase touch target size for mobile
+                        "::selection": {
+                          backgroundColor: "rgba(66, 71, 112, 0.1)"
+                        }
                       },
                       invalid: {
                         color: '#9e2146',
                       },
                     },
+                    hidePostalCode: true
                   }}
                 />
               </div>
               {cardError && <p className="text-red-600 text-sm mt-2">{cardError}</p>}
               
-              <div className="flex justify-between mt-6">
-                <Button variant="outline" onClick={() => setShowPaymentForm(false)} disabled={paymentProcessing}>
+              <div className="flex flex-col sm:flex-row justify-between gap-3 mt-6">
+                <Button variant="outline" onClick={() => setShowPaymentForm(false)} disabled={paymentProcessing} className="w-full sm:w-auto">
                   Back
                 </Button>
-                <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements}>
+                <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements} className="w-full sm:w-auto">
                   {paymentProcessing ? "Processing..." : `Pay ${formatCurrency(downPayment)}`}
                 </Button>
               </div>
@@ -377,42 +385,46 @@ function PaymentScheduleContent({
           ) : (
             /* Split payment across two cards */
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="firstCardAmount" className="text-sm font-medium">
-                  Amount for first card
-                </Label>
-                <div className="flex items-center mt-1">
-                  <Input
-                    id="firstCardAmount"
-                    type="number"
-                    value={firstCardAmount}
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      if (!isNaN(value) && value >= 0 && value <= downPayment) {
-                        setFirstCardAmount(value);
-                      }
-                    }}
-                    className="w-full"
-                    min={1}
-                    max={downPayment - 1}
-                    step={0.01}
-                    disabled={paymentProcessing || firstCardPaid}
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="firstCardAmount" className="text-sm font-medium">
+                    Amount for first card
+                  </Label>
+                  <div className="flex items-center mt-1">
+                    <Input
+                      id="firstCardAmount"
+                      type="number"
+                      inputMode="decimal"
+                      value={firstCardAmount}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        if (!isNaN(value) && value >= 0 && value <= downPayment) {
+                          setFirstCardAmount(value);
+                        }
+                      }}
+                      className="w-full text-base"
+                      min={1}
+                      max={downPayment - 1}
+                      step={0.01}
+                      disabled={paymentProcessing || firstCardPaid}
+                    />
+                  </div>
                 </div>
-              </div>
-              
-              <div>
-                <Label htmlFor="secondCardAmount" className="text-sm font-medium">
-                  Amount for second card
-                </Label>
-                <div className="flex items-center mt-1">
-                  <Input
-                    id="secondCardAmount"
-                    type="number"
-                    value={secondCardAmount}
-                    disabled={true}
-                    className="w-full bg-gray-50"
-                  />
+                
+                <div>
+                  <Label htmlFor="secondCardAmount" className="text-sm font-medium">
+                    Amount for second card
+                  </Label>
+                  <div className="flex items-center mt-1">
+                    <Input
+                      id="secondCardAmount"
+                      type="number"
+                      inputMode="decimal"
+                      value={secondCardAmount}
+                      disabled={true}
+                      className="w-full bg-gray-50 text-base"
+                    />
+                  </div>
                 </div>
               </div>
               
@@ -435,7 +447,7 @@ function PaymentScheduleContent({
                 </TabsList>
                 
                 <TabsContent value="first" className="mt-4">
-                  <div className={`p-3 border rounded-md ${firstCardPaid ? 'bg-gray-100 opacity-50' : ''}`}>
+                  <div className={`p-3 border rounded-md min-h-[40px] touch-manipulation ${firstCardPaid ? 'bg-gray-100 opacity-50' : ''}`}>
                     {!firstCardPaid ? (
                       <CardElement 
                         options={{
@@ -446,11 +458,19 @@ function PaymentScheduleContent({
                               '::placeholder': {
                                 color: '#aab7c4',
                               },
+                              ":-webkit-autofill": {
+                                color: "#424770"
+                              },
+                              // Increase touch target size for mobile
+                              "::selection": {
+                                backgroundColor: "rgba(66, 71, 112, 0.1)"
+                              }
                             },
                             invalid: {
                               color: '#9e2146',
                             },
-                          }
+                          },
+                          hidePostalCode: true
                         }}
                       />
                     ) : (
@@ -461,18 +481,18 @@ function PaymentScheduleContent({
                   </div>
                   {cardError && <p className="text-red-600 text-sm mt-2">{cardError}</p>}
                   
-                  <div className="flex justify-between mt-4">
-                    <Button variant="outline" onClick={() => setEnableSplitPayment(false)} disabled={paymentProcessing}>
+                  <div className="flex flex-col sm:flex-row justify-between gap-3 mt-4">
+                    <Button variant="outline" onClick={() => setEnableSplitPayment(false)} disabled={paymentProcessing} className="w-full sm:w-auto">
                       Use Single Card
                     </Button>
-                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || firstCardAmount <= 0 || firstCardPaid}>
+                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || firstCardAmount <= 0 || firstCardPaid} className="w-full sm:w-auto">
                       {paymentProcessing ? "Processing..." : `Pay ${formatCurrency(firstCardAmount)}`}
                     </Button>
                   </div>
                 </TabsContent>
                 
                 <TabsContent value="second" className="mt-4">
-                  <div className="p-3 border rounded-md">
+                  <div className="p-3 border rounded-md min-h-[40px] touch-manipulation">
                     <CardElement 
                       options={{
                         style: {
@@ -482,24 +502,32 @@ function PaymentScheduleContent({
                             '::placeholder': {
                               color: '#aab7c4',
                             },
+                            ":-webkit-autofill": {
+                              color: "#424770"
+                            },
+                            // Increase touch target size for mobile
+                            "::selection": {
+                              backgroundColor: "rgba(66, 71, 112, 0.1)"
+                            }
                           },
                           invalid: {
                             color: '#9e2146',
                           },
                         },
+                        hidePostalCode: true
                       }}
                     />
                   </div>
                   {cardError && <p className="text-red-600 text-sm mt-2">{cardError}</p>}
                   
-                  <div className="flex justify-between mt-4">
+                  <div className="flex flex-col sm:flex-row justify-between gap-3 mt-4">
                     <Button variant="outline" onClick={() => {
                       setFirstCardPaid(false);
                       setActiveCardTab('first');
-                    }} disabled={paymentProcessing}>
+                    }} disabled={paymentProcessing} className="w-full sm:w-auto">
                       Back to First Card
                     </Button>
-                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || secondCardAmount <= 0}>
+                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || secondCardAmount <= 0} className="w-full sm:w-auto">
                       {paymentProcessing ? "Processing..." : `Pay ${formatCurrency(secondCardAmount)}`}
                     </Button>
                   </div>
