@@ -23,7 +23,8 @@ import {
   ExternalLink,
   Lightbulb,
   CheckCircle,
-  Building
+  Building,
+  User
 } from "lucide-react";
 import BankConnection from "@/components/customer/BankConnection";
 import { Logo } from "@/components/ui/logo";
@@ -198,6 +199,28 @@ export default function CustomerDashboard(): React.ReactNode {
     },
     enabled: !!contract?.customerId,
   });
+  
+  // Fetch user data for profile section
+  const { data: userData, isLoading: isLoadingUserData } = useQuery({
+    queryKey: ["/api/users", contract?.customerId],
+    queryFn: async () => {
+      if (!contract?.customerId) return null;
+      try {
+        const res = await fetch(`/api/users/${contract.customerId}`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          throw new Error("Failed to fetch user data");
+        }
+        const user = await res.json();
+        return user;
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        return null;
+      }
+    },
+    enabled: !!contract?.customerId,
+  });
 
 
   // Format currency values with validation for NaN and undefined
@@ -315,12 +338,12 @@ export default function CustomerDashboard(): React.ReactNode {
     return null;
   }
 
-  if (isLoadingContract || isLoadingFinancialData) {
+  if (isLoadingContract || isLoadingFinancialData || isLoadingUserData) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
         <div className="flex flex-col items-center">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
-          <p className="mt-4 text-sm text-gray-600">Loading your contract information...</p>
+          <p className="mt-4 text-sm text-gray-600">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -376,7 +399,28 @@ export default function CustomerDashboard(): React.ReactNode {
       </div>
       
       <div className="max-w-6xl mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-6">Your Financial Dashboard</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-start mb-6">
+          <h1 className="text-2xl font-bold">Your Financial Dashboard</h1>
+          
+          {/* Profile Section */}
+          <div className="mt-3 sm:mt-0 bg-white shadow rounded-lg p-3 flex items-center">
+            <div className="bg-primary/10 rounded-full p-2 mr-3">
+              <User className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Welcome</p>
+              <p className="font-medium">
+                {isLoadingUserData ? (
+                  <span className="inline-block w-24 h-4 bg-gray-200 animate-pulse rounded"></span>
+                ) : (
+                  userData?.firstName && userData?.lastName ? 
+                    `${userData.firstName} ${userData.lastName}` : 
+                    userData?.name || "Customer"
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
         
         {/* Real Contract Data */}
         <div className="grid gap-6 md:grid-cols-2 mb-8">
