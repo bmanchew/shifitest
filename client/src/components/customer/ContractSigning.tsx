@@ -142,8 +142,11 @@ export default function ContractSigning({
     setSigningError("");
 
     try {
-      // Get the customer's name for the signature
-      const customerName = `${firstName || ""} ${lastName || ""}`.trim() || "Customer";
+      // Extract customer name from component state or props
+      // If no name is available, use "Customer" as default
+      const customerName = customer ? 
+        `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || "Customer" : 
+        "Customer";
 
       console.log("Submitting signature for contract:", contractId, "customer:", customerName);
 
