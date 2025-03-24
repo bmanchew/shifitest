@@ -100,6 +100,11 @@ const ContractDetails = () => {
 
       <ApplicationStatus contractId={parseInt(contractId as string)} />
 
+      {/* Show document view for admin and merchant */}
+      {(user?.role === 'admin' || user?.role === 'merchant') && (
+        <DocumentView contractId={parseInt(contractId as string)} />
+      )}
+      
       {/* Use the factory to display appropriate underwriting view based on user role */}
       <UnderwritingViewFactory 
         userRole={user?.role || 'customer'} 
