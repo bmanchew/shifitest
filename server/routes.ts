@@ -6445,6 +6445,9 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
         recentTransactions: []
       };
       
+      // Track if we have any real Plaid asset report data
+      let hasPlaidData = false;
+      
       for (const contract of contracts) {
         // Get asset reports for this contract
         const contractAssetReports = await storage.getAssetReportsByContractId(contract.id);
@@ -6457,6 +6460,7 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
           
           if (latestReport && latestReport.analysisData) {
             assetReports.push(latestReport);
+            hasPlaidData = true;
             
             // Parse analysis data
             const analysisData = typeof latestReport.analysisData === 'string' 
@@ -6502,15 +6506,36 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
               }
               
               // Find upcoming recurring payments (potential bills)
-              // This is a simplified version - in a real app, this would involve more complex pattern detection
-              const knownBillNames = ['rent', 'mortgage', 'electric', 'gas', 'water', 'internet', 'phone', 'insurance'];
+              // This is based purely on real historical transaction patterns
               const recurringTransactions = analysisData.transactions
-                .filter((t: any) => t.amount > 0 && knownBillNames.some(term => t.name.toLowerCase().includes(term)))
-                .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .slice(0, 10);
+                .filter((t: any) => {
+                  // Find transactions that appear to be recurring (monthly bills)
+                  const amount = t.amount;
+                  if (amount <= 0) return false; // Only look at payments, not deposits
+                  
+                  // Count how many times this merchant appears with similar amounts
+                  const similarTransactions = analysisData.transactions.filter((st: any) => {
+                    const sameMerchant = st.name.toLowerCase() === t.name.toLowerCase();
+                    const similarAmount = Math.abs(st.amount - amount) < amount * 0.1; // Within 10%
+                    return sameMerchant && similarAmount;
+                  });
+                  
+                  // If we have multiple similar transactions, it's likely recurring
+                  return similarTransactions.length >= 2;
+                })
+                .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
               
-              if (recurringTransactions.length > 0) {
-                for (const tx of recurringTransactions) {
+              // Get unique merchants (to avoid duplicates)
+              const uniqueMerchants = new Map();
+              recurringTransactions.forEach((tx: any) => {
+                if (!uniqueMerchants.has(tx.name.toLowerCase())) {
+                  uniqueMerchants.set(tx.name.toLowerCase(), tx);
+                }
+              });
+              
+              // Convert to array of upcoming bills
+              if (uniqueMerchants.size > 0) {
+                uniqueMerchants.forEach((tx: any) => {
                   const lastDate = new Date(tx.date);
                   // Predict next occurrence (typically monthly)
                   const nextDate = new Date(lastDate);
@@ -6519,10 +6544,10 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
                   transactionsSummary.upcomingBills.push({
                     name: tx.name,
                     amount: tx.amount,
-                    predictedDate: nextDate,
+                    dueDate: nextDate.toISOString().split('T')[0],
                     category: tx.category ? tx.category[0] : 'Other'
                   });
-                }
+                });
               }
               
               // Get recent transactions for display
@@ -6536,20 +6561,68 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
         }
       }
       
+      // If we don't have any real Plaid data, return appropriate status
+      if (!hasPlaidData) {
+        logger.info({
+          message: "No Plaid asset report data available for customer",
+          category: "api",
+          source: "plaid",
+          metadata: { customerId },
+        });
+        
+        return res.status(200).json({
+          success: true,
+          data: {
+            contracts: contracts,
+            hasPlaidData: false,
+            needsPlaidConnection: true,
+            accounts: null,
+            transactionsSummary: null,
+            rewardsPoints: calculateCustomerPoints(contracts),
+            insights: []
+          }
+        });
+      }
+      
+      // Format accounts data for the frontend
+      const formattedAccounts = {
+        totalAccounts: accountsData.length,
+        totalBalance: accountsData.reduce((sum, acc) => sum + (acc.balances?.current || 0), 0),
+        totalAvailableBalance: accountsData.reduce((sum, acc) => sum + (acc.balances?.available || 0), 0),
+        accounts: accountsData
+      };
+      
+      // Format cash flow data
+      const cashFlow = {
+        monthlyIncome: transactionsSummary.incomeLastMonth,
+        monthlyExpenses: transactionsSummary.spendingLastMonth,
+        netCashFlow: transactionsSummary.incomeLastMonth - transactionsSummary.spendingLastMonth,
+        categories: Object.entries(transactionsSummary.categories)
+          .map(([name, amount]) => ({ name, amount }))
+          .sort((a, b) => (b.amount as number) - (a.amount as number))
+      };
+      
       // Calculate rewards points based on contract status and payments
       const totalPoints = calculateCustomerPoints(contracts);
       
-      // Generate financial insights and recommendations
+      // Generate financial insights and recommendations based on real data
       const insights = generateFinancialInsights(contracts, accountsData, transactionsSummary);
+      
+      // Generate smart suggestions based on financial behavior
+      const suggestions = generateSmartSuggestions(contracts, transactionsSummary, cashFlow);
       
       return res.status(200).json({
         success: true,
         data: {
           contracts: contracts,
-          accounts: accountsData,
-          transactionsSummary,
+          hasPlaidData: true,
+          accounts: formattedAccounts,
+          cashFlow,
+          upcomingBills: transactionsSummary.upcomingBills,
+          recentTransactions: transactionsSummary.recentTransactions,
           rewardsPoints: totalPoints,
-          insights
+          insights,
+          suggestions
         }
       });
     } catch (error) {
@@ -6695,6 +6768,87 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
                           (currentDate.getMonth() - startDate.getMonth());
     
     return Math.max(0, contract.termMonths - monthsElapsed);
+  };
+  
+  // Function to generate personalized financial suggestions based on real data
+  function generateSmartSuggestions(
+    contracts: Contract[],
+    transactionsSummary: any,
+    cashFlow: any
+  ): any[] {
+    const suggestions = [];
+    
+    // Early payment suggestion - based on cash flow data
+    if (cashFlow.netCashFlow > 0 && contracts.some(c => c.status === 'active')) {
+      const activeContracts = contracts.filter(c => c.status === 'active');
+      
+      // If customer has excess cash flow, suggest increasing payments
+      if (cashFlow.netCashFlow > (activeContracts[0].monthlyPayment * 0.5)) {
+        suggestions.push({
+          title: "Increase Your Monthly Payment",
+          description: `Based on your cash flow, you could increase your payment by $${Math.floor(cashFlow.netCashFlow * 0.5)} per month and pay off your contract earlier.`,
+          actionText: "Set Up Extra Payment",
+          actionUrl: `/contracts/${activeContracts[0].id}/payments`
+        });
+      }
+    }
+    
+    // Auto-payment suggestion - if not already set up
+    const hasAutoPayment = contracts.some(c => c.paymentMethod === 'ach');
+    if (!hasAutoPayment && contracts.some(c => c.status === 'active')) {
+      suggestions.push({
+        title: "Set Up Auto-Payment",
+        description: "Set up automatic payments to earn 500 rewards points and never worry about missing a payment date.",
+        actionText: "Enable Auto-Pay",
+        actionUrl: "/settings/payments"
+      });
+    }
+    
+    // Budget suggestion based on spending patterns
+    if (cashFlow.categories && cashFlow.categories.length > 0) {
+      const topCategory = cashFlow.categories[0];
+      if (topCategory.amount > (cashFlow.monthlyIncome * 0.3)) {
+        suggestions.push({
+          title: "Budget Your Spending",
+          description: `Your spending on ${topCategory.name} is ${Math.round((topCategory.amount / cashFlow.monthlyIncome) * 100)}% of your income. Consider creating a budget.`,
+          actionText: "Create Budget",
+          actionUrl: "/tools/budget"
+        });
+      }
+    }
+    
+    // Financial health tip based on income vs spending
+    if (cashFlow.monthlyIncome > 0 && cashFlow.monthlyExpenses > 0) {
+      const savingsRate = 1 - (cashFlow.monthlyExpenses / cashFlow.monthlyIncome);
+      
+      if (savingsRate < 0.1) {
+        suggestions.push({
+          title: "Build Your Emergency Fund",
+          description: "Financial experts recommend saving at least 10% of your income. Your current savings rate is below this target.",
+          actionText: "Learn More",
+          actionUrl: "/resources/emergency-fund"
+        });
+      } else if (savingsRate > 0.2) {
+        suggestions.push({
+          title: "Consider Investing",
+          description: "You're saving over 20% of your income. This is a great opportunity to consider investing for your future.",
+          actionText: "Explore Options",
+          actionUrl: "/resources/investing"
+        });
+      }
+    }
+    
+    // Add suggestion for bills consolidation if many upcoming bills
+    if (transactionsSummary.upcomingBills && transactionsSummary.upcomingBills.length > 3) {
+      suggestions.push({
+        title: "Streamline Your Bills",
+        description: `You have ${transactionsSummary.upcomingBills.length} recurring bills. Consider consolidating some services to simplify your finances.`,
+        actionText: "View All Bills",
+        actionUrl: "/tools/bill-tracker"
+      });
+    }
+    
+    return suggestions;
   };
 
   // Endpoint to trigger sending surveys for eligible contracts

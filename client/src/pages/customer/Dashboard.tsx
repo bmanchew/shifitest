@@ -339,7 +339,7 @@ export default function CustomerDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {financialData?.accounts ? (
+                {financialData?.hasPlaidData && financialData?.accounts ? (
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Total Balance</span>
@@ -379,7 +379,7 @@ export default function CustomerDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {financialData?.cashFlow ? (
+                {financialData?.hasPlaidData && financialData?.cashFlow ? (
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-500">Monthly Income</span>
@@ -434,7 +434,7 @@ export default function CustomerDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {financialData?.upcomingBills && financialData.upcomingBills.length > 0 ? (
+                {financialData?.hasPlaidData && financialData?.upcomingBills && financialData.upcomingBills.length > 0 ? (
                   <div className="space-y-3">
                     {financialData.upcomingBills.slice(0, 3).map((bill: any, index: number) => (
                       <div key={index} className="flex justify-between items-center py-1">
@@ -449,7 +449,14 @@ export default function CustomerDashboard() {
                 ) : (
                   <div className="flex flex-col items-center justify-center py-4 text-center">
                     <CalendarRange className="h-10 w-10 mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-500">No upcoming bills detected</p>
+                    <p className="text-sm text-gray-500">
+                      {financialData?.hasPlaidData ? "No recurring bills detected" : "Connect your bank accounts to detect recurring bills"}
+                    </p>
+                    {!financialData?.hasPlaidData && (
+                      <Button variant="outline" size="sm" className="mt-3">
+                        Connect Bank
+                      </Button>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -464,7 +471,7 @@ export default function CustomerDashboard() {
             Personalized Suggestions
           </h2>
           <div className="grid gap-4 md:grid-cols-2">
-            {financialData?.suggestions && financialData.suggestions.length > 0 ? (
+            {financialData?.hasPlaidData && financialData?.suggestions && financialData.suggestions.length > 0 ? (
               financialData.suggestions.map((suggestion: any, index: number) => (
                 <Card key={index} className="border-l-4 border-l-amber-500">
                   <CardContent className="p-4">
@@ -484,13 +491,21 @@ export default function CustomerDashboard() {
               <Card className="md:col-span-2">
                 <CardContent className="flex flex-col items-center justify-center p-6 text-center">
                   <Lightbulb className="h-12 w-12 mb-3 text-amber-200" />
-                  <h3 className="font-medium mb-2">Personalized Suggestions Coming Soon</h3>
+                  <h3 className="font-medium mb-2">
+                    {financialData?.hasPlaidData 
+                      ? "Analyzing Your Financial Data..." 
+                      : "Personalized Suggestions Require Banking Data"}
+                  </h3>
                   <p className="text-sm text-gray-500">
-                    Connect your financial accounts to receive customized suggestions based on your spending patterns and financial goals.
+                    {financialData?.hasPlaidData 
+                      ? "We're analyzing your financial data to generate personalized suggestions. Check back soon!"
+                      : "Connect your financial accounts to receive customized suggestions based on your spending patterns and financial goals."}
                   </p>
-                  <Button className="mt-4" variant="outline" size="sm">
-                    Connect Accounts
-                  </Button>
+                  {!financialData?.hasPlaidData && (
+                    <Button className="mt-4" variant="outline" size="sm">
+                      Connect Accounts
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             )}
