@@ -1,34 +1,30 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { addMonths, format } from "date-fns";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { Badge } from "@/components/ui/badge";
 import { 
-  CalendarRange, 
-  Clock, 
-  CreditCard, 
-  Download, 
+  BarChart, 
   FileText, 
+  Gift, 
+  CreditCard, 
   DollarSign, 
-  ExternalLink, 
-  AlertCircle,
-  BarChart,
+  CalendarRange, 
+  BarChart3, 
   PiggyBank,
+  Wallet,
   TrendingUp,
-  Lightbulb,
   ArrowUp,
   ArrowDown,
-  Wallet,
-  Gift,
+  ExternalLink,
+  Lightbulb,
   CheckCircle
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import BankConnection from "@/components/customer/BankConnection";
-import { format, addMonths } from "date-fns";
 import { Logo } from "@/components/ui/logo";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
@@ -42,18 +38,18 @@ export default function CustomerDashboard(): React.ReactNode {
   const [activeBankContractId, setActiveBankContractId] = useState<number | null>(null);
   const [bankConnectionDetails, setBankConnectionDetails] = useState<any>(null);
   const [isCheckingBankConnection, setIsCheckingBankConnection] = useState(false);
-
+  
   // Handle opening the bank connection dialog
   const handleViewBankConnection = async (contractId: number) => {
     setActiveBankContractId(contractId);
     setIsCheckingBankConnection(true);
-
+    
     try {
       // Check if this contract already has a bank connection
       const response = await fetch(`/api/plaid/bank-connection/${contractId}`, {
         credentials: "include",
       });
-
+      
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.hasConnection) {
@@ -169,16 +165,16 @@ export default function CustomerDashboard(): React.ReactNode {
     queryKey: ["/api/contracts/document", contractId],
     queryFn: async () => {
       if (!contractId) return null;
-
+      
       try {
         const res = await fetch(`/api/contracts/${contractId}/document`, {
           credentials: "include",
         });
-
+        
         if (!res.ok) {
           return { success: false, message: "Document not found" };
         }
-
+        
         return res.json();
       } catch (error) {
         console.error("Error fetching document:", error);
@@ -198,10 +194,10 @@ export default function CustomerDashboard(): React.ReactNode {
       });
       return;
     }
-
+    
     // Open document URL in new tab (or could download directly)
     window.open(documentData.documentUrl, '_blank');
-
+    
     toast({
       title: "Document Opened",
       description: "Your signed contract has been opened in a new tab.",
@@ -282,10 +278,10 @@ export default function CustomerDashboard(): React.ReactNode {
           </div>
         </div>
       </div>
-
+      
       <div className="max-w-6xl mx-auto p-6">
         <h1 className="text-2xl font-bold mb-6">Your Financial Dashboard</h1>
-
+        
         {/* Real Contract Data */}
         <div className="grid gap-6 md:grid-cols-2 mb-8">
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-none shadow-md">
@@ -323,7 +319,7 @@ export default function CustomerDashboard(): React.ReactNode {
               </div>
             </CardContent>
           </Card>
-
+          
           {/* Financial Insights/Suggestions Card */}
           <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-none shadow-md">
             <CardHeader className="pb-2">
@@ -515,7 +511,7 @@ export default function CustomerDashboard(): React.ReactNode {
                     <p className="text-sm text-gray-500">
                       {financialData?.hasPlaidData ? "No recurring bills detected" : "Connect your bank accounts to detect recurring bills"}
                     </p>
-                        <Button 
+                    <Button 
                       variant="outline" 
                       size="sm" 
                       className="mt-3"
@@ -593,44 +589,44 @@ export default function CustomerDashboard(): React.ReactNode {
           </div>
         </div>
       </div>
-    </div>
 
-    {/* Bank Connection Dialog */}
-    <Dialog open={showBankDialog} onOpenChange={setShowBankDialog}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {isCheckingBankConnection 
-              ? "Checking Bank Connection..." 
-              : "Your Bank Connection"
-            }
-          </DialogTitle>
-        </DialogHeader>
-
-        {isCheckingBankConnection ? (
-          <div className="p-6 text-center">
-            <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-sm text-gray-600">Checking for existing bank connections...</p>
-          </div>
-        ) : (
-          <BankConnection 
-            contractId={activeBankContractId || 0} 
-            progressId={0}
-            existingConnection={bankConnectionDetails}
-            onComplete={() => {
-              setShowBankDialog(false);
-              if (contract?.customerId) {
-                window.location.reload();
+      {/* Bank Connection Dialog */}
+      <Dialog open={showBankDialog} onOpenChange={setShowBankDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isCheckingBankConnection 
+                ? "Checking Bank Connection..." 
+                : "Your Bank Connection"
               }
-              toast({
-                title: "Bank Connected",
-                description: "Your bank account has been successfully connected. You can now view your financial data.",
-              });
-            }}
-            onBack={() => setShowBankDialog(false)}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+            </DialogTitle>
+          </DialogHeader>
+          
+          {isCheckingBankConnection ? (
+            <div className="p-6 text-center">
+              <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-sm text-gray-600">Checking for existing bank connections...</p>
+            </div>
+          ) : (
+            <BankConnection 
+              contractId={activeBankContractId || 0} 
+              progressId={0}
+              existingConnection={bankConnectionDetails}
+              onComplete={() => {
+                setShowBankDialog(false);
+                if (contract?.customerId) {
+                  window.location.reload();
+                }
+                toast({
+                  title: "Bank Connected",
+                  description: "Your bank account has been successfully connected. You can now view your financial data.",
+                });
+              }}
+              onBack={() => setShowBankDialog(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
