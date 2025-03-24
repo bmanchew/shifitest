@@ -330,13 +330,14 @@ function PaymentScheduleContent({
           <h2 className="text-2xl font-bold mb-4">Down Payment</h2>
           <p className="mb-4">Please complete your down payment of {formatCurrency(downPayment)} to proceed.</p>
           
-          <div className="flex items-center space-x-2 mb-4">
+          <div className="flex items-center gap-3 mb-6 p-3 border rounded-lg bg-gray-50 touch-manipulation">
             <Switch
               id="split-payment"
               checked={enableSplitPayment}
               onCheckedChange={setEnableSplitPayment}
+              className="scale-110"
             />
-            <Label htmlFor="split-payment" className="cursor-pointer">
+            <Label htmlFor="split-payment" className="cursor-pointer text-base font-medium">
               Split payment across two cards
             </Label>
           </div>
@@ -344,13 +345,14 @@ function PaymentScheduleContent({
           {!enableSplitPayment ? (
             /* Single card payment */
             <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">Card Information</label>
-              <div className="p-3 border rounded-md min-h-[40px] touch-manipulation">
+              <label className="block text-base font-medium mb-3">Card Information</label>
+              <div className="p-4 border rounded-lg shadow-sm bg-white min-h-[56px] touch-manipulation">
                 <CardElement 
                   options={{
                     style: {
                       base: {
-                        fontSize: '16px',
+                        fontSize: '18px',
+                        lineHeight: '42px',
                         color: '#424770',
                         '::placeholder': {
                           color: '#aab7c4',
@@ -361,10 +363,14 @@ function PaymentScheduleContent({
                         // Increase touch target size for mobile
                         "::selection": {
                           backgroundColor: "rgba(66, 71, 112, 0.1)"
-                        }
+                        },
+                        // Increase spacing for mobile touch
+                        iconColor: '#5469d4',
+                        padding: '10px 0',
                       },
                       invalid: {
                         color: '#9e2146',
+                        iconColor: '#fa004f'
                       },
                     },
                     hidePostalCode: true
@@ -385,12 +391,12 @@ function PaymentScheduleContent({
           ) : (
             /* Split payment across two cards */
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg border mb-2">
                 <div>
-                  <Label htmlFor="firstCardAmount" className="text-sm font-medium">
+                  <Label htmlFor="firstCardAmount" className="text-base font-medium mb-2 block">
                     Amount for first card
                   </Label>
-                  <div className="flex items-center mt-1">
+                  <div className="flex items-center">
                     <Input
                       id="firstCardAmount"
                       type="number"
@@ -402,7 +408,7 @@ function PaymentScheduleContent({
                           setFirstCardAmount(value);
                         }
                       }}
-                      className="w-full text-base"
+                      className="w-full text-base py-6 px-4 bg-white"
                       min={1}
                       max={downPayment - 1}
                       step={0.01}
@@ -412,17 +418,17 @@ function PaymentScheduleContent({
                 </div>
                 
                 <div>
-                  <Label htmlFor="secondCardAmount" className="text-sm font-medium">
+                  <Label htmlFor="secondCardAmount" className="text-base font-medium mb-2 block">
                     Amount for second card
                   </Label>
-                  <div className="flex items-center mt-1">
+                  <div className="flex items-center">
                     <Input
                       id="secondCardAmount"
                       type="number"
                       inputMode="decimal"
                       value={secondCardAmount}
                       disabled={true}
-                      className="w-full bg-gray-50 text-base"
+                      className="w-full bg-gray-100 text-base py-6 px-4"
                     />
                   </div>
                 </div>
@@ -447,13 +453,14 @@ function PaymentScheduleContent({
                 </TabsList>
                 
                 <TabsContent value="first" className="mt-4">
-                  <div className={`p-3 border rounded-md min-h-[40px] touch-manipulation ${firstCardPaid ? 'bg-gray-100 opacity-50' : ''}`}>
+                  <div className={`p-4 border rounded-lg shadow-sm bg-white min-h-[56px] touch-manipulation ${firstCardPaid ? 'bg-gray-100 opacity-50' : ''}`}>
                     {!firstCardPaid ? (
                       <CardElement 
                         options={{
                           style: {
                             base: {
-                              fontSize: '16px',
+                              fontSize: '18px',
+                              lineHeight: '42px',
                               color: '#424770',
                               '::placeholder': {
                                 color: '#aab7c4',
@@ -461,43 +468,50 @@ function PaymentScheduleContent({
                               ":-webkit-autofill": {
                                 color: "#424770"
                               },
-                              // Increase touch target size for mobile
+                              // Increase spacing for mobile touch
+                              iconColor: '#5469d4',
+                              padding: '10px 0',
                               "::selection": {
                                 backgroundColor: "rgba(66, 71, 112, 0.1)"
                               }
                             },
                             invalid: {
                               color: '#9e2146',
+                              iconColor: '#fa004f'
                             },
                           },
                           hidePostalCode: true
                         }}
                       />
                     ) : (
-                      <div className="text-center py-2 text-gray-500">
+                      <div className="text-center py-3 text-gray-500 flex items-center justify-center">
+                        <svg className="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
                         Card information processed successfully
                       </div>
                     )}
                   </div>
-                  {cardError && <p className="text-red-600 text-sm mt-2">{cardError}</p>}
+                  {cardError && <p className="text-red-600 text-sm mt-2 p-2 bg-red-50 rounded-md border border-red-100">{cardError}</p>}
                   
-                  <div className="flex flex-col sm:flex-row justify-between gap-3 mt-4">
-                    <Button variant="outline" onClick={() => setEnableSplitPayment(false)} disabled={paymentProcessing} className="w-full sm:w-auto">
+                  <div className="flex flex-col sm:flex-row justify-between gap-4 mt-6">
+                    <Button variant="outline" onClick={() => setEnableSplitPayment(false)} disabled={paymentProcessing} className="w-full sm:w-auto py-6 text-base">
                       Use Single Card
                     </Button>
-                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || firstCardAmount <= 0 || firstCardPaid} className="w-full sm:w-auto">
+                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || firstCardAmount <= 0 || firstCardPaid} className="w-full sm:w-auto py-6 text-base bg-primary-600 hover:bg-primary-700">
                       {paymentProcessing ? "Processing..." : `Pay ${formatCurrency(firstCardAmount)}`}
                     </Button>
                   </div>
                 </TabsContent>
                 
                 <TabsContent value="second" className="mt-4">
-                  <div className="p-3 border rounded-md min-h-[40px] touch-manipulation">
+                  <div className="p-4 border rounded-lg shadow-sm bg-white min-h-[56px] touch-manipulation">
                     <CardElement 
                       options={{
                         style: {
                           base: {
-                            fontSize: '16px',
+                            fontSize: '18px',
+                            lineHeight: '42px',
                             color: '#424770',
                             '::placeholder': {
                               color: '#aab7c4',
@@ -505,29 +519,32 @@ function PaymentScheduleContent({
                             ":-webkit-autofill": {
                               color: "#424770"
                             },
-                            // Increase touch target size for mobile
+                            // Increase spacing for mobile touch
+                            iconColor: '#5469d4',
+                            padding: '10px 0',
                             "::selection": {
                               backgroundColor: "rgba(66, 71, 112, 0.1)"
                             }
                           },
                           invalid: {
                             color: '#9e2146',
+                            iconColor: '#fa004f'
                           },
                         },
                         hidePostalCode: true
                       }}
                     />
                   </div>
-                  {cardError && <p className="text-red-600 text-sm mt-2">{cardError}</p>}
+                  {cardError && <p className="text-red-600 text-sm mt-2 p-2 bg-red-50 rounded-md border border-red-100">{cardError}</p>}
                   
-                  <div className="flex flex-col sm:flex-row justify-between gap-3 mt-4">
+                  <div className="flex flex-col sm:flex-row justify-between gap-4 mt-6">
                     <Button variant="outline" onClick={() => {
                       setFirstCardPaid(false);
                       setActiveCardTab('first');
-                    }} disabled={paymentProcessing} className="w-full sm:w-auto">
+                    }} disabled={paymentProcessing} className="w-full sm:w-auto py-6 text-base">
                       Back to First Card
                     </Button>
-                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || secondCardAmount <= 0} className="w-full sm:w-auto">
+                    <Button onClick={handlePayment} disabled={paymentProcessing || !stripe || !elements || secondCardAmount <= 0} className="w-full sm:w-auto py-6 text-base bg-primary-600 hover:bg-primary-700">
                       {paymentProcessing ? "Processing..." : `Pay ${formatCurrency(secondCardAmount)}`}
                     </Button>
                   </div>
