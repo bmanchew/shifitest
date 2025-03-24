@@ -603,12 +603,27 @@ export default function CustomerDashboard() {
     <Dialog open={showBankDialog} onOpenChange={setShowBankDialog}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Connect Your Bank Account</DialogTitle>
+          <DialogTitle>
+            {isCheckingBankConnection ? (
+              "Checking Bank Connection..."
+            ) : bankConnectionDetails ? (
+              "Your Bank Connection"
+            ) : (
+              "Connect Your Bank Account"
+            )}
+          </DialogTitle>
         </DialogHeader>
-        {activeBankContractId && (
+        
+        {isCheckingBankConnection ? (
+          <div className="p-6 text-center">
+            <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-sm text-gray-600">Checking for existing bank connections...</p>
+          </div>
+        ) : activeBankContractId && (
           <BankConnection 
             contractId={activeBankContractId} 
             progressId={0} // Not needed for reconnection
+            existingConnection={bankConnectionDetails}
             onComplete={() => {
               setShowBankDialog(false);
               // Refresh financial data after connecting bank
