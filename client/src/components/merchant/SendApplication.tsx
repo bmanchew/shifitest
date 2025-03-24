@@ -11,6 +11,25 @@ interface SendApplicationProps {
   merchantId?: number;
 }
 
+// Helper function to format phone number to E.164 format
+function formatPhoneNumberE164(phone: string): string {
+  // Remove all non-digit characters
+  const digitsOnly = phone.replace(/\D/g, "");
+  
+  // If the number starts with "1" and has 11 digits, it's already a US number with country code
+  if (digitsOnly.length === 11 && digitsOnly.startsWith("1")) {
+    return `+${digitsOnly}`;
+  }
+  
+  // If the number has 10 digits, assume it's a US number and add +1
+  if (digitsOnly.length === 10) {
+    return `+1${digitsOnly}`;
+  }
+  
+  // Otherwise, just add + (might not be valid but let Twilio validate it)
+  return `+${digitsOnly}`;
+}
+
 export default function SendApplication(props: SendApplicationProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
@@ -39,6 +58,19 @@ export default function SendApplication(props: SendApplicationProps) {
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
         throw new Error("Please enter a valid amount");
       }
+      
+      // Validate phone number
+      if (!phoneNumber.trim()) {
+        throw new Error("Phone number is required");
+      }
+      
+      // Format the phone number properly for Twilio (E.164 format)
+      const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
+      
+      // Make sure we have at least 10 digits
+      if (formattedPhoneNumber.replace(/\D/g, "").length < 10) {
+        throw new Error("Please enter a valid phone number with at least 10 digits");
+      }
 
       const response = await fetch("/api/send-sms", {
         method: "POST",
@@ -46,7 +78,7 @@ export default function SendApplication(props: SendApplicationProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          phoneNumber,
+          phoneNumber: formattedPhoneNumber,
           email,
           merchantId: merchantId,
           amount: parsedAmount
@@ -69,42 +101,42 @@ export default function SendApplication(props: SendApplicationProps) {
         description: `Financing application sent to ${phoneNumber}`
       });
     } catch (error: unknown) {
-            // Enhanced error logging
-            console.error("Error sending application:", error);
+      // Enhanced error logging
+      console.error("Error sending application:", error);
 
-            // Log detailed error information
-            const merchantId = props?.merchantId || (user?.merchantId as number);
-            // Get parsedAmount safely
-            let parsedAmountValue: number;
-            try {
-              parsedAmountValue = parseFloat(amount);
-              if (isNaN(parsedAmountValue)) parsedAmountValue = 0;
-            } catch {
-              parsedAmountValue = 0;
-            }
-            
-            console.error("Error details:", {
-                errorType: error instanceof Error ? error.constructor.name : "Unknown",
-                errorMessage: error instanceof Error ? error.message : String(error),
-                errorStack: error instanceof Error ? error.stack : undefined,
-                requestData: {
-                    phoneNumber,
-                    email,
-                    merchantId: merchantId, 
-                    amount: parsedAmountValue
-                }
-            });
+      // Log detailed error information
+      const merchantId = props?.merchantId || (user?.merchantId as number);
+      // Get parsedAmount safely
+      let parsedAmountValue: number;
+      try {
+        parsedAmountValue = parseFloat(amount);
+        if (isNaN(parsedAmountValue)) parsedAmountValue = 0;
+      } catch {
+        parsedAmountValue = 0;
+      }
+      
+      console.error("Error details:", {
+        errorType: error instanceof Error ? error.constructor.name : "Unknown",
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        requestData: {
+          phoneNumber,
+          email,
+          merchantId: merchantId, 
+          amount: parsedAmountValue
+        }
+      });
 
-            // Create user-friendly error message
-            const o = error instanceof Error ? error.message : "An unknown error occurred";
+      // Create user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
 
-            // Show error toast to user
-            toast({
-                title: "Error Sending Application",
-                description: o,
-                variant: "destructive"
-            });
-        } finally {
+      // Show error toast to user
+      toast({
+        title: "Error Sending Application",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    } finally {
       setIsSubmitting(false);
     }
   };
