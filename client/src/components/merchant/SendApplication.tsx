@@ -4,8 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Send } from "lucide-react";
+import { Send, Calculator } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import FinancingCalculator from "./FinancingCalculator";
 
 interface SendApplicationProps {
   merchantId?: number;
@@ -35,6 +36,8 @@ export default function SendApplication(props: SendApplicationProps) {
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCalculator, setShowCalculator] = useState(false);
+  const [parsedAmount, setParsedAmount] = useState(0);
   const { toast } = useToast();
   const { user } = useAuth();
 
