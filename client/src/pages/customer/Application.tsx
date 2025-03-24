@@ -414,7 +414,7 @@ export default function Application() {
       });
     }
 
-    window.location.href = `/dashboard/${contractData.contract.id}`;
+    setLocation(`/dashboard/${contractData.contract.id}`);
   };
 
   // Handle going back to the previous step
