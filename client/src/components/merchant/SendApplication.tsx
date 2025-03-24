@@ -41,10 +41,10 @@ export default function SendApplication(props: SendApplicationProps) {
   const { toast } = useToast();
   const { user } = useAuth();
 
+  // Validates form fields and shows calculator if valid
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-
+    
     try {
       // Get the merchant ID from props or user context
       const merchantId = props?.merchantId || (user?.merchantId as number);
@@ -53,8 +53,6 @@ export default function SendApplication(props: SendApplicationProps) {
       if (!merchantId) {
         throw new Error("Merchant ID is required but not available");
       }
-
-      console.log("Sending application with merchantId:", merchantId);
 
       // Ensure amount is a valid number
       const parsedAmount = parseFloat(amount);
@@ -74,7 +72,35 @@ export default function SendApplication(props: SendApplicationProps) {
       if (formattedPhoneNumber.replace(/\D/g, "").length < 10) {
         throw new Error("Please enter a valid phone number with at least 10 digits");
       }
+      
+      // Store parsed amount for calculator and show it
+      setParsedAmount(parsedAmount);
+      setShowCalculator(true);
+      
+    } catch (error) {
+      // Create user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
 
+      // Show error toast to user
+      toast({
+        title: "Validation Error",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // This handles the actual sending of the application after calculator confirmation
+  const handleSendApplication = async () => {
+    setIsSubmitting(true);
+    
+    try {
+      // Get the merchant ID from props or user context
+      const merchantId = props?.merchantId || (user?.merchantId as number);
+      
+      // Format the phone number for Twilio
+      const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
+      
       const response = await fetch("/api/send-sms", {
         method: "POST",
         headers: {
@@ -98,6 +124,7 @@ export default function SendApplication(props: SendApplicationProps) {
       setPhoneNumber("");
       setEmail("");
       setAmount("");
+      setShowCalculator(false);
 
       toast({
         title: "Application Sent!",
@@ -163,6 +190,7 @@ export default function SendApplication(props: SendApplicationProps) {
               id="phone" 
               type="tel" 
               placeholder="(555) 123-4567" 
+              inputMode="tel"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               required
@@ -175,6 +203,7 @@ export default function SendApplication(props: SendApplicationProps) {
               id="email" 
               type="email" 
               placeholder="customer@example.com" 
+              inputMode="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -182,16 +211,34 @@ export default function SendApplication(props: SendApplicationProps) {
 
           <div className="space-y-2">
             <Label htmlFor="amount">Amount</Label>
-            <Input 
-              id="amount" 
-              type="number" 
-              min="1"
-              step="0.01"
-              placeholder="1000.00" 
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-            />
+            <div className="relative">
+              <Input 
+                id="amount" 
+                type="number" 
+                min="1"
+                step="0.01"
+                placeholder="1000.00" 
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                required
+              />
+              {amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0 && (
+                <Button 
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                  onClick={() => {
+                    setParsedAmount(parseFloat(amount));
+                    setShowCalculator(true);
+                  }}
+                >
+                  <Calculator className="h-4 w-4" />
+                  <span className="sr-only">View payment calculator</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           <Button 
@@ -199,10 +246,18 @@ export default function SendApplication(props: SendApplicationProps) {
             className="w-full"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Sending..." : "Send Application"}
+            {isSubmitting ? "Sending..." : "Calculate & Send Application"}
           </Button>
         </form>
       </CardContent>
+      
+      {/* Financing Calculator Dialog */}
+      <FinancingCalculator
+        amount={parsedAmount}
+        open={showCalculator}
+        onClose={() => setShowCalculator(false)}
+        onConfirm={handleSendApplication}
+      />
     </Card>
   );
 }
