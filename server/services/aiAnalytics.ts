@@ -482,7 +482,7 @@ export class AIAnalyticsService {
       return {
         recommendations,
         analysisDate: new Date().toISOString(),
-        dataSource: 'CFPB complaint data and portfolio performance metrics',
+        dataSource: 'GPT-4.5 analysis of CFPB complaint data and portfolio performance metrics',
         portfolioHealth: portfolioMetrics,
         complaintsSampleSize: recentComplaints.length
       };
