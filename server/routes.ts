@@ -804,6 +804,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     },
   );
+  
+  // Get contract document URL from signing progress
+  apiRouter.get(
+    "/contracts/:id/document",
+    async (req: Request, res: Response) => {
+      try {
+        const contractId = parseInt(req.params.id);
+        if (isNaN(contractId)) {
+          return res.status(400).json({ message: "Invalid contract ID format" });
+        }
+
+        // Get all application progress steps for this contract
+        const progress = await storage.getApplicationProgressByContractId(contractId);
+        
+        // Find the signing step with completed status
+        const signingStep = progress.find(
+          (step) => step.step === "signing" && step.completed
+        );
+
+        if (!signingStep || !signingStep.data) {
+          return res.status(404).json({ 
+            success: false,
+            message: "Signed document not found for this contract" 
+          });
+        }
+
+        try {
+          // Parse the JSON data from the signing step
+          const signingData = JSON.parse(signingStep.data);
+          
+          if (!signingData.documentUrl) {
+            return res.status(404).json({ 
+              success: false,
+              message: "Document URL not available" 
+            });
+          }
+
+          // Return the document URL and other relevant signing data
+          res.json({
+            success: true,
+            documentUrl: signingData.documentUrl,
+            signedAt: signingData.signedAt || signingData.completedAt,
+            signatureId: signingData.signatureId,
+            status: signingData.status
+          });
+        } catch (parseError) {
+          console.error("Error parsing signing data:", parseError);
+          return res.status(500).json({ 
+            success: false,
+            message: "Error retrieving document data" 
+          });
+        }
+      } catch (error) {
+        console.error("Get contract document error:", error);
+        res.status(500).json({ 
+          success: false,
+          message: "Internal server error" 
+        });
+      }
+    },
+  );
 
   // Get KYC progress step specifically - creates KYC progress if it doesn't exist
   apiRouter.get(

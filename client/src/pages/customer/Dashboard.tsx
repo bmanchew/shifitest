@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { CalendarRange, Clock, CreditCard, Download, FileText, DollarSign, ExternalLink } from "lucide-react";
+import { CalendarRange, Clock, CreditCard, Download, FileText, DollarSign, ExternalLink, AlertCircle } from "lucide-react";
 import { format, addMonths } from "date-fns";
 import { Logo } from "@/components/ui/logo";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 export default function CustomerDashboard() {
   const { contractId: contractIdParam } = useParams();
@@ -102,13 +103,48 @@ export default function CustomerDashboard() {
     // In a real app, redirect to payment page or open payment modal
   };
 
+  // Fetch contract document
+  const { data: documentData, isLoading: isLoadingDocument } = useQuery({
+    queryKey: ["/api/contracts/document", contractId],
+    queryFn: async () => {
+      if (!contractId) return null;
+      
+      try {
+        const res = await fetch(`/api/contracts/${contractId}/document`, {
+          credentials: "include",
+        });
+        
+        if (!res.ok) {
+          return { success: false, message: "Document not found" };
+        }
+        
+        return res.json();
+      } catch (error) {
+        console.error("Error fetching document:", error);
+        return { success: false, message: "Error retrieving document" };
+      }
+    },
+    enabled: !!contractId,
+  });
+
   // Handle download contract
   const handleDownloadContract = () => {
+    if (!documentData || !documentData.success) {
+      toast({
+        title: "Document Not Available",
+        description: documentData?.message || "The signed contract document is not available.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Open document URL in new tab (or could download directly)
+    window.open(documentData.documentUrl, '_blank');
+    
     toast({
-      title: "Contract Download",
-      description: "Your contract is being prepared for download.",
+      title: "Document Opened",
+      description: "Your signed contract has been opened in a new tab.",
     });
-    // In a real app, generate and download contract PDF
   };
 
   // Handle early payoff
@@ -459,49 +495,86 @@ export default function CustomerDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="border rounded-lg p-4 flex justify-between items-center">
-                    <div className="flex items-center">
-                      <FileText className="h-8 w-8 text-gray-400 mr-3" />
-                      <div>
-                        <p className="font-medium">Retail Installment Contract</p>
-                        <p className="text-sm text-gray-500">Signed on {format(new Date(), "MMM d, yyyy")}</p>
-                      </div>
-                    </div>
-                    <Button variant="outline" onClick={handleDownloadContract}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Download
-                    </Button>
+                {isLoadingDocument ? (
+                  <div className="flex justify-center items-center py-8">
+                    <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
+                    <span className="ml-2 text-sm text-gray-500">Loading document...</span>
                   </div>
+                ) : !documentData || !documentData.success ? (
+                  <Alert className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Document Not Available</AlertTitle>
+                    <AlertDescription>
+                      {documentData?.message || "Your signed contract document is not yet available."}
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="border rounded-lg p-4 flex justify-between items-center">
+                      <div className="flex items-center">
+                        <FileText className="h-8 w-8 text-gray-400 mr-3" />
+                        <div>
+                          <p className="font-medium">Signed Financing Contract</p>
+                          <p className="text-sm text-gray-500">
+                            Signed on {documentData.signedAt 
+                              ? format(new Date(documentData.signedAt), "MMM d, yyyy") 
+                              : format(new Date(), "MMM d, yyyy")}
+                          </p>
+                        </div>
+                      </div>
+                      <Button variant="outline" onClick={handleDownloadContract}>
+                        <Download className="mr-2 h-4 w-4" />
+                        View Document
+                      </Button>
+                    </div>
 
-                  <div className="border rounded-lg p-4 flex justify-between items-center">
-                    <div className="flex items-center">
-                      <FileText className="h-8 w-8 text-gray-400 mr-3" />
-                      <div>
-                        <p className="font-medium">Terms & Conditions</p>
-                        <p className="text-sm text-gray-500">General contract terms</p>
+                    <div className="border rounded-lg p-4 flex justify-between items-center">
+                      <div className="flex items-center">
+                        <FileText className="h-8 w-8 text-gray-400 mr-3" />
+                        <div>
+                          <p className="font-medium">Terms & Conditions</p>
+                          <p className="text-sm text-gray-500">General contract terms</p>
+                        </div>
                       </div>
+                      <Button 
+                        variant="outline" 
+                        disabled={!documentData || !documentData.success}
+                        onClick={() => {
+                          toast({
+                            title: "Document Access",
+                            description: "Terms & Conditions are included in your signed contract document.",
+                          });
+                          handleDownloadContract();
+                        }}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        View
+                      </Button>
                     </div>
-                    <Button variant="outline" onClick={handleDownloadContract}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Download
-                    </Button>
-                  </div>
 
-                  <div className="border rounded-lg p-4 flex justify-between items-center">
-                    <div className="flex items-center">
-                      <CalendarRange className="h-8 w-8 text-gray-400 mr-3" />
-                      <div>
-                        <p className="font-medium">Payment Schedule</p>
-                        <p className="text-sm text-gray-500">Full payment schedule</p>
+                    <div className="border rounded-lg p-4 flex justify-between items-center">
+                      <div className="flex items-center">
+                        <CalendarRange className="h-8 w-8 text-gray-400 mr-3" />
+                        <div>
+                          <p className="font-medium">Payment Schedule</p>
+                          <p className="text-sm text-gray-500">Full payment schedule</p>
+                        </div>
                       </div>
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          toast({
+                            title: "Payment Schedule",
+                            description: "Your payment schedule can be viewed in the Payments tab.",
+                          });
+                        }}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        View
+                      </Button>
                     </div>
-                    <Button variant="outline" onClick={handleDownloadContract}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Download
-                    </Button>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
