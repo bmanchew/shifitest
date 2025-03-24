@@ -92,6 +92,7 @@ export interface IStorage {
   storeAssetReportToken(contractId: number, assetReportToken: string, assetReportId: string, options: any): Promise<AssetReport>;
   getAssetReportById(id: number): Promise<AssetReport | undefined>;
   getAssetReportsByContractId(contractId: number): Promise<AssetReport[]>;
+  getAssetReportsByUserId(userId: number): Promise<AssetReport[]>;
   getAssetReportsByAssetReportId(assetReportId: string): Promise<AssetReport[]>;
   updateAssetReportStatus(id: number, status: string, analysisData?: any): Promise<AssetReport | undefined>;
   getLatestPortfolioMonitoring(): Promise<PortfolioMonitoring | null>;
