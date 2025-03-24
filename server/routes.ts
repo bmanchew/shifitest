@@ -13,7 +13,8 @@ import {
   insertApplicationProgressSchema,
   insertLogSchema,
   insertCustomerSatisfactionSurveySchema,
-  type InsertCustomerSatisfactionSurvey
+  type InsertCustomerSatisfactionSurvey,
+  logSourceEnum
 } from "@shared/schema";
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
@@ -6296,7 +6297,7 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
         logger.info({
           message: "Merchant performance metrics updated with new survey data",
           category: "system",
-          source: "analytics",
+          source: logSourceEnum.enumValues.find(src => src === "analytics") || "internal",
           metadata: {
             merchantId,
             contractId,
@@ -6308,7 +6309,7 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
         logger.error({
           message: `Error updating merchant performance after survey submission: ${merchantUpdateError instanceof Error ? merchantUpdateError.message : String(merchantUpdateError)}`,
           category: "system",
-          source: "analytics",
+          source: logSourceEnum.enumValues.find(src => src === "analytics") || "internal",
           metadata: {
             contractId,
             merchantId: contract.merchantId,
