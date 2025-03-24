@@ -19,10 +19,20 @@ import { Search, Filter } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 
+interface Customer {
+  id: number;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+}
+
 export default function Contracts() {
   const { user } = useAuth();
   const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [customerCache, setCustomerCache] = useState<Record<number, Customer>>({});
 
   const { data: contracts = [] } = useQuery<Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
@@ -65,30 +75,68 @@ export default function Contracts() {
     }).format(amount);
   };
 
+  const fetchCustomer = async (customerId: number) => {
+    if (customerCache[customerId]) {
+      return customerCache[customerId];
+    }
+    
+    try {
+      const response = await fetch(`/api/customers/${customerId}`, {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch customer with ID ${customerId}`);
+      }
+      
+      const customer = await response.json();
+      setCustomerCache(prev => ({ ...prev, [customerId]: customer }));
+      return customer;
+    } catch (error) {
+      console.error(`Error fetching customer ${customerId}:`, error);
+      return { id: customerId };
+    }
+  };
+
+  // Hook to fetch customer data for all contracts
+  useQuery({
+    queryKey: ["customers", contracts.map(c => c.customerId).filter(Boolean)],
+    queryFn: async () => {
+      const customerIds = contracts
+        .map(c => c.customerId)
+        .filter((id): id is number => id !== null && id !== undefined);
+      
+      const uniqueIds = [...new Set(customerIds)];
+      
+      await Promise.all(uniqueIds.map(fetchCustomer));
+      return true;
+    },
+    enabled: contracts.length > 0,
+  });
+
   const getCustomerName = (customerId?: number) => {
     if (!customerId) return "Unknown Customer";
-
-    // Mock data for the demo
-    const mockCustomers: Record<number, { name: string, email: string }> = {
-      2: { name: "Sarah Johnson", email: "sarah.j@example.com" },
-      3: { name: "Michael Brown", email: "m.brown@example.com" },
-      4: { name: "Jennifer Smith", email: "j.smith@example.com" }
-    };
-
-    return mockCustomers[customerId]?.name || `Customer ${customerId}`;
+    
+    const customer = customerCache[customerId];
+    if (!customer) return `Loading...`;
+    
+    if (customer.name) return customer.name;
+    if (customer.firstName && customer.lastName) return `${customer.firstName} ${customer.lastName}`;
+    if (customer.firstName) return customer.firstName;
+    if (customer.lastName) return customer.lastName;
+    if (customer.email) return customer.email.split('@')[0];
+    if (customer.phone) return customer.phone;
+    
+    return `Customer ${customerId}`;
   };
 
   const getCustomerEmail = (customerId?: number) => {
     if (!customerId) return "";
-
-    // Mock data for the demo
-    const mockCustomers: Record<number, { name: string, email: string }> = {
-      2: { name: "Sarah Johnson", email: "sarah.j@example.com" },
-      3: { name: "Michael Brown", email: "m.brown@example.com" },
-      4: { name: "Jennifer Smith", email: "j.smith@example.com" }
-    };
-
-    return mockCustomers[customerId]?.email || "";
+    
+    const customer = customerCache[customerId];
+    if (!customer) return "";
+    
+    return customer.email || "";
   };
 
   // Function to get credit tier badge variant
