@@ -6493,7 +6493,7 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
           logger.info({
             message: `Satisfaction survey sent for contract ${contract.contractNumber}`,
             category: "system",
-            source: "notification",
+            source: logSourceEnum.enumValues.find(src => src === "notification") || "internal",
             metadata: {
               contractId: contract.id,
               customerId: customer.id
@@ -6503,7 +6503,7 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
           logger.error({
             message: `Error sending survey for contract ${contract.id}: ${error instanceof Error ? error.message : String(error)}`,
             category: "system",
-            source: "notification",
+            source: logSourceEnum.enumValues.find(src => src === "notification") || "internal",
             metadata: {
               contractId: contract.id,
               error: error instanceof Error ? error.stack : String(error)
@@ -6524,7 +6524,7 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
             logger.info({
               message: "Merchant performance metrics updated after sending surveys",
               category: "system",
-              source: "analytics",
+              source: logSourceEnum.enumValues.find(src => src === "analytics") || "internal",
               metadata: {
                 merchantId,
                 affectedContractsCount: eligibleContracts.filter(c => c.merchantId === merchantId).length
@@ -6535,7 +6535,7 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
           logger.error({
             message: `Error updating merchant performance metrics: ${updateError instanceof Error ? updateError.message : String(updateError)}`,
             category: "system",
-            source: "analytics",
+            source: logSourceEnum.enumValues.find(src => src === "analytics") || "internal",
             metadata: {
               merchantIds: Array.from(merchantIdsToUpdate),
               error: updateError instanceof Error ? updateError.stack : String(updateError)
