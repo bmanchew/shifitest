@@ -5296,6 +5296,61 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
       // Parse the bank data
       const bankData = JSON.parse(bankStep.data);
       
+      // Get additional Plaid data if available
+      let plaidData = null;
+      
+      if (bankData.accessToken) {
+        try {
+          // Import the Plaid service
+          const { plaidService } = await import('./services');
+          
+          // Check if Plaid service is initialized
+          if (plaidService && plaidService.isInitialized()) {
+            // Get auth data for account and routing numbers
+            const authResponse = await plaidService.getAuth(bankData.accessToken);
+            
+            // Get the specific account's data
+            const accountDetails = authResponse.accounts.find(acc => acc.account_id === bankData.accountId);
+            
+            if (accountDetails) {
+              // Build the Plaid data object with non-sensitive information
+              plaidData = {
+                accounts: [{
+                  account_id: accountDetails.account_id,
+                  name: accountDetails.name,
+                  mask: accountDetails.mask,
+                  type: accountDetails.type,
+                  subtype: accountDetails.subtype,
+                  balances: {
+                    available: accountDetails.balances.available,
+                    current: accountDetails.balances.current,
+                    limit: accountDetails.balances.limit
+                  }
+                }],
+                institution: {
+                  name: bankData.institutionName || "Your Bank",
+                  institution_id: bankData.institutionId || ""
+                },
+                totalBalance: accountDetails.balances.available || accountDetails.balances.current || 0,
+                totalAvailableBalance: accountDetails.balances.available || 0,
+                totalAccounts: 1
+              };
+            }
+          }
+        } catch (plaidError) {
+          logger.warn({
+            message: `Unable to fetch additional Plaid data: ${plaidError instanceof Error ? plaidError.message : String(plaidError)}`,
+            category: "api",
+            source: "plaid",
+            metadata: {
+              error: plaidError instanceof Error ? plaidError.stack : String(plaidError),
+              contractId: contractId
+            }
+          });
+          // Continue without the additional Plaid data
+        }
+      }
+      
       // Return the connection info, but hide sensitive details
       return res.json({
         success: true,
@@ -5308,9 +5363,10 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
           accountMask: bankData.accountMask,
           bankName: bankData.institutionName || "Your Bank",
           connected: true,
-          connectedAt: bankData.completedAt || bankStep.completedAt,
+          connectedAt: bankData.completedAt || bankStep.completedAt
           // Don't send sensitive data like routing/account numbers to the frontend
-        }
+        },
+        plaidData: plaidData // Include the additional Plaid data if available
       });
     } catch (error) {
       logger.error({

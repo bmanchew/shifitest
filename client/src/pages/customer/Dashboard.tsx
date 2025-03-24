@@ -22,7 +22,8 @@ import {
   ArrowDown,
   ExternalLink,
   Lightbulb,
-  CheckCircle
+  CheckCircle,
+  Building
 } from "lucide-react";
 import BankConnection from "@/components/customer/BankConnection";
 import { Logo } from "@/components/ui/logo";
@@ -38,6 +39,9 @@ export default function CustomerDashboard(): React.ReactNode {
   const [activeBankContractId, setActiveBankContractId] = useState<number | null>(null);
   const [bankConnectionDetails, setBankConnectionDetails] = useState<any>(null);
   const [isCheckingBankConnection, setIsCheckingBankConnection] = useState(false);
+  
+  // State for Plaid data from connection
+  const [plaidAccountData, setPlaidAccountData] = useState<any>(null);
   
   // Handle opening the bank connection dialog
   const handleViewBankConnection = async (contractId: number) => {
@@ -55,18 +59,41 @@ export default function CustomerDashboard(): React.ReactNode {
         if (data.success && data.hasConnection) {
           // We have an existing connection, save the details
           setBankConnectionDetails(data.connectionDetails);
+          
+          // Also save the Plaid data if available
+          if (data.plaidData) {
+            setPlaidAccountData(data.plaidData);
+            
+            // Update the financial data if needed
+            if (!financialData || !financialData.hasPlaidData) {
+              // Create a minimal financial data object from the Plaid data
+              const minimalFinancialData = {
+                hasPlaidData: true,
+                accounts: {
+                  totalBalance: data.plaidData.totalBalance || 0,
+                  totalAvailableBalance: data.plaidData.totalAvailableBalance || 0,
+                  totalAccounts: data.plaidData.totalAccounts || 1
+                }
+              };
+              
+              // This could be enhanced to include more data as needed
+            }
+          }
         } else {
           // No existing connection
           setBankConnectionDetails(null);
+          setPlaidAccountData(null);
         }
       } else {
         // Error checking connection status
         console.error("Error checking bank connection status");
         setBankConnectionDetails(null);
+        setPlaidAccountData(null);
       }
     } catch (error) {
       console.error("Error checking bank connection:", error);
       setBankConnectionDetails(null);
+      setPlaidAccountData(null);
     } finally {
       setIsCheckingBankConnection(false);
       setShowBankDialog(true);
@@ -93,6 +120,44 @@ export default function CustomerDashboard(): React.ReactNode {
       }
     },
   });
+  
+  // Auto-check for bank connection when contract loads
+  useEffect(() => {
+    // Only check once contract is loaded and if contractId is valid
+    if (contract && contract.id) {
+      // Check if we already loaded the bank data
+      if (!bankConnectionDetails && !isCheckingBankConnection) {
+        (async () => {
+          try {
+            // Set loading state 
+            setIsCheckingBankConnection(true);
+            
+            // Check for bank connection
+            const response = await fetch(`/api/plaid/bank-connection/${contract.id}`, {
+              credentials: "include",
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.success && data.hasConnection) {
+                // Save the connection details
+                setBankConnectionDetails(data.connectionDetails);
+                
+                // Also save the Plaid data if available
+                if (data.plaidData) {
+                  setPlaidAccountData(data.plaidData);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error auto-checking bank connection:", error);
+          } finally {
+            setIsCheckingBankConnection(false);
+          }
+        })();
+      }
+    }
+  }, [contract, bankConnectionDetails, isCheckingBankConnection]);
 
   // Fetch customer's financial data (includes points, accounts, transactions, insights)
   const { data: financialData, isLoading: isLoadingFinancialData } = useQuery({
@@ -388,24 +453,58 @@ export default function CustomerDashboard(): React.ReactNode {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {financialData?.hasPlaidData && financialData?.accounts ? (
+                {/* Show account data from either financialData API or directly fetched plaidData */}
+                {(financialData?.hasPlaidData && financialData?.accounts) || plaidAccountData ? (
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Total Balance</span>
                       <span className="font-medium">
-                        {formatCurrency(financialData.accounts.totalBalance || 0)}
+                        {formatCurrency(
+                          (financialData?.accounts?.totalBalance) || 
+                          (plaidAccountData?.totalBalance) || 
+                          0
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Available Balance</span>
                       <span className="font-medium">
-                        {formatCurrency(financialData.accounts.totalAvailableBalance || 0)}
+                        {formatCurrency(
+                          (financialData?.accounts?.totalAvailableBalance) || 
+                          (plaidAccountData?.totalAvailableBalance) || 
+                          0
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Accounts</span>
-                      <span className="font-medium">{financialData.accounts.totalAccounts || 0}</span>
+                      <span className="font-medium">
+                        {(financialData?.accounts?.totalAccounts) || 
+                         (plaidAccountData?.totalAccounts) || 
+                         (plaidAccountData?.accounts?.length) || 
+                         1}
+                      </span>
                     </div>
+                    {/* Show bank name if available */}
+                    {(plaidAccountData?.institution?.name || bankConnectionDetails?.bankName) && (
+                      <div className="mt-2 pt-2 border-t border-gray-100">
+                        <div className="flex items-center text-sm">
+                          <Building className="h-4 w-4 mr-2 text-gray-500" />
+                          <span className="text-gray-700">
+                            {plaidAccountData?.institution?.name || bankConnectionDetails?.bankName}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {/* Button to view full details */}
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-2 w-full"
+                      onClick={() => handleViewBankConnection(contract?.id || 0)}
+                    >
+                      View Bank Details
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
