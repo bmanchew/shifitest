@@ -598,3 +598,30 @@ export type InAppNotification = typeof inAppNotifications.$inferSelect;
 export type InsertInAppNotification = z.infer<
   typeof insertInAppNotificationSchema
 >;
+
+// Customer Satisfaction Survey
+export const customerSatisfactionSurveys = pgTable("customer_satisfaction_surveys", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id").notNull().references(() => contracts.id),
+  customerId: integer("customer_id").notNull().references(() => users.id),
+  rating: integer("rating").notNull(), // Scale 1-10
+  feedback: text("feedback"),
+  sentAt: timestamp("sent_at").defaultNow(),
+  respondedAt: timestamp("responded_at"),
+  responseSource: text("response_source"), // 'sms' or 'in_app'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCustomerSatisfactionSurveySchema = createInsertSchema(
+  customerSatisfactionSurveys
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CustomerSatisfactionSurvey = typeof customerSatisfactionSurveys.$inferSelect;
+export type InsertCustomerSatisfactionSurvey = z.infer<
+  typeof insertCustomerSatisfactionSurveySchema
+>;

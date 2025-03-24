@@ -14,10 +14,11 @@ import {
   merchantDocuments, MerchantDocument, InsertMerchantDocument,
   notifications, Notification, InsertNotification,
   notificationChannels, NotificationChannel, InsertNotificationChannel,
-  inAppNotifications, InAppNotification, InsertInAppNotification
+  inAppNotifications, InAppNotification, InsertInAppNotification,
+  customerSatisfactionSurveys, CustomerSatisfactionSurvey, InsertCustomerSatisfactionSurvey
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, inArray, SQL, or, like } from "drizzle-orm";
+import { eq, and, desc, inArray, SQL, or, like, lt } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -129,6 +130,13 @@ export interface IStorage {
   markInAppNotificationAsRead(id: number): Promise<InAppNotification | undefined>;
   markAllInAppNotificationsAsRead(userId: number, userType: string): Promise<number>; // Returns count of notifications updated
 
+  // Customer Satisfaction Survey operations
+  createSatisfactionSurvey(survey: InsertCustomerSatisfactionSurvey): Promise<CustomerSatisfactionSurvey>;
+  getSatisfactionSurvey(id: number): Promise<CustomerSatisfactionSurvey | undefined>;
+  getSatisfactionSurveysByContractId(contractId: number): Promise<CustomerSatisfactionSurvey[]>;
+  getSatisfactionSurveysByCustomerId(customerId: number): Promise<CustomerSatisfactionSurvey[]>;
+  updateSatisfactionSurvey(id: number, data: Partial<CustomerSatisfactionSurvey>): Promise<CustomerSatisfactionSurvey | undefined>;
+  getActiveContractsDueForSurvey(daysActive: number): Promise<Contract[]>; // Gets contracts active for X days that haven't had surveys sent
 
   updateMerchant(id: number, updateData: Partial<Merchant>): Promise<Merchant | undefined>;
   getMerchantByEmail(email: string): Promise<Merchant | undefined>;
@@ -1332,6 +1340,109 @@ export class DatabaseStorage implements IStorage {
 
     // Return number of rows affected
     return result.rowCount || 0;
+  }
+
+  // Customer Satisfaction Survey methods
+  async createSatisfactionSurvey(survey: InsertCustomerSatisfactionSurvey): Promise<CustomerSatisfactionSurvey> {
+    try {
+      const [newSurvey] = await db.insert(customerSatisfactionSurveys)
+        .values(survey)
+        .returning();
+      
+      return newSurvey;
+    } catch (error) {
+      console.error('Error creating satisfaction survey:', error);
+      throw new Error('Failed to create customer satisfaction survey');
+    }
+  }
+
+  async getSatisfactionSurvey(id: number): Promise<CustomerSatisfactionSurvey | undefined> {
+    try {
+      const [survey] = await db.select()
+        .from(customerSatisfactionSurveys)
+        .where(eq(customerSatisfactionSurveys.id, id));
+      
+      return survey;
+    } catch (error) {
+      console.error(`Error getting satisfaction survey with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSatisfactionSurveysByContractId(contractId: number): Promise<CustomerSatisfactionSurvey[]> {
+    try {
+      return await db.select()
+        .from(customerSatisfactionSurveys)
+        .where(eq(customerSatisfactionSurveys.contractId, contractId))
+        .orderBy(desc(customerSatisfactionSurveys.createdAt));
+    } catch (error) {
+      console.error(`Error getting satisfaction surveys for contract ${contractId}:`, error);
+      return [];
+    }
+  }
+
+  async getSatisfactionSurveysByCustomerId(customerId: number): Promise<CustomerSatisfactionSurvey[]> {
+    try {
+      return await db.select()
+        .from(customerSatisfactionSurveys)
+        .where(eq(customerSatisfactionSurveys.customerId, customerId))
+        .orderBy(desc(customerSatisfactionSurveys.createdAt));
+    } catch (error) {
+      console.error(`Error getting satisfaction surveys for customer ${customerId}:`, error);
+      return [];
+    }
+  }
+
+  async updateSatisfactionSurvey(id: number, data: Partial<CustomerSatisfactionSurvey>): Promise<CustomerSatisfactionSurvey | undefined> {
+    try {
+      const [updatedSurvey] = await db.update(customerSatisfactionSurveys)
+        .set(data)
+        .where(eq(customerSatisfactionSurveys.id, id))
+        .returning();
+      
+      return updatedSurvey;
+    } catch (error) {
+      console.error(`Error updating satisfaction survey with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getActiveContractsDueForSurvey(daysActive: number): Promise<Contract[]> {
+    try {
+      const referenceDate = new Date();
+      referenceDate.setDate(referenceDate.getDate() - daysActive);
+      
+      // Get all active contracts that have been active for at least 'daysActive' days
+      const activeContracts = await db.select()
+        .from(contracts)
+        .where(
+          and(
+            eq(contracts.status, 'active'),
+            // Ensure createdAt is before the reference date (contract is old enough)
+            lt(contracts.createdAt, referenceDate)
+          )
+        );
+      
+      if (activeContracts.length === 0) return [];
+      
+      // For each contract, check if a survey has already been sent
+      const contractsWithoutSurveys = [];
+      
+      for (const contract of activeContracts) {
+        // Check if this contract already has a survey
+        const existingSurveys = await this.getSatisfactionSurveysByContractId(contract.id);
+        
+        // If no surveys exist for this contract, add it to the list
+        if (existingSurveys.length === 0) {
+          contractsWithoutSurveys.push(contract);
+        }
+      }
+      
+      return contractsWithoutSurveys;
+    } catch (error) {
+      console.error(`Error getting active contracts due for survey:`, error);
+      return [];
+    }
   }
 }
 
