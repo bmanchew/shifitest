@@ -5260,6 +5260,77 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
     }
   });
 
+  // Check for bank connection status by contract ID
+  apiRouter.get("/plaid/bank-connection/:contractId", async (req: Request, res: Response) => {
+    try {
+      const contractId = parseInt(req.params.contractId);
+      
+      if (isNaN(contractId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid contract ID format"
+        });
+      }
+      
+      // Check if the contract exists
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return res.status(404).json({
+          success: false,
+          message: "Contract not found"
+        });
+      }
+      
+      // Get application progress for this contract, focusing on the bank step
+      const applicationProgress = await storage.getApplicationProgressByContractId(contractId);
+      const bankStep = applicationProgress.find(step => step.step === "bank");
+      
+      if (!bankStep || !bankStep.completed || !bankStep.data) {
+        return res.json({
+          success: true,
+          hasConnection: false,
+          message: "No bank connection found for this contract"
+        });
+      }
+      
+      // Parse the bank data
+      const bankData = JSON.parse(bankStep.data);
+      
+      // Return the connection info, but hide sensitive details
+      return res.json({
+        success: true,
+        hasConnection: true,
+        connectionDetails: {
+          accountId: bankData.accountId,
+          accountName: bankData.accountName,
+          accountType: bankData.accountType,
+          accountSubtype: bankData.accountSubtype,
+          accountMask: bankData.accountMask,
+          bankName: bankData.institutionName || "Your Bank",
+          connected: true,
+          connectedAt: bankData.completedAt || bankStep.completedAt,
+          // Don't send sensitive data like routing/account numbers to the frontend
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error checking bank connection: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error),
+          contractId: req.params.contractId
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to check bank connection status",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // TEST ENDPOINT: Get raw originators directly from Plaid API
   apiRouter.get("/plaid/test/originators", async (req: Request, res: Response) => {
     try {
