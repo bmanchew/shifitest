@@ -8,3 +8,4 @@ export const nlpearlService = new NLPearlService();
 // Export all services
 export { aiAnalyticsService } from './aiAnalytics';
 export { merchantAnalyticsService } from './merchantAnalytics';
+export { openaiService } from './openai';
