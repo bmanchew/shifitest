@@ -42,18 +42,18 @@ export default function CustomerDashboard(): React.ReactNode {
   const [activeBankContractId, setActiveBankContractId] = useState<number | null>(null);
   const [bankConnectionDetails, setBankConnectionDetails] = useState<any>(null);
   const [isCheckingBankConnection, setIsCheckingBankConnection] = useState(false);
-  
+
   // Handle opening the bank connection dialog
   const handleViewBankConnection = async (contractId: number) => {
     setActiveBankContractId(contractId);
     setIsCheckingBankConnection(true);
-    
+
     try {
       // Check if this contract already has a bank connection
       const response = await fetch(`/api/plaid/bank-connection/${contractId}`, {
         credentials: "include",
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.hasConnection) {
@@ -169,16 +169,16 @@ export default function CustomerDashboard(): React.ReactNode {
     queryKey: ["/api/contracts/document", contractId],
     queryFn: async () => {
       if (!contractId) return null;
-      
+
       try {
         const res = await fetch(`/api/contracts/${contractId}/document`, {
           credentials: "include",
         });
-        
+
         if (!res.ok) {
           return { success: false, message: "Document not found" };
         }
-        
+
         return res.json();
       } catch (error) {
         console.error("Error fetching document:", error);
@@ -198,10 +198,10 @@ export default function CustomerDashboard(): React.ReactNode {
       });
       return;
     }
-    
+
     // Open document URL in new tab (or could download directly)
     window.open(documentData.documentUrl, '_blank');
-    
+
     toast({
       title: "Document Opened",
       description: "Your signed contract has been opened in a new tab.",
@@ -282,10 +282,10 @@ export default function CustomerDashboard(): React.ReactNode {
           </div>
         </div>
       </div>
-      
+
       <div className="max-w-6xl mx-auto p-6">
         <h1 className="text-2xl font-bold mb-6">Your Financial Dashboard</h1>
-        
+
         {/* Real Contract Data */}
         <div className="grid gap-6 md:grid-cols-2 mb-8">
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-none shadow-md">
@@ -323,7 +323,7 @@ export default function CustomerDashboard(): React.ReactNode {
               </div>
             </CardContent>
           </Card>
-          
+
           {/* Financial Insights/Suggestions Card */}
           <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-none shadow-md">
             <CardHeader className="pb-2">
@@ -606,7 +606,7 @@ export default function CustomerDashboard(): React.ReactNode {
             }
           </DialogTitle>
         </DialogHeader>
-        
+
         {isCheckingBankConnection ? (
           <div className="p-6 text-center">
             <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
