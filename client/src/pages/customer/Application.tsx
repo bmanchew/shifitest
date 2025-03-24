@@ -401,20 +401,29 @@ export default function Application() {
 
   // Navigate to dashboard after completion
   const navigateToDashboard = () => {
-    if (!contractData || !contractData.contract) {
+    // Check if we have the contract data directly in contractData
+    const contractId = contractData?.id || contractResponse?.contract?.id;
+    
+    if (!contractId) {
       console.error('Contract data not available for dashboard redirect');
+      toast({
+        title: "Navigation Error",
+        description: "Unable to find your contract information. Please try again.",
+        variant: "destructive"
+      });
       return;
     }
 
     // Add points for ACH setup if bank connection is completed
     if (completedSteps.includes('bank')) {
-      apiRequest('POST', `/api/contracts/${contractData.contract.id}/points`, {
+      apiRequest('POST', `/api/contracts/${contractId}/points`, {
         points: 500,
         reason: 'ach_setup_bonus'
       });
     }
 
-    setLocation(`/dashboard/${contractData.contract.id}`);
+    // Navigate to dashboard with the contract ID
+    setLocation(`/dashboard/${contractId}`);
   };
 
   // Handle going back to the previous step
@@ -429,10 +438,10 @@ export default function Application() {
 
   // Handle completion of all steps
   useEffect(() => {
-    if (currentStep === "completed" && contractData && contractData.contract) {
+    if (currentStep === "completed" && (contractData || contractResponse?.contract)) {
       navigateToDashboard();
     }
-  }, [currentStep, contractData]);
+  }, [currentStep, contractData, contractResponse]);
 
   // If still loading contract data, show loading state
   if (!contractData) {
