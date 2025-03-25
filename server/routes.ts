@@ -669,38 +669,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  apiRouter.get("/contracts", async (req: Request, res: Response) => {
-    try {
-      const { merchantId, customerId } = req.query;
-
-      let contracts;
-      if (merchantId) {
-        const id = parseInt(merchantId as string);
-        if (isNaN(id)) {
-          return res
-            .status(400)
-            .json({ message: "Invalid merchant ID format" });
-        }
-        contracts = await storage.getContractsByMerchantId(id);
-      } else if (customerId) {
-        const id = parseInt(customerId as string);
-        if (isNaN(id)) {
-          return res
-            .status(400)
-            .json({ message: "Invalid customer ID format" });
-        }
-        contracts = await storage.getContractsByCustomerId(id);
-      } else {
-        contracts = await storage.getAllContracts();
-      }
-
-      res.json(contracts);
-    } catch (error) {
-      console.error("Get contracts error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
   apiRouter.get("/contracts/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
@@ -1098,193 +1066,12 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       res.status(500).json({ message: "Internal server error" });
     }
   });
-  // Log routes
-  apiRouter.get("/logs", async (req: Request, res: Response) => {
-    try {
-      const { userId } = req.query;
-
-      let logs;
-      if (userId) {
-        const id = parseInt(userId as string);
-        if (isNaN(id)) {
-          return res.status(400).json({ message: "Invalid user ID format" });
-        }
-        logs = await storage.getLogsByUserId(id);
-      } else {
-        logs = await storage.getLogs();
-      }
-
-      res.json(logs);
-    } catch (error) {
-      console.error("Get logs error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
 
 
+  // Endpoint has been moved to /twilio/send-application with enhanced functionality
   apiRouter.post("/send-application", async (req: Request, res: Response) => {
-    try {
-      const { phoneNumber, merchantId, amount } = req.body;
-      
-      logger.info({
-        message: "Attempting to send application via SMS",
-        category: "api",
-        source: "twilio", 
-        metadata: { phoneNumber, merchantId, amount }
-      });
-      
-      if (!phoneNumber || !merchantId) {
-        logger.warn({
-          message: "Missing required fields for application",
-          category: "api",
-          source: "twilio",
-          metadata: { phoneNumber, merchantId }
-        });
-        
-        return res.status(400).json({
-          success: false,
-          message: "Phone number and merchant ID are required"
-        });
-      }
-      
-      // Verify merchant exists
-      const merchant = await storage.getMerchant(parseInt(merchantId));
-      if (!merchant) {
-        logger.warn({
-          message: `Merchant not found: ${merchantId}`,
-          category: "api",
-          source: "twilio"
-        });
-        
-        return res.status(404).json({
-          success: false,
-          message: "Merchant not found"
-        });
-      }
-      
-      // Create a contract for this application
-      const contractNumber = generateContractNumber();
-      const termMonths = 24; // Fixed term
-      const interestRate = 0; // 0% APR
-      const downPaymentPercent = 15; // 15% down payment
-      const downPayment = parseFloat(amount) * (downPaymentPercent / 100);
-      const financedAmount = parseFloat(amount) - downPayment;
-      const monthlyPayment = financedAmount / termMonths;
-
-      // Find or create a user for this phone number
-      try {
-        const customer = await storage.findOrCreateUserByPhone(phoneNumber);
-        
-        if (!customer) {
-          throw new Error("Failed to create customer record");
-        }
-
-        // Create the contract
-        const newContract = await storage.createContract({
-          contractNumber,
-          merchantId: parseInt(merchantId),
-          customerId: customer.id,
-          amount: parseFloat(amount),
-          downPayment,
-          financedAmount,
-          termMonths,
-          interestRate,
-          monthlyPayment,
-          status: "pending",
-          currentStep: "terms",
-          phoneNumber: phoneNumber
-        });
-
-        logger.info({
-          message: `Created contract for phone ${phoneNumber}`,
-          category: "api",
-          source: "contract",
-          metadata: { contractId: newContract.id, merchantId }
-        });
-
-        // Create application progress for all steps
-        const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
-        for (const step of applicationSteps) {
-          await storage.createApplicationProgress({
-            contractId: newContract.id,
-            step: step as any,
-            completed: false,
-            data: null,
-          });
-        }
-        
-        // Generate application URL with contract ID and merchant ID
-        const applicationUrl = `${req.protocol}://${req.get('host')}/apply/${newContract.id}?mid=${merchantId}`;
-        
-        // Prepare message for SMS
-        const message = `You've been invited to apply for ShiFi financing${
-          amount ? ` for $${parseFloat(amount).toFixed(2)}` : ''
-        }. Apply here: ${applicationUrl}`;
-        
-        // Send SMS using Twilio service
-        const result = await twilioService.sendSMS({
-          to: phoneNumber,
-          body: message
-        });
-        
-        if (!result.success) {
-          logger.error({
-            message: `Failed to send application SMS: ${result.error}`,
-            category: "api",
-            source: "twilio"
-          });
-          
-          return res.status(500).json({
-            success: false,
-            message: "Failed to send application SMS",
-            error: result.error
-          });
-        }
-        
-        // Log successful send
-        logger.info({
-          message: "Successfully sent application SMS",
-          category: "api",
-          source: "twilio",
-          metadata: { messageId: result.messageId, phoneNumber }
-        });
-        
-        return res.status(200).json({
-          success: true,
-          message: "Application sent successfully",
-          messageId: result.messageId,
-          isSimulated: result.isSimulated,
-          contractId: newContract.id,
-          applicationUrl
-        });
-      } catch (userError) {
-        logger.error({
-          message: `Error creating customer or contract: ${userError instanceof Error ? userError.message : String(userError)}`,
-          category: "api",
-          source: "internal",
-          metadata: {
-            error: userError instanceof Error ? userError.stack : String(userError)
-          }
-        });
-        
-        throw userError; // Re-throw to be caught by outer catch block
-      }
-    } catch (error) {
-      logger.error({
-        message: `Error sending application: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "twilio",
-        metadata: {
-          error: error instanceof Error ? error.stack : String(error)
-        }
-      });
-      
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send application",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
+    // Redirect to the newer implementation
+    return res.redirect(307, `/api/twilio/send-application`);
   });
   
   // Add initiate-call endpoint for NLPearl integration
@@ -1640,298 +1427,63 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
     }
   });
 
+  // Endpoint to consolidate SMS sending functionality
   apiRouter.post("/send-sms", async (req: Request, res: Response) => {
     try {
-      // Check if this is a test SMS from admin panel
-      if (req.body.phone && req.body.isTest) {
-        // This is a test request from the admin API verification
-        console.log(`Processing test SMS to ${req.body.phone}`);
-
-        // Create test log entry
-        await storage.createLog({
-          level: "info",
-          category: "api",
-          source: "twilio",
-          message: `Test SMS to ${req.body.phone}`,
-          metadata: JSON.stringify(req.body),
-        });
-
-        // Send a real test message via Twilio service
-        const testResult = await twilioService.sendSMS({
-          to: req.body.phone,
-          body: "This is a test message from ShiFi. Your API verification was successful.",
-        });
-
-        // Return appropriate response
-        return res.json({
-          success: true,
-          message: testResult.isSimulated
-            ? `Test SMS would be sent to ${req.body.phone}`
-            : `Test SMS sent to ${req.body.phone}`,
-          messageId:
-            testResult.messageId ||
-            "SM" + Math.random().toString(36).substring(2, 15).toUpperCase(),
-          status: testResult.isSimulated ? "simulated" : "delivered",
-        });
-      }
-
-      // Regular SMS flow
-      const { phoneNumber, merchantId, amount, email } = req.body;
-
+      // First, create a log of the original request
       logger.info({
-        message: "Attempting to send application SMS",
-        category: "sms",
-        metadata: { 
-          phoneNumber,
-          merchantId,
-          amount,
-          email 
+        message: "SMS request received at /send-sms",
+        category: "api",
+        source: "twilio",
+        metadata: {
+          body: { ...req.body, password: undefined } // Ensure no sensitive data is logged
         }
       });
 
-      if (!phoneNumber || merchantId === undefined || !amount) {
-        logger.warn({
-          message: "Missing required fields for SMS",
-          category: "sms",
-          metadata: { 
-            phoneNumber,
-            merchantId,
-            amount
-          }
-        });
-        return res.status(400).json({
-          success: false,
-          message: "Phone number, merchant ID, and amount are required",
-        });
-      }
-
-      // Validate numeric inputs
-      const merchantIdNum = parseInt(String(merchantId));
-      const amountNum = parseFloat(String(amount));
-      
-      // Add additional debugging
-      console.log("Processing application with merchant ID:", merchantId, "→", merchantIdNum);
-      
-      if (isNaN(merchantIdNum) || isNaN(amountNum)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid merchant ID or amount format",
-        });
-      }
-
-      // Get merchant
-      const merchant = await storage.getMerchant(merchantIdNum);
-      if (!merchant) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Merchant not found" 
-        });
-      }
-
-      // Check for existing pending contracts for this phone number and archive them
-      try {
-        const existingContracts = await storage.getContractsByPhoneNumber(phoneNumber);
-        const pendingContracts = existingContracts.filter(contract => 
-          contract.status === 'pending' && contract.merchantId === merchantIdNum
-        );
-        
-        if (pendingContracts.length > 0) {
-          logger.info({
-            message: `Found ${pendingContracts.length} existing pending contracts for phone ${phoneNumber} - will archive them`,
-            category: "contract",
-            source: "internal",
-            metadata: {
-              phoneNumber,
-              pendingContractIds: pendingContracts.map(c => c.id)
-            }
-          });
-          
-          // Archive each pending contract - never archive active contracts
-          for (const pendingContract of pendingContracts) {
-            // Safety check: never archive active contracts
-            if (pendingContract.status === 'active') {
-              logger.warn({
-                message: `Attempted to archive active contract ${pendingContract.id} - operation skipped`,
-                category: "contract",
-                source: "internal",
-                metadata: {
-                  contractId: pendingContract.id,
-                  status: pendingContract.status,
-                  phoneNumber
-                }
-              });
-              continue; // Skip this contract
-            }
-            
-            await storage.updateContract(pendingContract.id, {
-              archived: true,
-              status: 'cancelled',
-              archived_at: new Date(),
-              archived_reason: 'Superseded by new contract'
-            });
-            
-            logger.info({
-              message: `Archived contract ${pendingContract.id} due to new contract creation`,
-              category: "contract",
-              source: "internal",
-              metadata: {
-                contractId: pendingContract.id,
-                phoneNumber
-              }
-            });
-          }
-        }
-      } catch (archiveError) {
-        logger.warn({
-          message: `Error checking/archiving existing contracts: ${archiveError instanceof Error ? archiveError.message : String(archiveError)}`,
-          category: "contract",
-          source: "internal",
-          metadata: {
-            phoneNumber,
-            error: archiveError instanceof Error ? archiveError.stack : null
-          }
-        });
-        // Continue with contract creation despite archiving error
-      }
-
-      // Create a contract for this financing request with proper type conversions
-      const contractNumber = generateContractNumber();
-      const termMonths = 24; // Fixed term
-      const interestRate = 0; // 0% APR
-      const downPaymentPercent = 15; // 15% down payment
-      const downPayment = amountNum * (downPaymentPercent / 100);
-      const financedAmount = amountNum - downPayment;
-      const monthlyPayment = financedAmount / termMonths;
-
-      // Find or create a user for this phone number, passing in the email
-      try {
-        const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
-
-        if (!customer) {
-          throw new Error("Failed to create or find customer");
-        }
-
+      // Check if this is a test SMS from admin panel
+      if (req.body.phone && req.body.isTest) {
+        // For test SMS, use the dedicated test endpoint
         logger.info({
-          message: `User for contract: ${customer.id}`,
-          category: "api", 
-          source: "twilio",
-          metadata: { 
-            userId: customer.id,
-            email: customer.email,
-            phone: customer.phone 
-          }
-        });
-
-        // Create a new contract
-        const newContract = await storage.createContract({
-          contractNumber,
-          merchantId: merchantIdNum,
-          customerId: customer.id, // Link to the customer immediately
-          amount: amountNum,
-          downPayment,
-          financedAmount,
-          termMonths,
-          interestRate,
-          monthlyPayment,
-          status: "pending",
-          currentStep: "terms",
-          phoneNumber: phoneNumber, // Store the phone number directly in the contract
-        });
-
-        // Create application progress for all steps of this contract
-        const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
-
-        for (const step of applicationSteps) {
-          await storage.createApplicationProgress({
-            contractId: newContract.id,
-            step: step as any,
-            completed: false,
-            data: null,
-          });
-        }
-
-        // Get the application base URL from Replit - include both contract ID and merchant ID
-        const replitDomain = getAppDomain();
-        const applicationUrl = `https://${replitDomain}/apply/${newContract.id}?mid=${merchantIdNum}`;
-
-        // Prepare the SMS message
-        const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amountNum.toFixed(2)}. Click here to apply: ${applicationUrl}`;
-
-        // Send SMS using our Twilio service
-        const result = await twilioService.sendSMS({
-          to: phoneNumber,
-          body: messageText,
-        });
-
-        if (!result.success) {
-          logger.error({
-            message: `Failed to send SMS: ${result.error}`,
-            category: "api",
-            source: "twilio",
-            metadata: {
-              phoneNumber,
-              contractId: newContract.id
-            }
-          });
-          
-          return res.status(500).json({
-            success: false,
-            message: "Failed to send SMS",
-            error: result.error
-          });
-        }
-
-        // Create log for SMS sending
-        await storage.createLog({
-          level: "info",
+          message: "Redirecting test SMS request to /twilio/test-sms",
           category: "api",
-          source: "twilio",
-          message: `SMS sent to ${phoneNumber}`,
-          metadata: JSON.stringify({
-            merchantId,
-            amount: amountNum,
-            contractId: newContract.id,
-            customerEmail: customer.email
-          }),
-        });
-
-        return res.json({ 
-          success: true, 
-          message: "SMS sent successfully",
-          contractId: newContract.id,
-          applicationUrl,
-          isSimulated: result.isSimulated
-        });
-      } catch (customerError) {
-        logger.error({
-          message: `Error creating customer or contract: ${customerError instanceof Error ? customerError.message : String(customerError)}`,
-          category: "api",
-          source: "internal",
-          metadata: {
-            error: customerError instanceof Error ? customerError.stack : String(customerError)
-          }
+          source: "twilio"
         });
         
-        throw customerError; // Re-throw to be caught by outer catch block
+        // Copy the request body
+        req.body.phoneNumber = req.body.phone; // Adjust parameter name if needed
+        req.body.message = "This is a test message from ShiFi. Your API verification was successful.";
+        
+        // Redirect to the test SMS endpoint
+        return res.redirect(307, `/api/twilio/test-sms`);
       }
+
+      // For non-test SMS (application invitations), use the dedicated application endpoint
+      logger.info({
+        message: "Redirecting application SMS request to /twilio/send-application",
+        category: "api",
+        source: "twilio"
+      });
+      
+      // Redirect to the application SMS endpoint
+      return res.redirect(307, `/api/twilio/send-application`);
     } catch (error) {
-      console.error("Send SMS error:", error);
+      console.error("Send SMS redirect error:", error);
 
       // Create error log
       await storage.createLog({
         level: "error",
         category: "api",
         source: "twilio",
-        message: `Failed to send SMS: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to redirect SMS request: ${error instanceof Error ? error.message : String(error)}`,
         metadata: JSON.stringify({
           error: error instanceof Error ? error.stack : null,
-          requestBody: req.body
+          requestBody: { ...req.body, password: undefined } // Ensure no sensitive data is logged
         }),
       });
 
       return res.status(500).json({ 
         success: false,
-        message: "Failed to send application",
+        message: "Failed to process SMS request",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }
@@ -5190,14 +4742,18 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
         });
       }
 
-      // Normalize the phone number
-      const normalizedPhone = phoneNumber.replace(/\D/g, '');
-
-      // Find contracts with this phone number
-      const allContracts = await storage.getAllContracts();
-      const matchingContracts = allContracts.filter(contract => {
-        if (!contract.phoneNumber) return false;
-        return contract.phoneNumber.replace(/\D/g, '') === normalizedPhone;
+      // Use the dedicated storage method to get contracts by phone number
+      // This is more efficient as it uses a direct database query
+      const matchingContracts = await storage.getContractsByPhoneNumber(phoneNumber);
+      
+      logger.info({
+        message: `Fetched contracts by phone number: ${phoneNumber}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          phoneNumber,
+          contractCount: matchingContracts.length
+        }
       });
 
       if (matchingContracts.length === 0) {
@@ -5207,21 +4763,31 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
         });
       }
 
-      // Return the most recent contract
-      const contract = matchingContracts.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )[0];
+      // Return all matching contracts as well as the most recent one
+      // The storage method already sorts by createdAt in descending order
+      const mostRecentContract = matchingContracts[0];
 
       return res.json({
         success: true,
-        contract,
-        message: "Contract found successfully"
+        contract: mostRecentContract, // For backward compatibility
+        contracts: matchingContracts, // Provide all matching contracts
+        message: "Contract(s) found successfully"
       });
     } catch (error) {
-      console.error("Error finding contract by phone:", error);
+      logger.error({
+        message: `Error finding contracts by phone: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          phoneNumber: req.params.phoneNumber,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
       return res.status(500).json({
         success: false,
-        message: "Internal server error"
+        message: "Failed to retrieve contracts by phone number",
+        error: error instanceof Error ? error.message : "Unknown error"
       });
     }
   });
