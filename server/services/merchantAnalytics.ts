@@ -353,3 +353,322 @@ class MerchantAnalyticsService {
 }
 
 export const merchantAnalyticsService = new MerchantAnalyticsService();
+import { db } from "../db";
+import { 
+  eq, 
+  and, 
+  or, 
+  not, 
+  count, 
+  sum, 
+  avg, 
+  sql 
+} from "drizzle-orm";
+import { contracts, merchantPerformance, merchants } from "@shared/schema";
+import { logger } from "./logger";
+
+export class MerchantAnalyticsService {
+  // Calculate merchant performance metrics
+  async calculateMerchantMetrics(merchantId: number) {
+    try {
+      // Get all contracts for this merchant
+      const merchantContracts = await db.select()
+        .from(contracts)
+        .where(eq(contracts.merchantId, merchantId));
+      
+      // Total contracts
+      const totalContracts = merchantContracts.length;
+      
+      // Active contracts
+      const activeContracts = merchantContracts.filter(c => c.status === 'active').length;
+      
+      // Completed contracts
+      const completedContracts = merchantContracts.filter(c => c.status === 'completed').length;
+      
+      // Cancelled contracts
+      const cancelledContracts = merchantContracts.filter(c => c.status === 'cancelled').length;
+      
+      // Default rate (contracts marked as defaulted / total contracts)
+      const defaultedContracts = merchantContracts.filter(c => c.status === 'defaulted').length;
+      const defaultRate = totalContracts > 0 ? (defaultedContracts / totalContracts) * 100 : 0;
+      
+      // Late payment rate - this would require payment history
+      // For now, we'll use a placeholder value
+      const latePaymentRate = 0;
+      
+      // Average contract value
+      const avgContractValue = totalContracts > 0 
+        ? merchantContracts.reduce((sum, c) => sum + c.amount, 0) / totalContracts 
+        : 0;
+      
+      // Risk-adjusted return - simple placeholder calculation
+      // In a real system, this would be much more sophisticated
+      const riskAdjustedReturn = (1 - (defaultRate / 100)) * 15; // Assuming 15% base return
+      
+      // Customer satisfaction score - would come from survey data
+      // For now, use a placeholder value
+      const customerSatisfactionScore = await this.getCustomerSatisfactionScore(merchantId);
+      
+      return {
+        defaultRate,
+        latePaymentRate,
+        avgContractValue,
+        totalContracts,
+        activeContracts,
+        completedContracts,
+        cancelledContracts,
+        riskAdjustedReturn,
+        customerSatisfactionScore
+      };
+    } catch (error) {
+      console.error("Error calculating merchant metrics:", error);
+      throw error;
+    }
+  }
+  
+  // Calculate a merchant's performance score based on metrics
+  calculatePerformanceScore(metrics: any) {
+    // Score components:
+    // - Default rate (lower is better)
+    // - Average contract value (higher is better, to a point)
+    // - Active contracts (more is better)
+    // - Customer satisfaction (higher is better)
+    
+    try {
+      // Default rate score (0-25 points)
+      const defaultRateScore = Math.max(0, 25 - (metrics.defaultRate * 2.5));
+      
+      // Contract volume score (0-25 points)
+      const volumeScore = Math.min(25, metrics.totalContracts / 2);
+      
+      // Average value score (0-25 points)
+      const valueScore = Math.min(25, (metrics.avgContractValue / 1000) * 2.5);
+      
+      // Customer satisfaction score (0-25 points)
+      const satisfactionScore = (metrics.customerSatisfactionScore / 10) * 25;
+      
+      // Final score (0-100)
+      const score = Math.round(defaultRateScore + volumeScore + valueScore + satisfactionScore);
+      
+      return Math.min(100, Math.max(0, score));
+    } catch (error) {
+      console.error("Error calculating performance score:", error);
+      return 0;
+    }
+  }
+  
+  // Convert numerical score to letter grade
+  scoreToGrade(score: number) {
+    if (score >= 90) return 'A+';
+    if (score >= 85) return 'A';
+    if (score >= 80) return 'A-';
+    if (score >= 75) return 'B+';
+    if (score >= 70) return 'B';
+    if (score >= 65) return 'B-';
+    if (score >= 60) return 'C+';
+    if (score >= 55) return 'C';
+    if (score >= 50) return 'C-';
+    if (score >= 45) return 'D+';
+    if (score >= 40) return 'D';
+    if (score >= 35) return 'D-';
+    return 'F';
+  }
+  
+  // Get customer satisfaction score for a merchant
+  async getCustomerSatisfactionScore(merchantId: number) {
+    try {
+      // Query customer satisfaction survey data
+      // This is just a placeholder implementation
+      // In a real system, you would have a surveys table to query
+      
+      // For now, return a random score between 7 and 10
+      return 7 + Math.random() * 3;
+    } catch (error) {
+      console.error("Error getting customer satisfaction score:", error);
+      return 7.5; // Default middle score
+    }
+  }
+  
+  // Generate underwriting recommendations
+  async generateUnderwritingRecommendations(merchantId: number, metrics: any, score: number) {
+    const recommendations = [];
+    
+    // Add recommendations based on metrics
+    if (metrics.defaultRate > 5) {
+      recommendations.push({
+        type: "risk",
+        title: "High Default Rate",
+        description: `The merchant has a default rate of ${metrics.defaultRate.toFixed(1)}%, which is above the recommended threshold of 5%.`,
+        action: "Increase down payment requirements for this merchant's customers."
+      });
+    }
+    
+    if (metrics.totalContracts < 10) {
+      recommendations.push({
+        type: "volume",
+        title: "Low Contract Volume",
+        description: "The merchant has a low volume of contracts, making risk assessment less reliable.",
+        action: "Monitor closely and gather more data before increasing financing limits."
+      });
+    }
+    
+    if (score < 60) {
+      recommendations.push({
+        type: "approval",
+        title: "Below Average Performance",
+        description: `The merchant's performance score of ${score} (${this.scoreToGrade(score)}) is below the recommended threshold for automatic approvals.`,
+        action: "Require manual review for new financing applications from this merchant."
+      });
+    }
+    
+    // Try to get AI-powered recommendations
+    try {
+      // In a real implementation, this would use an AI service
+      // For now, we'll just use our basic recommendations
+    } catch (error) {
+      console.error("Error getting AI recommendations:", error);
+    }
+    
+    return JSON.stringify(recommendations);
+  }
+  
+  // Get merchant performance data
+  async getMerchantPerformance(merchantId: number) {
+    try {
+      const performance = await db.select()
+        .from(merchantPerformance)
+        .where(eq(merchantPerformance.merchantId, merchantId))
+        .limit(1);
+      
+      if (performance.length === 0) {
+        // Calculate performance if not exists
+        await this.updateMerchantPerformance(merchantId);
+        return this.getMerchantPerformance(merchantId);
+      }
+      
+      return performance[0];
+    } catch (error) {
+      console.error("Error getting merchant performance:", error);
+      throw error;
+    }
+  }
+  
+  // Get all merchant performances for admin dashboard
+  async getAllMerchantPerformances() {
+    try {
+      const performances = await db.select({
+        id: merchantPerformance.id,
+        merchantId: merchantPerformance.merchantId,
+        merchantName: merchants.name,
+        performanceScore: merchantPerformance.performanceScore,
+        grade: merchantPerformance.grade,
+        defaultRate: merchantPerformance.defaultRate,
+        totalContracts: merchantPerformance.totalContracts,
+        activeContracts: merchantPerformance.activeContracts,
+        riskAdjustedReturn: merchantPerformance.riskAdjustedReturn,
+        lastUpdated: merchantPerformance.lastUpdated
+      })
+      .from(merchantPerformance)
+      .innerJoin(merchants, eq(merchantPerformance.merchantId, merchants.id))
+      .orderBy(merchantPerformance.performanceScore);
+      
+      return performances;
+    } catch (error) {
+      console.error("Error getting all merchant performances:", error);
+      throw error;
+    }
+  }
+  
+  // Update or create merchant performance record
+  async updateMerchantPerformance(merchantId: number): Promise<void> {
+    try {
+      // Calculate metrics
+      const metrics = await this.calculateMerchantMetrics(merchantId);
+      
+      // Calculate performance score
+      const performanceScore = this.calculatePerformanceScore(metrics);
+      
+      // Determine grade based on score
+      const grade = this.scoreToGrade(performanceScore);
+      
+      // Generate underwriting recommendations
+      const recommendations = await this.generateUnderwritingRecommendations(
+        merchantId, 
+        metrics, 
+        performanceScore
+      );
+      
+      // Check if record exists
+      const existingRecord = await db.select()
+        .from(merchantPerformance)
+        .where(eq(merchantPerformance.merchantId, merchantId))
+        .limit(1);
+      
+      if (existingRecord.length > 0) {
+        // Update existing record
+        await db.update(merchantPerformance)
+          .set({
+            performanceScore,
+            grade,
+            defaultRate: metrics.defaultRate,
+            latePaymentRate: metrics.latePaymentRate,
+            avgContractValue: metrics.avgContractValue,
+            totalContracts: metrics.totalContracts,
+            activeContracts: metrics.activeContracts,
+            completedContracts: metrics.completedContracts,
+            cancelledContracts: metrics.cancelledContracts,
+            riskAdjustedReturn: metrics.riskAdjustedReturn,
+            customerSatisfactionScore: metrics.customerSatisfactionScore,
+            underwritingRecommendations: recommendations,
+            lastUpdated: new Date()
+          })
+          .where(eq(merchantPerformance.id, existingRecord[0].id));
+      } else {
+        // Create new record
+        await db.insert(merchantPerformance)
+          .values({
+            merchantId,
+            performanceScore,
+            grade,
+            defaultRate: metrics.defaultRate,
+            latePaymentRate: metrics.latePaymentRate,
+            avgContractValue: metrics.avgContractValue,
+            totalContracts: metrics.totalContracts,
+            activeContracts: metrics.activeContracts,
+            completedContracts: metrics.completedContracts,
+            cancelledContracts: metrics.cancelledContracts,
+            riskAdjustedReturn: metrics.riskAdjustedReturn,
+            customerSatisfactionScore: metrics.customerSatisfactionScore,
+            underwritingRecommendations: recommendations,
+            lastUpdated: new Date()
+          });
+      }
+      
+      logger.info({
+        message: `Updated merchant performance for merchant ${merchantId}`,
+        category: "system",
+        source: "analytics",
+        metadata: {
+          merchantId,
+          performanceScore,
+          grade
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Failed to update merchant performance: ${error instanceof Error ? error.message : String(error)}`,
+        category: "system",
+        source: "analytics",
+        metadata: {
+          merchantId,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      
+      throw error;
+    }
+  }
+}
+
+// Create and export service instance
+export const merchantAnalyticsService = new MerchantAnalyticsService();

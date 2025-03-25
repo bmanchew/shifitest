@@ -1,3 +1,14 @@
+
+export * from './logger';
+export * from './twilio';
+export * from './didit';
+export * from './thanksroger';
+export * from './plaid';
+export * from './prefi';
+export * from './nlpearl';
+export * from './notification';
+export * from './merchantAnalytics';
+
 import { NotificationService } from './notification';
 import { NLPearlService } from './nlpearl';
 import { storage } from '../storage';
