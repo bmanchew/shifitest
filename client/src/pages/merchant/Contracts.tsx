@@ -30,7 +30,7 @@ interface Customer {
 
 export default function Contracts() {
   const { user } = useAuth();
-  const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
+  const merchantId = user?.merchantId; // Default to Shiloh Finance ID (49)
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [customerCache, setCustomerCache] = useState<Record<number, Customer>>({});
 

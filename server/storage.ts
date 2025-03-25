@@ -342,6 +342,7 @@ export class DatabaseStorage implements IStorage {
 
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
     // Get basic contract fields without the archived field that might not exist yet
+    // And only return active contracts
     const results = await db.select({
       id: contracts.id,
       contractNumber: contracts.contractNumber,
@@ -360,7 +361,14 @@ export class DatabaseStorage implements IStorage {
       phoneNumber: contracts.phoneNumber,
       // Include other fields but not archived until migration runs
       purchasedByShifi: contracts.purchasedByShifi
-    }).from(contracts).where(eq(contracts.merchantId, merchantId));
+    })
+    .from(contracts)
+    .where(
+      and(
+        eq(contracts.merchantId, merchantId),
+        eq(contracts.status, "active") // Only get active contracts
+      )
+    );
     
     // Add default value for archived field that might not exist in database yet
     return results.map(contract => ({

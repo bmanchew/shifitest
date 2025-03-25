@@ -553,10 +553,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Return all contracts for admin users
-        const contracts = await storage.getAllContracts();
+        const allContracts = await storage.getAllContracts();
+        
+        // Filter to only include active contracts
+        const activeContracts = allContracts.filter(contract => contract.status === "active");
         
         // Add underwriting data to each contract
-        const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
+        const contractsWithTiers = await Promise.all(activeContracts.map(async (contract) => {
           const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
           // Use the most recent underwriting data if available
           const mostRecentUnderwriting = underwritingData.length > 0 ? 
@@ -573,12 +576,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(contractsWithTiers);
       }
       
-      // For merchant-specific requests, return only their contracts with credit tiers
+      // For merchant-specific requests, return only their active contracts with credit tiers
       if (merchantId) {
-        const contracts = await storage.getContractsByMerchantId(merchantId);
+        const allContracts = await storage.getContractsByMerchantId(merchantId);
+        
+        // Filter to only include active contracts
+        const activeContracts = allContracts.filter(contract => contract.status === "active");
         
         // Add underwriting data to each contract
-        const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
+        const contractsWithTiers = await Promise.all(activeContracts.map(async (contract) => {
           const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
           // Use the most recent underwriting data if available
           const mostRecentUnderwriting = underwritingData.length > 0 ? 
@@ -675,17 +681,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid ID format" });
       }
-
+  
       const contract = await storage.getContract(id);
       if (!contract) {
         return res.status(404).json({ message: "Contract not found" });
       }
-
+  
+      // Check if the contract is active
+      if (contract.status !== "active") {
+        return res.status(404).json({ 
+          message: "Contract not found or not active",
+          status: contract.status
+        });
+      }
+  
       // Get application progress for this contract
       const progress = await storage.getApplicationProgressByContractId(
         contract.id,
       );
-
+  
       res.json({ contract, progress });
     } catch (error) {
       console.error("Get contract error:", error);
