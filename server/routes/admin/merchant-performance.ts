@@ -1,50 +1,49 @@
-
 import { Request, Response } from "express";
-import { storage } from "../../storage";
 import { logger } from "../../services/logger";
+import { storage } from "../../storage";
 import { merchantAnalyticsService } from "../../services";
 
-// Get all merchant performances for the dashboard
+// Get all merchant performances
 export async function getAllMerchantPerformances(req: Request, res: Response) {
   try {
-    // Get all merchant performances from the database
-    const merchantPerformances = await storage.getAllMerchantPerformances();
-    
-    // Return the data
+    // Get all merchant performances
+    const performances = await storage.getAllMerchantPerformances();
+
+    // Return performances data
     return res.status(200).json({
       success: true,
-      data: merchantPerformances
+      data: performances
     });
   } catch (error) {
     logger.error({
-      message: `Failed to fetch merchant performances: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Failed to get merchant performances: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
       source: "analytics",
       metadata: {
         error: error instanceof Error ? error.stack : String(error)
       }
     });
-    
+
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch merchant performances"
+      message: "Failed to get merchant performances"
     });
   }
 }
 
-// Get detailed performance for a specific merchant
+// Get detailed performance for a merchant
 export async function getMerchantPerformanceDetails(req: Request, res: Response) {
   try {
     const merchantId = parseInt(req.params.id);
-    
+
     if (isNaN(merchantId)) {
       return res.status(400).json({
         success: false,
         message: "Invalid merchant ID"
       });
     }
-    
-    // Get merchant details
+
+    // Get the merchant
     const merchant = await storage.getMerchant(merchantId);
     if (!merchant) {
       return res.status(404).json({
@@ -52,35 +51,18 @@ export async function getMerchantPerformanceDetails(req: Request, res: Response)
         message: "Merchant not found"
       });
     }
-    
-    // Get merchant performance from the database
+
+    // Get performance data
     const performance = await storage.getMerchantPerformance(merchantId);
-    
-    // If performance record doesn't exist, calculate it on the fly
     if (!performance) {
-      // Calculate metrics
-      const metrics = await merchantAnalyticsService.calculateMerchantMetrics(merchantId);
-      const performanceScore = merchantAnalyticsService.calculatePerformanceScore(metrics);
-      const grade = merchantAnalyticsService.scoreToGrade(performanceScore);
-      
-      // Return calculated data
-      return res.status(200).json({
-        success: true,
-        data: {
-          merchantId,
-          merchantName: merchant.name,
-          performanceScore,
-          grade,
-          metrics,
-          // No recommendations without stored data
-          recommendations: []
-        }
+      return res.status(404).json({
+        success: false,
+        message: "Performance data not found"
       });
     }
-    
-    // Get contracts for additional context
+
     const contracts = await storage.getContractsByMerchantId(merchantId);
-    
+
     // Parse underwriting recommendations if available
     let recommendations = [];
     try {
@@ -95,7 +77,7 @@ export async function getMerchantPerformanceDetails(req: Request, res: Response)
         metadata: { merchantId }
       });
     }
-    
+
     // Return detailed performance data
     return res.status(200).json({
       success: true,
@@ -116,20 +98,12 @@ export async function getMerchantPerformanceDetails(req: Request, res: Response)
           customerSatisfactionScore: performance.customerSatisfactionScore || 0
         },
         recommendations,
-        contractsData: contracts.map(contract => ({
-          id: contract.id,
-          contractNumber: contract.contractNumber,
-          amount: contract.amount,
-          status: contract.status,
-          currentStep: contract.currentStep,
-          createdAt: contract.createdAt
-        })),
-        lastUpdated: performance.lastUpdated
+        contracts
       }
     });
   } catch (error) {
     logger.error({
-      message: `Failed to fetch merchant performance details: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Failed to get merchant performance details: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
       source: "analytics",
       metadata: {
@@ -137,10 +111,10 @@ export async function getMerchantPerformanceDetails(req: Request, res: Response)
         error: error instanceof Error ? error.stack : String(error)
       }
     });
-    
+
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch merchant performance details"
+      message: "Failed to get merchant performance details"
     });
   }
 }
@@ -149,20 +123,20 @@ export async function getMerchantPerformanceDetails(req: Request, res: Response)
 export async function updateMerchantPerformance(req: Request, res: Response) {
   try {
     const merchantId = parseInt(req.params.id);
-    
+
     if (isNaN(merchantId)) {
       return res.status(400).json({
         success: false,
         message: "Invalid merchant ID"
       });
     }
-    
+
     // Update merchant performance using the service
     await merchantAnalyticsService.updateMerchantPerformance(merchantId);
-    
+
     // Get the updated performance
     const updatedPerformance = await storage.getMerchantPerformance(merchantId);
-    
+
     return res.status(200).json({
       success: true,
       message: "Merchant performance updated successfully",
@@ -178,7 +152,7 @@ export async function updateMerchantPerformance(req: Request, res: Response) {
         error: error instanceof Error ? error.stack : String(error)
       }
     });
-    
+
     return res.status(500).json({
       success: false,
       message: "Failed to update merchant performance"
@@ -189,46 +163,11 @@ export async function updateMerchantPerformance(req: Request, res: Response) {
 // Update all merchant performances
 export async function updateAllMerchantPerformances(req: Request, res: Response) {
   try {
-    // Get all merchants
-    const merchants = await storage.getAllMerchants();
-    
-    // Track success and failures
-    const results = {
-      total: merchants.length,
-      success: 0,
-      failed: 0,
-      merchantsUpdated: [] as number[],
-      errors: [] as {merchantId: number, error: string}[]
-    };
-    
-    // Update each merchant's performance
-    for (const merchant of merchants) {
-      try {
-        await merchantAnalyticsService.updateMerchantPerformance(merchant.id);
-        results.success++;
-        results.merchantsUpdated.push(merchant.id);
-      } catch (merchantError) {
-        results.failed++;
-        results.errors.push({
-          merchantId: merchant.id,
-          error: merchantError instanceof Error ? merchantError.message : String(merchantError)
-        });
-        
-        logger.error({
-          message: `Failed to update merchant ${merchant.id} performance: ${merchantError instanceof Error ? merchantError.message : String(merchantError)}`,
-          category: "api",
-          source: "analytics",
-          metadata: {
-            merchantId: merchant.id,
-            error: merchantError instanceof Error ? merchantError.stack : String(merchantError)
-          }
-        });
-      }
-    }
-    
+    const results = await merchantAnalyticsService.updateAllMerchantPerformances();
+
     return res.status(200).json({
       success: true,
-      message: `Successfully updated ${results.success} out of ${results.total} merchant performances`,
+      message: "All merchant performances updated successfully",
       data: results
     });
   } catch (error) {
@@ -240,7 +179,7 @@ export async function updateAllMerchantPerformances(req: Request, res: Response)
         error: error instanceof Error ? error.stack : String(error)
       }
     });
-    
+
     return res.status(500).json({
       success: false,
       message: "Failed to update all merchant performances"
