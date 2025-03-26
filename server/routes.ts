@@ -37,6 +37,7 @@ import paymentRouter from "./routes/payments";
 import healthRouter from "./routes/health"; // Import health routes
 import blockchainRouter from "./routes/blockchain"; // Import blockchain routes
 import salesRepRouter from "./routes/salesRep"; // Import sales rep routes
+import communicationsRouter from "./routes/communications"; // Import communications routes
 import indexRoutes from "./routes/index"; // Import routes from index.ts
 import fs from 'fs';
 import path from 'path';
@@ -4867,6 +4868,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   apiRouter.use("/health", healthRouter);
   apiRouter.use("/blockchain", blockchainRouter);
   apiRouter.use("/sales-reps", salesRepRouter);
+  apiRouter.use("/communications", communicationsRouter);
 
   // Get contract by phone number
   apiRouter.get("/contracts/by-phone/:phoneNumber", async (req: Request, res: Response) => {

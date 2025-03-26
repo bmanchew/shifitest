@@ -19,6 +19,12 @@ export const userRoleEnum = pgEnum("user_role", [
   "customer",
   "sales_rep",
 ]);
+
+export const conversationStatusEnum = pgEnum("conversation_status", [
+  "active",
+  "resolved",
+  "archived",
+]);
 export const contractStatusEnum = pgEnum("contract_status", [
   "pending",
   "active",
@@ -811,3 +817,52 @@ export type InsertCommission = z.infer<typeof insertCommissionSchema>;
 
 export type SalesRepAnalytics = typeof salesRepAnalytics.$inferSelect;
 export type InsertSalesRepAnalytics = z.infer<typeof insertSalesRepAnalyticsSchema>;
+
+// Conversation Status Enum is defined at the top of the file (line 23)
+
+// Conversations - Thread of messages between admins and merchants
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  topic: text("topic").notNull(),
+  contractId: integer("contract_id").references(() => contracts.id), // Optional link to a specific contract
+  status: conversationStatusEnum("status").notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  lastMessageAt: timestamp("last_message_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id).notNull(), // User who started the conversation
+  priority: text("priority").default("normal"), // normal, high, urgent
+  category: text("category").notNull(), // contract-question, payment-issue, default-notice, etc.
+});
+
+// Messages within conversations
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").references(() => conversations.id).notNull(),
+  senderId: integer("sender_id").references(() => users.id).notNull(),
+  senderRole: userRoleEnum("sender_role").notNull(), // Uses existing user role enum
+  content: text("content").notNull(),
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  attachments: text("attachments").array(), // Array of attachment URLs or IDs
+  metadata: text("metadata"), // JSON stringified additional data (e.g., flagged as important)
+});
+
+export const insertConversationSchema = createInsertSchema(conversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastMessageAt: true,
+});
+
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+  readAt: true,
+});
+
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;

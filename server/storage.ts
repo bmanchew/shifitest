@@ -20,10 +20,12 @@ import {
   smartContractDeployments, SmartContractDeployment, InsertSmartContractDeployment,
   salesReps, SalesRep, InsertSalesRep,
   commissions, Commission, InsertCommission,
-  salesRepAnalytics, SalesRepAnalytics, InsertSalesRepAnalytics
+  salesRepAnalytics, SalesRepAnalytics, InsertSalesRepAnalytics,
+  conversations, Conversation, InsertConversation,
+  messages, Message, InsertMessage
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, inArray, SQL, or, like, lt } from "drizzle-orm";
+import { eq, and, desc, inArray, SQL, or, like, lt, not } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -37,6 +39,22 @@ export interface IStorage {
 
   // Add to the IStorage interface
   updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined>;
+  
+  // Conversation operations
+  createConversation(conversation: InsertConversation): Promise<Conversation>;
+  getConversation(id: number): Promise<Conversation | undefined>;
+  updateConversation(id: number, data: Partial<Conversation>): Promise<Conversation | undefined>;
+  updateConversationStatus(id: number, status: string): Promise<Conversation | undefined>;
+  getConversationsByContractId(contractId: number): Promise<Conversation[]>;
+  getConversationsByUserId(userId: number): Promise<Conversation[]>;
+  getConversationsForMerchant(merchantId: number): Promise<Conversation[]>;
+  getAllConversations(limit?: number, offset?: number): Promise<Conversation[]>;
+  
+  // Message operations
+  createMessage(message: InsertMessage): Promise<Message>;
+  getMessagesByConversationId(conversationId: number, options?: { limit?: number, offset?: number }): Promise<Message[]>;
+  markMessageAsRead(id: number): Promise<Message | undefined>;
+  markAllMessagesAsRead(conversationId: number, userId: number): Promise<number>; // Returns count of messages updated
   
   // Smart Contract Template operations
   getSmartContractTemplates(): Promise<SmartContractTemplate[]>;
@@ -186,6 +204,237 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Conversation methods
+  async createConversation(conversation: InsertConversation): Promise<Conversation> {
+    try {
+      // Set timestamps
+      const conversationData = {
+        ...conversation,
+        updatedAt: new Date(),
+        lastMessageAt: new Date()
+      };
+
+      const [newConversation] = await db
+        .insert(conversations)
+        .values(conversationData)
+        .returning();
+
+      return newConversation;
+    } catch (error) {
+      console.error(`Error creating conversation:`, error);
+      throw new Error('Failed to create conversation');
+    }
+  }
+
+  async getConversation(id: number): Promise<Conversation | undefined> {
+    try {
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, id));
+
+      return conversation;
+    } catch (error) {
+      console.error(`Error getting conversation ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async updateConversation(id: number, data: Partial<Conversation>): Promise<Conversation | undefined> {
+    try {
+      const updateData = {
+        ...data,
+        updatedAt: new Date()
+      };
+
+      const [updatedConversation] = await db
+        .update(conversations)
+        .set(updateData)
+        .where(eq(conversations.id, id))
+        .returning();
+
+      return updatedConversation;
+    } catch (error) {
+      console.error(`Error updating conversation ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async updateConversationStatus(id: number, status: string): Promise<Conversation | undefined> {
+    return this.updateConversation(id, { status: status as any });
+  }
+
+  async getConversationsByContractId(contractId: number): Promise<Conversation[]> {
+    try {
+      return await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.contractId, contractId))
+        .orderBy(desc(conversations.lastMessageAt));
+    } catch (error) {
+      console.error(`Error getting conversations for contract ${contractId}:`, error);
+      return [];
+    }
+  }
+
+  async getConversationsByUserId(userId: number): Promise<Conversation[]> {
+    try {
+      return await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.createdBy, userId))
+        .orderBy(desc(conversations.lastMessageAt));
+    } catch (error) {
+      console.error(`Error getting conversations for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  async getConversationsForMerchant(merchantId: number): Promise<Conversation[]> {
+    try {
+      // Get the merchant's user ID
+      const merchant = await this.getMerchant(merchantId);
+      if (!merchant || !merchant.userId) {
+        return [];
+      }
+
+      // Get all contracts for this merchant
+      const merchantContracts = await this.getContractsByMerchantId(merchantId);
+      const contractIds = merchantContracts.map(contract => contract.id);
+
+      // Get all conversations either created by the merchant user
+      // or related to the merchant's contracts
+      if (contractIds.length === 0) {
+        // If no contracts, just get conversations created by merchant user
+        return await db
+          .select()
+          .from(conversations)
+          .where(eq(conversations.createdBy, merchant.userId))
+          .orderBy(desc(conversations.lastMessageAt));
+      } else {
+        // Get conversations for merchant's user ID or for their contracts
+        return await db
+          .select()
+          .from(conversations)
+          .where(
+            or(
+              eq(conversations.createdBy, merchant.userId),
+              inArray(conversations.contractId, contractIds)
+            )
+          )
+          .orderBy(desc(conversations.lastMessageAt));
+      }
+    } catch (error) {
+      console.error(`Error getting conversations for merchant ${merchantId}:`, error);
+      return [];
+    }
+  }
+
+  async getAllConversations(limit: number = 20, offset: number = 0): Promise<Conversation[]> {
+    try {
+      return await db
+        .select()
+        .from(conversations)
+        .orderBy(desc(conversations.lastMessageAt))
+        .limit(limit)
+        .offset(offset);
+    } catch (error) {
+      console.error(`Error getting all conversations:`, error);
+      return [];
+    }
+  }
+
+  // Message methods
+  async createMessage(message: InsertMessage): Promise<Message> {
+    try {
+      const [newMessage] = await db.insert(messages).values(message).returning();
+
+      // Update the conversation's lastMessageAt timestamp
+      await db
+        .update(conversations)
+        .set({
+          lastMessageAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(eq(conversations.id, message.conversationId));
+
+      return newMessage;
+    } catch (error) {
+      console.error(`Error creating message:`, error);
+      throw new Error('Failed to create message');
+    }
+  }
+
+  async getMessagesByConversationId(
+    conversationId: number,
+    options?: { limit?: number; offset?: number }
+  ): Promise<Message[]> {
+    try {
+      let baseQuery = db
+        .select()
+        .from(messages)
+        .where(eq(messages.conversationId, conversationId))
+        .orderBy(desc(messages.createdAt));
+
+      // Apply pagination if options are provided
+      if (options?.limit !== undefined) {
+        const limitedQuery = baseQuery.limit(options.limit);
+        
+        if (options?.offset !== undefined) {
+          return await limitedQuery.offset(options.offset);
+        }
+        
+        return await limitedQuery;
+      }
+
+      return await baseQuery;
+    } catch (error) {
+      console.error(`Error getting messages for conversation ${conversationId}:`, error);
+      return [];
+    }
+  }
+
+  async markMessageAsRead(id: number): Promise<Message | undefined> {
+    try {
+      const [updatedMessage] = await db
+        .update(messages)
+        .set({
+          isRead: true,
+          readAt: new Date()
+        })
+        .where(eq(messages.id, id))
+        .returning();
+
+      return updatedMessage;
+    } catch (error) {
+      console.error(`Error marking message ${id} as read:`, error);
+      return undefined;
+    }
+  }
+
+  async markAllMessagesAsRead(conversationId: number, userId: number): Promise<number> {
+    try {
+      const result = await db
+        .update(messages)
+        .set({
+          isRead: true,
+          readAt: new Date()
+        })
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            // Only mark messages as read if they weren't sent by this user
+            not(eq(messages.senderId, userId)),
+            eq(messages.isRead, false)
+          )
+        );
+
+      return result.rowCount || 0;
+    } catch (error) {
+      console.error(`Error marking all messages as read in conversation ${conversationId}:`, error);
+      return 0;
+    }
+  }
 
   async updateMerchant(id: number, updateData: Partial<Merchant>): Promise<Merchant | undefined> {
     try {
