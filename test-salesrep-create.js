@@ -4,7 +4,7 @@
  * a user and registers them as a sales rep in a single step
  */
 
-const axios = require('axios');
+import axios from 'axios';
 
 // Configuration
 const API_BASE_URL = 'http://localhost:5001/api';
@@ -81,3 +81,6 @@ async function runTests() {
 
 // Run the tests
 runTests().catch(console.error);
+
+// Export the functions for potential reuse
+export { testCreateSalesRepWithUser, runTests };
