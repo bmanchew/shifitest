@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { User, Building, Bell, Lock, Save, RefreshCw } from "lucide-react";
+import { User, Building, Bell, Lock, Save, RefreshCw, Users } from "lucide-react";
+import SalesRepManager from "@/components/merchant/SalesRepManager";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -47,6 +48,10 @@ export default function Settings() {
               <TabsTrigger value="business" className="flex items-center">
                 <Building className="mr-2 h-4 w-4" />
                 Business
+              </TabsTrigger>
+              <TabsTrigger value="salesreps" className="flex items-center">
+                <Users className="mr-2 h-4 w-4" />
+                Sales Reps
               </TabsTrigger>
               <TabsTrigger value="notifications" className="flex items-center">
                 <Bell className="mr-2 h-4 w-4" />
@@ -246,6 +251,11 @@ export default function Settings() {
                   </Button>
                 </CardFooter>
               </Card>
+            </TabsContent>
+            
+            {/* Sales Reps Management */}
+            <TabsContent value="salesreps">
+              <SalesRepManager />
             </TabsContent>
             
             {/* Security Settings */}
