@@ -1,0 +1,91 @@
+🔧Merchant Support Ticket Submission Portal Structure
+1. Simple Intro Form
+Capture the essential merchant info automatically (or with autofill, if possible):
+Business Name (pre-filled if logged in)
+Contact Name
+Email Address
+Phone Number (optional)
+2. Ticket Category Dropdown
+Prompt them to choose what type of issue they’re facing. This helps route the request correctly.
+Options:
+🧾 Accounting (e.g., commissions, payouts, invoices)
+Payout Delays or Errors
+“The amount is less than expected.”
+“Payout hasn’t hit my bank account.”
+“My bank details were changed but not reflected.”
+Invoice Requests / Discrepancies
+“I need an invoice for January’s disbursed commissions.”
+“The invoice has the wrong business name.”
+Tax Documents (1099s, W-9s, etc.)
+“I never received my 1099.”
+“I submitted a new W-9—can you confirm receipt?”
+Banking Information Updates
+“I need to update my payout account.”
+🧑‍💼 Customer Issue
+Application Status Updates
+“What’s the status of John Doe’s application?”
+“Has Jane Smith submitted all her docs?”
+Customer Was Denied – Request for Clarification
+“My client has a 720 credit score—why was she denied?”
+“Can you manually review this customer again?”
+Document Upload Issues (Client-Side)
+“My client said they uploaded their ID, but it’s not showing.”
+“Bank statements aren’t being accepted.”
+Down Payment / Contract Confusion
+“Customer is unclear on their payment plan details.”
+“Client doesn’t see their payment link.”
+Approval Stuck or Timeout
+“The system shows ‘pending’ but it’s been over 48 hours.”
+“We uploaded everything—still no response.”
+Client-Side Communication Requests
+“Can you resend the contract to the customer?”
+“Please follow up with John Smith about submitting his bank info.”
+🖥️ Technical Issue 
+Login Problems
+“I can’t access my account.”
+“Two-factor authentication is not working.”
+Merchant Portal Bugs / Glitches
+“The application form freezes on step 3.”
+“I can’t view my dashboard metrics anymore.”
+File Upload Failures
+“PDFs are not being accepted.”
+“Uploading ID gets stuck on 0%.”
+
+
+Broken Links or UI Issues
+“The ‘Submit’ button doesn’t work on Firefox.”
+“The bank info page goes blank after typing in routing.”
+
+
+Integration Errors (Webhooks/API/etc.)
+“Our CRM isn’t syncing with the loan portal.”
+“Zapier stopped firing correctly since last update.”
+
+
+Notifications Not Sending
+“We’re not getting email updates about ticket submissions.”
+“My client didn’t receive their e-signature request.”
+❓ Other (with required short description)
+
+
+Optional: Add icons next to each to make it more visual and intuitive.
+3. Short Description Field
+Allow for a short summary (e.g., "Customer was denied but has 750 credit score")
+5. Attachments Upload
+Let them upload documents/screenshots if needed.
+6. Priority Level Selector (Optional)
+Let them select:
+Normal
+Urgent
+7. Auto-Response Confirmation
+Once submitted, they receive:
+A ticket #
+Confirmation email
+Estimated response time (e.g., “You can expect a reply within 1 business day.”)
+
+
+
+💬 Back-End Handling for Your Team
+Each ticket is tagged by category, merchant name, and ticket number
+Can be viewed in a dashboard by support team
+Trigger Slack/email notifications to appropriate team (e.g., accounting@, support@, tech@)

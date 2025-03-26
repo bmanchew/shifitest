@@ -5,13 +5,23 @@ import { ZodError } from "zod";
 import { 
   insertConversationSchema, 
   insertMessageSchema,
+  insertSupportTicketSchema,
+  insertTicketAttachmentSchema,
+  insertTicketActivityLogSchema,
   type InsertConversation, 
   type Conversation,
   type Message,
-  type InsertMessage 
+  type InsertMessage,
+  type SupportTicket,
+  type InsertSupportTicket,
+  type TicketAttachment,
+  type InsertTicketAttachment,
+  type TicketActivityLog,
+  type InsertTicketActivityLog 
 } from "@shared/schema";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
+import crypto from "crypto";
 
 const router = Router();
 

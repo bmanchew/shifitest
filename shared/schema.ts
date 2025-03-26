@@ -25,6 +25,28 @@ export const conversationStatusEnum = pgEnum("conversation_status", [
   "resolved",
   "archived",
 ]);
+
+// Support ticket related enums
+export const ticketStatusEnum = pgEnum("ticket_status", [
+  "new",
+  "in_progress",
+  "pending_merchant",
+  "pending_customer",
+  "resolved",
+  "closed",
+]);
+
+export const ticketPriorityEnum = pgEnum("ticket_priority", [
+  "normal",
+  "urgent",
+]);
+
+export const ticketCategoryEnum = pgEnum("ticket_category", [
+  "accounting",
+  "customer_issue",
+  "technical_issue",
+  "other",
+]);
 export const contractStatusEnum = pgEnum("contract_status", [
   "pending",
   "active",
@@ -848,6 +870,50 @@ export const messages = pgTable("messages", {
   metadata: text("metadata"), // JSON stringified additional data (e.g., flagged as important)
 });
 
+// Support ticket tables
+export const supportTickets = pgTable("support_tickets", {
+  id: serial("id").primaryKey(),
+  ticketNumber: text("ticket_number").notNull().unique(), // Formatted like "TICKET-12345"
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  createdBy: integer("created_by").references(() => users.id).notNull(), // User who created the ticket
+  category: ticketCategoryEnum("category").notNull(),
+  subcategory: text("subcategory"), // This will be populated based on the category selection
+  subject: text("subject").notNull(), // Short description/summary of the issue
+  description: text("description"), // Detailed description of the issue
+  status: ticketStatusEnum("status").notNull().default("new"),
+  priority: ticketPriorityEnum("priority").notNull().default("normal"),
+  assignedTo: integer("assigned_to").references(() => users.id), // Admin/support staff assigned to the ticket
+  conversationId: integer("conversation_id").references(() => conversations.id), // Associated conversation for ongoing communication
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  resolvedAt: timestamp("resolved_at"),
+  closedAt: timestamp("closed_at"),
+  metadata: text("metadata"), // JSON stringified additional data
+});
+
+export const ticketAttachments = pgTable("ticket_attachments", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").references(() => supportTickets.id).notNull(),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull(),
+  fileType: text("file_type").notNull(), // MIME type
+  fileUrl: text("file_url").notNull(), // URL to the stored file
+  uploadedBy: integer("uploaded_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const ticketActivityLog = pgTable("ticket_activity_log", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").references(() => supportTickets.id).notNull(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  actionType: text("action_type").notNull(), // created, updated, assigned, commented, resolved, closed, reopened
+  actionDetails: text("action_details"), // Details about the action taken
+  previousValue: text("previous_value"), // Previous value if it was an update
+  newValue: text("new_value"), // New value if it was an update
+  timestamp: timestamp("timestamp").defaultNow(),
+  metadata: text("metadata"), // JSON stringified additional data
+});
+
 export const insertConversationSchema = createInsertSchema(conversations).omit({
   id: true,
   createdAt: true,
@@ -866,3 +932,32 @@ export type InsertConversation = z.infer<typeof insertConversationSchema>;
 
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+// Support ticket insert schemas
+export const insertSupportTicketSchema = createInsertSchema(supportTickets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  resolvedAt: true,
+  closedAt: true,
+});
+
+export const insertTicketAttachmentSchema = createInsertSchema(ticketAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTicketActivityLogSchema = createInsertSchema(ticketActivityLog).omit({
+  id: true,
+  timestamp: true,
+});
+
+// Support ticket types
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+
+export type TicketAttachment = typeof ticketAttachments.$inferSelect;
+export type InsertTicketAttachment = z.infer<typeof insertTicketAttachmentSchema>;
+
+export type TicketActivityLog = typeof ticketActivityLog.$inferSelect;
+export type InsertTicketActivityLog = z.infer<typeof insertTicketActivityLogSchema>;

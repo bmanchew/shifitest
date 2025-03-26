@@ -22,7 +22,10 @@ import {
   commissions, Commission, InsertCommission,
   salesRepAnalytics, SalesRepAnalytics, InsertSalesRepAnalytics,
   conversations, Conversation, InsertConversation,
-  messages, Message, InsertMessage
+  messages, Message, InsertMessage,
+  supportTickets, SupportTicket, InsertSupportTicket,
+  ticketAttachments, TicketAttachment, InsertTicketAttachment,
+  ticketActivityLog, TicketActivityLog, InsertTicketActivityLog
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt, not } from "drizzle-orm";
@@ -201,6 +204,26 @@ export interface IStorage {
   createSalesRepAnalytics(analytics: InsertSalesRepAnalytics): Promise<SalesRepAnalytics>;
   updateSalesRepAnalytics(id: number, data: Partial<SalesRepAnalytics>): Promise<SalesRepAnalytics | undefined>;
   getContractsBySalesRepId(salesRepId: number): Promise<Contract[]>;
+  
+  // Support Ticket operations
+  createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket>;
+  getSupportTicket(id: number): Promise<SupportTicket | undefined>;
+  getSupportTicketByNumber(ticketNumber: string): Promise<SupportTicket | undefined>;
+  getSupportTicketsByMerchantId(merchantId: number): Promise<SupportTicket[]>;
+  getSupportTicketsByStatus(status: string): Promise<SupportTicket[]>;
+  updateSupportTicket(id: number, data: Partial<SupportTicket>): Promise<SupportTicket | undefined>;
+  updateSupportTicketStatus(id: number, status: string): Promise<SupportTicket | undefined>;
+  assignSupportTicket(id: number, assignedTo: number): Promise<SupportTicket | undefined>;
+  getAllSupportTickets(options?: { limit?: number, offset?: number }): Promise<SupportTicket[]>;
+  
+  // Ticket Attachment operations
+  createTicketAttachment(attachment: InsertTicketAttachment): Promise<TicketAttachment>;
+  getTicketAttachment(id: number): Promise<TicketAttachment | undefined>;
+  getTicketAttachmentsByTicketId(ticketId: number): Promise<TicketAttachment[]>;
+  
+  // Ticket Activity Log operations
+  createTicketActivityLog(activity: InsertTicketActivityLog): Promise<TicketActivityLog>;
+  getTicketActivityLogsByTicketId(ticketId: number): Promise<TicketActivityLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2070,6 +2093,326 @@ export class DatabaseStorage implements IStorage {
       return await db.select().from(contracts).where(eq(contracts.tokenizationStatus, status as any));
     } catch (error) {
       console.error(`Error getting contracts with tokenization status ${status}:`, error);
+      return [];
+    }
+  }
+
+  // Support Ticket methods
+  async createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket> {
+    try {
+      // Set timestamps
+      const ticketData = {
+        ...ticket,
+        updatedAt: new Date()
+      };
+
+      const [newTicket] = await db
+        .insert(supportTickets)
+        .values(ticketData)
+        .returning();
+
+      // Create activity log entry for ticket creation
+      await this.createTicketActivityLog({
+        ticketId: newTicket.id,
+        userId: ticket.createdBy,
+        actionType: 'created',
+        actionDetails: `Support ticket created with status "${ticket.status}"`,
+      });
+
+      return newTicket;
+    } catch (error) {
+      console.error(`Error creating support ticket:`, error);
+      throw new Error('Failed to create support ticket');
+    }
+  }
+
+  async getSupportTicket(id: number): Promise<SupportTicket | undefined> {
+    try {
+      const [ticket] = await db
+        .select()
+        .from(supportTickets)
+        .where(eq(supportTickets.id, id));
+
+      return ticket;
+    } catch (error) {
+      console.error(`Error getting support ticket ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSupportTicketByNumber(ticketNumber: string): Promise<SupportTicket | undefined> {
+    try {
+      const [ticket] = await db
+        .select()
+        .from(supportTickets)
+        .where(eq(supportTickets.ticketNumber, ticketNumber));
+
+      return ticket;
+    } catch (error) {
+      console.error(`Error getting support ticket by number ${ticketNumber}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSupportTicketsByMerchantId(merchantId: number): Promise<SupportTicket[]> {
+    try {
+      return await db
+        .select()
+        .from(supportTickets)
+        .where(eq(supportTickets.merchantId, merchantId))
+        .orderBy(desc(supportTickets.updatedAt));
+    } catch (error) {
+      console.error(`Error getting support tickets for merchant ${merchantId}:`, error);
+      return [];
+    }
+  }
+
+  async getSupportTicketsByStatus(status: string): Promise<SupportTicket[]> {
+    try {
+      return await db
+        .select()
+        .from(supportTickets)
+        .where(eq(supportTickets.status, status as any))
+        .orderBy(desc(supportTickets.createdAt));
+    } catch (error) {
+      console.error(`Error getting support tickets with status ${status}:`, error);
+      return [];
+    }
+  }
+
+  async updateSupportTicket(id: number, data: Partial<SupportTicket>): Promise<SupportTicket | undefined> {
+    try {
+      // Get previous state of the ticket for activity log
+      const previousTicket = await this.getSupportTicket(id);
+      if (!previousTicket) {
+        return undefined;
+      }
+
+      // Set updatedAt timestamp
+      const updateData = {
+        ...data,
+        updatedAt: new Date()
+      };
+
+      const [updatedTicket] = await db
+        .update(supportTickets)
+        .set(updateData)
+        .where(eq(supportTickets.id, id))
+        .returning();
+
+      // Log the changes made to the ticket
+      const actionDetails = [];
+      if (data.status && data.status !== previousTicket.status) {
+        actionDetails.push(`Status changed from "${previousTicket.status}" to "${data.status}"`);
+      }
+      if (data.priority && data.priority !== previousTicket.priority) {
+        actionDetails.push(`Priority changed from "${previousTicket.priority}" to "${data.priority}"`);
+      }
+      if (data.assignedTo !== undefined && data.assignedTo !== previousTicket.assignedTo) {
+        actionDetails.push(`Assigned to user ID ${data.assignedTo || 'none'}`);
+      }
+      if (data.subject && data.subject !== previousTicket.subject) {
+        actionDetails.push(`Subject updated`);
+      }
+      if (data.description && data.description !== previousTicket.description) {
+        actionDetails.push(`Description updated`);
+      }
+
+      // Create activity log entry if any changes were made
+      if (actionDetails.length > 0 && updateData.updatedBy) {
+        await this.createTicketActivityLog({
+          ticketId: id,
+          userId: updateData.updatedBy,
+          actionType: 'updated',
+          actionDetails: actionDetails.join(', '),
+          previousValue: JSON.stringify(previousTicket),
+          newValue: JSON.stringify(updatedTicket)
+        });
+      }
+
+      return updatedTicket;
+    } catch (error) {
+      console.error(`Error updating support ticket ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async updateSupportTicketStatus(id: number, status: string, userId?: number): Promise<SupportTicket | undefined> {
+    try {
+      // Get previous state of the ticket for activity log
+      const previousTicket = await this.getSupportTicket(id);
+      if (!previousTicket) {
+        return undefined;
+      }
+
+      // Update timestamps based on status
+      const updateData: Partial<SupportTicket> = { 
+        status: status as any,
+        updatedAt: new Date()
+      };
+      
+      // Set resolved or closed timestamps if applicable
+      if (status === 'resolved' && !previousTicket.resolvedAt) {
+        updateData.resolvedAt = new Date();
+      } else if (status === 'closed' && !previousTicket.closedAt) {
+        updateData.closedAt = new Date();
+      }
+
+      const [updatedTicket] = await db
+        .update(supportTickets)
+        .set(updateData)
+        .where(eq(supportTickets.id, id))
+        .returning();
+
+      // Create activity log entry
+      if (userId) {
+        await this.createTicketActivityLog({
+          ticketId: id,
+          userId: userId,
+          actionType: 'status_change',
+          actionDetails: `Status changed from "${previousTicket.status}" to "${status}"`,
+          previousValue: previousTicket.status,
+          newValue: status
+        });
+      }
+
+      return updatedTicket;
+    } catch (error) {
+      console.error(`Error updating support ticket status ${id} to ${status}:`, error);
+      return undefined;
+    }
+  }
+
+  async assignSupportTicket(id: number, assignedTo: number): Promise<SupportTicket | undefined> {
+    try {
+      // Get previous assignee for activity log
+      const previousTicket = await this.getSupportTicket(id);
+      if (!previousTicket) {
+        return undefined;
+      }
+
+      const [updatedTicket] = await db
+        .update(supportTickets)
+        .set({
+          assignedTo,
+          updatedAt: new Date()
+        })
+        .where(eq(supportTickets.id, id))
+        .returning();
+
+      // Create activity log entry
+      await this.createTicketActivityLog({
+        ticketId: id,
+        userId: assignedTo, // The assigner is the actor
+        actionType: 'assigned',
+        actionDetails: `Ticket assigned to user ID ${assignedTo}`,
+        previousValue: previousTicket.assignedTo?.toString() || 'none',
+        newValue: assignedTo.toString()
+      });
+
+      return updatedTicket;
+    } catch (error) {
+      console.error(`Error assigning support ticket ${id} to user ${assignedTo}:`, error);
+      return undefined;
+    }
+  }
+
+  async getAllSupportTickets(options: { limit?: number, offset?: number } = {}): Promise<SupportTicket[]> {
+    try {
+      let query = db
+        .select()
+        .from(supportTickets)
+        .orderBy(desc(supportTickets.updatedAt));
+
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+      
+      if (options.offset) {
+        query = query.offset(options.offset);
+      }
+
+      return await query;
+    } catch (error) {
+      console.error(`Error getting all support tickets:`, error);
+      return [];
+    }
+  }
+
+  // Ticket Attachment methods
+  async createTicketAttachment(attachment: InsertTicketAttachment): Promise<TicketAttachment> {
+    try {
+      const [newAttachment] = await db
+        .insert(ticketAttachments)
+        .values(attachment)
+        .returning();
+
+      // Create activity log entry for attachment upload
+      await this.createTicketActivityLog({
+        ticketId: attachment.ticketId,
+        userId: attachment.uploadedBy,
+        actionType: 'attachment_added',
+        actionDetails: `File "${attachment.fileName}" attached to ticket`
+      });
+
+      return newAttachment;
+    } catch (error) {
+      console.error(`Error creating ticket attachment:`, error);
+      throw new Error('Failed to create ticket attachment');
+    }
+  }
+
+  async getTicketAttachment(id: number): Promise<TicketAttachment | undefined> {
+    try {
+      const [attachment] = await db
+        .select()
+        .from(ticketAttachments)
+        .where(eq(ticketAttachments.id, id));
+
+      return attachment;
+    } catch (error) {
+      console.error(`Error getting ticket attachment ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getTicketAttachmentsByTicketId(ticketId: number): Promise<TicketAttachment[]> {
+    try {
+      return await db
+        .select()
+        .from(ticketAttachments)
+        .where(eq(ticketAttachments.ticketId, ticketId))
+        .orderBy(desc(ticketAttachments.createdAt));
+    } catch (error) {
+      console.error(`Error getting attachments for ticket ${ticketId}:`, error);
+      return [];
+    }
+  }
+
+  // Ticket Activity Log methods
+  async createTicketActivityLog(activity: InsertTicketActivityLog): Promise<TicketActivityLog> {
+    try {
+      const [newActivity] = await db
+        .insert(ticketActivityLog)
+        .values(activity)
+        .returning();
+
+      return newActivity;
+    } catch (error) {
+      console.error(`Error creating ticket activity log:`, error);
+      throw new Error('Failed to create ticket activity log');
+    }
+  }
+
+  async getTicketActivityLogsByTicketId(ticketId: number): Promise<TicketActivityLog[]> {
+    try {
+      return await db
+        .select()
+        .from(ticketActivityLog)
+        .where(eq(ticketActivityLog.ticketId, ticketId))
+        .orderBy(desc(ticketActivityLog.timestamp));
+    } catch (error) {
+      console.error(`Error getting activity logs for ticket ${ticketId}:`, error);
       return [];
     }
   }
