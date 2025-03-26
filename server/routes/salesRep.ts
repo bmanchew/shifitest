@@ -773,4 +773,133 @@ router.post("/:id/refresh-analytics", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /sales-reps/create-with-user
+ * Create a new user and register them as a sales rep in one step
+ */
+const createUserSalesRepSchema = z.object({
+  // User data
+  email: z.string().email(),
+  password: z.string().min(8),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  phone: z.string().optional(),
+  
+  // Sales rep data
+  merchantId: z.number(),
+  title: z.string().optional(),
+  commissionRate: z.number().optional(),
+  commissionRateType: z.enum(["percentage", "fixed"]).optional(),
+  maxAllowedFinanceAmount: z.number().optional(),
+  target: z.number().optional(),
+  notes: z.string().optional()
+});
+
+router.post("/create-with-user", async (req: Request, res: Response) => {
+  try {
+    const data = createUserSalesRepSchema.parse(req.body);
+    
+    // Verify the merchant exists
+    const merchant = await storage.getMerchant(data.merchantId);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found"
+      });
+    }
+    
+    // Check if user with email already exists
+    const existingUser = await storage.getUserByEmail(data.email);
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "User with this email already exists"
+      });
+    }
+    
+    // Start a transaction to ensure both operations (create user and create sales rep) succeed or fail together
+    const userData = {
+      email: data.email,
+      password: data.password,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phone: data.phone,
+      // Set role to sales_rep directly
+      role: "sales_rep" as const
+    };
+    
+    // Create the user
+    logger.info({
+      message: `Creating new user for sales rep: ${data.email}`,
+      category: "api",
+      source: "internal"
+    });
+    
+    const newUser = await storage.createUser(userData);
+    
+    // Create the sales rep record
+    const salesRepData = {
+      userId: newUser.id,
+      merchantId: data.merchantId,
+      title: data.title,
+      commissionRate: data.commissionRate,
+      commissionRateType: data.commissionRateType,
+      maxAllowedFinanceAmount: data.maxAllowedFinanceAmount,
+      target: data.target,
+      notes: data.notes,
+      active: true
+    };
+    
+    const salesRep = await storage.createSalesRep(salesRepData);
+    
+    // Initialize analytics for the new sales rep
+    await salesRepAnalyticsService.updateAnalyticsForSalesRep(salesRep.id);
+    
+    // Create log for complete sales rep creation
+    await storage.createLog({
+      level: "info",
+      message: `Sales rep created with new user: ${newUser.email}`,
+      userId: newUser.id,
+      metadata: JSON.stringify({ 
+        salesRepId: salesRep.id, 
+        merchantId: data.merchantId 
+      }),
+    });
+    
+    // Remove password from response
+    const { password, ...userWithoutPassword } = newUser;
+    
+    return res.status(201).json({
+      success: true,
+      user: userWithoutPassword,
+      salesRep
+    });
+    
+  } catch (error) {
+    if (error instanceof ZodError) {
+      const formattedError = fromZodError(error);
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: formattedError.details
+      });
+    }
+    
+    logger.error({
+      message: `Error creating user and sales rep: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        body: req.body,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create sales representative with user"
+    });
+  }
+});
+
 export default router;
