@@ -15,7 +15,9 @@ import {
   notifications, Notification, InsertNotification,
   notificationChannels, NotificationChannel, InsertNotificationChannel,
   inAppNotifications, InAppNotification, InsertInAppNotification,
-  customerSatisfactionSurveys, CustomerSatisfactionSurvey, InsertCustomerSatisfactionSurvey
+  customerSatisfactionSurveys, CustomerSatisfactionSurvey, InsertCustomerSatisfactionSurvey,
+  smartContractTemplates, SmartContractTemplate, InsertSmartContractTemplate,
+  smartContractDeployments, SmartContractDeployment, InsertSmartContractDeployment
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt } from "drizzle-orm";
@@ -31,6 +33,19 @@ export interface IStorage {
 
   // Add to the IStorage interface
   updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined>;
+  
+  // Smart Contract Template operations
+  getSmartContractTemplates(): Promise<SmartContractTemplate[]>;
+  getSmartContractTemplate(id: number): Promise<SmartContractTemplate | undefined>;
+  getSmartContractTemplatesByType(contractType: string): Promise<SmartContractTemplate[]>;
+  createSmartContractTemplate(template: InsertSmartContractTemplate): Promise<SmartContractTemplate>;
+  updateSmartContractTemplate(id: number, data: Partial<SmartContractTemplate>): Promise<SmartContractTemplate | undefined>;
+  
+  // Smart Contract Deployment operations
+  getSmartContractDeployments(): Promise<SmartContractDeployment[]>;
+  getSmartContractDeployment(id: number): Promise<SmartContractDeployment | undefined>;
+  getSmartContractDeploymentsByTemplateId(templateId: number): Promise<SmartContractDeployment[]>;
+  createSmartContractDeployment(deployment: InsertSmartContractDeployment): Promise<SmartContractDeployment>;
 
   // Merchant operations
   getMerchant(id: number): Promise<Merchant | undefined>;
@@ -1455,6 +1470,102 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error getting active contracts due for survey:`, error);
       return [];
+    }
+  }
+
+  // Smart Contract Template operations
+  async getSmartContractTemplates(): Promise<SmartContractTemplate[]> {
+    try {
+      return await db.select().from(smartContractTemplates);
+    } catch (error) {
+      console.error("Error getting smart contract templates:", error);
+      return [];
+    }
+  }
+
+  async getSmartContractTemplate(id: number): Promise<SmartContractTemplate | undefined> {
+    try {
+      const [template] = await db.select().from(smartContractTemplates).where(eq(smartContractTemplates.id, id));
+      return template || undefined;
+    } catch (error) {
+      console.error(`Error getting smart contract template ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSmartContractTemplatesByType(contractType: string): Promise<SmartContractTemplate[]> {
+    try {
+      return await db.select().from(smartContractTemplates).where(eq(smartContractTemplates.contractType, contractType));
+    } catch (error) {
+      console.error(`Error getting smart contract templates by type ${contractType}:`, error);
+      return [];
+    }
+  }
+
+  async createSmartContractTemplate(template: InsertSmartContractTemplate): Promise<SmartContractTemplate> {
+    try {
+      const [newTemplate] = await db.insert(smartContractTemplates).values(template).returning();
+      return newTemplate;
+    } catch (error) {
+      console.error("Error creating smart contract template:", error);
+      throw error;
+    }
+  }
+
+  async updateSmartContractTemplate(id: number, data: Partial<SmartContractTemplate>): Promise<SmartContractTemplate | undefined> {
+    try {
+      const [updatedTemplate] = await db
+        .update(smartContractTemplates)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(smartContractTemplates.id, id))
+        .returning();
+      
+      return updatedTemplate;
+    } catch (error) {
+      console.error(`Error updating smart contract template ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  // Smart Contract Deployment operations
+  async getSmartContractDeployments(): Promise<SmartContractDeployment[]> {
+    try {
+      return await db.select().from(smartContractDeployments);
+    } catch (error) {
+      console.error("Error getting smart contract deployments:", error);
+      return [];
+    }
+  }
+
+  async getSmartContractDeployment(id: number): Promise<SmartContractDeployment | undefined> {
+    try {
+      const [deployment] = await db.select().from(smartContractDeployments).where(eq(smartContractDeployments.id, id));
+      return deployment || undefined;
+    } catch (error) {
+      console.error(`Error getting smart contract deployment ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSmartContractDeploymentsByTemplateId(templateId: number): Promise<SmartContractDeployment[]> {
+    try {
+      return await db.select().from(smartContractDeployments).where(eq(smartContractDeployments.templateId, templateId));
+    } catch (error) {
+      console.error(`Error getting smart contract deployments by template ID ${templateId}:`, error);
+      return [];
+    }
+  }
+
+  async createSmartContractDeployment(deployment: InsertSmartContractDeployment): Promise<SmartContractDeployment> {
+    try {
+      const [newDeployment] = await db.insert(smartContractDeployments).values(deployment).returning();
+      return newDeployment;
+    } catch (error) {
+      console.error("Error creating smart contract deployment:", error);
+      throw error;
     }
   }
 }

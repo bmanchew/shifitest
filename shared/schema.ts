@@ -25,6 +25,12 @@ export const contractStatusEnum = pgEnum("contract_status", [
   "declined",
   "cancelled",
 ]);
+export const tokenizationStatusEnum = pgEnum("tokenization_status", [
+  "pending",
+  "processing",
+  "tokenized",
+  "failed",
+]);
 export const applicationStepEnum = pgEnum("application_step", [
   "terms",
   "kyc",
@@ -64,7 +70,8 @@ export const logSourceEnum = pgEnum("log_source", [
   "signing",
   "analytics",
   "notification",
-  "openai"
+  "openai",
+  "blockchain"
 ]);
 export const verificationTypeEnum = pgEnum("verification_type", [
   "identity",
@@ -146,6 +153,15 @@ export const contracts = pgTable("contracts", {
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
   phoneNumber: text("phone_number"), // Store customer phone number directly in contract
+  
+  // Blockchain and tokenization fields
+  tokenizationStatus: tokenizationStatusEnum("tokenization_status").default("pending"),
+  tokenId: text("token_id"), // The token ID on the blockchain
+  smartContractAddress: text("smart_contract_address"), // Address of the smart contract holding this token
+  blockchainTransactionHash: text("blockchain_transaction_hash"), // Hash of the transaction that created the token
+  blockNumber: integer("block_number"), // Block number when the token was created
+  tokenizationDate: timestamp("tokenization_date"), // When the contract was tokenized
+  tokenMetadata: text("token_metadata"), // JSON stringified metadata stored with the token
 });
 
 export const insertContractSchema = createInsertSchema(contracts).omit({
@@ -524,6 +540,14 @@ export const notificationRecipientTypeEnum = pgEnum(
   ["merchant", "customer", "admin"],
 );
 
+// Smart Contract Template Types
+export const smartContractTypeEnum = pgEnum("smart_contract_type", [
+  "standard_financing",
+  "zero_interest_financing",
+  "merchant_specific",
+  "custom"
+]);
+
 // Notifications
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
@@ -628,3 +652,58 @@ export type CustomerSatisfactionSurvey = typeof customerSatisfactionSurveys.$inf
 export type InsertCustomerSatisfactionSurvey = z.infer<
   typeof insertCustomerSatisfactionSurveySchema
 >;
+
+// Smart Contract Templates
+export const smartContractTemplates = pgTable("smart_contract_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  contractType: smartContractTypeEnum("contract_type").notNull().default("standard_financing"),
+  abiJson: text("abi_json").notNull(), // ABI (Application Binary Interface) JSON
+  bytecode: text("bytecode").notNull(), // Compiled contract bytecode
+  sourceCode: text("source_code"), // Original Solidity source code
+  version: text("version").notNull(),
+  merchantId: integer("merchant_id").references(() => merchants.id), // For merchant-specific templates
+  parameters: text("parameters"), // JSON of required parameters
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertSmartContractTemplateSchema = createInsertSchema(
+  smartContractTemplates
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Smart Contract Deployments
+export const smartContractDeployments = pgTable("smart_contract_deployments", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").references(() => smartContractTemplates.id).notNull(),
+  contractAddress: text("contract_address").notNull(),
+  networkId: integer("network_id").notNull(), // Which blockchain network it's deployed on
+  deploymentParams: text("deployment_params"), // JSON of deployment parameters
+  deployedAt: timestamp("deployed_at").defaultNow(),
+  deployedBy: integer("deployed_by").references(() => users.id),
+  transactionHash: text("transaction_hash").notNull(),
+  status: text("status").notNull().default("active"), // active, deprecated, etc.
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertSmartContractDeploymentSchema = createInsertSchema(
+  smartContractDeployments
+).omit({
+  id: true,
+  deployedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SmartContractTemplate = typeof smartContractTemplates.$inferSelect;
+export type InsertSmartContractTemplate = z.infer<typeof insertSmartContractTemplateSchema>;
+
+export type SmartContractDeployment = typeof smartContractDeployments.$inferSelect;
+export type InsertSmartContractDeployment = z.infer<typeof insertSmartContractDeploymentSchema>;
