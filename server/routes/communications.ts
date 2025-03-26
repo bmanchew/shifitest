@@ -1255,6 +1255,9 @@ router.get("/tickets", async (req: Request, res: Response) => {
     if (parsedAssignedTo) {
       tickets = tickets.filter(ticket => ticket.assignedTo === parsedAssignedTo);
     }
+    if (priority) {
+      tickets = tickets.filter(ticket => ticket.priority === priority);
+    }
     
     logger.info({
       message: `Retrieved ${tickets.length} support tickets`,
