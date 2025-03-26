@@ -25,6 +25,8 @@ import crypto from "crypto";
 
 const router = Router();
 
+// ===== CONVERSATION ROUTES =====
+
 // Get all conversations (with optional filtering)
 router.get("/", async (req: Request, res: Response) => {
   try {
@@ -102,6 +104,90 @@ router.get("/", async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve conversations"
+    });
+  }
+});
+
+// ===== SUPPORT TICKET ROUTES =====
+
+// Get all support tickets (with optional filtering)
+router.get("/tickets", async (req: Request, res: Response) => {
+  try {
+    const { merchantId, status, category, assignedTo, limit, offset } = req.query;
+    
+    // Validate query parameters
+    const parsedMerchantId = merchantId ? parseInt(merchantId as string) : undefined;
+    const parsedAssignedTo = assignedTo ? parseInt(assignedTo as string) : undefined;
+    const parsedLimit = limit ? parseInt(limit as string) : 20;
+    const parsedOffset = offset ? parseInt(offset as string) : 0;
+    
+    if (
+      (merchantId && isNaN(parsedMerchantId!)) || 
+      (assignedTo && isNaN(parsedAssignedTo!)) ||
+      isNaN(parsedLimit) || 
+      isNaN(parsedOffset)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid query parameters"
+      });
+    }
+    
+    let tickets = await storage.getAllSupportTickets(parsedLimit, parsedOffset);
+    
+    // Apply filters if specified
+    if (parsedMerchantId) {
+      tickets = tickets.filter(ticket => ticket.merchantId === parsedMerchantId);
+    }
+    
+    if (status) {
+      tickets = tickets.filter(ticket => ticket.status === status);
+    }
+    
+    if (category) {
+      tickets = tickets.filter(ticket => ticket.category === category);
+    }
+    
+    if (parsedAssignedTo) {
+      tickets = tickets.filter(ticket => ticket.assignedTo === parsedAssignedTo);
+    }
+    
+    logger.info({
+      message: `Retrieved ${tickets.length} support tickets`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId: parsedMerchantId,
+        status,
+        category,
+        assignedTo: parsedAssignedTo,
+        limit: parsedLimit,
+        offset: parsedOffset
+      }
+    });
+    
+    res.json({
+      success: true,
+      tickets,
+      meta: {
+        count: tickets.length,
+        limit: parsedLimit,
+        offset: parsedOffset
+      }
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving support tickets: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve support tickets"
     });
   }
 });
@@ -781,10 +867,19 @@ router.post("/tickets", async (req: Request, res: Response) => {
     // Generate ticket number (format: TICKET-XXXXX)
     const ticketNumber = `TICKET-${crypto.randomInt(10000, 99999)}`;
     
-    const ticketData: InsertSupportTicket = {
-      ...insertSupportTicketSchema.parse(req.body),
+    // Create a new object without Zod validation first
+    const rawTicketData = {
+      ...req.body,
       ticketNumber
     };
+    
+    // Create a custom validation schema that overrides the priority field
+    const customTicketSchema = insertSupportTicketSchema.extend({
+      priority: z.enum(["low", "normal", "high", "urgent"]).default("normal")
+    });
+    
+    // Now parse with the updated Zod schema
+    const ticketData = customTicketSchema.parse(rawTicketData);
     
     // Validate that the merchant exists
     const merchant = await storage.getMerchant(ticketData.merchantId);

@@ -37,7 +37,9 @@ export const ticketStatusEnum = pgEnum("ticket_status", [
 ]);
 
 export const ticketPriorityEnum = pgEnum("ticket_priority", [
+  "low",
   "normal",
+  "high",
   "urgent",
 ]);
 
