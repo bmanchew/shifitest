@@ -320,16 +320,14 @@ export default function AdminMessages() {
   
   // Handle tab change
   const handleTabChange = (value: string) => {
-    updateParams({ status: value === "all" ? null : value });
+    setParam("status", value === "all" ? undefined : value);
   };
   
   // Reset filters
   const resetFilters = () => {
-    updateParams({
-      status: null,
-      search: null,
-      merchantId: null,
-    });
+    setParam("status", undefined);
+    setParam("search", undefined);
+    setParam("merchantId", undefined);
     setSearchValue("");
   };
   
@@ -387,8 +385,8 @@ export default function AdminMessages() {
           </div>
           
           <Select
-            value={params.merchantId || ""}
-            onValueChange={(value) => updateParams({ merchantId: value || null })}
+            value={getParam("merchantId") || ""}
+            onValueChange={(value) => setParam("merchantId", value || undefined)}
           >
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Select Merchant" />
@@ -447,8 +445,8 @@ export default function AdminMessages() {
         </div>
         
         <Tabs
-          defaultValue={params.status || "all"}
-          value={params.status || "all"}
+          defaultValue={getParam("status") || "all"}
+          value={getParam("status") || "all"}
           onValueChange={handleTabChange}
         >
           <TabsList className="grid grid-cols-4 w-full md:w-auto">
