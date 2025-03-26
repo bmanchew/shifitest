@@ -1,79 +1,84 @@
-import { useLocation } from "wouter";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import { useLocation, useRoute } from "wouter";
 
 /**
- * Custom hook to get and manipulate URL search parameters
- * @returns Object with searchParams and utility functions
+ * A hook for working with URL search parameters in React components.
+ * Provides utility functions to get, set, and clear search parameters.
  */
 export function useSearchParams() {
   const [location, setLocation] = useLocation();
-  
-  // Parse current search params from URL
+
+  // Extract search params from the URL
   const searchParams = useMemo(() => {
-    const url = new URL(window.location.href);
+    const url = new URL(location, window.location.origin);
     return url.searchParams;
   }, [location]);
-  
+
   /**
-   * Update a single search parameter
-   * @param key Parameter key to update
-   * @param value New value (undefined to remove)
+   * Set a single search parameter in the URL
+   * @param key The parameter key
+   * @param value The parameter value, undefined to remove
    */
-  const setParam = (key: string, value: string | undefined) => {
-    const url = new URL(window.location.href);
-    
-    if (value === undefined) {
-      url.searchParams.delete(key);
-    } else {
-      url.searchParams.set(key, value);
-    }
-    
-    // Update the location using wouter's setLocation
-    setLocation(url.pathname + url.search);
-  };
-  
-  /**
-   * Update multiple search parameters at once
-   * @param params Object with key-value pairs to update
-   */
-  const setParams = (params: Record<string, string | undefined>) => {
-    const url = new URL(window.location.href);
-    
-    Object.entries(params).forEach(([key, value]) => {
+  const setParam = useCallback(
+    (key: string, value: string | undefined) => {
+      const url = new URL(location, window.location.origin);
+      
       if (value === undefined) {
         url.searchParams.delete(key);
       } else {
         url.searchParams.set(key, value);
       }
-    });
-    
-    // Update the location using wouter's setLocation
-    setLocation(url.pathname + url.search);
-  };
-  
+      
+      setLocation(url.pathname + url.search);
+    },
+    [location, setLocation]
+  );
+
   /**
-   * Get a specific parameter value
-   * @param key Parameter key to retrieve
-   * @returns Parameter value or null if not present
+   * Set multiple search parameters at once
+   * @param params Object with key-value pairs to set in URL
    */
-  const getParam = (key: string): string | null => {
-    return searchParams.get(key);
-  };
-  
+  const setParams = useCallback(
+    (params: Record<string, string | undefined>) => {
+      const url = new URL(location, window.location.origin);
+      
+      for (const [key, value] of Object.entries(params)) {
+        if (value === undefined) {
+          url.searchParams.delete(key);
+        } else {
+          url.searchParams.set(key, value);
+        }
+      }
+      
+      setLocation(url.pathname + url.search);
+    },
+    [location, setLocation]
+  );
+
   /**
-   * Remove all search parameters and reset URL
+   * Get a single search parameter value
+   * @param key The parameter key
+   * @returns The parameter value or null if not present
    */
-  const clearParams = () => {
-    setLocation(window.location.pathname);
-  };
-  
+  const getParam = useCallback(
+    (key: string): string | null => {
+      return searchParams.get(key);
+    },
+    [searchParams]
+  );
+
+  /**
+   * Clear all search parameters
+   */
+  const clearParams = useCallback(() => {
+    setLocation(location.split("?")[0]);
+  }, [location, setLocation]);
+
   return {
     searchParams,
     setParam,
     setParams,
     getParam,
-    clearParams
+    clearParams,
   };
 }
-
-export default useSearchParams;

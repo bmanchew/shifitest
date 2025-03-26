@@ -218,15 +218,17 @@ const conversationsColumns: ColumnDef<any>[] = [
 ];
 
 export default function AdminMessages() {
-  const { params, updateParams } = useSearchParams<{
-    status?: string;
-    search?: string;
-    merchantId?: string;
-  }>();
+  const { 
+    searchParams,
+    getParam,
+    setParam,
+    setParams: updateParams,
+    clearParams
+  } = useSearchParams();
   
   const { toast } = useToast();
   const [isNewConversationDialogOpen, setIsNewConversationDialogOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState(params.search || "");
+  const [searchValue, setSearchValue] = useState(getParam("search") || "");
   
   // Form for new conversation
   const newConversationForm = useForm<z.infer<typeof newConversationSchema>>({
@@ -243,13 +245,13 @@ export default function AdminMessages() {
   // Effect to update search params when user stops typing
   useEffect(() => {
     const timeout = setTimeout(() => {
-      if (searchValue !== params.search) {
-        updateParams({ search: searchValue || null });
+      if (searchValue !== getParam("search")) {
+        setParam("search", searchValue || undefined);
       }
     }, 500);
     
     return () => clearTimeout(timeout);
-  }, [searchValue, params.search, updateParams]);
+  }, [searchValue, getParam, setParam]);
   
   // Query to fetch conversations
   const { 
@@ -257,14 +259,9 @@ export default function AdminMessages() {
     isLoading, 
     refetch 
   } = useQuery({
-    queryKey: ["/api/conversations", params],
+    queryKey: ["/api/conversations", searchParams.toString()],
     queryFn: async () => {
-      const queryParams = new URLSearchParams();
-      if (params.status) queryParams.append("status", params.status);
-      if (params.search) queryParams.append("search", params.search);
-      if (params.merchantId) queryParams.append("merchantId", params.merchantId);
-      
-      const url = `/api/conversations${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+      const url = `/api/conversations${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error("Failed to load conversations");
