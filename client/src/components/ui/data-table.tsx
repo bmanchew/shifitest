@@ -1,16 +1,15 @@
-import * as React from "react";
+import { useState } from "react";
 import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
-  getPaginationRowModel,
   useReactTable,
+  getPaginationRowModel,
+  FilterFn,
+  getFilteredRowModel,
   SortingState,
   getSortedRowModel,
-  ColumnFiltersState,
-  getFilteredRowModel,
 } from "@tanstack/react-table";
-
 import {
   Table,
   TableBody,
@@ -21,66 +20,108 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ChevronLeft, ChevronRight, Search, SortAsc, SortDesc } from "lucide-react";
+import { rank } from "@/lib/utils";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  searchField?: string;
-  searchPlaceholder?: string;
+  showSearch?: boolean;
+  searchKey?: string;
+  placeholder?: string;
+  isLoading?: boolean;
 }
+
+// Custom fuzzy filter function that uses our rank utility
+const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
+  // Check if the value is undefined or empty string
+  if (!value || value === "") return true;
+
+  // Get the value of the row
+  const rowValue = row.getValue(columnId);
+  if (typeof rowValue !== "string") return false;
+
+  // Use our rank function to determine match quality
+  const score = rank(rowValue, value);
+  
+  // Save the score so we can sort by it
+  addMeta({ score });
+  
+  // Return true for any non-zero score
+  return score > 0;
+};
 
 export function DataTable<TData, TValue>({
   columns,
   data,
-  searchField,
-  searchPlaceholder = "Search...",
+  showSearch = true,
+  searchKey = "",
+  placeholder = "Search...",
+  isLoading = false,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState<string>("");
 
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    onGlobalFilterChange: setGlobalFilter,
+    getFilteredRowModel: getFilteredRowModel(),
+    globalFilterFn: fuzzyFilter,
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    getFilteredRowModel: getFilteredRowModel(),
     state: {
+      globalFilter,
       sorting,
-      columnFilters,
     },
   });
 
   return (
-    <div>
-      {searchField && (
-        <div className="flex items-center py-4">
+    <div className="space-y-4">
+      {showSearch && searchKey && (
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
           <Input
-            placeholder={searchPlaceholder}
-            value={(table.getColumn(searchField)?.getFilterValue() as string) ?? ""}
-            onChange={(event) =>
-              table.getColumn(searchField)?.setFilterValue(event.target.value)
-            }
-            className="max-w-sm"
+            placeholder={placeholder}
+            value={globalFilter ?? ""}
+            onChange={(event) => setGlobalFilter(event.target.value)}
+            className="pl-8 max-w-md"
           />
         </div>
       )}
-      <div className="rounded-md border">
+      <div className="rounded-md border bg-white">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
+                  const isSorted = header.column.getIsSorted();
+
                   return (
                     <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                      <div 
+                        className={
+                          header.column.getCanSort() 
+                            ? "flex cursor-pointer select-none items-center" 
+                            : ""
+                        }
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                        {isSorted === "asc" && (
+                          <SortAsc className="ml-2 h-4 w-4" />
+                        )}
+                        {isSorted === "desc" && (
+                          <SortDesc className="ml-2 h-4 w-4" />
+                        )}
+                      </div>
                     </TableHead>
                   );
                 })}
@@ -88,7 +129,19 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  <div className="flex justify-center items-center h-full">
+                    <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
+                    <span className="ml-2">Loading...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -103,39 +156,43 @@ export function DataTable<TData, TValue>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  No results found.
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-between space-x-2 py-4">
-        <div className="text-sm text-gray-700">
-          Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{" "}
-          {Math.min(
-            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-            table.getFilteredRowModel().rows.length
-          )}{" "}
-          of {table.getFilteredRowModel().rows.length} entries
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          {isLoading ? "Loading..." : `Showing ${table.getRowModel().rows.length} of ${data.length} items`}
         </div>
-        <div className="space-x-2">
+        <div className="flex items-center space-x-2">
           <Button
             variant="outline"
-            size="sm"
+            className="h-8 w-8 p-0"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
-            Previous
+            <span className="sr-only">Go to previous page</span>
+            <ChevronLeft className="h-4 w-4" />
           </Button>
+          <div className="text-sm font-medium">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()}
+          </div>
           <Button
             variant="outline"
-            size="sm"
+            className="h-8 w-8 p-0"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
-            Next
+            <span className="sr-only">Go to next page</span>
+            <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>

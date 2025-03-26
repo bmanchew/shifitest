@@ -14,6 +14,8 @@ import {
   X,
   BarChart,
   Link2,
+  TicketIcon,
+  MessageSquare,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -52,6 +54,18 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       href: "/admin/contracts",
       icon: FileText,
       current: location === "/admin/contracts",
+    },
+    {
+      name: "Support Tickets",
+      href: "/admin/support-tickets",
+      icon: TicketIcon,
+      current: location === "/admin/support-tickets",
+    },
+    {
+      name: "Messages",
+      href: "/admin/messages",
+      icon: MessageSquare,
+      current: location === "/admin/messages",
     },
     {
       name: "Blockchain",
