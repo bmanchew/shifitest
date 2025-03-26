@@ -521,7 +521,7 @@ blockchainRouter.post('/tokenize/:contractId', async (req: Request, res: Respons
     }
     
     // Check if contract is already tokenized
-    if (contract.tokenizationStatus === 'completed' && contract.tokenId) {
+    if (contract.tokenizationStatus === 'tokenized' && contract.tokenId) {
       return res.status(400).json({
         success: false,
         error: 'Contract is already tokenized',
@@ -553,7 +553,7 @@ blockchainRouter.post('/tokenize/:contractId', async (req: Request, res: Respons
     
     // Update contract with tokenization details
     await storage.updateContract(contractId, {
-      tokenizationStatus: 'completed',
+      tokenizationStatus: 'tokenized',
       tokenId: tokenizationResult.tokenId,
       smartContractAddress: tokenizationResult.smartContractAddress,
       blockchainTransactionHash: tokenizationResult.transactionHash,

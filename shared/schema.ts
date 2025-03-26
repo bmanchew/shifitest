@@ -162,6 +162,7 @@ export const contracts = pgTable("contracts", {
   blockNumber: integer("block_number"), // Block number when the token was created
   tokenizationDate: timestamp("tokenization_date"), // When the contract was tokenized
   tokenMetadata: text("token_metadata"), // JSON stringified metadata stored with the token
+  tokenizationError: text("tokenization_error"), // Error message if tokenization failed
 });
 
 export const insertContractSchema = createInsertSchema(contracts).omit({

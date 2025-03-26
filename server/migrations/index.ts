@@ -1,6 +1,8 @@
 import { migrateName } from "./name-to-first-last-name";
 import { updateLogSourceEnum } from "./update-log-source-enum";
 import { migrateArchivedFields } from "./add-archived-fields";
+import { migrateTokenizationFields } from "./add-tokenization-fields";
+import { addTokenizationErrorField } from "./add-tokenization-error-field";
 import { logger } from "../services/logger";
 
 export async function runMigrations() {
@@ -13,6 +15,8 @@ export async function runMigrations() {
     await migrateName();
     await updateLogSourceEnum();
     await migrateArchivedFields();
+    await migrateTokenizationFields();
+    await addTokenizationErrorField();
 
     logger.info({
       message: "Database migrations completed successfully",
