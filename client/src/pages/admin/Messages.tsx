@@ -385,14 +385,14 @@ export default function AdminMessages() {
           </div>
           
           <Select
-            value={getParam("merchantId") || ""}
+            value={getParam("merchantId") || "all"}
             onValueChange={(value) => setParam("merchantId", value || undefined)}
           >
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Select Merchant" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Merchants</SelectItem>
+              <SelectItem value="all">All Merchants</SelectItem>
               {merchants.map((merchant: any) => (
                 <SelectItem key={merchant.id} value={String(merchant.id)}>
                   {merchant.businessName}
@@ -513,7 +513,7 @@ export default function AdminMessages() {
                   <FormItem>
                     <FormLabel>Merchant</FormLabel>
                     <Select
-                      value={field.value ? String(field.value) : ""}
+                      value={field.value ? String(field.value) : "0"}
                       onValueChange={(value) => field.onChange(Number(value))}
                     >
                       <FormControl>
