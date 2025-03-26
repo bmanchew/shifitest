@@ -642,6 +642,52 @@ router.post('/contracts/:id/purchase-by-shifi', async (req: Request, res: Respon
  * @desc Get all tokenized contracts
  * @access Private - Admin only
  */
+/**
+ * @route GET /api/blockchain/contracts/:status
+ * @desc Get contracts with a specific tokenization status
+ * @access Private - Admin only
+ */
+router.get('/contracts/:status', async (req: Request, res: Response) => {
+  try {
+    const { status } = req.params;
+    
+    // Validate the status parameter
+    const validStatuses = ['pending', 'processing', 'tokenized', 'failed'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid tokenization status. Must be one of: pending, processing, tokenized, failed'
+      });
+    }
+    
+    const contracts = await storage.getContractsByTokenizationStatus(status);
+    
+    // Return the contracts array directly without wrapping it in a data object
+    // This ensures compatibility with the frontend component's data.map() call
+    res.json(contracts);
+  } catch (error) {
+    logger.error({
+      message: `Failed to get contracts with status ${req.params.status}: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'system',
+      source: 'blockchain',
+      metadata: {
+        status: req.params.status,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      }
+    });
+    
+    // Return an empty array instead of an error response
+    // This ensures compatibility with the frontend component's data.map() call
+    res.json([]);
+  }
+});
+
+/**
+ * @route GET /api/blockchain/contracts/tokenized
+ * @desc Get all tokenized contracts
+ * @access Private - Admin only
+ */
 router.get('/contracts/tokenized', async (req: Request, res: Response) => {
   try {
     const tokenizedContracts = await storage.getContractsByTokenizationStatus('tokenized');

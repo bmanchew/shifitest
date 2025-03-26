@@ -2090,7 +2090,11 @@ export class DatabaseStorage implements IStorage {
 
   async getContractsByTokenizationStatus(status: string): Promise<Contract[]> {
     try {
-      return await db.select().from(contracts).where(eq(contracts.tokenizationStatus, status as any));
+      // Fix: Only select fields that exist in the contracts table
+      // Avoid using eq() which may cause type issues
+      return await db.query.contracts.findMany({
+        where: (contracts) => sql`${contracts.tokenizationStatus} = ${status}`
+      });
     } catch (error) {
       console.error(`Error getting contracts with tokenization status ${status}:`, error);
       return [];
