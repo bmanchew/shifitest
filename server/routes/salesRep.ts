@@ -14,6 +14,64 @@ import { z } from "zod";
 
 const router = express.Router();
 
+/**
+ * POST /sales-reps/:id/refresh-analytics
+ * Refresh analytics data for a specific sales rep
+ */
+router.post("/:id/refresh-analytics", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid sales rep ID"
+      });
+    }
+
+    // Verify the sales rep exists
+    const salesRep = await storage.getSalesRep(id);
+    if (!salesRep) {
+      return res.status(404).json({
+        success: false,
+        message: "Sales rep not found"
+      });
+    }
+
+    // Update analytics for the sales rep
+    await salesRepAnalyticsService.updateAnalyticsForSalesRep(id);
+    
+    logger.info({
+      message: `Analytics refreshed for sales rep ID ${id}`,
+      category: "api",
+      source: "sales_rep",
+      metadata: {
+        salesRepId: id
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: "Sales rep analytics refreshed successfully"
+    });
+    
+  } catch (error) {
+    logger.error({
+      message: `Error refreshing sales rep analytics: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "sales_rep",
+      metadata: {
+        salesRepId: req.params.id,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: "Failed to refresh sales rep analytics"
+    });
+  }
+});
+
 // Schema for creating a new sales rep
 const createSalesRepSchema = z.object({
   userId: z.number(),

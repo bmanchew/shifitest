@@ -32,6 +32,7 @@ import {
   Legend, 
   ResponsiveContainer 
 } from "recharts";
+import SalesRepPerformance from "@/components/merchant/SalesRepPerformance";
 
 // Merchant Performance Card using real data
 const MerchantPerformanceCard = ({ merchantId }: { merchantId: number }) => {
@@ -445,6 +446,11 @@ export default function Reports() {
         {/* Merchant Performance Card */}
         <div className="px-4 sm:px-0 mb-6">
           <MerchantPerformanceCard merchantId={merchantId} />
+        </div>
+        
+        {/* Sales Rep Performance */}
+        <div className="px-4 sm:px-0 mb-6">
+          <SalesRepPerformance merchantId={merchantId} />
         </div>
 
         {isLoading ? (
