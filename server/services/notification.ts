@@ -17,6 +17,8 @@ export type NotificationType =
   | 'merchant_rejection'
   | 'merchant_document_request'
   | 'merchant_revenue_verification_complete'
+  | 'merchant_ticket_created'  // Added for merchant support tickets
+  | 'merchant_ticket_updated'  // Added for merchant support tickets
   
   // Customer notifications
   | 'customer_welcome'
@@ -33,7 +35,9 @@ export type NotificationType =
   | 'admin_document_review'
   | 'admin_contract_review'
   | 'admin_payment_failed'
-  | 'admin_high_risk_alert';
+  | 'admin_high_risk_alert'
+  | 'admin_new_ticket'      // Added for support tickets
+  | 'admin_ticket_updated'; // Added for support tickets
 
 export type NotificationChannel = 'email' | 'sms' | 'in_app' | 'webhook';
 

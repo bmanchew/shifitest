@@ -21,6 +21,8 @@ import {
 } from "@shared/schema";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
+import { notificationService } from "../services/index";
+import { NotificationType } from "../services/notification";
 import crypto from "crypto";
 
 const router = Router();
@@ -861,7 +863,7 @@ router.get("/tickets/:id", async (req: Request, res: Response) => {
   }
 });
 
-// Create a new support ticket
+// Create a new support ticket (general API endpoint)
 router.post("/tickets", async (req: Request, res: Response) => {
   try {
     // Generate ticket number (format: TICKET-XXXXX)
@@ -948,6 +950,167 @@ router.post("/tickets", async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: "Failed to create support ticket"
+    });
+  }
+});
+
+// Merchant Support Ticket Submission Portal API endpoint
+router.post("/merchant-support", async (req: Request, res: Response) => {
+  try {
+    // Generate ticket number (format: TICKET-XXXXX)
+    const ticketNumber = `TICKET-${crypto.randomInt(10000, 99999)}`;
+    
+    // Extract merchant information from request
+    const { 
+      merchantId, 
+      createdBy, 
+      category, 
+      subcategory, 
+      subject, 
+      description, 
+      priority = "normal",
+      contactInfo = {} 
+    } = req.body;
+    
+    // Create the ticket data object
+    const rawTicketData = {
+      ticketNumber,
+      merchantId,
+      createdBy,
+      category,
+      subcategory,
+      subject,
+      description,
+      priority,
+      status: "new",
+      metadata: JSON.stringify({
+        contactInfo,
+        submittedVia: "merchant-portal"
+      })
+    };
+    
+    // Create a custom validation schema for merchant portal submissions
+    const merchantPortalTicketSchema = insertSupportTicketSchema.extend({
+      priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+      subcategory: z.string().optional(),
+      metadata: z.string().optional()
+    });
+    
+    // Validate the data
+    const ticketData = merchantPortalTicketSchema.parse(rawTicketData);
+    
+    // Validate that the merchant exists
+    const merchant = await storage.getMerchant(ticketData.merchantId);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Referenced merchant not found"
+      });
+    }
+    
+    // Validate that the creator exists
+    const creator = await storage.getUser(ticketData.createdBy);
+    if (!creator) {
+      return res.status(404).json({
+        success: false,
+        message: "Creator user not found"
+      });
+    }
+    
+    // Create the support ticket
+    const newTicket = await storage.createSupportTicket(ticketData);
+    
+    // Log the ticket creation in the activity log
+    await storage.createTicketActivityLog({
+      ticketId: newTicket.id,
+      actionType: "created",
+      userId: ticketData.createdBy,
+      actionDetails: `Support ticket created via Merchant Portal with status "new"`
+    });
+    
+    // Send a notification to the merchant about their ticket submission
+    await notificationService.sendNotification("merchant_ticket_created", {
+      recipientId: merchant.userId,
+      recipientType: "merchant",
+      channels: ["email", "in_app"],
+      subject: `Support Ticket #${newTicket.ticketNumber} Received`,
+      message: `We've received your support request regarding "${newTicket.subject}". Our team will respond to you within 1 business day.`,
+      data: {
+        ticketNumber: newTicket.ticketNumber,
+        category: newTicket.category,
+        priority: newTicket.priority,
+        subject: newTicket.subject
+      }
+    });
+    
+    // Notify admins about new ticket
+    // Query for admin users (users with role = 'admin')
+    const adminUsers = await storage.getAllUsers();
+    // Filter for admin users
+    const admins = adminUsers.filter(user => user.role === 'admin');
+    
+    if (admins && admins.length > 0) {
+      // Notify the first admin (we could implement a rotation or assignment system later)
+      const admin = admins[0];
+      await notificationService.sendNotification("admin_new_ticket", {
+        recipientId: admin.id,
+        recipientType: "admin",
+        channels: ["email", "in_app"],
+        subject: `New Support Ticket #${newTicket.ticketNumber}`,
+        message: `A new support ticket has been submitted by ${merchant.name}: "${newTicket.subject}"`,
+        data: {
+          ticketId: newTicket.id,
+          ticketNumber: newTicket.ticketNumber,
+          merchantId: merchant.id,
+          merchantName: merchant.name,
+          category: newTicket.category,
+          priority: newTicket.priority
+        }
+      });
+    }
+    
+    logger.info({
+      message: `Created new merchant support ticket: ${newTicket.subject}`,
+      category: "api",
+      source: "internal",
+      userId: ticketData.createdBy,
+      metadata: {
+        ticketId: newTicket.id,
+        merchantId: ticketData.merchantId,
+        category: ticketData.category,
+        subcategory: ticketData.subcategory,
+        priority: ticketData.priority,
+        submittedVia: "merchant-portal"
+      }
+    });
+    
+    res.status(201).json({
+      success: true,
+      ticket: newTicket,
+      message: `Support ticket #${newTicket.ticketNumber} created successfully. You will receive a confirmation email shortly.`
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: fromZodError(error).toString()
+      });
+    }
+    
+    logger.error({
+      message: `Error creating merchant support ticket: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        requestBody: req.body,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to create support ticket. Please try again later."
     });
   }
 });
@@ -1217,7 +1380,7 @@ router.get("/tickets/:id/activity", async (req: Request, res: Response) => {
 // Get all support tickets (with optional filtering)
 router.get("/tickets", async (req: Request, res: Response) => {
   try {
-    const { merchantId, status, category, assignedTo, limit, offset } = req.query;
+    const { merchantId, status, priority, category, assignedTo, limit, offset } = req.query;
     
     // Validate query parameters
     const parsedMerchantId = merchantId ? parseInt(merchantId as string) : undefined;
@@ -1255,6 +1418,7 @@ router.get("/tickets", async (req: Request, res: Response) => {
     if (parsedAssignedTo) {
       tickets = tickets.filter(ticket => ticket.assignedTo === parsedAssignedTo);
     }
+    
     if (priority) {
       tickets = tickets.filter(ticket => ticket.priority === priority);
     }
@@ -1267,6 +1431,7 @@ router.get("/tickets", async (req: Request, res: Response) => {
         merchantId: parsedMerchantId,
         status,
         category,
+        priority,
         assignedTo: parsedAssignedTo,
         limit: parsedLimit,
         offset: parsedOffset
