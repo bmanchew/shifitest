@@ -644,4 +644,606 @@ router.get("/customer/:customerId", async (req: Request, res: Response) => {
   }
 });
 
+// ===== SUPPORT TICKET ROUTES =====
+
+// Get support tickets with optional filtering
+router.get("/tickets", async (req: Request, res: Response) => {
+  try {
+    const { merchantId, status, priority, category, limit, offset } = req.query;
+    
+    // Validate query parameters
+    const parsedMerchantId = merchantId ? parseInt(merchantId as string) : undefined;
+    const parsedLimit = limit ? parseInt(limit as string) : 20;
+    const parsedOffset = offset ? parseInt(offset as string) : 0;
+    
+    if (
+      (merchantId && isNaN(parsedMerchantId!)) ||
+      isNaN(parsedLimit) || 
+      isNaN(parsedOffset)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid query parameters"
+      });
+    }
+    
+    let tickets = await storage.getAllSupportTickets({ limit: parsedLimit, offset: parsedOffset });
+    
+    // Apply filters if provided
+    if (parsedMerchantId) {
+      tickets = tickets.filter(ticket => ticket.merchantId === parsedMerchantId);
+    }
+    
+    if (status) {
+      tickets = tickets.filter(ticket => ticket.status === status);
+    }
+    
+    if (priority) {
+      tickets = tickets.filter(ticket => ticket.priority === priority);
+    }
+    
+    if (category) {
+      tickets = tickets.filter(ticket => ticket.category === category);
+    }
+    
+    logger.info({
+      message: `Retrieved ${tickets.length} support tickets`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId: parsedMerchantId,
+        status,
+        priority,
+        category,
+        limit: parsedLimit,
+        offset: parsedOffset
+      }
+    });
+    
+    res.json({
+      success: true,
+      tickets,
+      meta: {
+        count: tickets.length,
+        limit: parsedLimit,
+        offset: parsedOffset
+      }
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving support tickets: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve support tickets"
+    });
+  }
+});
+
+// Get support ticket by ID
+router.get("/tickets/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ticket ID format"
+      });
+    }
+    
+    const ticket = await storage.getSupportTicket(id);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: "Support ticket not found"
+      });
+    }
+    
+    // Get attachments for the ticket
+    const attachments = await storage.getTicketAttachmentsByTicketId(id);
+    
+    // Get activity log for the ticket
+    const activityLog = await storage.getTicketActivityLogsByTicketId(id);
+    
+    res.json({
+      success: true,
+      ticket,
+      attachments,
+      activityLog
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving support ticket: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        ticketId: req.params.id,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve support ticket"
+    });
+  }
+});
+
+// Create a new support ticket
+router.post("/tickets", async (req: Request, res: Response) => {
+  try {
+    // Generate ticket number (format: TICKET-XXXXX)
+    const ticketNumber = `TICKET-${crypto.randomInt(10000, 99999)}`;
+    
+    const ticketData: InsertSupportTicket = {
+      ...insertSupportTicketSchema.parse(req.body),
+      ticketNumber
+    };
+    
+    // Validate that the merchant exists
+    const merchant = await storage.getMerchant(ticketData.merchantId);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Referenced merchant not found"
+      });
+    }
+    
+    // Validate that the creator exists
+    const creator = await storage.getUser(ticketData.createdBy);
+    if (!creator) {
+      return res.status(404).json({
+        success: false,
+        message: "Creator user not found"
+      });
+    }
+    
+    const newTicket = await storage.createSupportTicket(ticketData);
+    
+    // Log the ticket creation in the activity log
+    await storage.createTicketActivityLog({
+      ticketId: newTicket.id,
+      actionType: "created",
+      userId: ticketData.createdBy,
+      actionDetails: "Ticket created"
+    });
+    
+    logger.info({
+      message: `Created new support ticket: ${newTicket.subject}`,
+      category: "api",
+      source: "internal",
+      userId: ticketData.createdBy,
+      metadata: {
+        ticketId: newTicket.id,
+        merchantId: ticketData.merchantId,
+        category: ticketData.category,
+        priority: ticketData.priority
+      }
+    });
+    
+    res.status(201).json({
+      success: true,
+      ticket: newTicket
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: fromZodError(error).toString()
+      });
+    }
+    
+    logger.error({
+      message: `Error creating support ticket: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        requestBody: req.body,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to create support ticket"
+    });
+  }
+});
+
+// Update support ticket status, priority, or assignment
+router.patch("/tickets/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ticket ID format"
+      });
+    }
+    
+    const { status, priority, assignedTo, notes } = req.body;
+    const updateData: Partial<SupportTicket> = {};
+    
+    // Only include valid fields in the update
+    if (status) {
+      if (!["new", "in_progress", "pending_merchant", "pending_customer", "resolved", "closed"].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status value"
+        });
+      }
+      updateData.status = status;
+    }
+    
+    if (priority) {
+      if (!["low", "normal", "high", "urgent"].includes(priority)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid priority value"
+        });
+      }
+      updateData.priority = priority;
+    }
+    
+    if (assignedTo !== undefined) {
+      // If assignedTo is null, it's valid (unassigning)
+      if (assignedTo !== null) {
+        const assignedUser = await storage.getUser(assignedTo);
+        if (!assignedUser) {
+          return res.status(404).json({
+            success: false,
+            message: "Assigned user not found"
+          });
+        }
+      }
+      updateData.assignedTo = assignedTo;
+    }
+    
+    if (notes) {
+      updateData.notes = notes;
+    }
+    
+    // If no valid updates provided
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid fields to update"
+      });
+    }
+    
+    // Update the ticket
+    const ticket = await storage.getSupportTicket(id);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: "Support ticket not found"
+      });
+    }
+    
+    // Add updates timestamp
+    updateData.updatedAt = new Date();
+    
+    const updatedTicket = await storage.updateSupportTicket(id, updateData);
+    
+    // Log the ticket update in the activity log
+    const activityDetails = Object.keys(updateData)
+      .filter(key => key !== 'updatedAt')
+      .map(key => {
+        const oldValue = ticket[key as keyof SupportTicket];
+        const newValue = updateData[key as keyof SupportTicket];
+        return `${key}: ${oldValue} → ${newValue}`;
+      })
+      .join(", ");
+    
+    if (activityDetails) {
+      await storage.createTicketActivityLog({
+        ticketId: id,
+        actionType: "updated",
+        userId: req.body.updatedBy || null, // We expect the client to provide who updated it
+        actionDetails: activityDetails
+      });
+    }
+    
+    logger.info({
+      message: `Updated support ticket: ${ticket.subject}`,
+      category: "api",
+      source: "internal",
+      userId: req.body.updatedBy,
+      metadata: {
+        ticketId: id,
+        updates: updateData
+      }
+    });
+    
+    res.json({
+      success: true,
+      ticket: updatedTicket
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error updating support ticket: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        ticketId: req.params.id,
+        requestBody: req.body,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to update support ticket"
+    });
+  }
+});
+
+// Add attachment to support ticket
+router.post("/tickets/:id/attachments", async (req: Request, res: Response) => {
+  try {
+    const ticketId = parseInt(req.params.id);
+    if (isNaN(ticketId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ticket ID format"
+      });
+    }
+    
+    // Verify ticket exists
+    const ticket = await storage.getSupportTicket(ticketId);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: "Support ticket not found"
+      });
+    }
+    
+    // Parse and validate attachment data
+    const attachmentData: InsertTicketAttachment = {
+      ...insertTicketAttachmentSchema.parse(req.body),
+      ticketId
+    };
+    
+    // Verify uploader exists
+    const uploader = await storage.getUser(attachmentData.uploadedBy);
+    if (!uploader) {
+      return res.status(404).json({
+        success: false,
+        message: "Uploader user not found"
+      });
+    }
+    
+    const newAttachment = await storage.createTicketAttachment(attachmentData);
+    
+    // Log the attachment upload in the activity log
+    await storage.createTicketActivityLog({
+      ticketId,
+      actionType: "attachment_added",
+      userId: attachmentData.uploadedBy,
+      actionDetails: `File uploaded: ${attachmentData.fileName} (${attachmentData.fileType}, ${attachmentData.fileSize} bytes)`
+    });
+    
+    logger.info({
+      message: `New attachment added to ticket: ${ticket.subject}`,
+      category: "api",
+      source: "internal",
+      userId: attachmentData.uploadedBy,
+      metadata: {
+        ticketId,
+        attachmentId: newAttachment.id,
+        fileName: attachmentData.fileName,
+        fileType: attachmentData.fileType
+      }
+    });
+    
+    res.status(201).json({
+      success: true,
+      attachment: newAttachment
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: fromZodError(error).toString()
+      });
+    }
+    
+    logger.error({
+      message: `Error adding attachment to ticket: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        ticketId: req.params.id,
+        requestBody: req.body,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to add attachment to ticket"
+    });
+  }
+});
+
+// Get activity log for a ticket
+router.get("/tickets/:id/activity", async (req: Request, res: Response) => {
+  try {
+    const ticketId = parseInt(req.params.id);
+    if (isNaN(ticketId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ticket ID format"
+      });
+    }
+    
+    // Verify ticket exists
+    const ticket = await storage.getSupportTicket(ticketId);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: "Support ticket not found"
+      });
+    }
+    
+    const activityLog = await storage.getTicketActivityLogsByTicketId(ticketId);
+    
+    res.json({
+      success: true,
+      ticketId,
+      activityLog
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving ticket activity log: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        ticketId: req.params.id,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve ticket activity log"
+    });
+  }
+});
+
+// Get all support tickets (with optional filtering)
+router.get("/tickets", async (req: Request, res: Response) => {
+  try {
+    const { merchantId, status, category, assignedTo, limit, offset } = req.query;
+    
+    // Validate query parameters
+    const parsedMerchantId = merchantId ? parseInt(merchantId as string) : undefined;
+    const parsedAssignedTo = assignedTo ? parseInt(assignedTo as string) : undefined;
+    const parsedLimit = limit ? parseInt(limit as string) : 20;
+    const parsedOffset = offset ? parseInt(offset as string) : 0;
+    
+    if (
+      (merchantId && isNaN(parsedMerchantId!)) || 
+      (assignedTo && isNaN(parsedAssignedTo!)) ||
+      isNaN(parsedLimit) || 
+      isNaN(parsedOffset)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid query parameters"
+      });
+    }
+    
+    let tickets = await storage.getAllSupportTickets(parsedLimit, parsedOffset);
+    
+    // Apply filters if specified
+    if (parsedMerchantId) {
+      tickets = tickets.filter(ticket => ticket.merchantId === parsedMerchantId);
+    }
+    
+    if (status) {
+      tickets = tickets.filter(ticket => ticket.status === status);
+    }
+    
+    if (category) {
+      tickets = tickets.filter(ticket => ticket.category === category);
+    }
+    
+    if (parsedAssignedTo) {
+      tickets = tickets.filter(ticket => ticket.assignedTo === parsedAssignedTo);
+    }
+    
+    logger.info({
+      message: `Retrieved ${tickets.length} support tickets`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId: parsedMerchantId,
+        status,
+        category,
+        assignedTo: parsedAssignedTo,
+        limit: parsedLimit,
+        offset: parsedOffset
+      }
+    });
+    
+    res.json({
+      success: true,
+      tickets,
+      meta: {
+        count: tickets.length,
+        limit: parsedLimit,
+        offset: parsedOffset
+      }
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving support tickets: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve support tickets"
+    });
+  }
+});
+
+// Get tickets for a merchant - Note: this route must be before the "/tickets/:id" route to avoid conflicts
+router.get("/merchant/:merchantId/tickets", async (req: Request, res: Response) => {
+  try {
+    const merchantId = parseInt(req.params.merchantId);
+    if (isNaN(merchantId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid merchant ID format"
+      });
+    }
+    
+    // Check if merchant exists
+    const merchant = await storage.getMerchant(merchantId);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found"
+      });
+    }
+    
+    const tickets = await storage.getSupportTicketsByMerchantId(merchantId);
+    
+    res.json({
+      success: true,
+      tickets,
+      count: tickets.length
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving merchant tickets: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId: req.params.merchantId,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve merchant tickets"
+    });
+  }
+});
+
 export default router;
