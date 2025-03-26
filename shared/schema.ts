@@ -17,6 +17,7 @@ export const userRoleEnum = pgEnum("user_role", [
   "admin",
   "merchant",
   "customer",
+  "sales_rep",
 ]);
 export const contractStatusEnum = pgEnum("contract_status", [
   "pending",
@@ -138,6 +139,7 @@ export const contracts = pgTable("contracts", {
     .references(() => merchants.id)
     .notNull(),
   customerId: integer("customer_id").references(() => users.id),
+  salesRepId: integer("sales_rep_id").references(() => users.id), // ID of the sales rep who created/owns this contract
   amount: doublePrecision("amount").notNull(),
   downPayment: doublePrecision("down_payment").notNull(),
   financedAmount: doublePrecision("financed_amount").notNull(),
@@ -708,3 +710,104 @@ export type InsertSmartContractTemplate = z.infer<typeof insertSmartContractTemp
 
 export type SmartContractDeployment = typeof smartContractDeployments.$inferSelect;
 export type InsertSmartContractDeployment = z.infer<typeof insertSmartContractDeploymentSchema>;
+
+// Commission rate types enum
+export const commissionRateTypeEnum = pgEnum("commission_rate_type", [
+  "percentage", // Percentage of contract value
+  "fixed", // Fixed amount per contract
+]);
+
+// Sales Rep Management
+export const salesReps = pgTable("sales_reps", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .references(() => users.id)
+    .notNull()
+    .unique(),
+  merchantId: integer("merchant_id")
+    .references(() => merchants.id)
+    .notNull(),
+  active: boolean("active").default(true),
+  title: text("title"),
+  commissionRate: doublePrecision("commission_rate").default(0), // Default commission rate (percentage or fixed amount)
+  commissionRateType: commissionRateTypeEnum("commission_rate_type").default("percentage"),
+  maxAllowedFinanceAmount: doublePrecision("max_allowed_finance_amount"), // Maximum finance amount this rep can approve
+  target: doublePrecision("target"), // Monthly or quarterly sales target
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertSalesRepSchema = createInsertSchema(
+  salesReps
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Commission records for tracking sales rep commissions
+export const commissions = pgTable("commissions", {
+  id: serial("id").primaryKey(),
+  salesRepId: integer("sales_rep_id")
+    .references(() => salesReps.id)
+    .notNull(),
+  contractId: integer("contract_id")
+    .references(() => contracts.id)
+    .notNull(),
+  amount: doublePrecision("amount").notNull(), // Commission amount
+  rate: doublePrecision("rate").notNull(), // Rate used for this commission
+  rateType: commissionRateTypeEnum("rate_type").notNull(), // Percentage or fixed
+  contractAmount: doublePrecision("contract_amount").notNull(), // The contract amount this commission is based on
+  status: text("status").default("pending"), // pending, paid, cancelled
+  paidAt: timestamp("paid_at"),
+  notes: text("notes"),
+  metadata: text("metadata"), // JSON stringified additional data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertCommissionSchema = createInsertSchema(
+  commissions
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Sales Rep Analytics
+export const salesRepAnalytics = pgTable("sales_rep_analytics", {
+  id: serial("id").primaryKey(),
+  salesRepId: integer("sales_rep_id")
+    .references(() => salesReps.id)
+    .notNull(),
+  period: text("period").notNull(), // YYYY-MM for monthly, YYYY-QQ for quarterly
+  contractsCreated: integer("contracts_created").default(0),
+  contractsApproved: integer("contracts_approved").default(0),
+  contractsDeclined: integer("contracts_declined").default(0),
+  totalAmount: doublePrecision("total_amount").default(0),
+  totalCommission: doublePrecision("total_commission").default(0),
+  targetAchievementPercentage: doublePrecision("target_achievement_percentage"),
+  conversionRate: doublePrecision("conversion_rate"), // Percentage of created contracts that get approved
+  avgContractAmount: doublePrecision("avg_contract_amount"),
+  metadata: text("metadata"), // JSON stringified additional data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertSalesRepAnalyticsSchema = createInsertSchema(
+  salesRepAnalytics
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SalesRep = typeof salesReps.$inferSelect;
+export type InsertSalesRep = z.infer<typeof insertSalesRepSchema>;
+
+export type Commission = typeof commissions.$inferSelect;
+export type InsertCommission = z.infer<typeof insertCommissionSchema>;
+
+export type SalesRepAnalytics = typeof salesRepAnalytics.$inferSelect;
+export type InsertSalesRepAnalytics = z.infer<typeof insertSalesRepAnalyticsSchema>;

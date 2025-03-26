@@ -18,6 +18,7 @@ import {
 } from "@shared/schema";
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
+import { blockchainService } from "./services/blockchain";
 import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
@@ -35,6 +36,7 @@ import notificationRouter from "./routes/notification";
 import paymentRouter from "./routes/payments";
 import healthRouter from "./routes/health"; // Import health routes
 import blockchainRouter from "./routes/blockchain"; // Import blockchain routes
+import salesRepRouter from "./routes/salesRep"; // Import sales rep routes
 import indexRoutes from "./routes/index"; // Import routes from index.ts
 import fs from 'fs';
 import path from 'path';
@@ -748,6 +750,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Update contract status error:", error);
         res.status(500).json({ message: "Internal server error" });
+      }
+    },
+  );
+  
+  // Endpoint to mark contract as purchased by ShiFi and trigger tokenization
+  apiRouter.patch(
+    "/contracts/:id/purchase-by-shifi",
+    async (req: Request, res: Response) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) {
+          return res.status(400).json({ message: "Invalid ID format" });
+        }
+
+        const contract = await storage.getContract(id);
+        if (!contract) {
+          return res.status(404).json({ message: "Contract not found" });
+        }
+
+        // Update contract to mark it as purchased by ShiFi
+        const updatedContract = await storage.updateContract(id, {
+          purchasedByShifi: true,
+          tokenizationStatus: "pending" // Set initial tokenization status
+        });
+
+        // Create log for purchase by ShiFi
+        await storage.createLog({
+          level: "info",
+          message: `Contract marked as purchased by ShiFi: ${contract.contractNumber}`,
+          category: "contract",
+          source: "blockchain",
+          metadata: JSON.stringify({
+            id: contract.id,
+            purchasedByShifi: true
+          }),
+        });
+
+        // Trigger tokenization asynchronously
+        // We don't await this to avoid blocking the API response
+        (async () => {
+          try {
+            // First update status to processing
+            await storage.updateContract(id, {
+              tokenizationStatus: "processing"
+            });
+
+            // Attempt to tokenize the contract
+            const tokenizationResult = await blockchainService.tokenizeContract(updatedContract);
+            
+            if (tokenizationResult.success) {
+              // Update contract with tokenization details
+              await storage.updateContract(id, {
+                tokenizationStatus: "tokenized",
+                tokenId: tokenizationResult.tokenId,
+                smartContractAddress: tokenizationResult.smartContractAddress,
+                blockchainTransactionHash: tokenizationResult.transactionHash,
+                blockNumber: tokenizationResult.blockNumber,
+                tokenizationDate: new Date()
+              });
+
+              logger.info({
+                message: `Contract ${id} successfully tokenized after ShiFi purchase`,
+                category: "contract",
+                source: "blockchain",
+                metadata: {
+                  contractId: id,
+                  tokenId: tokenizationResult.tokenId,
+                  transactionHash: tokenizationResult.transactionHash
+                }
+              });
+            } else {
+              // Update contract with failure information
+              await storage.updateContract(id, {
+                tokenizationStatus: "failed",
+                tokenizationError: tokenizationResult.error
+              });
+
+              logger.error({
+                message: `Failed to tokenize contract ${id} after ShiFi purchase: ${tokenizationResult.error}`,
+                category: "contract",
+                source: "blockchain",
+                metadata: {
+                  contractId: id,
+                  error: tokenizationResult.error
+                }
+              });
+            }
+          } catch (error) {
+            // Handle any unexpected errors during tokenization
+            await storage.updateContract(id, {
+              tokenizationStatus: "failed",
+              tokenizationError: error instanceof Error ? error.message : String(error)
+            });
+
+            logger.error({
+              message: `Unexpected error tokenizing contract ${id}: ${error instanceof Error ? error.message : String(error)}`,
+              category: "contract",
+              source: "blockchain",
+              metadata: {
+                contractId: id,
+                error: error instanceof Error ? error.stack : null
+              }
+            });
+          }
+        })();
+
+        // Return the updated contract immediately without waiting for tokenization
+        res.json({
+          success: true,
+          message: "Contract marked as purchased by ShiFi, tokenization initiated",
+          contract: updatedContract
+        });
+      } catch (error) {
+        console.error("Purchase by ShiFi error:", error);
+        res.status(500).json({ 
+          success: false,
+          message: "Internal server error", 
+          error: error instanceof Error ? error.message : "Unknown error" 
+        });
       }
     },
   );
@@ -4745,6 +4866,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Mount the health router
   apiRouter.use("/health", healthRouter);
   apiRouter.use("/blockchain", blockchainRouter);
+  apiRouter.use("/sales-reps", salesRepRouter);
 
   // Get contract by phone number
   apiRouter.get("/contracts/by-phone/:phoneNumber", async (req: Request, res: Response) => {

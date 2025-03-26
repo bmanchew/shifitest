@@ -3,6 +3,7 @@ import { updateLogSourceEnum } from "./update-log-source-enum";
 import { migrateArchivedFields } from "./add-archived-fields";
 import { migrateTokenizationFields } from "./add-tokenization-fields";
 import { addTokenizationErrorField } from "./add-tokenization-error-field";
+import { addBlockchainTables } from "./add-blockchain-tables";
 import { logger } from "../services/logger";
 
 export async function runMigrations() {
@@ -17,6 +18,7 @@ export async function runMigrations() {
     await migrateArchivedFields();
     await migrateTokenizationFields();
     await addTokenizationErrorField();
+    await addBlockchainTables();
 
     logger.info({
       message: "Database migrations completed successfully",

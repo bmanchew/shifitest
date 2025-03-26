@@ -17,7 +17,10 @@ import {
   inAppNotifications, InAppNotification, InsertInAppNotification,
   customerSatisfactionSurveys, CustomerSatisfactionSurvey, InsertCustomerSatisfactionSurvey,
   smartContractTemplates, SmartContractTemplate, InsertSmartContractTemplate,
-  smartContractDeployments, SmartContractDeployment, InsertSmartContractDeployment
+  smartContractDeployments, SmartContractDeployment, InsertSmartContractDeployment,
+  salesReps, SalesRep, InsertSalesRep,
+  commissions, Commission, InsertCommission,
+  salesRepAnalytics, SalesRepAnalytics, InsertSalesRepAnalytics
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt } from "drizzle-orm";
@@ -28,6 +31,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
   findOrCreateUserByPhone(phone: string): Promise<User>;
   getAllUsers(): Promise<User[]>;
 
@@ -80,6 +84,7 @@ export interface IStorage {
   updateContractCustomerId(id: number, customerId: number): Promise<Contract | undefined>;
   getContractsByPhoneNumber(phoneNumber: string): Promise<Contract[]>; // Added method
   updateContract(id: number, data: Partial<Contract>): Promise<Contract>; //Added method
+  getContractsByTokenizationStatus(status: string): Promise<Contract[]>; // Added for blockchain
 
   // Application Progress operations
   getApplicationProgress(id: number): Promise<ApplicationProgress | undefined>;
@@ -156,6 +161,28 @@ export interface IStorage {
 
   updateMerchant(id: number, updateData: Partial<Merchant>): Promise<Merchant | undefined>;
   getMerchantByEmail(email: string): Promise<Merchant | undefined>;
+
+  // Sales Rep operations
+  getSalesRep(id: number): Promise<SalesRep | undefined>;
+  getSalesRepByUserId(userId: number): Promise<SalesRep | undefined>;
+  getSalesRepsByMerchantId(merchantId: number): Promise<SalesRep[]>;
+  createSalesRep(salesRep: InsertSalesRep): Promise<SalesRep>;
+  updateSalesRep(id: number, data: Partial<SalesRep>): Promise<SalesRep | undefined>;
+  
+  // Commission operations
+  getCommission(id: number): Promise<Commission | undefined>;
+  getCommissionsByContractId(contractId: number): Promise<Commission[]>;
+  getCommissionsBySalesRepId(salesRepId: number): Promise<Commission[]>;
+  createCommission(commission: InsertCommission): Promise<Commission>;
+  updateCommissionStatus(id: number, status: string, paidAt?: Date): Promise<Commission | undefined>;
+  
+  // Sales Rep Analytics operations
+  getSalesRepAnalytics(id: number): Promise<SalesRepAnalytics | undefined>;
+  getSalesRepAnalyticsBySalesRepId(salesRepId: number): Promise<SalesRepAnalytics[]>;
+  getSalesRepAnalyticsByPeriod(salesRepId: number, period: string): Promise<SalesRepAnalytics | undefined>;
+  createSalesRepAnalytics(analytics: InsertSalesRepAnalytics): Promise<SalesRepAnalytics>;
+  updateSalesRepAnalytics(id: number, data: Partial<SalesRepAnalytics>): Promise<SalesRepAnalytics | undefined>;
+  getContractsBySalesRepId(salesRepId: number): Promise<Contract[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -263,6 +290,21 @@ export class DatabaseStorage implements IStorage {
   async createUser(user: InsertUser): Promise<User> {
     const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
+  }
+  
+  async updateUser(id: number, data: Partial<User>): Promise<User | undefined> {
+    try {
+      const [updatedUser] = await db
+        .update(users)
+        .set(data)
+        .where(eq(users.id, id))
+        .returning();
+      
+      return updatedUser;
+    } catch (error) {
+      console.error(`Error updating user ${id}:`, error);
+      return undefined;
+    }
   }
 
   async findOrCreateUserByPhone(phone: string, email?: string): Promise<User> {
@@ -612,6 +654,10 @@ export class DatabaseStorage implements IStorage {
 
   async getContractsByStatus(status: string) {
     return await db.select().from(contracts).where(eq(contracts.status, status));
+  }
+  
+  async getContractsByTokenizationStatus(status: string): Promise<Contract[]> {
+    return await db.select().from(contracts).where(eq(contracts.tokenizationStatus, status));
   }
 
   async storeAssetReportToken(contractId: number, assetReportToken: string, assetReportId: string, options: any = {}) {
@@ -1566,6 +1612,216 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error("Error creating smart contract deployment:", error);
       throw error;
+    }
+  }
+
+  // =========== Sales Rep Methods ===========
+
+  async getSalesRep(id: number): Promise<SalesRep | undefined> {
+    try {
+      const [salesRep] = await db.select().from(salesReps).where(eq(salesReps.id, id));
+      return salesRep || undefined;
+    } catch (error) {
+      console.error(`Error getting sales rep with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSalesRepByUserId(userId: number): Promise<SalesRep | undefined> {
+    try {
+      const [salesRep] = await db.select().from(salesReps).where(eq(salesReps.userId, userId));
+      return salesRep || undefined;
+    } catch (error) {
+      console.error(`Error getting sales rep by user ID ${userId}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSalesRepsByMerchantId(merchantId: number): Promise<SalesRep[]> {
+    try {
+      return await db.select().from(salesReps).where(eq(salesReps.merchantId, merchantId));
+    } catch (error) {
+      console.error(`Error getting sales reps for merchant ID ${merchantId}:`, error);
+      return [];
+    }
+  }
+
+  async createSalesRep(salesRep: InsertSalesRep): Promise<SalesRep> {
+    try {
+      const [newSalesRep] = await db.insert(salesReps).values(salesRep).returning();
+      return newSalesRep;
+    } catch (error) {
+      console.error("Error creating sales rep:", error);
+      throw error;
+    }
+  }
+
+  async updateSalesRep(id: number, data: Partial<SalesRep>): Promise<SalesRep | undefined> {
+    try {
+      const updateData = {
+        ...data,
+        updatedAt: new Date()
+      };
+
+      const [updatedSalesRep] = await db
+        .update(salesReps)
+        .set(updateData)
+        .where(eq(salesReps.id, id))
+        .returning();
+
+      return updatedSalesRep;
+    } catch (error) {
+      console.error(`Error updating sales rep ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  // =========== Commission Methods ===========
+
+  async getCommission(id: number): Promise<Commission | undefined> {
+    try {
+      const [commission] = await db.select().from(commissions).where(eq(commissions.id, id));
+      return commission || undefined;
+    } catch (error) {
+      console.error(`Error getting commission with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getCommissionsByContractId(contractId: number): Promise<Commission[]> {
+    try {
+      return await db.select().from(commissions).where(eq(commissions.contractId, contractId));
+    } catch (error) {
+      console.error(`Error getting commissions for contract ID ${contractId}:`, error);
+      return [];
+    }
+  }
+
+  async getCommissionsBySalesRepId(salesRepId: number): Promise<Commission[]> {
+    try {
+      return await db.select().from(commissions).where(eq(commissions.salesRepId, salesRepId));
+    } catch (error) {
+      console.error(`Error getting commissions for sales rep ID ${salesRepId}:`, error);
+      return [];
+    }
+  }
+
+  async createCommission(commission: InsertCommission): Promise<Commission> {
+    try {
+      const [newCommission] = await db.insert(commissions).values(commission).returning();
+      return newCommission;
+    } catch (error) {
+      console.error("Error creating commission:", error);
+      throw error;
+    }
+  }
+
+  async updateCommissionStatus(id: number, status: string, paidAt?: Date): Promise<Commission | undefined> {
+    try {
+      const updateData: any = {
+        status,
+        updatedAt: new Date()
+      };
+
+      if (status === "paid" && paidAt) {
+        updateData.paidAt = paidAt;
+      }
+
+      const [updatedCommission] = await db
+        .update(commissions)
+        .set(updateData)
+        .where(eq(commissions.id, id))
+        .returning();
+
+      return updatedCommission;
+    } catch (error) {
+      console.error(`Error updating commission status ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  // =========== Sales Rep Analytics Methods ===========
+
+  async getSalesRepAnalytics(id: number): Promise<SalesRepAnalytics | undefined> {
+    try {
+      const [analytics] = await db.select().from(salesRepAnalytics).where(eq(salesRepAnalytics.id, id));
+      return analytics || undefined;
+    } catch (error) {
+      console.error(`Error getting sales rep analytics with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSalesRepAnalyticsBySalesRepId(salesRepId: number): Promise<SalesRepAnalytics[]> {
+    try {
+      return await db.select().from(salesRepAnalytics).where(eq(salesRepAnalytics.salesRepId, salesRepId))
+        .orderBy(desc(salesRepAnalytics.period));
+    } catch (error) {
+      console.error(`Error getting analytics for sales rep ID ${salesRepId}:`, error);
+      return [];
+    }
+  }
+
+  async getSalesRepAnalyticsByPeriod(salesRepId: number, period: string): Promise<SalesRepAnalytics | undefined> {
+    try {
+      const [analytics] = await db.select().from(salesRepAnalytics).where(
+        and(
+          eq(salesRepAnalytics.salesRepId, salesRepId),
+          eq(salesRepAnalytics.period, period)
+        )
+      );
+      return analytics || undefined;
+    } catch (error) {
+      console.error(`Error getting analytics for sales rep ID ${salesRepId} and period ${period}:`, error);
+      return undefined;
+    }
+  }
+
+  async createSalesRepAnalytics(analytics: InsertSalesRepAnalytics): Promise<SalesRepAnalytics> {
+    try {
+      const [newAnalytics] = await db.insert(salesRepAnalytics).values(analytics).returning();
+      return newAnalytics;
+    } catch (error) {
+      console.error("Error creating sales rep analytics:", error);
+      throw error;
+    }
+  }
+
+  async updateSalesRepAnalytics(id: number, data: Partial<SalesRepAnalytics>): Promise<SalesRepAnalytics | undefined> {
+    try {
+      const updateData = {
+        ...data,
+        updatedAt: new Date()
+      };
+
+      const [updatedAnalytics] = await db
+        .update(salesRepAnalytics)
+        .set(updateData)
+        .where(eq(salesRepAnalytics.id, id))
+        .returning();
+
+      return updatedAnalytics;
+    } catch (error) {
+      console.error(`Error updating sales rep analytics ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getContractsBySalesRepId(salesRepId: number): Promise<Contract[]> {
+    try {
+      return await db.select().from(contracts).where(eq(contracts.salesRepId, salesRepId));
+    } catch (error) {
+      console.error(`Error getting contracts for sales rep ID ${salesRepId}:`, error);
+      return [];
+    }
+  }
+
+  async getContractsByTokenizationStatus(status: string): Promise<Contract[]> {
+    try {
+      return await db.select().from(contracts).where(eq(contracts.tokenizationStatus, status as any));
+    } catch (error) {
+      console.error(`Error getting contracts with tokenization status ${status}:`, error);
+      return [];
     }
   }
 }

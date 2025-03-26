@@ -1,616 +1,378 @@
-import { Router, Request, Response } from 'express';
+import express, { Request, Response } from 'express';
 import { storage } from '../storage';
-import { blockchainService } from '../services/blockchain';
 import { logger } from '../services/logger';
+import { blockchainService } from '../services/blockchain';
 import { validateContractId } from '../utils/contractHelpers';
-import { z } from 'zod';
 
-const blockchainRouter = Router();
+const router = express.Router();
 
 /**
- * GET /blockchain/status
- * Check the status of the blockchain service
+ * @route GET /api/blockchain/status
+ * @desc Check blockchain service status and configuration
+ * @access Private - Admin only
  */
-blockchainRouter.get('/status', async (req: Request, res: Response) => {
+router.get('/status', async (req: Request, res: Response) => {
   try {
     const isInitialized = blockchainService.isInitialized();
-    let valid = false;
     
-    if (isInitialized) {
-      valid = await blockchainService.validateCredentials();
-    }
+    // Check environment variables without exposing sensitive information
+    const envStatus = {
+      rpcUrl: process.env.BLOCKCHAIN_RPC_URL ? 'configured' : 'missing',
+      contractAddress: process.env.BLOCKCHAIN_CONTRACT_ADDRESS ? 'configured' : 'missing',
+      privateKey: process.env.BLOCKCHAIN_PRIVATE_KEY ? 'configured' : 'missing',
+      networkId: process.env.BLOCKCHAIN_NETWORK_ID || 'missing'
+    };
     
-    return res.json({
+    // Get counts of templates and deployments
+    const templates = await storage.getSmartContractTemplates();
+    const deployments = await storage.getSmartContractDeployments();
+    
+    // Count tokenized contracts
+    const tokenizedContracts = await storage.getContractsByTokenizationStatus('tokenized');
+    const pendingContracts = await storage.getContractsByTokenizationStatus('pending');
+    const processingContracts = await storage.getContractsByTokenizationStatus('processing');
+    const failedContracts = await storage.getContractsByTokenizationStatus('failed');
+    
+    res.json({
       success: true,
       status: {
-        initialized: isInitialized,
-        credentialsValid: valid
+        serviceInitialized: isInitialized,
+        environment: envStatus,
+        statistics: {
+          templates: templates.length,
+          deployments: deployments.length,
+          tokenizedContracts: tokenizedContracts.length,
+          pendingContracts: pendingContracts.length,
+          processingContracts: processingContracts.length,
+          failedContracts: failedContracts.length
+        }
       }
     });
   } catch (error) {
     logger.error({
-      message: `Error checking blockchain status: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
+      message: `Failed to get blockchain status: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'system',
       source: 'blockchain',
-      req
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      }
     });
     
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: 'Error checking blockchain status'
+      message: 'Failed to get blockchain service status'
     });
   }
 });
 
 /**
- * POST /blockchain/tokenize/:contractId
- * Tokenize a contract on the blockchain
+ * @route GET /api/blockchain/secrets-status
+ * @desc Check if required blockchain secrets (environment variables) are configured
+ * @access Private - Admin only
  */
-blockchainRouter.post('/tokenize/:contractId', async (req: Request, res: Response) => {
+router.get('/secrets-status', async (req: Request, res: Response) => {
   try {
-    // Validate contract ID
-    const contractId = validateContractId(req.params.contractId);
-    if (!contractId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid contract ID'
-      });
-    }
+    // Check which environment variables are missing
+    const requiredSecrets = [
+      'BLOCKCHAIN_RPC_URL',
+      'BLOCKCHAIN_CONTRACT_ADDRESS',
+      'BLOCKCHAIN_PRIVATE_KEY',
+      'BLOCKCHAIN_NETWORK_ID'
+    ];
     
-    // Get contract
-    const contract = await storage.getContract(contractId);
-    if (!contract) {
-      return res.status(404).json({
-        success: false,
-        error: 'Contract not found'
-      });
-    }
+    const missingSecrets = requiredSecrets.filter(secret => !process.env[secret]);
+    const allConfigured = missingSecrets.length === 0;
     
-    // Check if contract is already tokenized
-    if (contract.tokenizationStatus === 'tokenized') {
-      return res.status(400).json({
-        success: false,
-        error: 'Contract is already tokenized',
-        tokenId: contract.tokenId
-      });
-    }
-    
-    // Update tokenization status to processing
-    await storage.updateContract(contractId, {
-      tokenizationStatus: 'processing'
-    });
-    
-    // Perform tokenization
-    const tokenizationResult = await blockchainService.tokenizeContract(contract);
-    
-    if (!tokenizationResult.success) {
-      // Update status to failed
-      await storage.updateContract(contractId, {
-        tokenizationStatus: 'failed'
-      });
-      
-      return res.status(500).json({
-        success: false,
-        error: tokenizationResult.error || 'Tokenization failed'
-      });
-    }
-    
-    // Update contract with tokenization details
-    const updatedContract = await storage.updateContract(contractId, {
-      tokenizationStatus: 'tokenized',
-      tokenId: tokenizationResult.tokenId,
-      smartContractAddress: tokenizationResult.smartContractAddress,
-      blockchainTransactionHash: tokenizationResult.transactionHash,
-      blockNumber: tokenizationResult.blockNumber,
-      tokenizationDate: new Date(),
-      tokenMetadata: JSON.stringify({
-        contractNumber: contract.contractNumber,
-        amount: contract.amount,
-        financedAmount: contract.financedAmount,
-        termMonths: contract.termMonths
-      })
-    });
-    
-    return res.json({
+    res.json({
       success: true,
-      contract: updatedContract,
-      tokenization: tokenizationResult
+      configured: allConfigured,
+      missing: missingSecrets
     });
   } catch (error) {
     logger.error({
-      message: `Error tokenizing contract: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
+      message: `Failed to check blockchain secrets status: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'system',
       source: 'blockchain',
-      req
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      }
     });
     
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: 'Internal server error during tokenization'
+      message: 'Failed to check blockchain secrets status'
     });
   }
 });
 
 /**
- * GET /blockchain/token/:tokenId
- * Get details of a token
+ * @route GET /api/blockchain/templates
+ * @desc Get all smart contract templates
+ * @access Private - Admin only
  */
-blockchainRouter.get('/token/:tokenId', async (req: Request, res: Response) => {
-  try {
-    const { tokenId } = req.params;
-    
-    // Check if token ID is valid
-    if (!tokenId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid token ID'
-      });
-    }
-    
-    // Get token details from blockchain
-    const tokenDetails = await blockchainService.getTokenDetails(tokenId);
-    
-    return res.json({
-      success: true,
-      token: tokenDetails
-    });
-  } catch (error) {
-    logger.error({
-      message: `Error getting token details: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
-      source: 'blockchain',
-      req
-    });
-    
-    return res.status(500).json({
-      success: false,
-      error: 'Error getting token details'
-    });
-  }
-});
-
-/**
- * POST /blockchain/update-status/:tokenId
- * Update contract status on blockchain
- */
-blockchainRouter.post('/update-status/:tokenId', async (req: Request, res: Response) => {
-  try {
-    const { tokenId } = req.params;
-    
-    // Validate request body
-    const schema = z.object({
-      status: z.string()
-    });
-    
-    const validation = schema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid request body'
-      });
-    }
-    
-    const { status } = validation.data;
-    
-    // Update status on blockchain
-    const result = await blockchainService.updateContractStatus(tokenId, status);
-    
-    if (!result) {
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to update contract status on blockchain'
-      });
-    }
-    
-    return res.json({
-      success: true,
-      message: 'Contract status updated on blockchain'
-    });
-  } catch (error) {
-    logger.error({
-      message: `Error updating contract status on blockchain: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
-      source: 'blockchain',
-      req
-    });
-    
-    return res.status(500).json({
-      success: false,
-      error: 'Error updating contract status'
-    });
-  }
-});
-
-/**
- * POST /blockchain/record-payment/:tokenId
- * Record a payment on the blockchain
- */
-blockchainRouter.post('/record-payment/:tokenId', async (req: Request, res: Response) => {
-  try {
-    const { tokenId } = req.params;
-    
-    // Validate request body
-    const schema = z.object({
-      amount: z.number().positive(),
-      paymentDate: z.string().optional()
-    });
-    
-    const validation = schema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid request body'
-      });
-    }
-    
-    const { amount } = validation.data;
-    const paymentDate = validation.data.paymentDate ? new Date(validation.data.paymentDate) : new Date();
-    
-    // Record payment on blockchain
-    const result = await blockchainService.recordPayment(tokenId, amount, paymentDate);
-    
-    if (!result) {
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to record payment on blockchain'
-      });
-    }
-    
-    return res.json({
-      success: true,
-      message: 'Payment recorded on blockchain'
-    });
-  } catch (error) {
-    logger.error({
-      message: `Error recording payment on blockchain: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
-      source: 'blockchain',
-      req
-    });
-    
-    return res.status(500).json({
-      success: false,
-      error: 'Error recording payment'
-    });
-  }
-});
-
-/**
- * GET /blockchain/templates
- * Get all smart contract templates
- */
-blockchainRouter.get('/templates', async (req: Request, res: Response) => {
+router.get('/templates', async (req: Request, res: Response) => {
   try {
     const templates = await storage.getSmartContractTemplates();
     
-    return res.json({
+    res.json({
       success: true,
       templates
     });
   } catch (error) {
     logger.error({
-      message: `Error getting smart contract templates: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
+      message: `Failed to get smart contract templates: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'system',
       source: 'blockchain',
-      req
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      }
     });
     
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: 'Error getting smart contract templates'
+      message: 'Failed to get smart contract templates'
     });
   }
 });
 
 /**
- * GET /blockchain/templates/:id
- * Get a specific smart contract template
+ * @route GET /api/blockchain/templates/:id
+ * @desc Get a specific smart contract template
+ * @access Private - Admin only
  */
-blockchainRouter.get('/templates/:id', async (req: Request, res: Response) => {
+router.get('/templates/:id', async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const templateId = parseInt(req.params.id);
+    
+    if (isNaN(templateId)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid template ID'
+        message: 'Invalid template ID'
       });
     }
     
-    const template = await storage.getSmartContractTemplate(id);
+    const template = await storage.getSmartContractTemplate(templateId);
+    
     if (!template) {
       return res.status(404).json({
         success: false,
-        error: 'Template not found'
+        message: 'Smart contract template not found'
       });
     }
     
-    return res.json({
+    res.json({
       success: true,
       template
     });
   } catch (error) {
     logger.error({
-      message: `Error getting smart contract template: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
+      message: `Failed to get smart contract template: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'system',
       source: 'blockchain',
-      req
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        templateId: req.params.id
+      }
     });
     
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: 'Error getting smart contract template'
+      message: 'Failed to get smart contract template'
     });
   }
 });
 
 /**
- * POST /blockchain/templates
- * Create a new smart contract template
+ * @route POST /api/blockchain/templates
+ * @desc Create a new smart contract template
+ * @access Private - Admin only
  */
-blockchainRouter.post('/templates', async (req: Request, res: Response) => {
+router.post('/templates', async (req: Request, res: Response) => {
   try {
-    // Validate request body
-    const schema = z.object({
-      name: z.string(),
-      description: z.string().optional(),
-      contractType: z.string(),
-      version: z.string(),
-      abiJson: z.string(),
-      bytecode: z.string(),
-      sourceCode: z.string().optional(),
-      parameters: z.string().optional(),
-      merchantId: z.number().optional(),
-      isActive: z.boolean().optional()
-    });
+    const { name, description, contractType, abiJson, bytecode, sourceCode, version, merchantId, parameters } = req.body;
     
-    const validation = schema.safeParse(req.body);
-    if (!validation.success) {
+    if (!name || !contractType || !abiJson || !bytecode || !version) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid request body'
+        message: 'Missing required fields'
       });
     }
     
-    // Create template
     const template = await storage.createSmartContractTemplate({
-      name: validation.data.name,
-      description: validation.data.description,
-      contractType: validation.data.contractType,
-      version: validation.data.version,
-      abiJson: validation.data.abiJson,
-      bytecode: validation.data.bytecode,
-      sourceCode: validation.data.sourceCode,
-      parameters: validation.data.parameters,
-      merchantId: validation.data.merchantId,
-      isActive: validation.data.isActive ?? true
+      name,
+      description,
+      contractType,
+      abiJson,
+      bytecode,
+      sourceCode,
+      version,
+      merchantId,
+      parameters,
+      isActive: true
     });
     
-    return res.status(201).json({
+    logger.info({
+      message: `Created new smart contract template: ${name}`,
+      category: 'system',
+      source: 'blockchain',
+      metadata: {
+        templateId: template.id,
+        templateName: name,
+        contractType
+      }
+    });
+    
+    res.status(201).json({
       success: true,
       template
     });
   } catch (error) {
     logger.error({
-      message: `Error creating smart contract template: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
+      message: `Failed to create smart contract template: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'system',
       source: 'blockchain',
-      req
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        requestBody: req.body
+      }
     });
     
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: 'Error creating smart contract template'
+      message: 'Failed to create smart contract template'
     });
   }
 });
 
 /**
- * GET /blockchain/deployments
- * Get all smart contract deployments
+ * @route GET /api/blockchain/deployments
+ * @desc Get all smart contract deployments
+ * @access Private - Admin only
  */
-blockchainRouter.get('/deployments', async (req: Request, res: Response) => {
+router.get('/deployments', async (req: Request, res: Response) => {
   try {
     const deployments = await storage.getSmartContractDeployments();
     
-    return res.json({
+    res.json({
       success: true,
       deployments
     });
   } catch (error) {
     logger.error({
-      message: `Error getting smart contract deployments: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
+      message: `Failed to get smart contract deployments: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'system',
       source: 'blockchain',
-      req
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      }
     });
     
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: 'Error getting smart contract deployments'
+      message: 'Failed to get smart contract deployments'
     });
   }
 });
 
 /**
- * POST /blockchain/deployments
- * Create a new smart contract deployment
+ * @route GET /api/blockchain/contracts/:id/status
+ * @desc Get tokenization status for a specific contract
+ * @access Private - Admin only
  */
-blockchainRouter.post('/deployments', async (req: Request, res: Response) => {
+router.get('/contracts/:id/status', async (req: Request, res: Response) => {
   try {
-    // Validate request body
-    const schema = z.object({
-      templateId: z.number(),
-      networkName: z.string(),
-      networkId: z.number(),
-      contractAddress: z.string(),
-      transactionHash: z.string(),
-      deployedBy: z.string(),
-      deploymentParameters: z.string().optional(),
-      status: z.string().optional()
-    });
-    
-    const validation = schema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid request body'
-      });
-    }
-    
-    // Create deployment
-    const deployment = await storage.createSmartContractDeployment({
-      templateId: validation.data.templateId,
-      networkId: validation.data.networkId,
-      contractAddress: validation.data.contractAddress,
-      transactionHash: validation.data.transactionHash,
-      deployedBy: parseInt(validation.data.deployedBy) || null,
-      deploymentParams: validation.data.deploymentParameters,
-      status: validation.data.status || 'active'
-    });
-    
-    return res.status(201).json({
-      success: true,
-      deployment
-    });
-  } catch (error) {
-    logger.error({
-      message: `Error creating smart contract deployment: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
-      source: 'blockchain',
-      req
-    });
-    
-    return res.status(500).json({
-      success: false,
-      error: 'Error creating smart contract deployment'
-    });
-  }
-});
-
-/**
- * POST /blockchain/tokenize/:contractId
- * Tokenize a contract on the blockchain
- */
-blockchainRouter.post('/tokenize/:contractId', async (req: Request, res: Response) => {
-  try {
-    const contractId = validateContractId(req.params.contractId);
+    const contractId = validateContractId(req.params.id);
     
     if (!contractId) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid contract ID'
+        message: 'Invalid contract ID'
       });
     }
     
-    // Check if blockchain service is initialized
-    if (!blockchainService.isInitialized()) {
-      return res.status(503).json({
-        success: false,
-        error: 'Blockchain service is not available'
-      });
-    }
-    
-    // Get the contract from database
     const contract = await storage.getContract(contractId);
     
     if (!contract) {
       return res.status(404).json({
         success: false,
-        error: 'Contract not found'
+        message: 'Contract not found'
       });
     }
     
-    // Check if contract is already tokenized
-    if (contract.tokenizationStatus === 'tokenized' && contract.tokenId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Contract is already tokenized',
-        tokenId: contract.tokenId
-      });
-    }
+    // Extract only the tokenization-related info
+    const tokenizationStatus = {
+      contractId: contract.id,
+      contractNumber: contract.contractNumber,
+      tokenizationStatus: contract.tokenizationStatus,
+      tokenId: contract.tokenId,
+      smartContractAddress: contract.smartContractAddress,
+      blockchainTransactionHash: contract.blockchainTransactionHash,
+      blockNumber: contract.blockNumber,
+      tokenizationDate: contract.tokenizationDate,
+      purchasedByShifi: contract.purchasedByShifi,
+      tokenizationError: contract.tokenizationError
+    };
     
-    // Update contract status to indicate tokenization is in progress
-    await storage.updateContract(contractId, {
-      tokenizationStatus: 'processing'
-    });
-    
-    // Tokenize the contract
-    const tokenizationResult = await blockchainService.tokenizeContract(contract);
-    
-    if (!tokenizationResult.success) {
-      // Update contract to indicate tokenization failed
-      await storage.updateContract(contractId, {
-        tokenizationStatus: 'failed',
-        tokenizationError: tokenizationResult.error
-      });
-      
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to tokenize contract',
-        details: tokenizationResult.error
-      });
-    }
-    
-    // Update contract with tokenization details
-    await storage.updateContract(contractId, {
-      tokenizationStatus: 'tokenized',
-      tokenId: tokenizationResult.tokenId,
-      smartContractAddress: tokenizationResult.smartContractAddress,
-      blockchainTransactionHash: tokenizationResult.transactionHash,
-      tokenMetadata: JSON.stringify({
-        blockNumber: tokenizationResult.blockNumber,
-        createdAt: new Date(),
-        network: process.env.BLOCKCHAIN_NETWORK_ID || '1'
-      })
-    });
-    
-    logger.info({
-      message: `Contract ${contractId} successfully tokenized`,
-      category: 'contract',
-      source: 'blockchain',
-      metadata: {
-        contractId,
-        tokenId: tokenizationResult.tokenId,
-        transactionHash: tokenizationResult.transactionHash,
-        smartContractAddress: tokenizationResult.smartContractAddress
-      }
-    });
-    
-    return res.json({
+    res.json({
       success: true,
-      message: 'Contract successfully tokenized',
-      tokenId: tokenizationResult.tokenId,
-      transactionHash: tokenizationResult.transactionHash,
-      blockNumber: tokenizationResult.blockNumber,
-      smartContractAddress: tokenizationResult.smartContractAddress
+      tokenizationStatus
     });
   } catch (error) {
     logger.error({
-      message: `Error tokenizing contract: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
+      message: `Failed to get contract tokenization status: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'system',
       source: 'blockchain',
-      req
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        contractId: req.params.id
+      }
     });
     
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: 'Error tokenizing contract'
+      message: 'Failed to get contract tokenization status'
     });
   }
 });
 
 /**
- * GET /blockchain/token/:tokenId
- * Get details of a tokenized contract
+ * @route POST /api/blockchain/contracts/:id/tokenize
+ * @desc Manually tokenize a specific contract
+ * @access Private - Admin only
  */
-blockchainRouter.get('/token/:tokenId', async (req: Request, res: Response) => {
+router.post('/contracts/:id/tokenize', async (req: Request, res: Response) => {
   try {
-    const { tokenId } = req.params;
+    const contractId = validateContractId(req.params.id);
     
-    if (!tokenId) {
+    if (!contractId) {
       return res.status(400).json({
         success: false,
-        error: 'Token ID is required'
+        message: 'Invalid contract ID'
+      });
+    }
+    
+    const contract = await storage.getContract(contractId);
+    
+    if (!contract) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contract not found'
+      });
+    }
+    
+    // Check if already tokenized
+    if (contract.tokenizationStatus === 'tokenized') {
+      return res.status(400).json({
+        success: false,
+        message: 'Contract is already tokenized',
+        tokenId: contract.tokenId
       });
     }
     
@@ -618,30 +380,293 @@ blockchainRouter.get('/token/:tokenId', async (req: Request, res: Response) => {
     if (!blockchainService.isInitialized()) {
       return res.status(503).json({
         success: false,
-        error: 'Blockchain service is not available'
+        message: 'Blockchain service is not initialized. Check environment variables.'
       });
     }
     
-    // Get token details from blockchain
-    const tokenDetails = await blockchainService.getTokenDetails(tokenId);
+    // Update contract status to processing
+    await storage.updateContract(contractId, {
+      tokenizationStatus: 'processing',
+      tokenizationError: null
+    });
     
-    return res.json({
+    // Tokenize contract on blockchain
+    const result = await blockchainService.tokenizeContract(contract);
+    
+    if (!result.success) {
+      // Update contract with error
+      await storage.updateContract(contractId, {
+        tokenizationStatus: 'failed',
+        tokenizationError: result.error
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to tokenize contract on blockchain',
+        error: result.error
+      });
+    }
+    
+    // Update contract with tokenization result
+    await storage.updateContract(contractId, {
+      tokenizationStatus: 'tokenized',
+      tokenId: result.tokenId,
+      smartContractAddress: result.smartContractAddress,
+      blockchainTransactionHash: result.transactionHash,
+      blockNumber: result.blockNumber,
+      tokenizationDate: new Date()
+    });
+    
+    logger.info({
+      message: `Successfully tokenized contract #${contractId}`,
+      category: 'contract',
+      source: 'blockchain',
+      metadata: {
+        contractId,
+        contractNumber: contract.contractNumber,
+        tokenId: result.tokenId,
+        transactionHash: result.transactionHash
+      }
+    });
+    
+    res.json({
       success: true,
-      tokenDetails
+      message: 'Contract successfully tokenized',
+      tokenizationResult: {
+        contractId,
+        contractNumber: contract.contractNumber,
+        tokenId: result.tokenId,
+        smartContractAddress: result.smartContractAddress,
+        transactionHash: result.transactionHash,
+        blockNumber: result.blockNumber
+      }
     });
   } catch (error) {
     logger.error({
-      message: `Error getting token details: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
+      message: `Failed to tokenize contract: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'contract',
       source: 'blockchain',
-      req
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        contractId: req.params.id
+      }
     });
     
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      error: 'Error getting token details'
+      message: 'Failed to tokenize contract',
+      error: error instanceof Error ? error.message : String(error)
     });
   }
 });
 
-export default blockchainRouter;
+/**
+ * @route POST /api/blockchain/contracts/:id/purchase-by-shifi
+ * @desc Mark a contract as purchased by ShiFi and trigger tokenization
+ * @access Private - Admin only
+ */
+router.post('/contracts/:id/purchase-by-shifi', async (req: Request, res: Response) => {
+  try {
+    const contractId = validateContractId(req.params.id);
+    
+    if (!contractId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid contract ID'
+      });
+    }
+    
+    const contract = await storage.getContract(contractId);
+    
+    if (!contract) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contract not found'
+      });
+    }
+    
+    // Check if already purchased by ShiFi
+    if (contract.purchasedByShifi) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contract is already marked as purchased by ShiFi'
+      });
+    }
+    
+    // Update contract to mark as purchased by ShiFi
+    await storage.updateContract(contractId, {
+      purchasedByShifi: true,
+      tokenizationStatus: 'processing'
+    });
+    
+    logger.info({
+      message: `Contract #${contractId} marked as purchased by ShiFi`,
+      category: 'contract',
+      source: 'blockchain',
+      metadata: {
+        contractId,
+        contractNumber: contract.contractNumber
+      }
+    });
+    
+    // Check if blockchain service is initialized
+    let tokenizationResult = null;
+    
+    if (blockchainService.isInitialized()) {
+      try {
+        // Tokenize contract on blockchain
+        const updatedContract = await storage.getContract(contractId);
+        if (updatedContract) {
+          const result = await blockchainService.tokenizeContract(updatedContract);
+          
+          if (result.success) {
+            // Update contract with tokenization result
+            await storage.updateContract(contractId, {
+              tokenizationStatus: 'tokenized',
+              tokenId: result.tokenId,
+              smartContractAddress: result.smartContractAddress,
+              blockchainTransactionHash: result.transactionHash,
+              blockNumber: result.blockNumber,
+              tokenizationDate: new Date()
+            });
+            
+            tokenizationResult = {
+              success: true,
+              tokenId: result.tokenId,
+              smartContractAddress: result.smartContractAddress,
+              transactionHash: result.transactionHash,
+              blockNumber: result.blockNumber
+            };
+            
+            logger.info({
+              message: `Successfully tokenized contract #${contractId} after ShiFi purchase`,
+              category: 'contract',
+              source: 'blockchain',
+              metadata: {
+                contractId,
+                contractNumber: contract.contractNumber,
+                tokenId: result.tokenId,
+                transactionHash: result.transactionHash
+              }
+            });
+          } else {
+            // Update contract with error
+            await storage.updateContract(contractId, {
+              tokenizationStatus: 'failed',
+              tokenizationError: result.error
+            });
+            
+            tokenizationResult = {
+              success: false,
+              error: result.error
+            };
+            
+            logger.error({
+              message: `Failed to tokenize contract #${contractId} after ShiFi purchase`,
+              category: 'contract',
+              source: 'blockchain',
+              metadata: {
+                contractId,
+                contractNumber: contract.contractNumber,
+                error: result.error
+              }
+            });
+          }
+        }
+      } catch (tokenizationError) {
+        logger.error({
+          message: `Error during tokenization after ShiFi purchase: ${tokenizationError instanceof Error ? tokenizationError.message : String(tokenizationError)}`,
+          category: 'contract',
+          source: 'blockchain',
+          metadata: {
+            contractId,
+            contractNumber: contract.contractNumber,
+            error: tokenizationError instanceof Error ? tokenizationError.message : String(tokenizationError)
+          }
+        });
+        
+        // Update contract with error
+        await storage.updateContract(contractId, {
+          tokenizationStatus: 'failed',
+          tokenizationError: tokenizationError instanceof Error ? tokenizationError.message : String(tokenizationError)
+        });
+        
+        tokenizationResult = {
+          success: false,
+          error: tokenizationError instanceof Error ? tokenizationError.message : String(tokenizationError)
+        };
+      }
+    } else {
+      logger.warn({
+        message: `Contract #${contractId} marked as purchased by ShiFi but blockchain service not initialized`,
+        category: 'contract',
+        source: 'blockchain',
+        metadata: {
+          contractId,
+          contractNumber: contract.contractNumber
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Contract successfully marked as purchased by ShiFi',
+      contractId,
+      contractNumber: contract.contractNumber,
+      purchasedByShifi: true,
+      tokenizationResult
+    });
+  } catch (error) {
+    logger.error({
+      message: `Failed to mark contract as purchased by ShiFi: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'contract',
+      source: 'blockchain',
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        contractId: req.params.id
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to mark contract as purchased by ShiFi',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * @route GET /api/blockchain/contracts/tokenized
+ * @desc Get all tokenized contracts
+ * @access Private - Admin only
+ */
+router.get('/contracts/tokenized', async (req: Request, res: Response) => {
+  try {
+    const tokenizedContracts = await storage.getContractsByTokenizationStatus('tokenized');
+    
+    res.json({
+      success: true,
+      count: tokenizedContracts.length,
+      contracts: tokenizedContracts
+    });
+  } catch (error) {
+    logger.error({
+      message: `Failed to get tokenized contracts: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'system',
+      source: 'blockchain',
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get tokenized contracts'
+    });
+  }
+});
+
+export default router;

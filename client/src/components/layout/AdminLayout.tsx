@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   BarChart,
+  Link2,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -51,6 +52,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       href: "/admin/contracts",
       icon: FileText,
       current: location === "/admin/contracts",
+    },
+    {
+      name: "Blockchain",
+      href: "/admin/blockchain",
+      icon: Link2,
+      current: location === "/admin/blockchain",
     },
     {
       name: "Logs",

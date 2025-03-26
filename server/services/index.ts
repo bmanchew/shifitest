@@ -8,6 +8,7 @@ export * from './prefi';
 export * from './nlpearl';
 export * from './notification';
 export * from './merchantAnalytics';
+export * from './salesRepAnalytics';
 
 import { NotificationService } from './notification';
 import { NLPearlService } from './nlpearl';
@@ -20,3 +21,5 @@ export const nlpearlService = new NLPearlService();
 export { aiAnalyticsService } from './aiAnalytics';
 export { merchantAnalyticsService } from './merchantAnalytics';
 export { openaiService } from './openai';
+export { salesRepAnalyticsService } from './salesRepAnalytics';
+export { blockchainService } from './blockchain';
