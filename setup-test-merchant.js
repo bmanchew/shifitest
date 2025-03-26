@@ -63,16 +63,25 @@ async function createTestMerchant() {
         companyName: merchantData.companyName,
         businessAddress: merchantData.businessAddress,
         businessType: merchantData.businessType,
-        taxId: merchantData.taxId
+        taxId: merchantData.taxId,
+        // Add the required fields
+        name: merchantData.companyName,
+        contactName: `${merchantData.firstName} ${merchantData.lastName}`,
+        email: merchantData.email,
+        phone: merchantData.phone
       }
     );
     
-    if (!merchantResponse.data.success) {
-      console.error('Failed to create merchant:', merchantResponse.data.message);
+    console.log('Merchant Response:', JSON.stringify(merchantResponse.data, null, 2));
+    
+    // The response structure might be different than expected
+    // It appears to return the merchant object directly instead of a {success: true, merchant: {...}} structure
+    const merchantId = merchantResponse.data.id || (merchantResponse.data.merchant && merchantResponse.data.merchant.id);
+    
+    if (!merchantId) {
+      console.error('Failed to create merchant: No merchant ID returned');
       return null;
     }
-    
-    const merchantId = merchantResponse.data.merchant.id;
     console.log('✅ Successfully created merchant with ID:', merchantId);
     
     return {
