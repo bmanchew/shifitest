@@ -1029,7 +1029,7 @@ router.post("/merchant-support", async (req: Request, res: Response) => {
     });
     
     // Send a notification to the merchant about their ticket submission
-    await notificationService.sendNotification("merchant_ticket_created", {
+    await notificationService.sendNotification("merchant_ticket_created" as NotificationType, {
       recipientId: merchant.userId,
       recipientType: "merchant",
       channels: ["email", "in_app"],
@@ -1052,7 +1052,7 @@ router.post("/merchant-support", async (req: Request, res: Response) => {
     if (admins && admins.length > 0) {
       // Notify the first admin (we could implement a rotation or assignment system later)
       const admin = admins[0];
-      await notificationService.sendNotification("admin_new_ticket", {
+      await notificationService.sendNotification("admin_new_ticket" as NotificationType, {
         recipientId: admin.id,
         recipientType: "admin",
         channels: ["email", "in_app"],

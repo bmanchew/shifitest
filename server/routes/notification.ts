@@ -304,7 +304,7 @@ router.post('/send-sms', async (req, res) => {
         
         // Create notification through the notification service for tracking
         await notificationService.sendNotification(
-          'customer_welcome',
+          'customer_welcome' as NotificationType,
           {
             recipientId: customerId || 0,
             recipientType: 'customer',
