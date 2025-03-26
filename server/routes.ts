@@ -4869,6 +4869,10 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   apiRouter.use("/blockchain", blockchainRouter);
   apiRouter.use("/sales-reps", salesRepRouter);
   apiRouter.use("/communications", communicationsRouter);
+  // Also mount the conversations endpoint at /conversations for backward compatibility
+  apiRouter.use("/conversations", communicationsRouter);
+  // Also mount the support-tickets endpoint for backward compatibility
+  apiRouter.use("/support-tickets", communicationsRouter);
 
   // Get contract by phone number
   apiRouter.get("/contracts/by-phone/:phoneNumber", async (req: Request, res: Response) => {
