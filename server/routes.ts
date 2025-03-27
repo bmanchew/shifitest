@@ -16,6 +16,7 @@ import {
   type InsertCustomerSatisfactionSurvey,
   logSourceEnum
 } from "@shared/schema";
+import { sortByDateDesc } from "./utils/dateHelpers";
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
 import { blockchainService } from "./services/blockchain";
@@ -24,7 +25,6 @@ import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
 import { nlpearlService, notificationService, merchantAnalyticsService } from './services';
-import { sortByDateDesc } from './utils/dateHelpers';
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
@@ -580,7 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Use the most recent underwriting data if available
           const mostRecentUnderwriting = underwritingData.length > 0 ? 
             underwritingData.sort((a, b) => 
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              sortByDateDesc(a, b)
             )[0] : null;
           
           return {

@@ -273,8 +273,8 @@ export default function AdminMessages() {
   // Extract conversations array from the response
   const conversations = data?.conversations || [];
   
-  // Query to fetch merchants (for new conversation)
-  const { data: merchants = [] } = useQuery({
+  // Query to fetch all merchants (for filtering)
+  const { data: allMerchants = [] } = useQuery({
     queryKey: ["/api/merchants"],
     queryFn: async () => {
       const response = await fetch("/api/merchants");
@@ -284,6 +284,34 @@ export default function AdminMessages() {
       return response.json();
     },
   });
+  
+  // Query to fetch active merchants (for new conversation dropdown)
+  const { data: activeMerchantsData = { merchants: [] }, isLoading: isLoadingActiveMerchants } = useQuery({
+    queryKey: ["/api/plaid/active-merchants"],
+    queryFn: async () => {
+      const response = await fetch("/api/plaid/active-merchants");
+      if (!response.ok) {
+        throw new Error("Failed to load active merchants");
+      }
+      return response.json();
+    },
+  });
+  
+  // Extract merchants array from the response
+  const merchants = allMerchants;
+  
+  // Use all merchants as fallback when active merchants API fails
+  const activeMerchants = activeMerchantsData.merchants && activeMerchantsData.merchants.length > 0 
+    ? activeMerchantsData.merchants 
+    : merchants.filter((m: any) => !m.isArchived);
+    
+  // Map merchants to format used in dropdown
+  const dropdownMerchants = activeMerchants.length > 0 && activeMerchants[0].merchantId
+    ? activeMerchants  // Format from active merchants API
+    : activeMerchants.map((m: any) => ({
+        merchantId: m.id,
+        merchantName: m.businessName
+      }));
   
   // Handle creating a new conversation
   const handleCreateConversation = async (values: z.infer<typeof newConversationSchema>) => {
@@ -525,11 +553,17 @@ export default function AdminMessages() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {merchants.map((merchant: any) => (
-                          <SelectItem key={merchant.id} value={String(merchant.id)}>
-                            {merchant.businessName}
-                          </SelectItem>
-                        ))}
+                        {isLoadingActiveMerchants ? (
+                          <div className="text-center p-2 text-sm text-gray-500">Loading merchants...</div>
+                        ) : dropdownMerchants.length > 0 ? (
+                          dropdownMerchants.map((merchant: any) => (
+                            <SelectItem key={merchant.merchantId} value={String(merchant.merchantId)}>
+                              {merchant.merchantName || "Unnamed Merchant"}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="text-center p-2 text-sm text-gray-500">No active merchants found</div>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
