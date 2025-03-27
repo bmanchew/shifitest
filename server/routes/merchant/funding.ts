@@ -18,22 +18,18 @@ router.get("/", async (req: Request, res: Response) => {
     const userId = req.user?.id;
     
     if (!userId) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
     
-    // Get the user record
-    const userResult = await db.select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+    // Get merchant record from request - this is set by the isMerchant middleware
+    const merchant = req.merchant;
     
-    if (!userResult || userResult.length === 0) {
-      return res.status(404).json({ error: "User not found" });
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant record not found" });
     }
     
-    // Get all transfers for this merchant (using user ID as merchant ID for now)
-    // Merchant ID and user ID are the same for merchant users
-    const merchantId = userId;
+    // Use the merchant ID from the merchant record
+    const merchantId = merchant.id;
     
     const transfers = await db.select()
       .from(plaidTransfers)
@@ -49,13 +45,15 @@ router.get("/", async (req: Request, res: Response) => {
     });
     
     return res.status(200).json({ 
+      success: true,
       transfers: formattedTransfers 
     });
     
   } catch (error) {
     console.error("Error fetching merchant funding data:", error);
     return res.status(500).json({ 
-      error: "Failed to fetch merchant funding data" 
+      success: false,
+      message: "Failed to fetch merchant funding data" 
     });
   }
 });
@@ -69,22 +67,18 @@ router.get("/:transferId", async (req: Request, res: Response) => {
     const userId = req.user?.id;
     
     if (!userId) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
     
-    // Get the user record
-    const userResult = await db.select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+    // Get merchant record from request - this is set by the isMerchant middleware
+    const merchant = req.merchant;
     
-    if (!userResult || userResult.length === 0) {
-      return res.status(404).json({ error: "User not found" });
+    if (!merchant) {
+      return res.status(404).json({ success: false, message: "Merchant record not found" });
     }
     
-    // Get all transfers for this merchant (using user ID as merchant ID for now)
-    // Merchant ID and user ID are the same for merchant users
-    const merchantId = userId;
+    // Use the merchant ID from the merchant record
+    const merchantId = merchant.id;
     
     // Get the specific transfer, ensuring it belongs to this merchant
     const transfer = await db.select()
@@ -98,7 +92,7 @@ router.get("/:transferId", async (req: Request, res: Response) => {
       .limit(1);
     
     if (!transfer || transfer.length === 0) {
-      return res.status(404).json({ error: "Transfer not found" });
+      return res.status(404).json({ success: false, message: "Transfer not found" });
     }
     
     // Format date
@@ -107,11 +101,11 @@ router.get("/:transferId", async (req: Request, res: Response) => {
       createdAt: transfer[0].createdAt ? format(new Date(transfer[0].createdAt), 'yyyy-MM-dd\'T\'HH:mm:ss') : ''
     };
     
-    return res.status(200).json({ transfer: formattedTransfer });
+    return res.status(200).json({ success: true, transfer: formattedTransfer });
     
   } catch (error) {
     console.error("Error fetching transfer:", error);
-    return res.status(500).json({ error: "Failed to fetch transfer" });
+    return res.status(500).json({ success: false, message: "Failed to fetch transfer" });
   }
 });
 
