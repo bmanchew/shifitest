@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   Bell,
+  CreditCard,
 } from "lucide-react";
 
 interface MerchantLayoutProps {
@@ -34,6 +35,12 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
       href: "/merchant/contracts",
       icon: FileText,
       current: location === "/merchant/contracts",
+    },
+    {
+      name: "Payments",
+      href: "/merchant/payments",
+      icon: CreditCard,
+      current: location === "/merchant/payments",
     },
     {
       name: "Reports",

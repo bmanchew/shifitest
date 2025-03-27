@@ -1,20 +1,16 @@
-import { Router } from 'express';
-import { getMerchantAnalytics, getContractSummary, getMerchantContracts } from './analytics';
-import { getMerchantFunding, getFundingTransferDetails } from './funding';
-import { authenticateToken, canAccessMerchantData } from '../../middleware/auth';
+import { Router } from "express";
+import { authenticateToken } from "../../middleware/auth";
+import fundingRouter from "./funding";
 
 const router = Router();
 
 // Apply authentication to all merchant routes
 router.use(authenticateToken);
 
-// Analytics routes
-router.get('/:id/analytics', canAccessMerchantData, getMerchantAnalytics);
-router.get('/:id/contract-summary', canAccessMerchantData, getContractSummary);
-router.get('/:id/contracts', canAccessMerchantData, getMerchantContracts);
+// Mount the funding routes for merchant API
+router.use("/funding", fundingRouter);
 
-// Funding routes
-router.get('/:id/funding', canAccessMerchantData, getMerchantFunding);
-router.get('/:merchantId/funding/:transferId', canAccessMerchantData, getFundingTransferDetails);
+// Mount the funding routes for merchant API (alternate path)
+router.use("/merchant/funding", fundingRouter);
 
 export default router;

@@ -1,177 +1,118 @@
-import { Request, Response } from 'express';
-import { storage } from '../../storage';
-import { logger } from '../../services/logger';
-import { PlaidTransfer } from '@shared/schema';
+import { Router, Request, Response } from "express";
+import { db } from "../../db";
+import { plaidTransfers, users } from "@shared/schema";
+import { eq, desc, and } from "drizzle-orm";
+import { format } from "date-fns";
+
+const router = Router();
 
 /**
- * Get merchant funding history 
- * Shows all funding transfers sent to the merchant
+ * Get funding data for the authenticated merchant
+ * 
+ * Returns:
+ * - Array of plaid transfers related to merchant funding
  */
-export async function getMerchantFunding(req: Request, res: Response) {
+router.get("/", async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const merchantId = parseInt(id);
+    // Get the authenticated user's ID
+    const userId = req.user?.id;
     
-    if (isNaN(merchantId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid merchant ID'
-      });
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
-
-    // Get all plaid transfers for this merchant that are funding (credits)
-    const fundingTransfers = await storage.getPlaidTransfers({
-      merchantId,
-      type: 'credit', // Only get credits/funding sent to merchant
-    });
-
-    // Group transfers by date to create funding batches
-    const batchesByDate = fundingTransfers.reduce<Record<string, PlaidTransfer[]>>((acc, transfer) => {
-      // Handle when createdAt is null by using current date as fallback
-      const createdDate = transfer.createdAt || new Date();
-      
-      // Format date as YYYY-MM-DD
-      const transferDate = createdDate.toISOString().split('T')[0];
-      
-      if (!acc[transferDate]) {
-        acc[transferDate] = [];
-      }
-      
-      acc[transferDate].push(transfer);
-      return acc;
-    }, {});
     
-    // Convert to array and calculate batch totals
-    const fundingBatches = Object.entries(batchesByDate).map(([date, transfers]) => {
-      const totalAmount = transfers.reduce((sum, t) => sum + (t.amount || 0), 0);
-      const transferCount = transfers.length;
-      
+    // Get the user record
+    const userResult = await db.select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    if (!userResult || userResult.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    // Get all transfers for this merchant (using user ID as merchant ID for now)
+    // Merchant ID and user ID are the same for merchant users
+    const merchantId = userId;
+    
+    const transfers = await db.select()
+      .from(plaidTransfers)
+      .where(eq(plaidTransfers.merchantId, merchantId))
+      .orderBy(desc(plaidTransfers.createdAt));
+    
+    // Format dates for client-side consumption
+    const formattedTransfers = transfers.map(transfer => {
       return {
-        date,
-        batchTotal: totalAmount,
-        transferCount,
-        transfers: transfers.map(t => ({
-          id: t.id,
-          transferId: t.transferId,
-          amount: t.amount,
-          description: t.description,
-          status: t.status,
-          createdAt: t.createdAt,
-          contractId: t.contractId,
-          metadata: t.metadata ? JSON.parse(t.metadata) : null
-        }))
+        ...transfer,
+        createdAt: transfer.createdAt ? format(new Date(transfer.createdAt), 'yyyy-MM-dd\'T\'HH:mm:ss') : ''
       };
     });
     
-    // Sort batches by date, newest first
-    fundingBatches.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    // Get total funding received
-    const totalFunding = fundingTransfers.reduce((sum, t) => sum + (t.amount || 0), 0);
-    
-    // Get count of successful transfers
-    const successfulTransfers = fundingTransfers.filter(t => 
-      t.status === 'posted' || t.status === 'settled'
-    ).length;
-    
-    res.json({
-      success: true,
-      fundingBatches,
-      metrics: {
-        totalFunding,
-        totalTransfers: fundingTransfers.length,
-        successfulTransfers
-      }
+    return res.status(200).json({ 
+      transfers: formattedTransfers 
     });
     
   } catch (error) {
-    logger.error({
-      message: `Failed to get merchant funding: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
-      // Use appropriate source category
-      source: 'plaid', 
-      metadata: {
-        merchantId: req.params.id,
-        error: error instanceof Error ? error.stack : null
-      }
-    });
-    
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch merchant funding data'
+    console.error("Error fetching merchant funding data:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch merchant funding data" 
     });
   }
-}
+});
 
 /**
- * Get details for a specific funding transfer
+ * Get a specific plaid transfer by ID
  */
-export async function getFundingTransferDetails(req: Request, res: Response) {
+router.get("/:transferId", async (req: Request, res: Response) => {
   try {
-    const { merchantId, transferId } = req.params;
+    const { transferId } = req.params;
+    const userId = req.user?.id;
     
-    if (!merchantId || !transferId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Merchant ID and transfer ID are required'
-      });
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
     
-    // Get the transfer details
-    const transfer = await storage.getPlaidTransferByExternalId(transferId);
+    // Get the user record
+    const userResult = await db.select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
     
-    if (!transfer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transfer not found'
-      });
+    if (!userResult || userResult.length === 0) {
+      return res.status(404).json({ error: "User not found" });
     }
     
-    // Security check - ensure the transfer belongs to this merchant
-    if (transfer.merchantId !== parseInt(merchantId)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: Transfer does not belong to this merchant'
-      });
+    // Get all transfers for this merchant (using user ID as merchant ID for now)
+    // Merchant ID and user ID are the same for merchant users
+    const merchantId = userId;
+    
+    // Get the specific transfer, ensuring it belongs to this merchant
+    const transfer = await db.select()
+      .from(plaidTransfers)
+      .where(
+        and(
+          eq(plaidTransfers.transferId, transferId),
+          eq(plaidTransfers.merchantId, merchantId)
+        )
+      )
+      .limit(1);
+    
+    if (!transfer || transfer.length === 0) {
+      return res.status(404).json({ error: "Transfer not found" });
     }
     
-    // Get associated contract if available
-    let contract = null;
-    if (transfer.contractId) {
-      contract = await storage.getContract(transfer.contractId);
-    }
+    // Format date
+    const formattedTransfer = {
+      ...transfer[0],
+      createdAt: transfer[0].createdAt ? format(new Date(transfer[0].createdAt), 'yyyy-MM-dd\'T\'HH:mm:ss') : ''
+    };
     
-    res.json({
-      success: true,
-      transfer: {
-        ...transfer,
-        metadata: transfer.metadata ? JSON.parse(transfer.metadata) : null
-      },
-      contract: contract ? {
-        id: contract.id,
-        contractNumber: contract.contractNumber,
-        amount: contract.amount,
-        financedAmount: contract.financedAmount,
-        status: contract.status
-      } : null
-    });
+    return res.status(200).json({ transfer: formattedTransfer });
     
   } catch (error) {
-    logger.error({
-      message: `Failed to get funding transfer details: ${error instanceof Error ? error.message : String(error)}`,
-      category: 'api',
-      // Use appropriate source category
-      source: 'plaid',
-      metadata: {
-        merchantId: req.params.merchantId,
-        transferId: req.params.transferId,
-        error: error instanceof Error ? error.stack : null
-      }
-    });
-    
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch transfer details'
-    });
+    console.error("Error fetching transfer:", error);
+    return res.status(500).json({ error: "Failed to fetch transfer" });
   }
-}
+});
+
+export default router;

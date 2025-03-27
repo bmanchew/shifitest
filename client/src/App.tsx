@@ -19,6 +19,7 @@ const AdminMessages = lazy(() => import("@/pages/admin/Messages"));
 // Merchant pages
 const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
 const MerchantContracts = lazy(() => import("@/pages/merchant/Contracts"));
+const MerchantPayments = lazy(() => import("@/pages/merchant/Payments"));
 const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
 const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
 const MerchantSupportTicketsList = lazy(() => import("@/pages/merchant/SupportTicketsList"));
@@ -98,6 +99,7 @@ function App() {
             <Route path="/merchant/dashboard" component={MerchantDashboard} />
             <Route path="/merchant/contracts" component={MerchantContracts} />
             <Route path="/merchant/contracts/:contractId" component={lazy(() => import("@/pages/merchant/ContractDetails"))} />
+            <Route path="/merchant/payments" component={MerchantPayments} />
             <Route path="/merchant/reports" component={MerchantReports} />
             <Route path="/merchant/settings" component={MerchantSettings} />
             <Route path="/merchant/support-tickets" component={MerchantSupportTicketsList} />

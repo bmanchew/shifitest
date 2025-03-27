@@ -42,6 +42,7 @@ import communicationsRouter from "./routes/communications"; // Import communicat
 import indexRoutes from "./routes/index"; // Import routes from index.ts
 import registerSesameAIRoutes from "./routes/sesameAI"; // Import SesameAI routes
 import registerFinancialSherpaRoutes from "./routes/financialSherpa"; // Import Financial Sherpa routes
+import merchantAPIRouter from "./routes/merchant"; // Import merchant API routes
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available
@@ -4862,6 +4863,9 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
 
   // Mount the merchant router
   apiRouter.use("/merchants", merchantRouter);
+  
+  // Mount the merchant API router for single merchant operations
+  apiRouter.use("/merchant", merchantAPIRouter);
   
   // Mount the notification router
   apiRouter.use("/notifications", notificationRouter);
