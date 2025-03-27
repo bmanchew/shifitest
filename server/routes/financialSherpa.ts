@@ -413,9 +413,12 @@ router.post('/generate-insights-voice', async (req, res) => {
           outputPath: `public/audio/insights/insight-${insight.id}-${Date.now()}.wav`
         });
         
+        // Convert the full file path to a URL path that can be used in the frontend
+        const audioUrl = audioPath.replace(/^public/, '');
+        
         return {
           insightId: insight.id,
-          audioUrl: audioPath,
+          audioUrl: audioUrl,
           success: true
         };
       } catch (error: any) {
@@ -485,9 +488,12 @@ router.post('/voice-insight', async (req, res) => {
       outputPath: `public/audio/insights/insight-${insightId}-${Date.now()}.wav`
     });
     
+    // Convert the full file path to a URL path that can be used in the frontend
+    const audioUrl = audioPath.replace(/^public/, '');
+    
     return res.json({
       success: true,
-      audioUrl: audioPath
+      audioUrl: audioUrl
     });
   } catch (error: any) {
     logger.error({
