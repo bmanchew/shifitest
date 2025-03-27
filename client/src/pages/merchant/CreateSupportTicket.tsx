@@ -12,17 +12,17 @@ import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { TicketSubmissionForm } from "@/components/forms/TicketSubmissionForm";
 import { useToast } from "@/hooks/use-toast";
-import { useSearch } from "@/hooks/use-search";
+import { useSearchParams } from "@/hooks/use-search-params";
 
 export default function CreateSupportTicketPage() {
-  const { merchant } = useAuth();
+  const { user } = useAuth();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
-  const search = useSearch();
+  const { getParam } = useSearchParams();
   
   // Get contract ID from URL if provided
-  const contractId = search.get("contractId") ? 
-    parseInt(search.get("contractId") as string, 10) : null;
+  const contractId = getParam("contractId") ? 
+    parseInt(getParam("contractId") as string, 10) : null;
 
   // Navigate back to tickets list
   const navigateBack = () => {
@@ -43,7 +43,7 @@ export default function CreateSupportTicketPage() {
   };
 
   // If not authenticated as a merchant, show error
-  if (!merchant) {
+  if (!user || user.role !== "merchant") {
     return (
       <div className="container py-8">
         <Card>
@@ -83,7 +83,7 @@ export default function CreateSupportTicketPage() {
         </CardHeader>
         <CardContent>
           <TicketSubmissionForm 
-            merchantId={merchant.id} 
+            merchantId={user.merchantId!} 
             onSuccess={handleTicketCreated}
             contractId={contractId}
           />

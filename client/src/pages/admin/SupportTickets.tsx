@@ -90,7 +90,7 @@ export default function SupportTickets() {
   const [activeTab, setActiveTab] = useState("all");
 
   // Fetch support tickets
-  const { data: tickets = [], isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ["/api/support-tickets"],
     queryFn: async () => {
       const response = await fetch("/api/support-tickets");
@@ -99,6 +99,9 @@ export default function SupportTickets() {
       return data;
     },
   });
+  
+  // Extract tickets array from the response
+  const tickets = data?.tickets || [];
 
   // Filter tickets based on active tab
   const filteredTickets = React.useMemo(() => {

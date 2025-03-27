@@ -25,26 +25,29 @@ import { useAuth } from "@/hooks/use-auth";
 import { getStatusColor, formatDate } from "@/lib/utils";
 
 export default function SupportTicketsList() {
-  const { merchant } = useAuth();
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
 
   // Fetch tickets
-  const { data: tickets = [], isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["support-tickets"],
     queryFn: async () => {
-      if (!merchant?.id) return [];
+      if (!user?.id || user.role !== "merchant") return { tickets: [] };
       
-      const response = await fetch(`/api/support-tickets?merchantId=${merchant.id}`);
+      const response = await fetch(`/api/support-tickets?merchantId=${user.merchantId}`);
       if (!response.ok) {
         throw new Error("Failed to fetch tickets");
       }
       return response.json();
     },
-    enabled: !!merchant?.id,
+    enabled: !!user?.merchantId && user.role === "merchant",
   });
+  
+  // Extract tickets array from the response
+  const tickets = data?.tickets || [];
 
   // Handler for creating a new ticket
   const handleCreateTicket = () => {

@@ -255,7 +255,7 @@ export default function AdminMessages() {
   
   // Query to fetch conversations
   const { 
-    data: conversations = [], 
+    data, 
     isLoading, 
     refetch 
   } = useQuery({
@@ -269,6 +269,9 @@ export default function AdminMessages() {
       return response.json();
     },
   });
+  
+  // Extract conversations array from the response
+  const conversations = data?.conversations || [];
   
   // Query to fetch merchants (for new conversation)
   const { data: merchants = [] } = useQuery({

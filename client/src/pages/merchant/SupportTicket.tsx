@@ -21,7 +21,7 @@ import { formatDate, getStatusColor } from "@/lib/utils";
 
 export default function SupportTicketPage() {
   const { id } = useParams();
-  const { merchant } = useAuth();
+  const { user } = useAuth();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();

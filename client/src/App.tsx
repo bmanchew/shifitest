@@ -21,6 +21,9 @@ const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
 const MerchantContracts = lazy(() => import("@/pages/merchant/Contracts"));
 const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
 const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
+const MerchantSupportTicketsList = lazy(() => import("@/pages/merchant/SupportTicketsList"));
+const MerchantCreateSupportTicket = lazy(() => import("@/pages/merchant/CreateSupportTicket"));
+const MerchantSupportTicket = lazy(() => import("@/pages/merchant/SupportTicket"));
 
 // Customer pages
 const CustomerApplication = lazy(() => import("@/pages/customer/Application"));
@@ -95,6 +98,9 @@ function App() {
             <Route path="/merchant/contracts/:contractId" component={lazy(() => import("@/pages/merchant/ContractDetails"))} />
             <Route path="/merchant/reports" component={MerchantReports} />
             <Route path="/merchant/settings" component={MerchantSettings} />
+            <Route path="/merchant/support-tickets" component={MerchantSupportTicketsList} />
+            <Route path="/merchant/support-tickets/create" component={MerchantCreateSupportTicket} />
+            <Route path="/merchant/support-tickets/:id" component={MerchantSupportTicket} />
           </>
         )}
 
