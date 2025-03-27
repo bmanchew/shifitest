@@ -1,0 +1,108 @@
+Absolutely! Here's a detailed prompt you can send to an AI developer to help them **stabilize**, **modularize**, and **clean up** your backend codebase — especially if your current code has become cluttered, such as with an oversized `routes.ts` file.
+
+---
+
+### 🧠 Prompt for AI Developer: Stabilize & Modularize Backend Code
+
+Hey [AI Assistant/Developer Name],
+
+I'm working on a Node.js backend project (Express + TypeScript), and I need your help to make the codebase more **stable**, **maintainable**, and **modular**.
+
+Right now, some files — especially `routes.ts` — have gotten way too large and hard to manage. I want to break everything into smaller, **task-specific files**, follow best practices for clean architecture, and ensure the project is easy to scale and debug.
+
+### 🎯 Goal
+- Refactor the codebase into smaller, more focused modules
+- Improve file structure and separation of concerns
+- Clean up any repeated patterns or logic
+- Add appropriate type safety and comments where needed
+- Make the API routes easier to read and maintain
+- Avoid "mega-files" like one giant routes file
+- Ensure the app remains fully functional and stable
+
+---
+
+### ✅ Key Requirements
+
+1. **Split routes into feature-specific route files**
+   - For example:
+     ```
+     routes/
+       ├── auth.routes.ts
+       ├── contract.routes.ts
+       ├── user.routes.ts
+       └── index.ts  <-- combine them here
+     ```
+   - Each route file should handle just one domain (auth, contracts, etc.)
+
+2. **Move business logic to controller files**
+   - Avoid placing logic directly in the routes
+   - Structure like:
+     ```
+     controllers/
+       ├── auth.controller.ts
+       ├── contract.controller.ts
+     ```
+
+3. **Separate validation and middleware**
+   - Use dedicated files for request validation (e.g. Zod or Joi schemas)
+   - Structure like:
+     ```
+     validators/
+       ├── auth.validator.ts
+       ├── contract.validator.ts
+     ```
+
+4. **Refactor shared utilities and services**
+   - Extract any reusable code (e.g., JWT handling, database helpers) into `utils/` or `services/` directory
+
+5. **Improve file structure (Suggested layout):**
+   ```
+   src/
+     ├── routes/
+     ├── controllers/
+     ├── services/
+     ├── validators/
+     ├── middleware/
+     ├── utils/
+     ├── models/ (if using)
+     └── index.ts (or main entry)
+   ```
+
+6. **Clean up the main `index.ts` or `server.ts`**
+   - Move route setup to a `routes/index.ts`
+   - Import and mount all routes via `app.use(...)`
+   - Example:
+     ```ts
+     import routes from './routes';
+     app.use('/api', routes);
+     ```
+
+7. **Add comments and typings where missing**
+   - Ensure every function, route handler, and controller method has appropriate TypeScript types
+   - Add short JSDoc comments for non-obvious logic
+
+8. **Fix any broken logic / bugs in the process**
+   - If you notice any non-functional or unstable patterns, fix them or flag them
+   - Prefer async/await over `.then()` chains for readability
+
+9. **Ensure consistent formatting**
+   - Run Prettier and ESLint across all files
+   - Adopt a clean code style (camelCase, PascalCase where needed, descriptive function names)
+
+---
+
+### 🚀 Deliverables
+- Fully refactored backend codebase
+- Routes separated by domain
+- Controllers and services modularized
+- Improved folder structure
+- Stable, running app with the same (or better) functionality
+- Optional: a short README or doc summary of what was changed and where to find things
+
+---
+
+Let me know if you'd like me to pass along an example of a route/controller pair to base this on. Thanks!
+
+---
+
+Would you like this as a text doc or copied into your codebase setup?
