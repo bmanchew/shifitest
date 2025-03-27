@@ -60,6 +60,22 @@ interface FundingMetrics {
 export default function MerchantFunding() {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["/api/merchant-funding/funding"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/merchant-funding/funding", {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          console.error(`Failed to fetch funding data: ${res.status}`);
+          const errorText = await res.text();
+          throw new Error(`Failed to fetch funding data: ${errorText}`);
+        }
+        return res.json();
+      } catch (error) {
+        console.error("Error fetching funding data:", error);
+        throw error;
+      }
+    },
     retry: 1,
   });
 
