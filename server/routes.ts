@@ -4878,7 +4878,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Also mount the support-tickets endpoint for backward compatibility
   apiRouter.use("/support-tickets", communicationsRouter);
   
-  // Register SesameAI routes
+  // Mount the SesameAI router for voice generation
   registerSesameAIRoutes(apiRouter);
 
   // Get contract by phone number

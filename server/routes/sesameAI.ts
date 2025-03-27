@@ -1,182 +1,185 @@
-import { Router, Request, Response } from 'express';
-import { z } from 'zod';
-import { sesameAIService } from '../services/sesameai';
+/**
+ * SesameAI API routes
+ *
+ * These routes handle voice generation requests using the SesameAI Conversational Speech Model.
+ */
+
+import { Router } from 'express';
+import { sesameAIService } from '../services';
 import { logger } from '../services/logger';
 
+// Initialize router
 const router = Router();
 
 /**
- * Schema for voice generation request
+ * @route GET /api/sesameai/status
+ * @description Check if the SesameAI service is ready
+ * @access Private
  */
-const generateVoiceSchema = z.object({
-  text: z.string().min(1, "Text is required").max(1000, "Text is too long"),
-  speaker: z.number().int().min(0).max(1).optional(),
-  outputPath: z.string().optional()
+router.get('/status', async (req, res) => {
+  try {
+    const isReady = sesameAIService.isReady();
+    
+    logger.info({
+      message: `SesameAI status check: ${isReady ? 'ready' : 'not ready'}`,
+      category: 'api',
+      source: 'sesameai',
+    });
+    
+    return res.json({
+      success: true,
+      ready: isReady
+    });
+  } catch (error: any) {
+    logger.error({
+      message: `Error checking SesameAI status: ${error.message}`,
+      category: 'api',
+      source: 'sesameai',
+      metadata: { error: error.stack }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to check SesameAI status'
+    });
+  }
 });
 
 /**
- * Schema for notification voice generation request
+ * @route POST /api/sesameai/generate-voice
+ * @description Generate voice from text
+ * @access Private
  */
-const generateNotificationVoiceSchema = z.object({
-  type: z.string().min(1, "Notification type is required"),
-  data: z.record(z.any()),
-  speaker: z.number().int().min(0).max(1).optional()
+router.post('/generate-voice', async (req, res) => {
+  try {
+    const { text, speaker = 0 } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({
+        success: false,
+        error: 'Text is required'
+      });
+    }
+    
+    logger.info({
+      message: 'Generating voice from text',
+      category: 'api',
+      source: 'sesameai',
+      metadata: { textLength: text.length, speaker }
+    });
+    
+    const audioPath = await sesameAIService.generateVoice({
+      text,
+      speaker
+    });
+    
+    return res.json({
+      success: true,
+      audioUrl: audioPath
+    });
+  } catch (error: any) {
+    logger.error({
+      message: `Error generating voice: ${error.message}`,
+      category: 'api',
+      source: 'sesameai',
+      metadata: { error: error.stack }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to generate voice'
+    });
+  }
 });
 
 /**
- * Register SesameAI routes for text-to-speech capabilities
- * @param apiRouter - Express Router to attach routes to
+ * @route POST /api/sesameai/notification-voice
+ * @description Generate voice for notification
+ * @access Private
  */
-export default function registerSesameAIRoutes(apiRouter: Router) {
-  // Mount the SesameAI router under /api/sesameai
+router.post('/notification-voice', async (req, res) => {
+  try {
+    const { type, data, speaker = 0 } = req.body;
+    
+    if (!type || !data) {
+      return res.status(400).json({
+        success: false,
+        error: 'Notification type and data are required'
+      });
+    }
+    
+    logger.info({
+      message: `Generating voice for notification type: ${type}`,
+      category: 'api',
+      source: 'sesameai',
+      metadata: { notificationType: type, speaker }
+    });
+    
+    const audioPath = await sesameAIService.generateNotificationVoice({
+      type,
+      data,
+      speaker
+    });
+    
+    return res.json({
+      success: true,
+      audioUrl: audioPath
+    });
+  } catch (error: any) {
+    logger.error({
+      message: `Error generating notification voice: ${error.message}`,
+      category: 'api',
+      source: 'sesameai',
+      metadata: { error: error.stack }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to generate notification voice'
+    });
+  }
+});
+
+/**
+ * @route GET /api/sesameai/audio-files
+ * @description List all generated audio files
+ * @access Private
+ */
+router.get('/audio-files', async (req, res) => {
+  try {
+    const files = await sesameAIService.listAudioFiles();
+    
+    logger.info({
+      message: `Listed ${files.length} audio files`,
+      category: 'api',
+      source: 'sesameai'
+    });
+    
+    return res.json({
+      success: true,
+      files
+    });
+  } catch (error: any) {
+    logger.error({
+      message: `Error listing audio files: ${error.message}`,
+      category: 'api',
+      source: 'sesameai',
+      metadata: { error: error.stack }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to list audio files'
+    });
+  }
+});
+
+/**
+ * Register SesameAI routes with the provided router
+ * @param apiRouter Express Router instance to mount routes on
+ */
+function registerSesameAIRoutes(apiRouter: Router) {
   apiRouter.use('/sesameai', router);
-
-  /**
-   * Check if SesameAI service is available
-   */
-  router.get('/status', (req: Request, res: Response) => {
-    try {
-      const isReady = sesameAIService.isReady();
-      res.json({
-        status: isReady ? 'ready' : 'not_ready',
-        message: isReady ? 'SesameAI service is available' : 'SesameAI service is not initialized'
-      });
-    } catch (error: any) {
-      logger.error({
-        message: `Error checking SesameAI service status: ${error.message}`,
-        source: 'sesameai',
-        category: 'api',
-        metadata: { error: error.stack }
-      });
-      
-      res.status(500).json({
-        status: 'error',
-        message: 'Error checking SesameAI service status'
-      });
-    }
-  });
-
-  /**
-   * Generate voice from text
-   */
-  router.post('/generate', async (req: Request, res: Response) => {
-    try {
-      const validationResult = generateVoiceSchema.safeParse(req.body);
-      
-      if (!validationResult.success) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Invalid request parameters',
-          errors: validationResult.error.errors
-        });
-      }
-      
-      const { text, speaker, outputPath } = validationResult.data;
-      
-      logger.info({
-        message: 'Received voice generation request',
-        source: 'sesameai',
-        category: 'api',
-        metadata: { textLength: text.length, speaker }
-      });
-      
-      const audioPath = await sesameAIService.generateVoice({
-        text,
-        speaker,
-        outputPath
-      });
-      
-      res.json({
-        status: 'success',
-        path: audioPath
-      });
-    } catch (error: any) {
-      logger.error({
-        message: `Error generating voice: ${error.message}`,
-        source: 'sesameai',
-        category: 'api',
-        metadata: { error: error.stack }
-      });
-      
-      res.status(500).json({
-        status: 'error',
-        message: `Error generating voice: ${error.message}`
-      });
-    }
-  });
-
-  /**
-   * Generate voice for notifications
-   */
-  router.post('/notification', async (req: Request, res: Response) => {
-    try {
-      const validationResult = generateNotificationVoiceSchema.safeParse(req.body);
-      
-      if (!validationResult.success) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Invalid request parameters',
-          errors: validationResult.error.errors
-        });
-      }
-      
-      const { type, data, speaker } = validationResult.data;
-      
-      logger.info({
-        message: `Received notification voice generation request for type: ${type}`,
-        source: 'sesameai',
-        category: 'api',
-        metadata: { notificationType: type, speaker }
-      });
-      
-      const audioPath = await sesameAIService.generateNotificationVoice({
-        type,
-        data,
-        speaker
-      });
-      
-      res.json({
-        status: 'success',
-        path: audioPath
-      });
-    } catch (error: any) {
-      logger.error({
-        message: `Error generating notification voice: ${error.message}`,
-        source: 'sesameai',
-        category: 'api',
-        metadata: { error: error.stack }
-      });
-      
-      res.status(500).json({
-        status: 'error',
-        message: `Error generating notification voice: ${error.message}`
-      });
-    }
-  });
-
-  /**
-   * List all generated audio files
-   */
-  router.get('/audio-files', async (req: Request, res: Response) => {
-    try {
-      const audioFiles = await sesameAIService.listAudioFiles();
-      
-      res.json({
-        status: 'success',
-        files: audioFiles
-      });
-    } catch (error: any) {
-      logger.error({
-        message: `Error listing audio files: ${error.message}`,
-        source: 'sesameai',
-        category: 'api',
-        metadata: { error: error.stack }
-      });
-      
-      res.status(500).json({
-        status: 'error',
-        message: `Error listing audio files: ${error.message}`
-      });
-    }
-  });
 }
+
+export default registerSesameAIRoutes;
