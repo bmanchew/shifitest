@@ -244,8 +244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin routes
-  apiRouter.use("/admin", adminRouter);
+  // Admin routes are registered at the end of the file
 
 // Merchant routes
   apiRouter.post("/merchants", async (req: Request, res: Response) => {
@@ -4843,8 +4842,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   apiRouter.use("/admin/reports", reportsRouter);
   apiRouter.use("/admin", adminReportsRouter);
   
-  // Mount the admin router
-  apiRouter.use("/admin", adminRouter);
+  // The admin router is already mounted above
 
   // Mount the underwriting router
   apiRouter.use("/underwriting", underwritingRouter);

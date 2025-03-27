@@ -15,25 +15,25 @@ adminRouter.use(isAdmin);
 adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {
   try {
     // Fetch dashboard statistics from database
-    const pendingContracts = await storage.contract.count({
-      where: { status: "pending" }
-    });
-
-    const totalUsers = await storage.user.count();
-
-    const totalMerchants = await storage.merchant.count();
-
+    // Get all contracts and filter for pending status
+    const allContracts = await storage.getAllContracts();
+    const pendingContracts = allContracts.filter(contract => contract.status === "pending").length;
+    
+    // Get total users count
+    const allUsers = await storage.getAllUsers();
+    const totalUsers = allUsers.length;
+    
+    // Get total merchants count
+    const allMerchants = await storage.getAllMerchants();
+    const totalMerchants = allMerchants.length;
+    
     // Count active merchants (where active = true and archived = false)
-    const activeMerchants = await storage.merchant.count({
-      where: { 
-        active: true,
-        archived: false
-      }
-    });
-
-    const activeContracts = await storage.contract.count({
-      where: { status: "active" }
-    });
+    const activeMerchants = allMerchants.filter(
+      merchant => merchant.active === true && merchant.archived === false
+    ).length;
+    
+    // Count active contracts
+    const activeContracts = allContracts.filter(contract => contract.status === "active").length;
 
     // Return dashboard statistics
     res.json({
@@ -88,20 +88,11 @@ adminRouter.get("/merchants/:id", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
 
-    const merchant = await storage.merchant.findUnique({
-      where: { id },
-      include: {
-        contracts: {
-          select: {
-            id: true,
-            status: true,
-            contractNumber: true,
-            createdAt: true,
-            updatedAt: true
-          }
-        }
-      }
-    });
+    // Get merchant by ID
+    const merchant = await storage.getMerchant(id);
+    
+    // Get all contracts for this merchant
+    const merchantContracts = await storage.getContractsByMerchantId(id);
 
     if (!merchant) {
       return res.status(404).json({
@@ -112,7 +103,15 @@ adminRouter.get("/merchants/:id", async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data: merchant
+      data: {
+        ...merchant,
+        contracts: merchantContracts.map(contract => ({
+          id: contract.id,
+          status: contract.status,
+          contractNumber: contract.contractNumber,
+          createdAt: contract.createdAt
+        }))
+      }
     });
   } catch (error) {
     logger.error({
@@ -137,17 +136,16 @@ adminRouter.post("/merchants", async (req: Request, res: Response) => {
     const { name, email, businessType, address, phoneNumber } = req.body;
 
     // Validate required fields
-    if (!name || !email || !businessType) {
+    if (!name || !email) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields"
       });
     }
 
-    // Check if merchant already exists
-    const existingMerchant = await storage.merchant.findFirst({
-      where: { email }
-    });
+    // Check if merchant already exists by email
+    const allMerchants = await storage.getAllMerchants();
+    const existingMerchant = allMerchants.find(m => m.email === email);
 
     if (existingMerchant) {
       return res.status(409).json({
@@ -157,35 +155,30 @@ adminRouter.post("/merchants", async (req: Request, res: Response) => {
     }
 
     // Create new merchant
-    const merchant = await storage.merchant.create({
-      data: {
-        name,
-        email,
-        businessType,
-        address,
-        phoneNumber,
-        status: "active"
-      }
+    const merchant = await storage.createMerchant({
+      name,
+      contactName: name, // Using the name as contact name for simplicity
+      email,
+      phone: phoneNumber || '',
+      address,
+      active: true,
+      archived: false
     });
 
     // Generate a temporary password for the merchant
     const tempPassword = crypto.randomBytes(8).toString('hex');
 
     // Create user account for merchant
-    await storage.user.create({
-      data: {
-        email,
-        password: tempPassword, // This should be hashed in a real app
-        role: "merchant",
-        merchantId: merchant.id
-      }
+    await storage.createUser({
+      email,
+      password: tempPassword, // This should be hashed in a real app
+      role: "merchant",
+      firstName: name.split(' ')[0],
+      lastName: name.split(' ').slice(1).join(' ')
     });
 
     // Send welcome email with temporary password
-    await emailService.sendMerchantWelcomeEmail(email, {
-      merchantName: name,
-      tempPassword
-    });
+    await emailService.sendMerchantWelcome(email, name, tempPassword);
 
     res.status(201).json({
       success: true,
