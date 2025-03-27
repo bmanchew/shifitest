@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -21,8 +21,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Contract } from "@shared/schema";
 
 // Define form schema with validation
 const ticketFormSchema = z.object({
@@ -53,6 +59,15 @@ interface TicketSubmissionFormProps {
   contractId?: number | null;
 }
 
+interface CustomerInfo {
+  id: number;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+}
+
 export function TicketSubmissionForm({
   merchantId,
   onSuccess,
@@ -60,6 +75,26 @@ export function TicketSubmissionForm({
   contractId,
 }: TicketSubmissionFormProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [contractSearchTerm, setContractSearchTerm] = useState("");
+  const [contractSearchOpen, setContractSearchOpen] = useState(false);
+  const [customerCache, setCustomerCache] = useState<Record<number, CustomerInfo>>({});
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+
+  // Fetch all contracts for this merchant
+  const { data: contracts = [] } = useQuery<Contract[]>({
+    queryKey: ["/api/contracts", { merchantId }],
+    queryFn: async () => {
+      const res = await fetch(`/api/contracts?merchantId=${merchantId}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to fetch contracts");
+      }
+      return res.json();
+    },
+    enabled: !!merchantId,
+  });
 
   // Initialize form with default values
   const form = useForm<TicketFormValues>({
@@ -69,12 +104,97 @@ export function TicketSubmissionForm({
       category: initialValues?.category || "technical_issue",
       priority: initialValues?.priority || "normal",
       description: initialValues?.description || "",
-      contractId: contractId ? String(contractId) : undefined,
+      contractId: contractId ? String(contractId) : "",
       attachments: undefined,
     },
   });
 
+  // If contractId prop is provided, find that contract
+  useEffect(() => {
+    if (contractId && contracts.length > 0) {
+      const foundContract = contracts.find(c => c.id === contractId);
+      if (foundContract) {
+        setSelectedContract(foundContract);
+      }
+    }
+  }, [contractId, contracts]);
+
   const isSubmitting = form.formState.isSubmitting;
+
+  // Fetch customer data for a specific customerId
+  const fetchCustomer = async (customerId: number) => {
+    if (customerCache[customerId]) {
+      return customerCache[customerId];
+    }
+    
+    try {
+      const response = await fetch(`/api/customers/${customerId}`, {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch customer with ID ${customerId}`);
+      }
+      
+      const customer = await response.json();
+      setCustomerCache(prev => ({ ...prev, [customerId]: customer }));
+      return customer;
+    } catch (error) {
+      console.error(`Error fetching customer ${customerId}:`, error);
+      return { id: customerId };
+    }
+  };
+
+  // Hook to fetch customer data for all contracts
+  useQuery({
+    queryKey: ["customers", contracts.map(c => c.customerId).filter(Boolean)],
+    queryFn: async () => {
+      const customerIds = contracts
+        .map(c => c.customerId)
+        .filter((id): id is number => id !== null && id !== undefined);
+      
+      const uniqueIds = [...new Set(customerIds)];
+      
+      await Promise.all(uniqueIds.map(fetchCustomer));
+      return true;
+    },
+    enabled: contracts.length > 0,
+  });
+
+  // Helper function to get customer name for display
+  const getCustomerName = (customerId?: number) => {
+    if (!customerId) return "Unknown Customer";
+    
+    const customer = customerCache[customerId];
+    if (!customer) return `Loading...`;
+    
+    if (customer.name) return customer.name;
+    if (customer.firstName && customer.lastName) return `${customer.firstName} ${customer.lastName}`;
+    if (customer.firstName) return customer.firstName;
+    if (customer.lastName) return customer.lastName;
+    if (customer.email) return customer.email.split('@')[0];
+    if (customer.phone) return customer.phone;
+    
+    return `Customer ${customerId}`;
+  };
+
+  // Function to format contract ID and customer info for display
+  const formatContractInfo = (contract: Contract) => {
+    return `#${contract.contractNumber} - ${getCustomerName(contract.customerId)}`;
+  };
+
+  // Handler for contract selection
+  const handleContractSelect = (contract: Contract) => {
+    setSelectedContract(contract);
+    form.setValue("contractId", String(contract.id));
+    setContractSearchOpen(false);
+  };
+
+  // Filter contracts based on search term
+  const filteredContracts = contracts.filter(contract => 
+    contract.contractNumber?.toLowerCase().includes(contractSearchTerm.toLowerCase()) ||
+    getCustomerName(contract.customerId)?.toLowerCase().includes(contractSearchTerm.toLowerCase())
+  );
 
   const onSubmit = async (values: TicketFormValues) => {
     try {
@@ -239,24 +359,74 @@ export function TicketSubmissionForm({
           )}
         />
 
-        {/* Contract ID field - hidden if contractId is provided as prop */}
+        {/* Enhanced Contract Selection */}
         {!contractId && (
           <FormField
             control={form.control}
             name="contractId"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Contract ID (Optional)</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="Enter contract ID if applicable"
-                    {...field}
-                    disabled={isSubmitting}
-                    value={field.value || ""}
-                  />
-                </FormControl>
+              <FormItem className="flex flex-col">
+                <FormLabel>Related Contract (Optional)</FormLabel>
+                <Popover open={contractSearchOpen} onOpenChange={setContractSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={contractSearchOpen}
+                        className="w-full justify-between"
+                        disabled={isSubmitting}
+                      >
+                        {selectedContract 
+                          ? formatContractInfo(selectedContract)
+                          : "Select a contract..."}
+                        <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Search contracts or customers..." 
+                        value={contractSearchTerm}
+                        onValueChange={setContractSearchTerm}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No contracts found.</CommandEmpty>
+                        <CommandGroup heading="Contracts">
+                          {filteredContracts.map((contract) => (
+                            <CommandItem
+                              key={contract.id}
+                              value={String(contract.id)}
+                              onSelect={() => handleContractSelect(contract)}
+                            >
+                              <div className="flex flex-col">
+                                <div className="flex items-center">
+                                  <span className="font-medium">#{contract.contractNumber}</span>
+                                  <Badge 
+                                    variant={
+                                      contract.status === 'active' ? 'success' : 
+                                      contract.status === 'pending' ? 'warning' : 
+                                      contract.status === 'completed' ? 'default' : 'destructive'
+                                    }
+                                    className="ml-2"
+                                  >
+                                    {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
+                                  </Badge>
+                                </div>
+                                <span className="text-sm text-muted-foreground">
+                                  {getCustomerName(contract.customerId)}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <FormDescription>
-                  If your issue relates to a specific contract, enter the contract ID
+                  If your issue relates to a specific contract, select it from the list
                 </FormDescription>
                 <FormMessage />
               </FormItem>
