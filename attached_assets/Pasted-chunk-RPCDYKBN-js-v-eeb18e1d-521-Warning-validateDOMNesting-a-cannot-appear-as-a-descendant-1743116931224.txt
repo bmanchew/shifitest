@@ -1,0 +1,39 @@
+chunk-RPCDYKBN.js?v=eeb18e1d:521 Warning: validateDOMNesting(...): <a> cannot appear as a descendant of <a>.
+    at a
+    at a
+    at https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=eeb18e1d:220:18
+    at div
+    at div
+    at header
+    at div
+    at MerchantLayout (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/merchant/MerchantLayout.tsx:35:42)
+    at Dashboard
+    at Route (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=eeb18e1d:206:16)
+    at Switch (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=eeb18e1d:262:17)
+    at Suspense
+    at App (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/App.tsx:94:31)
+    at AuthProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/context/AuthContext.tsx:29:32)
+    at QueryClientProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=eeb18e1d:2805:3)
+    at AppWrapper (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/AppWrapper.tsx?v=Pk4Jp4O2WvwWh-mJTY-v1:36:3)
+printWarning @ chunk-RPCDYKBN.js?v=eeb18e1d:521Understand this errorAI
+/api/communications/merchant/unread-count:1 
+            
+            
+           Failed to load resource: the server responded with a status of 400 (Bad Request)Understand this errorAI
+/api/communications/merchant:1 
+            
+            
+           Failed to load resource: the server responded with a status of 400 (Bad Request)Understand this errorAI
+/api/merchant/49/analytics:1 
+            
+            
+           Failed to load resource: the server responded with a status of 404 (Not Found)Understand this errorAI
+/api/communications/merchant/unread-count:1 
+            
+            
+           Failed to load resource: the server responded with a status of 400 (Bad Request)Understand this errorAI
+/api/communications/merchant:1 
+            
+            
+           Failed to load resource: the server responded with a status of 400 (Bad Request)Understand this errorAI
+messages:1 Refused to load the stylesheet 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap' because it violates the following Content Security Policy directive: "style-src 'self' 'unsafe-inline'". Note that 'style-src-elem' was not explicitly 

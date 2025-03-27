@@ -3,6 +3,7 @@ import { createServer, Server } from 'http';
 import authRoutes from './auth.routes';
 import userRoutes from './user.routes';
 import plaidRoutes from './plaid.routes';
+import notificationRoutes from './notification';
 import { apiRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 
@@ -16,11 +17,13 @@ modulesRouter.use('/api', apiRateLimiter);
 modulesRouter.use('/api/v1/auth', authRoutes);
 modulesRouter.use('/api/v1/users', userRoutes);
 modulesRouter.use('/api/v1/plaid', plaidRoutes);
+modulesRouter.use('/api/v1/notifications', notificationRoutes);
 
 // Support for legacy (non-versioned) routes during transition
 modulesRouter.use('/api/auth', authRoutes);
 modulesRouter.use('/api/users', userRoutes);
 modulesRouter.use('/api/plaid', plaidRoutes);
+modulesRouter.use('/api/notifications', notificationRoutes);
 
 // Add a simple status endpoint for health checks
 modulesRouter.get('/api/status', (req, res) => {

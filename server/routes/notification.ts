@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { storage } from '../storage';
 import { notificationService } from '../services';
 import { twilioService } from '../services/twilio';
-import { NotificationType } from '../services/notification';
+import { NotificationType, NotificationChannel, NotificationPriority } from '../services/notification';
 import { logger } from '../services/logger';
 
 const router = Router();
@@ -47,44 +47,35 @@ router.post('/send', async (req, res) => {
   try {
     const validatedData = sendNotificationSchema.parse(req.body);
     
-    const result = await notificationService.sendNotification(
-      validatedData.type as NotificationType,
-      {
-        recipientId: validatedData.recipientId,
-        recipientType: validatedData.recipientType,
-        channels: validatedData.channels,
-        subject: validatedData.subject,
-        message: validatedData.message,
-        data: validatedData.data,
-      }
-    );
+    // Map to the expected interface
+    const notificationParams = {
+      userId: validatedData.recipientId,
+      title: validatedData.subject || 'New Notification',
+      message: validatedData.message || '',
+      type: validatedData.type as unknown as NotificationType,
+      channels: validatedData.channels?.map(channel => 
+        channel === 'in_app' ? NotificationChannel.IN_APP : 
+        channel === 'email' ? NotificationChannel.EMAIL : 
+        channel === 'sms' ? NotificationChannel.SMS : 
+        NotificationChannel.PUSH
+      ),
+      metadata: validatedData.data || {},
+      priority: NotificationPriority.MEDIUM
+    };
     
-    // The notification service may return a boolean (legacy) or an object with success/error properties
-    if (typeof result === 'boolean') {
-      if (!result) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Failed to send notification'
-        });
-      }
-      
-      return res.status(200).json({
-        success: true,
-        message: 'Notification sent successfully'
-      });
-    } else {
-      // Handle object response
-      if (!result.success) {
-        return res.status(400).json({ 
-          success: false, 
-          error: result.error || 'Failed to send notification'
-        });
-      }
-      
+    // Send the notification
+    const notificationId = await notificationService.sendNotification(notificationParams);
+    
+    if (notificationId > 0) {
       return res.status(200).json({
         success: true,
         message: 'Notification sent successfully',
-        deliveredTo: result.channels
+        notificationId
+      });
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Failed to send notification'
       });
     }
   } catch (error) {
@@ -303,20 +294,21 @@ router.post('/send-sms', async (req, res) => {
         }
         
         // Create notification through the notification service for tracking
-        await notificationService.sendNotification(
-          'customer_welcome' as NotificationType,
-          {
-            recipientId: customerId || 0,
-            recipientType: 'customer',
-            recipientPhone: validatedData.phoneNumber,
-            channels: ['sms'],
-            data: {
-              merchantId: validatedData.merchantId,
-              applicationUrl,
-              amount: validatedData.amount
-            }
+        const notificationParams = {
+          userId: customerId || 0,
+          title: 'Welcome to ShiFi',
+          message: message,
+          type: NotificationType.ACCOUNT_ACTIVITY, // Use appropriate type from enum
+          channels: [NotificationChannel.SMS],
+          metadata: {
+            merchantId: validatedData.merchantId,
+            applicationUrl,
+            amount: validatedData.amount,
+            recipientPhone: validatedData.phoneNumber
           }
-        );
+        };
+        
+        await notificationService.sendNotification(notificationParams);
       } catch (notificationError) {
         // Log but don't fail the request if notification record creation fails
         logger.error({
@@ -336,6 +328,72 @@ router.post('/send-sms', async (req, res) => {
   } catch (error) {
     logger.error({
       message: `Error sending SMS: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'api',
+      source: 'twilio',
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    return res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Invalid request'
+    });
+  }
+});
+
+// Schema for testing SMS functionality
+const testSmsSchema = z.object({
+  phoneNumber: z.string().min(10), // Minimum 10 digits for phone numbers
+  message: z.string().optional() // Optional test message
+});
+
+// Test SMS functionality endpoint
+router.post('/test-sms', async (req, res) => {
+  try {
+    const validatedData = testSmsSchema.parse(req.body);
+    
+    // Generate test message if not provided
+    const message = validatedData.message || 
+      `This is a test SMS from ShiFi platform. Timestamp: ${new Date().toISOString()}`;
+    
+    // Send the SMS via Twilio
+    const result = await twilioService.sendSMS({
+      to: validatedData.phoneNumber,
+      body: message
+    });
+    
+    // Log the test attempt
+    logger.info({
+      message: `Test SMS to ${validatedData.phoneNumber}`,
+      category: 'api',
+      source: 'twilio',
+      metadata: {
+        success: result.success,
+        messageId: result.messageId,
+        isSimulated: result.isSimulated,
+        error: result.error
+      }
+    });
+    
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error || 'Failed to send test SMS'
+      });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: result.isSimulated ? 
+        `Test SMS would be sent to ${validatedData.phoneNumber} (simulation mode)` : 
+        `Test SMS sent to ${validatedData.phoneNumber}`,
+      messageId: result.messageId,
+      isSimulated: result.isSimulated
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error sending test SMS: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
       source: 'twilio',
       metadata: {
