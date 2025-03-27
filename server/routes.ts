@@ -17,6 +17,7 @@ import {
   type InsertCustomerSatisfactionSurvey,
   logSourceEnum
 } from "@shared/schema";
+import { authRateLimiter, userCreationRateLimiter } from "./middleware/authRateLimiter";
 import { sortByDateDesc } from "./utils/dateHelpers";
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
@@ -86,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Auth routes
-  apiRouter.post("/auth/login", async (req: Request, res: Response) => {
+  apiRouter.post("/auth/login", authRateLimiter, async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
       
@@ -168,7 +169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  apiRouter.post("/users", async (req: Request, res: Response) => {
+  apiRouter.post("/users", userCreationRateLimiter, async (req: Request, res: Response) => {
     try {
       const userData = insertUserSchema.parse(req.body);
 
