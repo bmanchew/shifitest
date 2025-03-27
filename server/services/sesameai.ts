@@ -101,24 +101,24 @@ export class SesameAIService {
     
     const { text, speaker = 0, outputPath } = options;
     
-    // Generate a filename if not provided
-    const audioFilename = outputPath || path.join(
-      this.audioOutputDir,
-      `voice_${Date.now()}.wav`
-    );
+    // Ensure we're using a path with the public prefix for the Python script
+    // but strip it when returning the URL for the client
+    const fullOutputPath = outputPath && !outputPath.startsWith('/public/') 
+      ? path.join(process.cwd(), outputPath) 
+      : path.join(process.cwd(), 'public', `audio/voice_${Date.now()}.wav`);
     
     // Ensure output directory exists
-    const outputDir = path.dirname(audioFilename);
+    const outputDir = path.dirname(fullOutputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
     
     try {
-      // Escape text for shell command
+      // Escape text for shell command using proper quoting
       const escapedText = JSON.stringify(text);
       
       // Run Python script to generate audio
-      const cmd = `${this.pythonInterpreter} ${this.csm_script_path} --text ${escapedText} --speaker ${speaker} --output "${audioFilename}"`;
+      const cmd = `${this.pythonInterpreter} ${this.csm_script_path} --text ${escapedText} --speaker ${speaker} --output "${fullOutputPath}"`;
       
       logger.info({
         message: 'Generating voice with SesameAI CSM',
@@ -129,7 +129,28 @@ export class SesameAIService {
       
       const { stdout, stderr } = await execPromise(cmd);
       
-      if (stderr && !stderr.includes('No CUDA GPUs are available')) {
+      // Parse the JSON response from Python script if available
+      try {
+        const result = JSON.parse(stdout);
+        if (result.success === false) {
+          throw new Error(result.error || 'Unknown error from Python script');
+        }
+        
+        // If the Python script returned a path, use it
+        if (result.path) {
+          return result.path;
+        }
+      } catch (error: any) {
+        // If stdout is not valid JSON, ignore and continue
+        logger.warn({
+          message: `Could not parse Python script output: ${error.message}`,
+          source: 'sesameai',
+          category: 'api',
+          metadata: { stdout }
+        });
+      }
+      
+      if (stderr) {
         logger.warn({
           message: `Warning during voice generation: ${stderr}`,
           source: 'sesameai',
@@ -138,12 +159,12 @@ export class SesameAIService {
       }
       
       // Verify file was created
-      if (!fs.existsSync(audioFilename)) {
+      if (!fs.existsSync(fullOutputPath)) {
         throw new Error('Failed to generate audio file');
       }
       
       // Return the path relative to the public directory for client access
-      const publicPath = audioFilename.replace(path.join(process.cwd(), 'public'), '');
+      const publicPath = fullOutputPath.replace(path.join(process.cwd(), 'public'), '');
       return publicPath.startsWith('/') ? publicPath : `/${publicPath}`;
     } catch (error: any) {
       logger.error({

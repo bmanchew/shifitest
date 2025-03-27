@@ -8,23 +8,47 @@ import os
 import sys
 import json
 import argparse
-import torch
-import torchaudio
-import numpy as np
 import uuid
+import traceback
 from pathlib import Path
-from typing import List, Optional, Union
+
+# Import required packages
+try:
+    import torch
+    import torchaudio
+    import numpy as np
+    import soundfile as sf
+    from scipy import signal
+except ImportError as e:
+    print(json.dumps({
+        "success": False,
+        "error": f"Missing Python package: {str(e)}"
+    }))
+    sys.exit(1)
 
 # Import the generator from the current directory
-from generator import Segment, load_csm_1b
+try:
+    from generator import Segment, load_csm_1b
+except ImportError as e:
+    print(json.dumps({
+        "success": False,
+        "error": f"Could not import generator module: {str(e)}"
+    }))
+    sys.exit(1)
 
 # Constants
 SAMPLE_RATE = 24000  # The expected sample rate for CSM
-AUDIO_DIR = os.path.join(os.getcwd(), "public", "audio")
+PROJECT_DIR = os.getcwd()
+AUDIO_DIR = os.path.join(PROJECT_DIR, "public", "audio")
+INSIGHTS_DIR = os.path.join(AUDIO_DIR, "insights")
 
-def simulate_audio_generation(text, speaker_id=0, output_path=None):
+# Ensure audio directories exist
+os.makedirs(AUDIO_DIR, exist_ok=True)
+os.makedirs(INSIGHTS_DIR, exist_ok=True)
+
+def generate_audio(text, speaker_id=0, output_path=None):
     """
-    Simulate audio generation for testing without requiring the full model
+    Generate audio from text using the CSM model
     
     Args:
         text: Text to convert to speech
@@ -32,12 +56,9 @@ def simulate_audio_generation(text, speaker_id=0, output_path=None):
         output_path: Path to save the audio file
     
     Returns:
-        Path to the generated audio file
+        Dictionary with success status and path or error
     """
     try:
-        # Make sure the output directory exists
-        os.makedirs(AUDIO_DIR, exist_ok=True)
-        
         # Create a model instance
         model = load_csm_1b(device="cpu")
         
@@ -56,20 +77,38 @@ def simulate_audio_generation(text, speaker_id=0, output_path=None):
             filename = f"sesameai_{uuid.uuid4().hex[:8]}_{speaker_id}.wav"
             output_path = os.path.join(AUDIO_DIR, filename)
         else:
-            # Ensure the path is within the audio directory for security
-            base_filename = os.path.basename(output_path)
-            output_path = os.path.join(AUDIO_DIR, base_filename)
+            # Make sure it's an absolute path
+            if not os.path.isabs(output_path):
+                output_path = os.path.join(PROJECT_DIR, output_path)
+            
+            # Ensure the output directory exists
+            output_dir = os.path.dirname(output_path)
+            os.makedirs(output_dir, exist_ok=True)
         
         # Save the audio
-        torchaudio.save(
-            output_path,
-            audio.unsqueeze(0),  # Add channel dimension
-            SAMPLE_RATE
-        )
+        try:
+            # First attempt with torchaudio
+            torchaudio.save(
+                output_path,
+                audio.unsqueeze(0),  # Add channel dimension
+                SAMPLE_RATE
+            )
+        except Exception as audio_error:
+            # Fallback to soundfile if torchaudio fails
+            try:
+                # Convert tensor to numpy
+                audio_np = audio.detach().cpu().numpy()
+                sf.write(output_path, audio_np, SAMPLE_RATE)
+            except Exception as sf_error:
+                raise Exception(f"Failed to save audio file with both methods: {str(audio_error)} and {str(sf_error)}")
+        
+        # Verify the file was created
+        if not os.path.exists(output_path):
+            raise Exception(f"Audio file was not created at {output_path}")
         
         # Return the relative path for web serving
-        # Strip the 'public' directory from the path, keeping the leading slash
-        rel_path = output_path.replace(os.path.join(os.getcwd(), "public"), "")
+        # Strip the 'public' directory from the path for client-side URLs
+        rel_path = output_path.replace(os.path.join(PROJECT_DIR, "public"), "")
         
         # Ensure the path starts with a slash for correct web URLs
         if not rel_path.startswith('/'):
@@ -77,10 +116,14 @@ def simulate_audio_generation(text, speaker_id=0, output_path=None):
             
         return {
             "success": True,
-            "path": rel_path
+            "path": rel_path,
+            "fullPath": output_path
         }
     except Exception as e:
-        print(f"Error generating audio: {str(e)}", file=sys.stderr)
+        # Print the error and traceback to stderr for debugging
+        traceback_str = traceback.format_exc()
+        print(f"Error generating audio: {str(e)}\n{traceback_str}", file=sys.stderr)
+        
         return {
             "success": False,
             "error": str(e)
@@ -98,16 +141,25 @@ def main():
     """
     Main function to handle CLI invocation
     """
-    args = parse_args()
-    
-    result = simulate_audio_generation(
-        text=args.text,
-        speaker_id=args.speaker,
-        output_path=args.output
-    )
-    
-    # Print JSON result to stdout for the Node.js process to capture
-    print(json.dumps(result))
+    try:
+        args = parse_args()
+        
+        # Generate the audio
+        result = generate_audio(
+            text=args.text,
+            speaker_id=args.speaker,
+            output_path=args.output
+        )
+        
+        # Print JSON result to stdout for the Node.js process to capture
+        print(json.dumps(result))
+    except Exception as e:
+        # Handle any unexpected errors
+        print(json.dumps({
+            "success": False,
+            "error": f"Script execution error: {str(e)}"
+        }))
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
