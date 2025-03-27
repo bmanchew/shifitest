@@ -83,10 +83,25 @@ export async function apiRequest<T = Response>(
   if (import.meta.env.DEV) {
     console.log(`API Request: ${method} ${fullUrl}`);
   }
+
+  // Get auth token from local storage
+  const headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
+  
+  try {
+    const userData = localStorage.getItem("shifi_user");
+    if (userData) {
+      const user = JSON.parse(userData);
+      if (user.token) {
+        headers['Authorization'] = `Bearer ${user.token}`;
+      }
+    }
+  } catch (error) {
+    console.error("Error getting auth token from localStorage:", error);
+  }
   
   const res = await fetch(fullUrl, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });

@@ -55,8 +55,24 @@ export const getQueryFn: <T>(options: {
       console.log(`Query request to: ${url} (original: ${queryKey[0]})`);
     }
     
+    // Get auth token from local storage
+    const headers: Record<string, string> = {};
+    
+    try {
+      const userData = localStorage.getItem("shifi_user");
+      if (userData) {
+        const user = JSON.parse(userData);
+        if (user.token) {
+          headers['Authorization'] = `Bearer ${user.token}`;
+        }
+      }
+    } catch (error) {
+      console.error("Error getting auth token from localStorage:", error);
+    }
+    
     const res = await fetch(url, {
       credentials: "include",
+      headers
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

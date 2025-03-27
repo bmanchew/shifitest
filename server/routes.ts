@@ -105,9 +105,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // In a real app, we would generate a JWT token here
-      // Instead, we'll just return the user object without password
+      // Generate a JWT token for auth
+      const token = jwt.sign(
+        { userId: user.id, role: user.role },
+        process.env.JWT_SECRET || 'default_jwt_secret',
+        { expiresIn: '7d' }
+      );
+      
+      // Return user without password
       const { password: _, ...userWithoutPassword } = user;
+      
+      // Add token to user object
+      const userWithToken = {
+        ...userWithoutPassword,
+        token
+      };
 
       // Set cookies for authentication
       res.cookie('userId', user.id.toString(), { 
@@ -135,7 +147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ 
         success: true, 
-        user: userWithoutPassword 
+        user: userWithToken 
       });
     } catch (error) {
       logger.error({

@@ -62,9 +62,25 @@ export default function MerchantFunding() {
     queryKey: ["/api/merchant-funding/funding"],
     queryFn: async () => {
       try {
+        // Get the user data from localStorage which contains auth token
+        const userData = localStorage.getItem("shifi_user");
+        if (!userData) {
+          throw new Error("User not authenticated");
+        }
+        
+        const user = JSON.parse(userData);
+        if (!user.token) {
+          throw new Error("No authentication token available");
+        }
+        
+        // Make the API request with the authorization header
         const res = await fetch("/api/merchant-funding/funding", {
+          headers: {
+            'Authorization': `Bearer ${user.token}`
+          },
           credentials: "include",
         });
+        
         if (!res.ok) {
           console.error(`Failed to fetch funding data: ${res.status}`);
           const errorText = await res.text();
