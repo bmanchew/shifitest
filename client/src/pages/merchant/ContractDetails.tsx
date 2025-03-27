@@ -74,31 +74,7 @@ export default function ContractDetails() {
     }
   };
 
-  // Function to get credit tier badge variant
-  const getCreditTierBadgeVariant = (tier: string | null | undefined) => {
-    if (!tier) return "default";
-    
-    switch (tier) {
-      case "tier1":
-        return "success";
-      case "tier2":
-        return "warning";
-      case "tier3":
-        return "secondary";
-      case "declined":
-        return "destructive";
-      default:
-        return "default";
-    }
-  };
-  
-  // Function to format credit tier for display
-  const formatCreditTier = (tier: string | null | undefined) => {
-    if (!tier) return "Not Rated";
-    
-    // Convert tier1 to Tier 1, etc.
-    return tier.replace(/tier(\d)/, 'Tier $1').charAt(0).toUpperCase() + tier.slice(1).replace(/tier(\d)/, 'Tier $1');
-  };
+  // Credit tier functions removed as they're not needed anymore
 
   if (loading) {
     return (
@@ -199,14 +175,7 @@ export default function ContractDetails() {
                       </div>
                     </div>
 
-                    <div>
-                      <h3 className="font-medium text-gray-900">Credit Rating</h3>
-                      <div className="flex items-center mt-1">
-                        <Badge variant={getCreditTierBadgeVariant(contract.creditTier)}>
-                          {formatCreditTier(contract.creditTier)}
-                        </Badge>
-                      </div>
-                    </div>
+                    {/* Credit rating is fetched from underwriting data, not stored in contracts */}
                   </div>
                   
                   <div className="space-y-4">

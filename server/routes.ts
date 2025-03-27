@@ -703,14 +703,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Contract not found" });
       }
   
-      // Check if the contract is active
-      if (contract.status !== "active") {
-        return res.status(404).json({ 
-          message: "Contract not found or not active",
-          status: contract.status
-        });
-      }
-  
       // Get application progress for this contract
       const progress = await storage.getApplicationProgressByContractId(
         contract.id,

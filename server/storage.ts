@@ -657,8 +657,10 @@ export class DatabaseStorage implements IStorage {
   // Contract methods
   async getContract(id: number): Promise<Contract | undefined> {
     try {
-      // Use specific column selection instead of * to avoid errors with missing columns
-      const [contract] = await db.select({
+      console.log(`Attempting to fetch contract with ID: ${id}`);
+      
+      // Use a basic select to get common fields, which should work across all database schemas
+      const result = await db.select({
         id: contracts.id,
         createdAt: contracts.createdAt,
         merchantId: contracts.merchantId,
@@ -672,25 +674,41 @@ export class DatabaseStorage implements IStorage {
         termMonths: contracts.termMonths,
         monthlyPayment: contracts.monthlyPayment,
         currentStep: contracts.currentStep,
-        lastUpdateSentAt: contracts.lastUpdateSentAt,
-        lastPaymentAt: contracts.lastPaymentAt,
-        loanStartDate: contracts.loanStartDate,
-        loanEndDate: contracts.loanEndDate,
         phoneNumber: contracts.phoneNumber,
-        archived: contracts.archived,
-        interestAmount: contracts.interestAmount,
-        tokenizationStatus: contracts.tokenizationStatus,
-        tokenId: contracts.tokenId,
-        tokenizationDate: contracts.tokenizationDate,
-        purchasedByShifi: contracts.purchasedByShifi,
-        smartContractAddress: contracts.smartContractAddress,
-        creditTier: contracts.creditTier,
-        tokenizationError: contracts.tokenizationError,
+        archived: contracts.archived
+        // Omitting fields that might not exist in all environments
       })
       .from(contracts)
       .where(eq(contracts.id, id));
-
-      return contract || undefined;
+      
+      // Get the first result
+      const contract = result[0];
+      
+      if (contract) {
+        console.log(`Found contract with ID: ${id}`);
+        
+        // Add missing fields with default values to make it compatible with the Contract type
+        return {
+          ...contract,
+          // Add default values for fields that might not exist in the database
+          purchasedByShifi: false,
+          tokenizationStatus: 'pending',
+          tokenId: null,
+          smartContractAddress: null,
+          tokenizationError: null,
+          archivedAt: null,
+          archivedReason: null,
+          completedAt: null,
+          blockchainTransactionHash: null,
+          blockNumber: null,
+          tokenizationDate: null,
+          tokenMetadata: null,
+          salesRepId: null
+        };
+      } else {
+        console.log(`Contract with ID: ${id} not found`);
+        return undefined;
+      }
     } catch (error) {
       console.error("Error fetching contract:", error);
       return undefined;
@@ -708,49 +726,51 @@ export class DatabaseStorage implements IStorage {
 
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
     try {
-      // Get basic contract fields without columns that might not exist yet
-      // And only return active contracts
+      // Use a basic select to get common fields, which should work across all database schemas
       const results = await db.select({
         id: contracts.id,
-        contractNumber: contracts.contractNumber,
+        createdAt: contracts.createdAt,
         merchantId: contracts.merchantId,
         customerId: contracts.customerId,
+        contractNumber: contracts.contractNumber,
+        status: contracts.status,
         amount: contracts.amount,
         downPayment: contracts.downPayment,
         financedAmount: contracts.financedAmount,
-        termMonths: contracts.termMonths,
         interestRate: contracts.interestRate,
+        termMonths: contracts.termMonths,
         monthlyPayment: contracts.monthlyPayment,
-        status: contracts.status,
         currentStep: contracts.currentStep,
-        createdAt: contracts.createdAt,
-        completedAt: contracts.completedAt,
         phoneNumber: contracts.phoneNumber,
-        // Include other fields but don't use salesRepId (which might not exist)
-        purchasedByShifi: contracts.purchasedByShifi,
-        tokenizationStatus: contracts.tokenizationStatus,
-        tokenId: contracts.tokenId,
-        tokenizationDate: contracts.tokenizationDate,
-        smartContractAddress: contracts.smartContractAddress,
-        // Safe to include but null if missing in schema
-        creditTier: contracts.creditTier,
-        tokenizationError: contracts.tokenizationError
+        archived: contracts.archived,
+        completedAt: contracts.completedAt
+        // Omitting fields that might not exist in all environments
       })
       .from(contracts)
       .where(
-        and(
-          eq(contracts.merchantId, merchantId),
-          eq(contracts.status, "active") // Only get active contracts
-        )
-      );
+        eq(contracts.merchantId, merchantId)
+      )
+      .orderBy(desc(contracts.createdAt));
       
-      // Add default value for archived field that might not exist in database yet
-      return results.map(contract => ({
+      // For each contract, add the missing fields with default values
+      const contractsWithDefaults = results.map(contract => ({
         ...contract,
-        archived: false, // Default to false if field doesn't exist yet
+        // Add default values for fields that might not exist in the database
+        purchasedByShifi: false,
+        tokenizationStatus: 'pending',
+        tokenId: null,
+        smartContractAddress: null,
+        tokenizationError: null,
         archivedAt: null,
-        archivedReason: null
+        archivedReason: null,
+        blockchainTransactionHash: null,
+        blockNumber: null,
+        tokenizationDate: null,
+        tokenMetadata: null,
+        salesRepId: null
       }));
+      
+      return contractsWithDefaults;
     } catch (error) {
       console.error(`Error getting contracts for merchant ID ${merchantId}:`, error);
       return [];
