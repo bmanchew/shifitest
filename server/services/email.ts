@@ -3,7 +3,16 @@ import { randomUUID } from 'crypto';
 import { logger } from './logger';
 
 // Initialize SendGrid with the API key from environment variables
-sgMail.setApiKey(process.env.SENDGRID_API_KEY as string);
+try {
+  if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY.startsWith('SG.')) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    console.log('SendGrid API initialized successfully');
+  } else {
+    console.log('SendGrid API key not set or invalid (should start with "SG."). Email sending will be disabled.');
+  }
+} catch (error) {
+  console.error('Error initializing SendGrid:', error);
+}
 
 // Email templates types
 export enum EmailTemplateType {
@@ -37,6 +46,12 @@ export class EmailService {
    */
   async sendEmail(emailData: EmailData): Promise<boolean> {
     const requestId = randomUUID().substring(0, 8);
+
+    // Skip sending if SendGrid is not properly initialized
+    if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_API_KEY.startsWith('SG.')) {
+      console.log(`Email sending skipped (SendGrid not configured) - would have sent to: ${emailData.to}, subject: ${emailData.subject}`);
+      return false;
+    }
 
     try {
       // Ensure we have a from email address
