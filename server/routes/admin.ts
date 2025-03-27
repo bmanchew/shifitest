@@ -1,5 +1,5 @@
 import express, { Request, Response, Router } from "express";
-import { authenticateAdmin } from "../middleware/auth";
+import { authenticateToken, isAdmin } from "../middleware/auth";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
 import crypto from 'crypto';
@@ -8,7 +8,8 @@ import emailService from '../services/email';
 const adminRouter = Router();
 
 // Apply admin authentication middleware to all admin routes
-adminRouter.use(authenticateAdmin);
+adminRouter.use(authenticateToken);
+adminRouter.use(isAdmin);
 
 // Get dashboard statistics
 adminRouter.get("/dashboard-stats", async (req: Request, res: Response) => {

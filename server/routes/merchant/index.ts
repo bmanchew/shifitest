@@ -1,18 +1,15 @@
-import express from "express";
-import { authenticateMerchant } from "../../middleware/auth";
-import { getMerchantAnalytics } from "./analytics";
+import { Router } from 'express';
+import { getMerchantAnalytics, getContractSummary, getMerchantContracts } from './analytics';
+import { authenticateToken, canAccessMerchantData } from '../../middleware/auth';
 
-const router = express.Router();
+const router = Router();
 
-// Apply merchant authentication middleware to all routes
-router.use(authenticateMerchant);
-
-// Example route
-router.get("/dashboard", (req, res) => {
-  res.status(200).json({ message: "Merchant dashboard data" });
-});
+// Apply authentication to all merchant routes
+router.use(authenticateToken);
 
 // Analytics routes
-router.get("/:id/analytics", getMerchantAnalytics);
+router.get('/:id/analytics', canAccessMerchantData, getMerchantAnalytics);
+router.get('/:id/contract-summary', canAccessMerchantData, getContractSummary);
+router.get('/:id/contracts', canAccessMerchantData, getMerchantContracts);
 
 export default router;
