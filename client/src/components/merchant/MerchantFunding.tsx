@@ -63,11 +63,14 @@ interface FundingResponse {
   transfers: PlaidTransfer[];
 }
 
-export default function MerchantFunding() {
-  // For testing, use debug endpoint that doesn't require auth
-  // Change this back to "/api/merchant-funding/funding" for production use
+export default function MerchantFunding({ useDebugData = false }: { useDebugData?: boolean }) {
+  // Conditionally select the endpoint based on debug mode
+  const endpoint = useDebugData 
+    ? "/api/merchant-funding/funding/debug/data" 
+    : "/api/merchant-funding/funding";
+  
   const { data, isLoading, isError, error, refetch } = useQuery<FundingResponse>({
-    queryKey: ["/api/merchant-funding/funding/debug/data"],
+    queryKey: [endpoint],
     // The query function is automatically provided by the QueryClient configuration,
     // which includes the authorization header from localStorage
     retry: 1

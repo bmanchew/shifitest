@@ -84,6 +84,48 @@ router.get("/funding/debug/data", (req: Request, res: Response) => {
       createdAt: "2025-03-18T11:45:00",
       merchantId: 1,
       contractId: null
+    },
+    {
+      id: 4,
+      transferId: "tr_sample_905431",
+      accountId: "acc_sample_123",
+      amount: 180000,
+      status: "completed",
+      type: "credit",
+      networkType: "ach",
+      failureReason: null,
+      description: "February 2025 funding - Contract #DEF456",
+      createdAt: "2025-02-20T10:15:00",
+      merchantId: 1,
+      contractId: 125
+    },
+    {
+      id: 5,
+      transferId: "tr_sample_287634",
+      accountId: "acc_sample_123",
+      amount: 2500,
+      status: "cancelled",
+      type: "debit",
+      networkType: "ach",
+      failureReason: null,
+      description: "Service fee - cancelled",
+      createdAt: "2025-03-20T16:45:00",
+      merchantId: 1,
+      contractId: null
+    },
+    {
+      id: 6,
+      transferId: "tr_sample_716249",
+      accountId: "acc_sample_123",
+      amount: 300000,
+      status: "completed",
+      type: "credit",
+      networkType: "ach",
+      failureReason: null,
+      description: "January 2025 funding - Contract #GHI789",
+      createdAt: "2025-01-10T08:30:00",
+      merchantId: 1,
+      contractId: 126
     }
   ];
   
