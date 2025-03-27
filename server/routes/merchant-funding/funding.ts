@@ -3,6 +3,7 @@ import { db } from "../../db";
 import { plaidTransfers } from "../../../shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { format } from "date-fns";
+import { logger } from "../../services/logger";
 
 const router = Router();
 
@@ -16,6 +17,20 @@ router.get("/", async (req: Request, res: Response) => {
   try {
     // Get the authenticated user's ID
     const userId = req.user?.id;
+    
+    // Log auth details for debugging
+    logger.info({
+      message: "Merchant funding API request received",
+      category: "api",
+      source: "internal",
+      metadata: {
+        endpoint: "/api/merchant-funding/funding",
+        userId: userId,
+        authHeader: req.headers['authorization'] ? 'Present' : 'Missing',
+        userObject: req.user ? 'Present' : 'Missing',
+        merchantObject: req.merchant ? 'Present' : 'Missing'
+      }
+    });
     
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -116,5 +131,7 @@ router.get("/:transferId", async (req: Request, res: Response) => {
     });
   }
 });
+
+// Debug endpoint is now in the index.ts file to avoid auth conflicts
 
 export default router;

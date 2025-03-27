@@ -48,6 +48,17 @@ export default function Login() {
       if (!data.user) {
         throw new Error("Invalid response format - missing user data");
       }
+      
+      // Check if the token is returned in the response
+      if (!data.user.token) {
+        console.error("No token returned from the server!");
+        console.log("User data:", data.user);
+      } else {
+        console.log("Token received:", data.user.token.substring(0, 20) + "...");
+        
+        // Manually store the user data with token in localStorage for debugging
+        localStorage.setItem("shifi_user_debug", JSON.stringify(data.user));
+      }
 
       // Now call the auth context login method with the user data
       await login(email, password);

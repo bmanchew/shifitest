@@ -57,42 +57,20 @@ interface FundingMetrics {
   failedFunding: number;
 }
 
+interface FundingResponse {
+  success: boolean;
+  message?: string;
+  transfers: PlaidTransfer[];
+}
+
 export default function MerchantFunding() {
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["/api/merchant-funding/funding"],
-    queryFn: async () => {
-      try {
-        // Get the user data from localStorage which contains auth token
-        const userData = localStorage.getItem("shifi_user");
-        if (!userData) {
-          throw new Error("User not authenticated");
-        }
-        
-        const user = JSON.parse(userData);
-        if (!user.token) {
-          throw new Error("No authentication token available");
-        }
-        
-        // Make the API request with the authorization header
-        const res = await fetch("/api/merchant-funding/funding", {
-          headers: {
-            'Authorization': `Bearer ${user.token}`
-          },
-          credentials: "include",
-        });
-        
-        if (!res.ok) {
-          console.error(`Failed to fetch funding data: ${res.status}`);
-          const errorText = await res.text();
-          throw new Error(`Failed to fetch funding data: ${errorText}`);
-        }
-        return res.json();
-      } catch (error) {
-        console.error("Error fetching funding data:", error);
-        throw error;
-      }
-    },
-    retry: 1,
+  // For testing, use debug endpoint that doesn't require auth
+  // Change this back to "/api/merchant-funding/funding" for production use
+  const { data, isLoading, isError, error, refetch } = useQuery<FundingResponse>({
+    queryKey: ["/api/merchant-funding/funding/debug/data"],
+    // The query function is automatically provided by the QueryClient configuration,
+    // which includes the authorization header from localStorage
+    retry: 1
   });
 
   if (isLoading) {

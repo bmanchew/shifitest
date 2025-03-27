@@ -6,6 +6,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import jwt from "jsonwebtoken";
 import {
   insertUserSchema,
   insertMerchantSchema,
