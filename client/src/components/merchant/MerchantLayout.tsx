@@ -101,31 +101,32 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
   const Navigation = () => (
     <div className="space-y-1 px-3">
       {navItems.map((item) => (
-        <Link key={item.name} href={item.path}>
-          <a
-            className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground ${
-              location === item.path
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              {item.icon}
-              <span>{item.name}</span>
-            </div>
-            {item.badge !== undefined && (
-              <Badge variant="default" className="ml-auto">
-                {item.badge}
-              </Badge>
-            )}
-          </a>
+        <Link 
+          key={item.name} 
+          href={item.path}
+          className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground ${
+            location === item.path
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            {item.icon}
+            <span>{item.name}</span>
+          </div>
+          {item.badge !== undefined && (
+            <Badge variant="default" className="ml-auto">
+              {item.badge}
+            </Badge>
+          )}
         </Link>
       ))}
-      <Link href="/logout">
-        <a className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
-          <LogOut className="h-5 w-5" />
-          <span>Logout</span>
-        </a>
+      <Link 
+        href="/logout"
+        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        <LogOut className="h-5 w-5" />
+        <span>Logout</span>
       </Link>
     </div>
   );
@@ -153,11 +154,12 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
               </Sheet>
             )}
 
-            <Link href="/merchant/dashboard">
-              <a className="flex items-center space-x-2">
-                <img src="/logo3.png" alt="ShiFi Logo" className="h-8" />
-                <span className="font-bold text-xl">ShiFi</span>
-              </a>
+            <Link 
+              href="/merchant/dashboard"
+              className="flex items-center space-x-2"
+            >
+              <img src="/logo3.png" alt="ShiFi Logo" className="h-8" />
+              <span className="font-bold text-xl">ShiFi</span>
             </Link>
           </div>
 
