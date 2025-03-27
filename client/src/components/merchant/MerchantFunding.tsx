@@ -59,7 +59,7 @@ interface FundingMetrics {
 
 export default function MerchantFunding() {
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["/api/merchant/dashboard/funding"],
+    queryKey: ["/api/merchant-funding/funding"],
     retry: 1,
   });
 

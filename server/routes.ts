@@ -33,6 +33,8 @@ import contractsRouter from "./routes/contracts";
 import customersRouter from "./routes/customers";
 import underwritingRouter from "./routes/underwriting";
 import merchantRouter from "./routes/merchant";
+import merchantDashboardRouter from "./routes/merchant-dashboard";
+import merchantFundingRouter from "./routes/merchant-funding";
 import notificationRouter from "./routes/notification";
 import paymentRouter from "./routes/payments";
 import healthRouter from "./routes/health"; // Import health routes
@@ -4865,7 +4867,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   
   // Mount the merchant API router for authenticated merchant operations
   // This path is for the currently logged-in merchant to access their own dashboard
-  apiRouter.use("/merchant/dashboard", merchantRouter);
+  apiRouter.use("/merchant-funding", merchantFundingRouter);
   
   // Mount the notification router
   apiRouter.use("/notifications", notificationRouter);
