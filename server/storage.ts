@@ -89,8 +89,10 @@ export interface IStorage {
   // Plaid Transfer operations
   createPlaidTransfer(transfer: InsertPlaidTransfer): Promise<PlaidTransfer>;
   getPlaidTransferById(id: number): Promise<PlaidTransfer | undefined>;
+  getPlaidTransferByExternalId(transferId: string): Promise<PlaidTransfer | undefined>;
   getPlaidTransfersByContractId(contractId: number): Promise<PlaidTransfer[]>;
   getPlaidTransfersByMerchantId(merchantId: number): Promise<PlaidTransfer[]>;
+  getPlaidTransfers(params: { merchantId?: number; type?: string; status?: string }): Promise<PlaidTransfer[]>;
   updatePlaidTransferStatus(id: number, status: string): Promise<PlaidTransfer | undefined>;
 
   // Contract operations
@@ -1571,12 +1573,50 @@ export class DatabaseStorage implements IStorage {
     return transfer || undefined;
   }
 
+  async getPlaidTransferByExternalId(transferId: string): Promise<PlaidTransfer | undefined> {
+    const [transfer] = await db.select().from(plaidTransfers).where(eq(plaidTransfers.transferId, transferId));
+    return transfer || undefined;
+  }
+
   async getPlaidTransfersByContractId(contractId: number): Promise<PlaidTransfer[]> {
     return await db.select().from(plaidTransfers).where(eq(plaidTransfers.contractId, contractId));
   }
 
   async getPlaidTransfersByMerchantId(merchantId: number): Promise<PlaidTransfer[]> {
     return await db.select().from(plaidTransfers).where(eq(plaidTransfers.merchantId, merchantId));
+  }
+  
+  async getPlaidTransfers(params: { 
+    merchantId?: number; 
+    type?: string;
+    status?: string;
+  }): Promise<PlaidTransfer[]> {
+    let query = db.select().from(plaidTransfers);
+    
+    // Add filters based on parameters
+    const conditions: SQL[] = [];
+    
+    if (params.merchantId) {
+      conditions.push(eq(plaidTransfers.merchantId, params.merchantId));
+    }
+    
+    if (params.type) {
+      conditions.push(eq(plaidTransfers.type, params.type));
+    }
+    
+    if (params.status) {
+      conditions.push(eq(plaidTransfers.status, params.status));
+    }
+    
+    // Apply all conditions if there are any
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    // Sort by creation date (newest first)
+    query = query.orderBy(desc(plaidTransfers.createdAt));
+    
+    return await query;
   }
 
   async updatePlaidTransferStatus(id: number, status: string): Promise<PlaidTransfer | undefined> {

@@ -1,14 +1,18 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import StatCard from "@/components/admin/StatCard";
 import SendApplication from "@/components/merchant/SendApplication";
 import ContractTable from "@/components/merchant/ContractTable";
+import MerchantFunding from "@/components/merchant/MerchantFunding";
 import { useAuth } from "@/hooks/use-auth";
 import { Contract } from "@shared/schema";
-import { Users, FileText, DollarSign } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Users, FileText, DollarSign, BarChart3, BanknoteIcon } from "lucide-react";
 
 export default function MerchantDashboard() {
   const { user } = useAuth();
   const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
+  const [activeTab, setActiveTab] = useState<string>("overview");
 
   const { data: contracts = [] } = useQuery<Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
@@ -57,7 +61,7 @@ export default function MerchantDashboard() {
           <h1 className="text-2xl font-bold">Welcome to ShiFi Dashboard</h1>
           <p className="mt-2 text-blue-100">
             Hello, {user?.name || "Merchant"}! Manage your financing contracts
-            and help your customers get the financing they need.
+            and track your funding through our platform.
           </p>
           <div className="mt-4 flex space-x-3">
             <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
@@ -109,14 +113,36 @@ export default function MerchantDashboard() {
         />
       </div>
 
-      {/* Create New Contract Section */}
+      {/* Main Content Tabs */}
       <div className="mt-8">
-        <SendApplication />
-      </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="mb-4">
+            <TabsTrigger value="overview">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="funding">
+              <BanknoteIcon className="h-4 w-4 mr-2" />
+              Funding
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="overview">
+            {/* Create New Contract Section */}
+            <div className="mb-8">
+              <SendApplication />
+            </div>
 
-      {/* Recent Contracts */}
-      <div className="mt-8">
-        <ContractTable contracts={contracts} />
+            {/* Recent Contracts */}
+            <div>
+              <ContractTable contracts={contracts} />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="funding">
+            <MerchantFunding />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
