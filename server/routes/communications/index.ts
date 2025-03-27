@@ -2,11 +2,15 @@ import { Router, Request, Response } from 'express';
 import { authenticateToken } from '../../middleware/auth';
 import { storage } from '../../storage';
 import { logger } from '../../services/logger';
+import merchantRoutes from './merchant';
 
 const router = Router();
 
 // Apply authentication to all routes
 router.use(authenticateToken);
+
+// Register merchant-specific routes
+router.use('/merchant', merchantRoutes);
 
 // ===== CONVERSATION ROUTES =====
 
