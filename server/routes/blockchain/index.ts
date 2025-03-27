@@ -197,11 +197,20 @@ router.post('/tokenize-pending', isAdmin, async (req: Request, res: Response) =>
       });
     }
     
+    // Define type for token results
+    interface TokenizationResultDetail {
+      contractId: number;
+      contractNumber: string;
+      success: boolean;
+      tokenId?: string;
+      error?: string;
+    }
+    
     const results = {
       processed: 0,
       successful: 0,
       failed: 0,
-      details: []
+      details: [] as TokenizationResultDetail[]
     };
     
     // Process each contract

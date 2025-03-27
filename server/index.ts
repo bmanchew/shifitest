@@ -127,11 +127,11 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     // Just log the error and continue - don't block requests if auth fails
     logger.warn({
       message: `Auth middleware error: ${error instanceof Error ? error.message : String(error)}`,
-      category: "auth",
+      category: "security",
       source: "internal",
       metadata: {
         path: req.path,
-        error: error instanceof Error ? error.stack : String(error)
+        errorStack: error instanceof Error ? error.stack : String(error)
       }
     });
     next();

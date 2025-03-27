@@ -24,6 +24,7 @@ import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
 import { nlpearlService, notificationService, merchantAnalyticsService } from './services';
+import { sortByDateDesc } from './utils/dateHelpers';
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
@@ -135,10 +136,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({
         message: `Login error: ${error instanceof Error ? error.message : String(error)}`,
-        category: "auth",
+        category: "security",
         source: "internal",
         metadata: {
-          error: error instanceof Error ? error.stack : String(error)
+          errorStack: error instanceof Error ? error.stack : String(error)
         }
       });
       
@@ -344,9 +345,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(plaidMerchant);
     } catch (error) {
       logger.error({
-        message: "Error getting merchant Plaid settings",
-        error,
-        metadata: { merchantId: req.params.id }
+        message: `Error getting merchant Plaid settings: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: { 
+          merchantId: req.params.id,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined 
+        }
       });
       res.status(500).json({ 
         success: false, 
@@ -381,8 +387,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update existing record
         updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
           clientId,
-          defaultFundingAccount,
-          updatedAt: new Date()
+          defaultFundingAccount
         });
 
         logger.info({
@@ -420,11 +425,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       logger.error({
-        message: "Error updating merchant Plaid settings",
-        error,
+        message: `Error updating merchant Plaid settings: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
         metadata: { 
           merchantId: req.params.id,
-          requestBody: req.body 
+          requestBody: req.body,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined
         }
       });
       res.status(500).json({ 
@@ -478,8 +486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Update the merchant's status in our database
       const updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
-        onboardingStatus: originatorStatus.status as any,
-        updatedAt: new Date()
+        onboardingStatus: originatorStatus.status as any
       });
 
       logger.info({
@@ -524,15 +531,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Create log for merchant archive
-      await storage.createLog({
-        level: "info",
-        message: `Merchant archived: ${updatedMerchant.name}`,
-        metadata: JSON.stringify({
-          id: updatedMerchant.id
-        }),
-      });
+      if (updatedMerchant) {
+        await storage.createLog({
+          level: "info",
+          message: `Merchant archived: ${updatedMerchant.name}`,
+          metadata: JSON.stringify({
+            id: updatedMerchant.id
+          }),
+        });
+      }
 
-      res.json(updatedMerchant);
+      res.json({
+        success: true,
+        message: "Merchant archived successfully",
+        merchant: updatedMerchant
+      });
     } catch (error) {
       console.error("Archive merchant error:", error);
       res.status(500).json({ message: "Internal server error" });

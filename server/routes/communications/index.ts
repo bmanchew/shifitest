@@ -149,13 +149,14 @@ router.get("/support-tickets", async (req: Request, res: Response) => {
       });
     }
     
-    // Get tickets with filter by conversation type = 'support'
+    // Get all conversations
     let tickets = await storage.getAllConversations(parsedLimit, parsedOffset);
-    tickets = tickets.filter(ticket => ticket.type === 'support');
+    // Filter for support tickets by category
+    tickets = tickets.filter(ticket => ticket.category === 'support');
     
     // Additional filters
     if (parsedUserId) {
-      tickets = tickets.filter(ticket => ticket.userId === parsedUserId);
+      tickets = tickets.filter(ticket => ticket.createdBy === parsedUserId);
     }
     
     if (status) {
