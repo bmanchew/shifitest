@@ -1,26 +1,23 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { 
+import { useQuery } from "@tanstack/react-query";
+import {
   LayoutDashboard,
-  FileText, 
-  Settings, 
-  ChevronLeft, 
-  ChevronRight, 
-  Menu, 
-  X,
+  FileText,
+  CreditCard,
+  BarChart3,
+  Settings,
+  MessageSquare,
+  TicketCheck,
+  ChevronRight,
   LogOut,
-  BarChartBig,
-  MessageCircle
+  Menu,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import { useQuery } from "@tanstack/react-query";
-import { 
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 interface MerchantLayoutProps {
   children: React.ReactNode;
@@ -28,325 +25,163 @@ interface MerchantLayoutProps {
 
 export default function MerchantLayout({ children }: MerchantLayoutProps) {
   const [location] = useLocation();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
+  // Check if we are on mobile screen size
   useEffect(() => {
-    setMounted(true);
-    
-    // Check if the sidebar state is stored in localStorage
-    const storedCollapsed = localStorage.getItem("merchantSidebarCollapsed");
-    if (storedCollapsed !== null) {
-      setIsCollapsed(storedCollapsed === "true");
-    }
-    
-    // Close mobile menu when location changes
-    setIsMobileMenuOpen(false);
-  }, [location]);
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkIfMobile();
+    window.addEventListener("resize", checkIfMobile);
+    return () => window.removeEventListener("resize", checkIfMobile);
+  }, []);
 
-  const toggleSidebar = () => {
-    const newState = !isCollapsed;
-    setIsCollapsed(newState);
-    localStorage.setItem("merchantSidebarCollapsed", String(newState));
-  };
-
-  // Query to get user profile data
-  const { data: userData, isLoading: isLoadingUser } = useQuery({
-    queryKey: ["/api/user/profile"],
+  // Query to get unread messages count
+  const { data: unreadMessagesData } = useQuery({
+    queryKey: ["/api/communications/merchant/unread-count"],
     queryFn: async () => {
-      const response = await fetch("/api/user/profile");
-      if (!response.ok) {
-        throw new Error("Failed to load user profile");
+      try {
+        const response = await fetch("/api/communications/merchant/unread-count");
+        if (!response.ok) {
+          return { count: 0 };
+        }
+        return response.json();
+      } catch (error) {
+        console.error("Error fetching unread messages count:", error);
+        return { count: 0 };
       }
-      return response.json();
     },
+    refetchInterval: 60000, // Refetch every minute
   });
 
-  // Also fetch merchant specific data
-  const { data: merchantData, isLoading: isLoadingMerchant } = useQuery({
-    queryKey: ["/api/merchants/current"],
-    queryFn: async () => {
-      const response = await fetch("/api/merchants/current");
-      if (!response.ok) {
-        throw new Error("Failed to load merchant data");
-      }
-      return response.json();
-    },
-  });
+  const unreadCount = unreadMessagesData?.count || 0;
 
-  // Get number of unread messages to display badge (if any)
-  const { data: messagesData } = useQuery({
-    queryKey: ["/api/conversations/merchant/unread-count"],
-    queryFn: async () => {
-      const response = await fetch("/api/conversations/merchant/unread-count");
-      if (!response.ok) {
-        throw new Error("Failed to load unread messages count");
-      }
-      return response.json();
-    },
-  });
-
-  const unreadMessagesCount = messagesData?.count || 0;
-  
-  const merchant = merchantData?.merchant;
-  const user = userData?.user;
-  
   // Navigation items
-  const navigationItems = [
+  const navItems = [
     {
       name: "Dashboard",
-      href: "/merchant/dashboard",
+      path: "/merchant/dashboard",
       icon: <LayoutDashboard className="h-5 w-5" />,
-      current: location === "/merchant/dashboard",
     },
     {
       name: "Contracts",
-      href: "/merchant/contracts",
+      path: "/merchant/contracts",
       icon: <FileText className="h-5 w-5" />,
-      current: location.startsWith("/merchant/contracts"),
+    },
+    {
+      name: "Payments",
+      path: "/merchant/payments",
+      icon: <CreditCard className="h-5 w-5" />,
     },
     {
       name: "Reports",
-      href: "/merchant/reports",
-      icon: <BarChartBig className="h-5 w-5" />,
-      current: location === "/merchant/reports",
+      path: "/merchant/reports",
+      icon: <BarChart3 className="h-5 w-5" />,
+    },
+    {
+      name: "Support Tickets",
+      path: "/merchant/support-tickets",
+      icon: <TicketCheck className="h-5 w-5" />,
     },
     {
       name: "Messages",
-      href: "/merchant/messages",
-      icon: <MessageCircle className="h-5 w-5" />,
-      current: location.startsWith("/merchant/messages"),
-      badge: unreadMessagesCount > 0 ? unreadMessagesCount : undefined,
+      path: "/merchant/messages",
+      icon: <MessageSquare className="h-5 w-5" />,
+      badge: unreadCount > 0 ? unreadCount : undefined,
     },
     {
       name: "Settings",
-      href: "/merchant/settings",
+      path: "/merchant/settings",
       icon: <Settings className="h-5 w-5" />,
-      current: location === "/merchant/settings",
     },
   ];
 
-  // Function to handle logout
-  const handleLogout = async () => {
-    try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-      });
-      
-      if (response.ok) {
-        window.location.href = "/login";
-      }
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
-  };
-
-  if (!mounted) {
-    return null;
-  }
+  // Create Mobile or Desktop Navigation
+  const Navigation = () => (
+    <div className="space-y-1 px-3">
+      {navItems.map((item) => (
+        <Link key={item.name} href={item.path}>
+          <a
+            className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground ${
+              location === item.path
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              {item.icon}
+              <span>{item.name}</span>
+            </div>
+            {item.badge !== undefined && (
+              <Badge variant="default" className="ml-auto">
+                {item.badge}
+              </Badge>
+            )}
+          </a>
+        </Link>
+      ))}
+      <Link href="/logout">
+        <a className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+          <LogOut className="h-5 w-5" />
+          <span>Logout</span>
+        </a>
+      </Link>
+    </div>
+  );
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Desktop Sidebar */}
-      <div
-        className={`hidden md:flex h-full flex-col border-r bg-white transition-all duration-300 ${
-          isCollapsed ? "w-16" : "w-64"
-        }`}
-      >
-        <div className="flex h-14 items-center border-b px-4">
-          <Link href="/merchant/dashboard" className="flex items-center space-x-2">
-            {!isCollapsed && (
-              <img src="/logo3.png" alt="Logo" className="h-6" />
-            )}
-            {isCollapsed && (
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  SF
-                </AvatarFallback>
-              </Avatar>
-            )}
-          </Link>
-          <div className="ml-auto">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="h-8 w-8"
-            >
-              {isCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-auto py-2">
-          <nav className="grid gap-1 px-2">
-            {navigationItems.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center rounded-md px-2 py-2 text-sm font-medium ${
-                  item.current
-                    ? "bg-gray-100 text-gray-900"
-                    : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                } ${isCollapsed ? "justify-center" : "justify-start"}`}
-              >
-                <div className="relative">
-                  {item.icon}
-                  {item.badge && (
-                    <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
-                      {item.badge > 99 ? "99+" : item.badge}
-                    </div>
-                  )}
-                </div>
-                {!isCollapsed && <span className="ml-3">{item.name}</span>}
-              </Link>
-            ))}
-          </nav>
-        </div>
-
-        <div className="mt-auto border-t p-2">
-          <div
-            className={`flex items-center ${
-              isCollapsed ? "justify-center" : "justify-between"
-            } py-2`}
-          >
-            {!isCollapsed && (
-              <div className="flex items-center space-x-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>
-                    {user?.firstName?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="text-sm font-medium">
-                    {user?.firstName
-                      ? `${user.firstName} ${user.lastName || ""}`
-                      : merchant?.businessName || "Merchant"}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate max-w-[160px]">
-                    {user?.email || ""}
-                  </p>
-                </div>
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size={isCollapsed ? "icon" : "sm"}
-              onClick={handleLogout}
-              className={isCollapsed ? "h-8 w-8" : ""}
-            >
-              {isCollapsed ? (
-                <LogOut className="h-4 w-4" />
-              ) : (
-                <>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Header & Menu */}
-      <div className="fixed inset-x-0 top-0 z-50 h-14 border-b bg-white md:hidden">
-        <div className="flex h-full items-center justify-between px-4">
-          <Link href="/merchant/dashboard" className="flex items-center space-x-2">
-            <img src="/logo3.png" alt="Logo" className="h-6" />
-          </Link>
-          
-          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <div className="flex h-14 items-center border-b px-4">
-                <Link href="/merchant/dashboard" className="flex items-center space-x-2">
-                  <img src="/logo3.png" alt="Logo" className="h-6" />
-                </Link>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-auto h-8 w-8"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <div className="py-2">
-                <nav className="grid gap-1 px-2">
-                  {navigationItems.map((item) => (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className={`flex items-center rounded-md px-2 py-2 text-sm font-medium ${
-                        item.current
-                          ? "bg-gray-100 text-gray-900"
-                          : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                      }`}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <div className="relative">
-                        {item.icon}
-                        {item.badge && (
-                          <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
-                            {item.badge > 99 ? "99+" : item.badge}
-                          </div>
-                        )}
-                      </div>
-                      <span className="ml-3">{item.name}</span>
-                    </Link>
-                  ))}
-                </nav>
-              </div>
-              
-              <div className="mt-auto border-t p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>
-                        {user?.firstName?.charAt(0) || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-medium">
-                        {user?.firstName
-                          ? `${user.firstName} ${user.lastName || ""}`
-                          : merchant?.businessName || "Merchant"}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate max-w-[160px]">
-                        {user?.email || ""}
-                      </p>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="bg-card shadow-sm border-b sticky top-0 z-30">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isMobile && (
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-64 p-0 pt-10">
+                  <div className="flex flex-col h-full">
+                    <div className="flex-1 overflow-auto py-4">
+                      <Navigation />
                     </div>
                   </div>
-                </div>
-                <Separator className="my-4" />
-                <Button 
-                  className="w-full" 
-                  variant="outline"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </Button>
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
-      </div>
+                </SheetContent>
+              </Sheet>
+            )}
 
-      {/* Main Content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <main className="flex-1 overflow-auto pt-14 md:pt-0">
-          {children}
+            <Link href="/merchant/dashboard">
+              <a className="flex items-center space-x-2">
+                <img src="/logo3.png" alt="ShiFi Logo" className="h-8" />
+                <span className="font-bold text-xl">ShiFi</span>
+              </a>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium">Merchant Portal</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex">
+        {/* Desktop sidebar */}
+        {!isMobile && (
+          <aside className="w-64 h-[calc(100vh-4rem)] sticky top-16 border-r shadow-sm overflow-y-auto">
+            <div className="p-6">
+              <Navigation />
+            </div>
+          </aside>
+        )}
+
+        {/* Main content */}
+        <main className="flex-1">
+          <div className="min-h-[calc(100vh-4rem)]">
+            {children}
+          </div>
         </main>
       </div>
     </div>
