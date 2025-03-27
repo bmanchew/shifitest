@@ -4860,11 +4860,12 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Mount the customers router
   apiRouter.use("/customers", customersRouter);
 
-  // Mount the merchant router
+  // Mount the merchant router for multi-merchant operations (admin view)
   apiRouter.use("/merchants", merchantRouter);
   
-  // Mount the merchant API router for single merchant operations
-  apiRouter.use("/merchant", merchantRouter);
+  // Mount the merchant API router for authenticated merchant operations
+  // This path is for the currently logged-in merchant to access their own dashboard
+  apiRouter.use("/merchant/dashboard", merchantRouter);
   
   // Mount the notification router
   apiRouter.use("/notifications", notificationRouter);
