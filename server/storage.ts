@@ -656,8 +656,45 @@ export class DatabaseStorage implements IStorage {
 
   // Contract methods
   async getContract(id: number): Promise<Contract | undefined> {
-    const [contract] = await db.select().from(contracts).where(eq(contracts.id, id));
-    return contract || undefined;
+    try {
+      // Use specific column selection instead of * to avoid errors with missing columns
+      const [contract] = await db.select({
+        id: contracts.id,
+        createdAt: contracts.createdAt,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        contractNumber: contracts.contractNumber,
+        status: contracts.status,
+        amount: contracts.amount,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        interestRate: contracts.interestRate,
+        termMonths: contracts.termMonths,
+        monthlyPayment: contracts.monthlyPayment,
+        currentStep: contracts.currentStep,
+        lastUpdateSentAt: contracts.lastUpdateSentAt,
+        lastPaymentAt: contracts.lastPaymentAt,
+        loanStartDate: contracts.loanStartDate,
+        loanEndDate: contracts.loanEndDate,
+        phoneNumber: contracts.phoneNumber,
+        archived: contracts.archived,
+        interestAmount: contracts.interestAmount,
+        tokenizationStatus: contracts.tokenizationStatus,
+        tokenId: contracts.tokenId,
+        tokenizationDate: contracts.tokenizationDate,
+        purchasedByShifi: contracts.purchasedByShifi,
+        smartContractAddress: contracts.smartContractAddress,
+        creditTier: contracts.creditTier,
+        tokenizationError: contracts.tokenizationError,
+      })
+      .from(contracts)
+      .where(eq(contracts.id, id));
+
+      return contract || undefined;
+    } catch (error) {
+      console.error("Error fetching contract:", error);
+      return undefined;
+    }
   }
 
   async getContractByNumber(contractNumber: string): Promise<Contract | undefined> {
@@ -670,53 +707,126 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
-    // Get basic contract fields without the archived field that might not exist yet
-    // And only return active contracts
-    const results = await db.select({
-      id: contracts.id,
-      contractNumber: contracts.contractNumber,
-      merchantId: contracts.merchantId,
-      customerId: contracts.customerId,
-      amount: contracts.amount,
-      downPayment: contracts.downPayment,
-      financedAmount: contracts.financedAmount,
-      termMonths: contracts.termMonths,
-      interestRate: contracts.interestRate,
-      monthlyPayment: contracts.monthlyPayment,
-      status: contracts.status,
-      currentStep: contracts.currentStep,
-      createdAt: contracts.createdAt,
-      completedAt: contracts.completedAt,
-      phoneNumber: contracts.phoneNumber,
-      // Include other fields but not archived until migration runs
-      purchasedByShifi: contracts.purchasedByShifi
-    })
-    .from(contracts)
-    .where(
-      and(
-        eq(contracts.merchantId, merchantId),
-        eq(contracts.status, "active") // Only get active contracts
-      )
-    );
-    
-    // Add default value for archived field that might not exist in database yet
-    return results.map(contract => ({
-      ...contract,
-      archived: false, // Default to false if field doesn't exist yet
-      archivedAt: null,
-      archivedReason: null
-    }));
+    try {
+      // Get basic contract fields without columns that might not exist yet
+      // And only return active contracts
+      const results = await db.select({
+        id: contracts.id,
+        contractNumber: contracts.contractNumber,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        amount: contracts.amount,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        termMonths: contracts.termMonths,
+        interestRate: contracts.interestRate,
+        monthlyPayment: contracts.monthlyPayment,
+        status: contracts.status,
+        currentStep: contracts.currentStep,
+        createdAt: contracts.createdAt,
+        completedAt: contracts.completedAt,
+        phoneNumber: contracts.phoneNumber,
+        // Include other fields but don't use salesRepId (which might not exist)
+        purchasedByShifi: contracts.purchasedByShifi,
+        tokenizationStatus: contracts.tokenizationStatus,
+        tokenId: contracts.tokenId,
+        tokenizationDate: contracts.tokenizationDate,
+        smartContractAddress: contracts.smartContractAddress,
+        // Safe to include but null if missing in schema
+        creditTier: contracts.creditTier,
+        tokenizationError: contracts.tokenizationError
+      })
+      .from(contracts)
+      .where(
+        and(
+          eq(contracts.merchantId, merchantId),
+          eq(contracts.status, "active") // Only get active contracts
+        )
+      );
+      
+      // Add default value for archived field that might not exist in database yet
+      return results.map(contract => ({
+        ...contract,
+        archived: false, // Default to false if field doesn't exist yet
+        archivedAt: null,
+        archivedReason: null
+      }));
+    } catch (error) {
+      console.error(`Error getting contracts for merchant ID ${merchantId}:`, error);
+      return [];
+    }
   }
 
   async getContractsByCustomerId(customerId: number): Promise<Contract[]> {
-    return await db.select().from(contracts).where(eq(contracts.customerId, customerId));
+    try {
+      // Use specific column selection to avoid issues with missing columns
+      const results = await db.select({
+        id: contracts.id,
+        contractNumber: contracts.contractNumber,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        amount: contracts.amount,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        termMonths: contracts.termMonths,
+        interestRate: contracts.interestRate,
+        monthlyPayment: contracts.monthlyPayment,
+        status: contracts.status,
+        currentStep: contracts.currentStep,
+        createdAt: contracts.createdAt,
+        completedAt: contracts.completedAt,
+        phoneNumber: contracts.phoneNumber,
+        archived: contracts.archived,
+        purchasedByShifi: contracts.purchasedByShifi,
+        tokenizationStatus: contracts.tokenizationStatus,
+        tokenId: contracts.tokenId
+      })
+      .from(contracts)
+      .where(eq(contracts.customerId, customerId));
+      
+      return results;
+    } catch (error) {
+      console.error(`Error getting contracts for customer ID ${customerId}:`, error);
+      return [];
+    }
   }
 
   async getContractsByPhoneNumber(phoneNumber: string): Promise<Contract[]> {
-    // Normalize the phone number by removing non-digits
-    const normalizedPhone = phoneNumber.replace(/\D/g, '');
+    try {
+      // Normalize the phone number by removing non-digits
+      const normalizedPhone = phoneNumber.replace(/\D/g, '');
 
-    return db.select().from(contracts).where(eq(contracts.phoneNumber, normalizedPhone)).orderBy(desc(contracts.createdAt));
+      // Use specific column selection to avoid issues with missing columns
+      const results = await db.select({
+        id: contracts.id,
+        contractNumber: contracts.contractNumber,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        amount: contracts.amount,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        termMonths: contracts.termMonths,
+        interestRate: contracts.interestRate,
+        monthlyPayment: contracts.monthlyPayment,
+        status: contracts.status,
+        currentStep: contracts.currentStep,
+        createdAt: contracts.createdAt,
+        completedAt: contracts.completedAt,
+        phoneNumber: contracts.phoneNumber,
+        archived: contracts.archived,
+        purchasedByShifi: contracts.purchasedByShifi,
+        tokenizationStatus: contracts.tokenizationStatus,
+        tokenId: contracts.tokenId
+      })
+      .from(contracts)
+      .where(eq(contracts.phoneNumber, normalizedPhone))
+      .orderBy(desc(contracts.createdAt));
+      
+      return results;
+    } catch (error) {
+      console.error(`Error getting contracts for phone number ${phoneNumber}:`, error);
+      return [];
+    }
   }
 
   async createContract(contract: InsertContract): Promise<Contract> {
@@ -924,13 +1034,37 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(underwritingData).orderBy(desc(underwritingData.createdAt));
   }
 
-  async getContractsByStatus(status: string) {
-    return await db.select().from(contracts).where(eq(contracts.status, status));
+  async getContractsByStatus(status: string): Promise<Contract[]> {
+    try {
+      const results = await db.select({
+        id: contracts.id,
+        contractNumber: contracts.contractNumber,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        amount: contracts.amount,
+        status: contracts.status,
+        currentStep: contracts.currentStep,
+        createdAt: contracts.createdAt,
+        completedAt: contracts.completedAt,
+        phoneNumber: contracts.phoneNumber,
+        purchasedByShifi: contracts.purchasedByShifi,
+        tokenizationStatus: contracts.tokenizationStatus,
+        archived: contracts.archived,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        termMonths: contracts.termMonths
+      })
+      .from(contracts)
+      .where(eq(contracts.status, status as any));
+      
+      return results;
+    } catch (error) {
+      console.error(`Error getting contracts by status ${status}:`, error);
+      return [];
+    }
   }
   
-  async getContractsByTokenizationStatus(status: string): Promise<Contract[]> {
-    return await db.select().from(contracts).where(eq(contracts.tokenizationStatus, status));
-  }
+
 
   async storeAssetReportToken(contractId: number, assetReportToken: string, assetReportId: string, options: any = {}) {
     const { userId, plaidItemId, daysRequested = 60, expiresAt } = options;
@@ -2081,7 +2215,42 @@ export class DatabaseStorage implements IStorage {
 
   async getContractsBySalesRepId(salesRepId: number): Promise<Contract[]> {
     try {
-      return await db.select().from(contracts).where(eq(contracts.salesRepId, salesRepId));
+      // Use specific column selection to include all fields required by the Contract type
+      const results = await db.select({
+        id: contracts.id,
+        contractNumber: contracts.contractNumber,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        amount: contracts.amount,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        termMonths: contracts.termMonths,
+        interestRate: contracts.interestRate,
+        monthlyPayment: contracts.monthlyPayment,
+        status: contracts.status,
+        currentStep: contracts.currentStep,
+        createdAt: contracts.createdAt,
+        completedAt: contracts.completedAt,
+        phoneNumber: contracts.phoneNumber,
+        archived: contracts.archived,
+        purchasedByShifi: contracts.purchasedByShifi,
+        tokenizationStatus: contracts.tokenizationStatus,
+        tokenId: contracts.tokenId,
+        tokenizationDate: contracts.tokenizationDate,
+        smartContractAddress: contracts.smartContractAddress,
+        tokenizationError: contracts.tokenizationError,
+        // Include additional fields required by the Contract type
+        salesRepId: contracts.salesRepId,
+        archivedAt: contracts.archivedAt,
+        archivedReason: contracts.archivedReason,
+        blockchainTransactionHash: contracts.blockchainTransactionHash,
+        blockNumber: contracts.blockNumber,
+        tokenMetadata: contracts.tokenMetadata
+      })
+      .from(contracts)
+      .where(eq(contracts.salesRepId, salesRepId));
+      
+      return results;
     } catch (error) {
       console.error(`Error getting contracts for sales rep ID ${salesRepId}:`, error);
       return [];
@@ -2090,10 +2259,42 @@ export class DatabaseStorage implements IStorage {
 
   async getContractsByTokenizationStatus(status: string): Promise<Contract[]> {
     try {
-      // Use simple eq function instead of sql template literal
-      return await db.select().from(contracts).where(
-        eq(contracts.tokenizationStatus, status as any)
-      );
+      // Use specific column selection to avoid issues with missing columns
+      const results = await db.select({
+        id: contracts.id,
+        contractNumber: contracts.contractNumber,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        amount: contracts.amount,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        termMonths: contracts.termMonths,
+        interestRate: contracts.interestRate,
+        monthlyPayment: contracts.monthlyPayment,
+        status: contracts.status,
+        currentStep: contracts.currentStep,
+        createdAt: contracts.createdAt,
+        completedAt: contracts.completedAt,
+        phoneNumber: contracts.phoneNumber,
+        archived: contracts.archived,
+        purchasedByShifi: contracts.purchasedByShifi,
+        tokenizationStatus: contracts.tokenizationStatus,
+        tokenId: contracts.tokenId,
+        tokenizationDate: contracts.tokenizationDate,
+        smartContractAddress: contracts.smartContractAddress,
+        tokenizationError: contracts.tokenizationError,
+        // Include additional fields that are required by the contract type definition
+        salesRepId: contracts.salesRepId,
+        archivedAt: contracts.archivedAt,
+        archivedReason: contracts.archivedReason,
+        blockchainTransactionHash: contracts.blockchainTransactionHash,
+        blockNumber: contracts.blockNumber,
+        tokenMetadata: contracts.tokenMetadata
+      })
+      .from(contracts)
+      .where(eq(contracts.tokenizationStatus, status as any));
+      
+      return results;
     } catch (error) {
       console.error(`Error getting contracts with tokenization status ${status}:`, error);
       return [];
