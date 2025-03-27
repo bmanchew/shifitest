@@ -12,6 +12,7 @@ import { Contract } from "@shared/schema";
 import UnderwritingViewFactory from "@/components/underwriting/UnderwritingViewFactory";
 import { ApplicationProgress } from "@/components/contract/ApplicationProgress";
 import PaymentSchedule from "@/components/contract/PaymentSchedule";
+import { CreateTicketDialog } from "@/components/contract/CreateTicketDialog";
 
 export default function ContractDetails() {
   const { contractId } = useParams();
@@ -112,11 +113,6 @@ export default function ContractDetails() {
     );
   }
 
-  // Function to navigate to create support ticket with this contract ID
-  const handleCreateSupportTicket = () => {
-    window.location.href = `/merchant/support-tickets/create?contractId=${contract.id}`;
-  };
-
   return (
     <MerchantLayout>
       <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
@@ -128,9 +124,7 @@ export default function ContractDetails() {
             </p>
           </div>
           <div className="flex space-x-3">
-            <Button variant="outline" onClick={handleCreateSupportTicket}>
-              Create Support Ticket
-            </Button>
+            <CreateTicketDialog contractId={contract.id} contractNumber={contract.contractNumber} />
             <Button variant="outline">Export</Button>
             <Button variant="outline">Send to Customer</Button>
           </div>
