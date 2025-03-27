@@ -1,14 +1,16 @@
-// Type augmentation for Express Request
-import express from 'express';
+import { Express } from 'express';
 
 declare global {
   namespace Express {
     interface Request {
-      csrfToken(): string;
       user?: {
         id: number;
-        role: string;
         email: string;
+        firstName: string | null;
+        lastName: string | null;
+        role: "admin" | "merchant" | "customer" | "sales_rep";
+        phone: string | null;
+        emailVerified?: boolean;
       };
     }
   }

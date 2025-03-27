@@ -4,391 +4,391 @@ import { storage } from '../storage';
 import { logger } from '../services/logger';
 
 /**
- * Middleware to authenticate user token
+ * Middleware to check if the user is authenticated
+ * @param req Express Request
+ * @param res Express Response
+ * @param next Express NextFunction
  */
-export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
+export const isAuthenticated = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Get the auth header
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    
-    if (!token) {
+    // Check if user is already attached to request (by JWT middleware)
+    if (!req.user) {
+      logger.warn({
+        message: 'Authentication required but no user found on request',
+        category: 'security',
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+        }
+      });
+      
       return res.status(401).json({
         success: false,
-        message: 'Access token is required'
+        message: 'Authentication required'
       });
     }
     
-    // Verify the token
-    jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'default_jwt_secret',
-      async (err: any, decoded: any) => {
-        if (err) {
-          logger.warn({
-            message: `Invalid or expired token: ${err.message}`,
-            category: 'security',
-            source: 'internal',
-            metadata: {
-              error: err.message,
-              requestPath: req.path
-            }
-          });
-          
-          return res.status(403).json({
-            success: false,
-            message: 'Invalid or expired token'
-          });
-        }
-        
-        // Check if user exists
-        const user = await storage.getUser(decoded.userId);
-        
-        if (!user) {
-          logger.warn({
-            message: `Token has valid userId but user not found: ${decoded.userId}`,
-            category: 'security',
-            source: 'internal',
-            metadata: {
-              userId: decoded.userId,
-              requestPath: req.path
-            }
-          });
-          
-          return res.status(403).json({
-            success: false,
-            message: 'User not found'
-          });
-        }
-        
-        // Store user info in request object
-        req.user = user;
-        next();
-      }
-    );
+    next();
   } catch (error) {
     logger.error({
       message: `Authentication error: ${error instanceof Error ? error.message : String(error)}`,
       category: 'security',
       source: 'internal',
       metadata: {
-        error: error instanceof Error ? error.stack : null,
-        requestPath: req.path
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
       }
     });
     
     res.status(500).json({
       success: false,
-      message: 'Authentication failed due to server error'
+      message: 'An error occurred during authentication'
     });
   }
 };
 
 /**
- * Middleware to check if user is an admin
+ * Middleware to check if the user is an admin
+ * @param req Express Request
+ * @param res Express Response
+ * @param next Express NextFunction
  */
-export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication required'
-    });
-  }
-  
-  if (req.user.role !== 'admin') {
-    logger.warn({
-      message: `Access denied: User ${req.user.id} attempted to access admin-only route`,
+export const isAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Check if user is already attached to request (by JWT middleware)
+    if (!req.user) {
+      logger.warn({
+        message: 'Admin authorization required but no user found on request',
+        category: 'security',
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+        }
+      });
+      
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    // Check if user is an admin
+    if (req.user.role !== 'admin') {
+      logger.warn({
+        message: `User ${req.user.email} (${req.user.id}) attempted to access admin resource with role ${req.user.role}`,
+        category: 'security',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+          userRole: req.user.role
+        }
+      });
+      
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+    
+    next();
+  } catch (error) {
+    logger.error({
+      message: `Admin authorization error: ${error instanceof Error ? error.message : String(error)}`,
       category: 'security',
+      userId: req.user?.id,
       source: 'internal',
       metadata: {
-        userId: req.user.id,
-        userRole: req.user.role,
-        requestPath: req.path
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
       }
     });
     
-    return res.status(403).json({
+    res.status(500).json({
       success: false,
-      message: 'Access denied: Admin privileges required'
+      message: 'An error occurred during authorization'
     });
   }
-  
-  next();
 };
 
 /**
- * Middleware to check if user is a merchant
+ * Middleware to check if the user is a merchant
+ * @param req Express Request
+ * @param res Express Response
+ * @param next Express NextFunction
  */
 export const isMerchant = async (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication required'
-    });
-  }
-  
-  if (req.user.role !== 'merchant') {
-    logger.warn({
-      message: `Access denied: User ${req.user.id} attempted to access merchant-only route`,
-      category: 'security',
-      source: 'internal',
-      metadata: {
-        userId: req.user.id,
-        userRole: req.user.role,
-        requestPath: req.path
-      }
-    });
-    
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied: Merchant privileges required'
-    });
-  }
-  
-  // Optionally verify that merchant record exists
   try {
-    const merchant = await storage.getMerchantByUserId(req.user.id);
-    
-    if (!merchant) {
+    // Check if user is already attached to request (by JWT middleware)
+    if (!req.user) {
       logger.warn({
-        message: `User ${req.user.id} has merchant role but no merchant record`,
+        message: 'Merchant authorization required but no user found on request',
         category: 'security',
         source: 'internal',
         metadata: {
-          userId: req.user.id,
-          requestPath: req.path
+          path: req.path,
+          method: req.method,
         }
       });
       
-      // Store empty merchant info
-      req.merchant = null;
-    } else {
-      // Store merchant info in request
-      req.merchant = merchant;
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    // Check if user is a merchant
+    if (req.user.role !== 'merchant') {
+      logger.warn({
+        message: `User ${req.user.email} (${req.user.id}) attempted to access merchant resource with role ${req.user.role}`,
+        category: 'security',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+          userRole: req.user.role
+        }
+      });
+      
+      return res.status(403).json({
+        success: false,
+        message: 'Merchant access required'
+      });
     }
     
     next();
   } catch (error) {
     logger.error({
-      message: `Error checking merchant status: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Merchant authorization error: ${error instanceof Error ? error.message : String(error)}`,
       category: 'security',
+      userId: req.user?.id,
       source: 'internal',
       metadata: {
-        userId: req.user.id,
-        error: error instanceof Error ? error.stack : null,
-        requestPath: req.path
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
       }
     });
     
     res.status(500).json({
       success: false,
-      message: 'Error verifying merchant status'
+      message: 'An error occurred during authorization'
     });
   }
 };
 
 /**
- * Middleware to check if user is a customer
+ * Middleware to check if the user is an admin or merchant
+ * @param req Express Request
+ * @param res Express Response
+ * @param next Express NextFunction
  */
-export const isCustomer = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication required'
-    });
-  }
-  
-  if (req.user.role !== 'customer') {
-    logger.warn({
-      message: `Access denied: User ${req.user.id} attempted to access customer-only route`,
+export const isAdminOrMerchant = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Check if user is already attached to request (by JWT middleware)
+    if (!req.user) {
+      logger.warn({
+        message: 'Admin/Merchant authorization required but no user found on request',
+        category: 'security',
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+        }
+      });
+      
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    // Check if user is an admin or merchant
+    if (req.user.role !== 'admin' && req.user.role !== 'merchant') {
+      logger.warn({
+        message: `User ${req.user.email} (${req.user.id}) attempted to access admin/merchant resource with role ${req.user.role}`,
+        category: 'security',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+          userRole: req.user.role
+        }
+      });
+      
+      return res.status(403).json({
+        success: false,
+        message: 'Admin or merchant access required'
+      });
+    }
+    
+    next();
+  } catch (error) {
+    logger.error({
+      message: `Admin/Merchant authorization error: ${error instanceof Error ? error.message : String(error)}`,
       category: 'security',
+      userId: req.user?.id,
       source: 'internal',
       metadata: {
-        userId: req.user.id,
-        userRole: req.user.role,
-        requestPath: req.path
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
       }
     });
     
-    return res.status(403).json({
+    res.status(500).json({
       success: false,
-      message: 'Access denied: Customer privileges required'
+      message: 'An error occurred during authorization'
     });
   }
-  
-  next();
 };
 
 /**
- * Middleware to check if user is a sales rep
+ * Middleware to check if the user is a customer
+ * @param req Express Request
+ * @param res Express Response
+ * @param next Express NextFunction
+ */
+export const isCustomer = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Check if user is already attached to request (by JWT middleware)
+    if (!req.user) {
+      logger.warn({
+        message: 'Customer authorization required but no user found on request',
+        category: 'security',
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+        }
+      });
+      
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    // Check if user is a customer
+    if (req.user.role !== 'customer') {
+      logger.warn({
+        message: `User ${req.user.email} (${req.user.id}) attempted to access customer resource with role ${req.user.role}`,
+        category: 'security',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+          userRole: req.user.role
+        }
+      });
+      
+      return res.status(403).json({
+        success: false,
+        message: 'Customer access required'
+      });
+    }
+    
+    next();
+  } catch (error) {
+    logger.error({
+      message: `Customer authorization error: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'security',
+      userId: req.user?.id,
+      source: 'internal',
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred during authorization'
+    });
+  }
+};
+
+/**
+ * Middleware to check if the user is a sales representative
+ * @param req Express Request
+ * @param res Express Response
+ * @param next Express NextFunction
  */
 export const isSalesRep = async (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false, 
-      message: 'Authentication required'
-    });
-  }
-  
-  if (req.user.role !== 'sales_rep') {
-    logger.warn({
-      message: `Access denied: User ${req.user.id} attempted to access sales-rep-only route`,
-      category: 'security',
-      source: 'internal',
-      metadata: {
-        userId: req.user.id,
-        userRole: req.user.role,
-        requestPath: req.path
-      }
-    });
-    
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied: Sales representative privileges required'
-    });
-  }
-  
-  // Optionally verify that salesRep record exists
   try {
-    const salesRep = await storage.getSalesRepByUserId(req.user.id);
-    
-    if (!salesRep) {
+    // Check if user is already attached to request (by JWT middleware)
+    if (!req.user) {
       logger.warn({
-        message: `User ${req.user.id} has sales_rep role but no sales rep record`,
+        message: 'Sales rep authorization required but no user found on request',
         category: 'security',
         source: 'internal',
         metadata: {
-          userId: req.user.id,
-          requestPath: req.path
+          path: req.path,
+          method: req.method,
         }
       });
       
-      // Store empty sales rep info
-      req.salesRep = null;
-    } else {
-      // Store sales rep info in request
-      req.salesRep = salesRep;
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    // Check if user is a sales representative
+    if (req.user.role !== 'sales_rep') {
+      logger.warn({
+        message: `User ${req.user.email} (${req.user.id}) attempted to access sales rep resource with role ${req.user.role}`,
+        category: 'security',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+          userRole: req.user.role
+        }
+      });
+      
+      return res.status(403).json({
+        success: false,
+        message: 'Sales representative access required'
+      });
     }
     
     next();
   } catch (error) {
     logger.error({
-      message: `Error checking sales rep status: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Sales rep authorization error: ${error instanceof Error ? error.message : String(error)}`,
       category: 'security',
+      userId: req.user?.id,
       source: 'internal',
       metadata: {
-        userId: req.user.id,
-        error: error instanceof Error ? error.stack : null,
-        requestPath: req.path
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
       }
     });
     
     res.status(500).json({
       success: false,
-      message: 'Error verifying sales rep status'
+      message: 'An error occurred during authorization'
     });
   }
 };
 
-/**
- * Middleware to check if a user can access merchant data
- * This is a more flexible middleware that allows:
- * 1. Admin users to access any merchant data
- * 2. Merchant users to access only their own merchant data
- */
-export const canAccessMerchantData = async (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication required'
-    });
-  }
-  
-  // Get the merchant ID from the request parameters
-  const merchantId = parseInt(req.params.id);
-  
-  if (isNaN(merchantId)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid merchant ID'
-    });
-  }
-  
-  // Check user role
-  if (req.user.role === 'admin') {
-    // Admins can access any merchant data
-    next();
-  } else if (req.user.role === 'merchant') {
-    // Load the merchant record for the user
-    const userMerchant = await storage.getMerchantByUserId(req.user.id);
-    
-    if (!userMerchant) {
-      logger.warn({
-        message: `User ${req.user.id} has merchant role but no merchant record`,
-        category: 'security',
-        source: 'internal',
-        metadata: {
-          userId: req.user.id,
-          requestPath: req.path
-        }
-      });
-      
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: No merchant record found for user'
-      });
-    }
-    
-    // Check if the user's merchant ID matches the requested merchant ID
-    if (userMerchant.id !== merchantId) {
-      logger.warn({
-        message: `Access denied: Merchant ${userMerchant.id} attempted to access data for merchant ${merchantId}`,
-        category: 'security',
-        source: 'internal',
-        metadata: {
-          userId: req.user.id,
-          userMerchantId: userMerchant.id,
-          requestedMerchantId: merchantId,
-          requestPath: req.path
-        }
-      });
-      
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: You can only access your own merchant data'
-      });
-    }
-    
-    // Store merchant info in request
-    req.merchant = userMerchant;
-    next();
-  } else {
-    // Other user types cannot access merchant data
-    logger.warn({
-      message: `Access denied: User ${req.user.id} with role ${req.user.role} attempted to access merchant data`,
-      category: 'security',
-      source: 'internal',
-      metadata: {
-        userId: req.user.id,
-        userRole: req.user.role,
-        requestPath: req.path
-      }
-    });
-    
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied: Insufficient privileges to access merchant data'
-    });
-  }
-};
-
-// Add TypeScript declarations for Express Request
-declare global {
-  namespace Express {
-    interface Request {
-      user?: any;
-      merchant?: any;
-      salesRep?: any;
-    }
-  }
-}
+// For backward compatibility with existing code
+export const authenticateToken = isAuthenticated;

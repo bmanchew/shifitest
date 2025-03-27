@@ -1,0 +1,613 @@
+import { Request, Response } from "express";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { storage } from "../storage";
+import { logger } from "../services/logger";
+import crypto from "crypto";
+
+/**
+ * Authentication controller
+ */
+export const authController = {
+  /**
+   * Login a user
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async login(req: Request, res: Response) {
+    try {
+      const { email, password } = req.body;
+      
+      // Validate request
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Email and password are required"
+        });
+      }
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      
+      // Check if user exists
+      if (!user) {
+        // Log failed login attempt
+        logger.warn({
+          message: `Failed login attempt for email: ${email} - user not found`,
+          category: "security",
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            userAgent: req.headers["user-agent"]
+          }
+        });
+        
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials"
+        });
+      }
+      
+      // Verify password
+      const isMatch = await bcrypt.compare(password, user.password);
+      
+      if (!isMatch) {
+        // Log failed login attempt
+        logger.warn({
+          message: `Failed login attempt for user: ${email} - invalid password`,
+          category: "security",
+          userId: user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            userAgent: req.headers["user-agent"]
+          }
+        });
+        
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials"
+        });
+      }
+      
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_SECRET || 'default_jwt_secret',
+        { expiresIn: '24h' }
+      );
+      
+      // Log successful login
+      logger.info({
+        message: `User logged in: ${email}`,
+        category: "security",
+        userId: user.id,
+        source: "internal",
+        metadata: {
+          ip: req.ip
+        }
+      });
+      
+      // Return token and user info
+      res.status(200).json({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Login error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          email: req.body.email
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred during login"
+      });
+    }
+  },
+  
+  /**
+   * Register a new user
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async register(req: Request, res: Response) {
+    try {
+      const { email, password, firstName, lastName, phone } = req.body;
+      
+      // Validate request
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Email and password are required"
+        });
+      }
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          message: "User with this email already exists"
+        });
+      }
+      
+      // Hash password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+      
+      // Create new user with customer role
+      const user = await storage.createUser({
+        email,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        role: "customer", // Default role for new registrations
+        phone,
+        createdAt: new Date()
+      });
+      
+      // Generate email verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      
+      // Store verification token
+      await storage.createEmailVerificationToken({
+        userId: user.id,
+        token: verificationToken,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+      });
+      
+      // In a production environment, this would send an actual email
+      // For now, we'll just log it
+      logger.info({
+        message: `User registered: ${email}. Verification token: ${verificationToken}`,
+        category: "user",
+        userId: user.id,
+        source: "internal",
+        metadata: {
+          ip: req.ip,
+          verificationToken // Would not log this in production
+        }
+      });
+      
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_SECRET || 'default_jwt_secret',
+        { expiresIn: '24h' }
+      );
+      
+      // Return success response
+      res.status(201).json({
+        success: true,
+        message: "User registered successfully",
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Registration error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          email: req.body.email
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred during registration"
+      });
+    }
+  },
+  
+  /**
+   * Verify a JWT token
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async verifyToken(req: Request, res: Response) {
+    try {
+      // User is already attached to request by isAuthenticated middleware
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid token"
+        });
+      }
+      
+      // Return user info
+      res.status(200).json({
+        success: true,
+        user: {
+          id: req.user.id,
+          email: req.user.email,
+          firstName: req.user.firstName,
+          lastName: req.user.lastName,
+          role: req.user.role
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Token verification error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        userId: req.user?.id,
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred during token verification"
+      });
+    }
+  },
+  
+  /**
+   * Log out a user
+   * Note: For JWT, this is mostly a client-side operation
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async logout(req: Request, res: Response) {
+    try {
+      // In a real implementation with token blacklisting, we would add the token to a blacklist here
+      
+      // Log logout
+      if (req.user) {
+        logger.info({
+          message: `User logged out: ${req.user.email}`,
+          category: "security",
+          userId: req.user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip
+          }
+        });
+      }
+      
+      res.status(200).json({
+        success: true,
+        message: "Logged out successfully"
+      });
+    } catch (error) {
+      logger.error({
+        message: `Logout error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        userId: req.user?.id,
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred during logout"
+      });
+    }
+  },
+  
+  /**
+   * Request a password reset
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async forgotPassword(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required"
+        });
+      }
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      
+      // If user not found, still return success to prevent email enumeration
+      if (!user) {
+        logger.info({
+          message: `Password reset requested for non-existent email: ${email}`,
+          category: "security",
+          source: "internal",
+          metadata: {
+            ip: req.ip
+          }
+        });
+        
+        return res.status(200).json({
+          success: true,
+          message: "If a user with that email exists, a password reset link has been sent"
+        });
+      }
+      
+      // Generate reset token
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      
+      // Store reset token
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        token: resetToken,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 1 * 60 * 60 * 1000) // 1 hour
+      });
+      
+      // In a production environment, this would send an actual email
+      // For now, we'll just log it
+      logger.info({
+        message: `Password reset requested for user: ${email}. Reset token: ${resetToken}`,
+        category: "security",
+        userId: user.id,
+        source: "internal",
+        metadata: {
+          ip: req.ip,
+          resetToken // Would not log this in production
+        }
+      });
+      
+      res.status(200).json({
+        success: true,
+        message: "If a user with that email exists, a password reset link has been sent"
+      });
+    } catch (error) {
+      logger.error({
+        message: `Forgot password error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          email: req.body.email
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while processing your request"
+      });
+    }
+  },
+  
+  /**
+   * Reset a password with a valid token
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async resetPassword(req: Request, res: Response) {
+    try {
+      const { token, newPassword } = req.body;
+      
+      if (!token || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Token and new password are required"
+        });
+      }
+      
+      // Verify token
+      const resetToken = await storage.verifyPasswordResetToken(token);
+      
+      if (!resetToken) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired token"
+        });
+      }
+      
+      // Hash new password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+      
+      // Update user password
+      await storage.updateUserPassword(resetToken.userId, hashedPassword);
+      
+      // Invalidate all reset tokens for this user
+      await storage.invalidatePasswordResetTokens(resetToken.userId);
+      
+      // Log password reset
+      logger.info({
+        message: `Password reset successfully for user ID: ${resetToken.userId}`,
+        category: "security",
+        userId: resetToken.userId,
+        source: "internal",
+        metadata: {
+          ip: req.ip
+        }
+      });
+      
+      res.status(200).json({
+        success: true,
+        message: "Password reset successful"
+      });
+    } catch (error) {
+      logger.error({
+        message: `Reset password error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while resetting your password"
+      });
+    }
+  },
+  
+  /**
+   * Verify a user's email with a token
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async verifyEmail(req: Request, res: Response) {
+    try {
+      const { token } = req.params;
+      
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          message: "Token is required"
+        });
+      }
+      
+      // Verify token
+      const verified = await storage.verifyUserEmail(token);
+      
+      if (!verified) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired token"
+        });
+      }
+      
+      // Log email verification
+      logger.info({
+        message: `Email verified for user ID: ${verified.userId}`,
+        category: "user",
+        userId: verified.userId,
+        source: "internal",
+        metadata: {
+          ip: req.ip
+        }
+      });
+      
+      res.status(200).json({
+        success: true,
+        message: "Email verified successfully"
+      });
+    } catch (error) {
+      logger.error({
+        message: `Email verification error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          token: req.params.token
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while verifying your email"
+      });
+    }
+  },
+  
+  /**
+   * Resend a verification email
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async resendVerificationEmail(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required"
+        });
+      }
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      
+      // If user not found or already verified, still return success to prevent email enumeration
+      if (!user || user.emailVerified) {
+        logger.info({
+          message: `Verification email requested for ${!user ? 'non-existent' : 'already verified'} email: ${email}`,
+          category: "user",
+          ...(user ? { userId: user.id } : {}),
+          source: "internal",
+          metadata: {
+            ip: req.ip
+          }
+        });
+        
+        return res.status(200).json({
+          success: true,
+          message: "If that email exists and is not verified, a verification link has been sent"
+        });
+      }
+      
+      // Generate verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      
+      // Store verification token
+      await storage.createEmailVerificationToken({
+        userId: user.id,
+        token: verificationToken,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+      });
+      
+      // In a production environment, this would send an actual email
+      // For now, we'll just log it
+      logger.info({
+        message: `Verification email resent to: ${email}. Verification token: ${verificationToken}`,
+        category: "user",
+        userId: user.id,
+        source: "internal",
+        metadata: {
+          ip: req.ip,
+          verificationToken // Would not log this in production
+        }
+      });
+      
+      res.status(200).json({
+        success: true,
+        message: "If that email exists and is not verified, a verification link has been sent"
+      });
+    } catch (error) {
+      logger.error({
+        message: `Resend verification email error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "user",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          email: req.body.email
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while sending the verification email"
+      });
+    }
+  }
+};

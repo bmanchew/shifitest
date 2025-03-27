@@ -1,25 +1,60 @@
-import { Router } from 'express';
-import blockchainRouter from './blockchain';
-import merchantRouter from './merchant';
-import communicationsRouter from './communications';
-// Import other routers here as they are created
+import express, { Router } from 'express';
+import authRoutes from './auth.routes';
+import userRoutes from './user.routes';
+import plaidRoutes from './plaid.routes';
+import { apiRateLimiter } from '../middleware/authRateLimiter';
+import { logger } from '../services/logger';
 
-const router = Router();
+// Create main router
+const router = express.Router();
 
-// Mount blockchain routes
-router.use('/blockchain', blockchainRouter);
+// Apply API rate limiting to all API routes
+router.use('/api', apiRateLimiter);
 
-// Mount merchant routes
-router.use('/merchants', merchantRouter);
+// Register all API routes with versioning
+router.use('/api/v1/auth', authRoutes);
+router.use('/api/v1/users', userRoutes);
+router.use('/api/v1/plaid', plaidRoutes);
 
-// Mount communications routes
-// Main communications endpoint
-router.use('/communications', communicationsRouter);
+// Support for legacy (non-versioned) routes during transition
+router.use('/api/auth', authRoutes);
+router.use('/api/users', userRoutes);
+router.use('/api/plaid', plaidRoutes);
 
-// Legacy endpoints that now use the communications router
-// This provides backward compatibility
-router.use('/conversations', communicationsRouter);
-router.use('/support-tickets', communicationsRouter);
+// Add a simple status endpoint for health checks
+router.get('/api/status', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API is operational',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0'
+  });
+});
 
-// Export the router
+// Track API usage
+router.use('/api', (req, res, next) => {
+  // Record the request start time
+  const start = Date.now();
+  
+  // Once response is finished, log the request details
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    
+    logger.debug({
+      message: `${req.method} ${req.path} ${res.statusCode} completed in ${duration}ms`,
+      category: 'api',
+      source: 'internal',
+      metadata: {
+        method: req.method,
+        path: req.path,
+        statusCode: res.statusCode,
+        duration: `${duration}ms`,
+        ip: req.ip
+      }
+    });
+  });
+  
+  next();
+});
+
 export default router;

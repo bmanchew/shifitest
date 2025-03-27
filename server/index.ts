@@ -1,11 +1,12 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerRoutes } from "./routes"; // Using our new routes structure
 import { setupVite, serveStatic, log } from "./vite";
 import { logger, requestLogger } from "./services/logger";
 import { storage } from "./storage";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { csrfProtectionWithExclusions, csrfTokenHandler, csrfErrorHandler } from "./middleware/csrfMiddleware";
+import jwt from "jsonwebtoken";
 
 const app = express();
 app.use(express.json());
@@ -136,23 +137,42 @@ app.use((req, res, next) => {
   next();
 });
 
-// Authentication middleware to extract user from cookies
+// Enhanced authentication middleware to extract user from JWT token
 app.use(async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.cookies?.userId;
-    const userRole = req.cookies?.userRole;
+    // Get token from Authorization header or cookies
+    const token = getTokenFromRequest(req);
     
-    if (userId) {
-      const user = await storage.getUser(parseInt(userId));
-      if (user) {
-        // Add user to request object for later use
-        (req as any).user = {
-          id: user.id,
-          role: user.role,
-          email: user.email
-        };
+    if (token) {
+      try {
+        // Verify the token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_jwt_secret');
+        
+        if (typeof decoded === 'object' && decoded.userId) {
+          // Get user from database
+          const user = await storage.getUser(decoded.userId);
+          
+          if (user) {
+            // Attach user to request object
+            req.user = user;
+          }
+        }
+      } catch (tokenError) {
+        // Don't block the request if token is invalid, just log the error
+        if (!(tokenError instanceof jwt.TokenExpiredError)) {
+          logger.warn({
+            message: `JWT validation error: ${tokenError instanceof Error ? tokenError.message : String(tokenError)}`,
+            category: "security",
+            source: "internal",
+            metadata: {
+              path: req.path
+            }
+          });
+        }
       }
     }
+    
+    // Continue even if no token is present or token is invalid
     next();
   } catch (error) {
     // Just log the error and continue - don't block requests if auth fails
@@ -168,6 +188,26 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     next();
   }
 });
+
+/**
+ * Helper function to extract token from request
+ * @param req Express Request
+ * @returns Token string or null
+ */
+function getTokenFromRequest(req: Request): string | null {
+  // Check Authorization header first
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  
+  // Check cookies
+  if (req.cookies && req.cookies.token) {
+    return req.cookies.token;
+  }
+  
+  return null;
+}
 
 // Add the request logger middleware for enhanced logging
 app.use(requestLogger);
@@ -324,9 +364,11 @@ async function startServer() {
       // Log the error with our enhanced logger
       logger.error({
         message: `Error: ${message}`,
-        req,
-        statusCode: status,
+        category: "api",
+        source: "internal",
         metadata: {
+          path: req.path,
+          statusCode: status,
           stack: err.stack,
           error: err instanceof Error ? err.message : String(err),
           errorDetails: Object.keys(errorDetails).length > 0 ? errorDetails : undefined

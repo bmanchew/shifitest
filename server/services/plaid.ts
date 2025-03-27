@@ -1,1805 +1,563 @@
-import {
-  Configuration,
-  PlaidApi,
-  PlaidEnvironments,
-  CountryCode,
-  Products,
-  LinkTokenCreateRequest,
-  ProcessorTokenCreateRequest,
-  TransferCreateRequest,
-  TransferType,
-  TransferNetwork,
-  AssetReportCreateRequest,
-  PaymentInitiationRecipientCreateRequest,
-  PaymentInitiationPaymentCreateRequest,
-  TransferAuthorizationCreateRequest,
-  TransferIntentCreateRequest,
-  BankTransferNetwork,
-  BankTransferType,
-  TransferIntentGet,
-  PaymentInitiationConsentCreateRequest,
-  TransferOriginatorGetRequest,
-  TransferOriginatorCreateRequest,
-  TransferQuestionnaireCreateRequest,
-} from "plaid";
-import { logger } from "./logger";
-
-interface PlaidLinkTokenParams {
-  userId: string;
-  clientUserId: string;
-  userName?: string;
-  userEmail?: string;
-  products?: Products[];
-  redirectUri?: string;
-}
-
-interface PlaidTransferParams {
-  accessToken: string;
-  accountId: string;
-  amount: number;
-  description: string;
-  achClass?: string;
-  userId?: string;
-  customerId?: string;
-  metadata?: Record<string, string>;
-}
-
-interface PlaidMerchantOnboardingParams {
-  merchantId: number;
-  legalName: string;
-  email: string;
-  redirectUri?: string;
-}
-
-interface PlaidPlatformPaymentParams {
-  amount: number;
-  merchantId: number;
-  contractId: number;
-  description: string;
-  routeToShifi: boolean;
-  facilitatorFee?: number; // Optional fee that ShiFi collects as platform
-  metadata?: Record<string, string>;
-}
-
-// Custom types for Plaid API responses
-export interface PlaidOriginator {
-  originator_id: string;
-  company_name: string;
-  status: string;
-  created_at: string;
-  // Add other properties as needed
-}
-
-export interface PlaidDetailedOriginator extends PlaidOriginator {
-  // Additional fields for detailed originator
-}
-
-class PlaidService {
-  private client: PlaidApi | null = null;
-  private initialized = false;
-  private env: string;
-
-  constructor() {
-    this.env = process.env.PLAID_ENVIRONMENT || "sandbox";
-    this.initialize();
-  }
-
-  private initialize() {
-    const clientId = process.env.PLAID_CLIENT_ID;
-    const secret = process.env.PLAID_SECRET;
-
-    if (!clientId || !secret) {
-      logger.error({
-        message:
-          "Missing Plaid credentials - API key required for authentic data",
-        category: "system",
-        source: "plaid",
-      });
-      // Mark as initialized but with a null client to throw proper errors
-      this.initialized = true;
-      return;
-    }
-
-    try {
-      // Determine which Plaid environment to use
-      let environment;
-      switch (this.env.toLowerCase()) {
-        case "production":
-          environment = PlaidEnvironments.production;
-          break;
-        case "development":
-          environment = PlaidEnvironments.development;
-          break;
-        case "sandbox":
-        default:
-          environment = PlaidEnvironments.sandbox;
-          break;
-      }
-
-      const configuration = new Configuration({
-        basePath: environment,
-        baseOptions: {
-          headers: {
-            "PLAID-CLIENT-ID": clientId,
-            "PLAID-SECRET": secret,
-          },
-        },
-      });
-
-      this.client = new PlaidApi(configuration);
-      this.initialized = true;
-
-      logger.info({
-        message: `Plaid service initialized in ${this.env} environment`,
-        category: "system",
-        source: "plaid",
-      });
-    } catch (error) {
-      logger.error({
-        message: `Failed to initialize Plaid client: ${error instanceof Error ? error.message : String(error)}`,
-        category: "system",
-        source: "plaid",
-        metadata: {
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-    }
-  }
-
-  isInitialized(): boolean {
-    return this.initialized;
-  }
-
-  // Method to expose the Plaid client for test endpoints only
-  getClient(): PlaidApi {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-    return this.client;
-  }
-
-  /**
-   * Create a link token for Plaid Link
-   */
-  async createLinkToken(params: PlaidLinkTokenParams) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    try {
-      const {
-        userId,
-        clientUserId,
-        userName,
-        userEmail,
-        products = [Products.Auth, Products.Transactions, Products.Assets],
-        redirectUri,
-      } = params;
-
-      // Prepare user object for the request
-      const user = {
-        client_user_id: clientUserId,
-      };
-
-      // Only add optional fields if they are provided
-      if (userName) {
-        user["legal_name"] = userName;
-      }
-
-      if (userEmail) {
-        user["email_address"] = userEmail;
-      }
-
-      // Log the request parameters for debugging
-      logger.info({
-        message: "Plaid link token request parameters",
-        category: "api",
-        source: "plaid",
-        metadata: {
-          userId,
-          clientUserId,
-          env: this.env,
-          products: products,
-        },
-      });
-
-      // Prepare request
-      const request: LinkTokenCreateRequest = {
-        user,
-        client_name: "ShiFi Financial",
-        products: products as Products[], // Ensure correct type
-        country_codes: [CountryCode.Us],
-        language: "en",
-      };
-
-      // Only add webhook URL if PUBLIC_URL is defined
-      if (process.env.PUBLIC_URL) {
-        request.webhook = `${process.env.PUBLIC_URL}/api/plaid/webhook`;
-      }
-
-      // Add auth configuration conditionally
-      // When using same_day_microdeposits, we need to follow Plaid's restrictions
-      if (
-        products.includes(Products.Auth) &&
-        !products.includes(Products.Transactions) &&
-        !products.includes(Products.Assets)
-      ) {
-        // Only add advanced auth features if Auth is the only product
-        request.auth = {
-          same_day_microdeposits_enabled: true,
-          sms_microdeposits_verification_enabled: true,
-        };
-      }
-
-      // Add optional redirect URI if provided
-      if (redirectUri) {
-        request.redirect_uri = redirectUri;
-      }
-
-      logger.info({
-        message: `Creating Plaid link token for user ${userId}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          userId,
-          products,
-          requestBody: JSON.stringify(request),
-        },
-      });
-
-      const response = await this.client.linkTokenCreate(request);
-
-      if (!response.data || !response.data.link_token) {
-        logger.error({
-          message: `Plaid returned an invalid response when creating link token for user ${userId}`,
-          category: "api",
-          source: "plaid",
-          metadata: {
-            userId,
-            response: JSON.stringify(response.data),
-          },
-        });
-        throw new Error("Invalid response from Plaid: missing link token");
-      }
-
-      logger.info({
-        message: `Created Plaid link token for user ${userId}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          userId,
-          linkToken: response.data.link_token,
-          expiration: response.data.expiration,
-        },
-      });
-
-      return {
-        linkToken: response.data.link_token,
-        expiration: response.data.expiration,
-      };
-    } catch (error) {
-      // Extract more detailed error information from Plaid response
-      let errorDetails = "Unknown error";
-      let errorCode = "UNKNOWN";
-
-      if (error.response?.data) {
-        errorDetails = JSON.stringify(error.response.data);
-        errorCode = error.response.data.error_code || "UNKNOWN";
-      }
-
-      logger.error({
-        message: `Failed to create Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          userId: params.userId,
-          error: error instanceof Error ? error.stack : null,
-          errorDetails,
-          errorCode,
-          request: {
-            clientUserId: params.clientUserId,
-            products: params.products,
-            env: this.env,
-          },
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Exchange a public token for an ACCESS TOKEN
-   */
-  async exchangePublicToken(publicToken: string) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    try {
-      logger.info({
-        message: "Exchanging Plaid public token for access token",
-        category: "api",
-        source: "plaid",
-      });
-
-      const response = await this.client.itemPublicTokenExchange({
-        public_token: publicToken,
-      });
-
-      logger.info({
-        message: "Exchanged Plaid public token for access token",
-        category: "api",
-        source: "plaid",
-        metadata: {
-          itemId: response.data.item_id,
-          requestId: response.data.request_id,
-        },
-      });
-
-      return {
-        accessToken: response.data.access_token,
-        itemId: response.data.item_id,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to exchange Plaid public token: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Get auth data (account and routing numbers)
-   */
-  async getAuth(accessToken: string) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    try {
-      logger.info({
-        message: "Getting Plaid auth data",
-        category: "api",
-        source: "plaid",
-      });
-
-      const response = await this.client.authGet({
-        access_token: accessToken,
-      });
-
-      logger.info({
-        message: "Retrieved Plaid auth data",
-        category: "api",
-        source: "plaid",
-        metadata: {
-          accountsCount: response.data.accounts.length,
-          requestId: response.data.request_id,
-        },
-      });
-
-      return {
-        accounts: response.data.accounts,
-        numbers: response.data.numbers,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to get Plaid auth data: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Create a processor token for a specific account
-   */
-  async createProcessorToken(
-    accessToken: string,
-    accountId: string,
-    processor: string,
-  ) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    try {
-      logger.info({
-        message: `Creating Plaid processor token for processor ${processor}`,
-        category: "api",
-        source: "plaid",
-        metadata: { accountId },
-      });
-
-      const request: ProcessorTokenCreateRequest = {
-        access_token: accessToken,
-        account_id: accountId,
-        processor: processor as any,
-      };
-
-      const response = await this.client.processorTokenCreate(request);
-
-      logger.info({
-        message: `Created Plaid processor token for processor ${processor}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          accountId,
-          requestId: response.data.request_id,
-        },
-      });
-
-      return {
-        processorToken: response.data.processor_token,
-        requestId: response.data.request_id,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to create Plaid processor token: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          accountId,
-          processor,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Create a transfer
-   */
-  async createTransfer(params: PlaidTransferParams) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    try {
-      const {
-        accessToken,
-        accountId,
-        amount,
-        description,
-        achClass = "ppd",
-        userId,
-        customerId,
-        metadata,
-      } = params;
-
-      // First, create a processor token
-      const { processorToken } = await this.createProcessorToken(
-        accessToken,
-        accountId,
-        "transfer",
-      );
-
-      // Prepare transfer request
-      const transferRequest: TransferCreateRequest = {
-        access_token: accessToken,
-        account_id: accountId,
-        authorization_id: processorToken, // Using processor token as authorization
-        type: TransferType.Debit, // Pull money from user's account
-        network: TransferNetwork.Ach,
-        amount: amount.toString(),
-        description: description,
-        ach_class: achClass as any,
-        user: {
-          legal_name: userId || "Unknown User",
-        },
-      };
-
-      // Add optional user metadata
-      if (metadata) {
-        transferRequest.metadata = metadata;
-      }
-
-      logger.info({
-        message: "Creating Plaid transfer",
-        category: "api",
-        source: "plaid",
-        metadata: {
-          accountId,
-          amount,
-          description,
-        },
-      });
-
-      const response = await this.client.transferCreate(transferRequest);
-
-      logger.info({
-        message: "Created Plaid transfer",
-        category: "api",
-        source: "plaid",
-        metadata: {
-          transferId: response.data.transfer.id,
-          status: response.data.transfer.status,
-          requestId: response.data.request_id,
-        },
-      });
-
-      return {
-        transferId: response.data.transfer.id,
-        status: response.data.transfer.status,
-        requestId: response.data.request_id,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to create Plaid transfer: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          accountId: params.accountId,
-          amount: params.amount,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Create an asset report
-   */
-  async createAssetReport(
-    accessToken: string,
-    daysRequested: number = 60,
-    options?: any,
-  ) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    try {
-      logger.info({
-        message: "Creating Plaid asset report",
-        category: "api",
-        source: "plaid",
-        metadata: { daysRequested },
-      });
-
-      // Prepare asset report request
-      const request: AssetReportCreateRequest = {
-        access_tokens: [accessToken],
-        days_requested: daysRequested,
-        options: options || {},
-      };
-
-      const response = await this.client.assetReportCreate(request);
-
-      // "Asset Report Create Response:",
-        //   JSON.stringify(response.data, null, 2),
-        // );
-
-        logger.info({
-          message: "Created Plaid asset report",
-          category: "api",
-          source: "plaid",
-          metadata: {
-            assetReportId: response.data.asset_report_id,
-            assetReportToken: response.data.asset_report_token,
-            requestId: response.data.request_id,
-          },
-        });
-
-      return {
-        assetReportId: response.data.asset_report_id,
-        assetReportToken: response.data.asset_report_token,
-        requestId: response.data.request_id,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to create Plaid asset report: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          daysRequested,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Get an asset report
-   */
-  async getAssetReport(
-    assetReportToken: string,
-    includeInsights: boolean = false,
-  ) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    try {
-      logger.info({
-        message: "Getting Plaid asset report",
-        category: "api",
-        source: "plaid",
-        metadata: { includeInsights },
-      });
-
-      const response = await this.client.assetReportGet({
-        asset_report_token: assetReportToken,
-        include_insights: includeInsights,
-      });
-
-      logger.info({
-        message: "Retrieved Plaid asset report",
-        category: "api",
-        source: "plaid",
-        metadata: {
-          reportId: response.data.report.asset_report_id,
-          userCount: response.data.report.items.length,
-          requestId: response.data.request_id,
-        },
-      });
-
-      return {
-        report: response.data.report,
-        warnings: response.data.warnings,
-        requestId: response.data.request_id,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to get Plaid asset report: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          assetReportToken,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Create an asset report for a specific user by phone number
-   * This is a helper method that finds the user by phone number and creates an asset report
-   */
-  async createAssetReportByPhone(
-    accessToken: string,
-    phoneNumber: string,
-    daysRequested: number = 60,
-    options?: any,
-  ) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    // Import storage here to avoid circular dependency
-    const { storage } = await import("../storage");
-
-    try {
-      // Find the user by phone number
-      const user = await storage.getUserByPhone(phoneNumber);
-
-      if (!user) {
-        throw new Error(`User with phone number ${phoneNumber} not found`);
-      }
-
-      logger.info({
-        message: `Creating Plaid asset report for user with phone ${phoneNumber}`,
-        category: "api",
-        source: "plaid",
-        metadata: { userId: user.id, daysRequested },
-      });
-
-      // Get user's recent contracts
-      const contracts = await storage.getContractsByCustomerId(user.id);
-
-      if (!contracts || contracts.length === 0) {
-        throw new Error(
-          `No contracts found for user with phone ${phoneNumber}`,
-        );
-      }
-
-      // Use the most recent contract
-      const contractId = contracts[0].id;
-
-      // Create the asset report
-      const assetReportResponse = await this.createAssetReport(
-        accessToken,
-        daysRequested,
-        options,
-      );
-
-      // Get the full report data right away
-      const reportData = await this.getAssetReport(
-        assetReportResponse.assetReportToken,
-        true,
-      );
-
-      // Store the asset report token and full report data in database
-      await storage.storeAssetReportToken(
-        parseInt(contractId.toString()),
-        assetReportResponse.assetReportToken,
-        assetReportResponse.assetReportId,
-        {
-          userId: user.id,
-          daysRequested,
-          analysisData: JSON.stringify(reportData.report),
-        },
-      );
-
-      return {
-        ...assetReportResponse,
-        userId: user.id,
-        contractId,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to create asset report by phone: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          phoneNumber,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Validate Plaid credentials by trying to create a link token
-   */
-  async validateCredentials(): Promise<boolean> {
-    if (!this.isInitialized() || !this.client) {
-      return false;
-    }
-
-    try {
-      // Attempt to create a test link token
-      await this.createLinkToken({
-        userId: "validation-test",
-        clientUserId: "validation-test",
-        products: [Products.Auth],
-      });
-
-      return true;
-    } catch (error) {
-      logger.error({
-        message: `Plaid credential validation failed: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      return false;
-    }
-  }
-
-  /**
-   * Analyze asset report data for underwriting purposes
-   * Extracts key financial metrics used in credit decisioning
-   */
-  async analyzeAssetReportForUnderwriting(
-    assetReportToken: string,
-  ): Promise<any> {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    try {
-      logger.info({
-        message: "Analyzing Plaid asset report for underwriting",
-        category: "api",
-        source: "plaid",
-        metadata: { assetReportToken },
-      });
-
-      // Fetch the asset report with insights for better analysis
-      const assetReport = await this.getAssetReport(assetReportToken, true);
-      const report = assetReport.report;
-
-      if (!report || !report.items || report.items.length === 0) {
-        throw new Error("Asset report contains no items");
-      }
-
-      // Extract key financial metrics
-      const accounts = report.items.flatMap((item) => item.accounts || []);
-
-      // Calculate income estimate (monthly income * 12)
-      const incomeStreams = report.items
-        .flatMap((item) => item.income_streams || [])
-        .filter((stream) => stream.confidence > 0.5);
-
-      const monthlyIncome = incomeStreams.reduce(
-        (sum, stream) => sum + (stream.monthly_income || 0),
-        0,
-      );
-      const annualIncome = monthlyIncome * 12;
-
-      // Analyze income deposit patterns
-      const incomePatterns = incomeStreams.map((stream) => {
-        const transactions = stream.income_transactions || [];
-        const dates = transactions.map((t) => new Date(t.date).getDate());
-        const daysBetween = transactions
-          .map((t, i) => {
-            if (i === 0) return 0;
-            const curr = new Date(t.date);
-            const prev = new Date(transactions[i - 1].date);
-            return Math.round(
-              (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24),
-            );
-          })
-          .filter((d) => d > 0);
-
-        const avgDaysBetween =
-          daysBetween.length > 0
-            ? daysBetween.reduce((a, b) => a + b, 0) / daysBetween.length
-            : 30;
-
-        return {
-          frequency:
-            avgDaysBetween <= 7
-              ? "weekly"
-              : avgDaysBetween <= 14
-                ? "biweekly"
-                : avgDaysBetween <= 16
-                  ? "semimonthly"
-                  : "monthly",
-          commonDates: [...new Set(dates)].sort((a, b) => a - b),
-          confidence: stream.confidence,
-          amount: stream.monthly_income,
-        };
-      });
-
-      // Extract employment data from income streams
-      const employmentMonths = Math.max(
-        ...incomeStreams.map((stream) => stream.days / 30),
-        0,
-      );
-
-      // Add income patterns to analysis
-      const primaryIncomePattern =
-        incomePatterns.length > 0
-          ? incomePatterns.reduce((a, b) => (a.amount > b.amount ? a : b))
-          : null;
-
-      // Calculate debt-to-income ratio
-      const totalDebt = accounts
-        .filter(
-          (account) => account.type === "loan" || account.type === "credit",
-        )
-        .reduce((sum, account) => {
-          // For credit accounts, use balance as debt
-          if (account.type === "credit") {
-            return sum + (account.balances.current || 0);
-          }
-
-          // For loan accounts, use outstanding balance
-          return sum + (account.balances.current || 0);
-        }, 0);
-
-      const dtiRatio = monthlyIncome > 0 ? totalDebt / (monthlyIncome * 12) : 0;
-
-      // Analyze housing status
-      const housingAccount = accounts.find(
-        (account) =>
-          account.name.toLowerCase().includes("mortgage") ||
-          account.name.toLowerCase().includes("rent") ||
-          account.subtype === "mortgage",
-      );
-
-      let housingStatus = "unknown";
-      let paymentHistoryMonths = 0;
-
-      if (housingAccount) {
-        if (housingAccount.subtype === "mortgage") {
-          housingStatus = "mortgage";
-        } else if (housingAccount.name.toLowerCase().includes("rent")) {
-          housingStatus = "rent";
-        }
-
-        // Estimate payment history from transaction data
-        const paymentCount = report.items
-          .flatMap((item) => item.transactions || [])
-          .filter(
-            (transaction) =>
-              transaction.name.toLowerCase().includes("mortgage") ||
-              transaction.name.toLowerCase().includes("rent"),
-          ).length;
-
-        paymentHistoryMonths = Math.min(Math.ceil(paymentCount), 24); // Cap at 24 months
-      }
-
-      // Construct the analysis object with all metrics
-      const analysis = {
-        income: {
-          annualIncome,
-          monthlyIncome,
-          incomeStreams: incomeStreams.length,
-          confidence:
-            incomeStreams.length > 0
-              ? incomeStreams.reduce(
-                  (sum, stream) => sum + stream.confidence,
-                  0,
-                ) / incomeStreams.length
-              : 0,
-          patterns: incomePatterns,
-          recommendedPaymentSchedule: primaryIncomePattern
-            ? {
-                frequency: primaryIncomePattern.frequency,
-                suggestedDates: primaryIncomePattern.commonDates,
-                confidence: primaryIncomePattern.confidence,
-              }
-            : null,
-        },
-        employment: {
-          employmentMonths,
-          hasStableIncome: employmentMonths >= 12 && monthlyIncome > 0,
-        },
-        debt: {
-          totalDebt,
-          dtiRatio,
-        },
-        housing: {
-          housingStatus,
-          paymentHistoryMonths,
-          hasStableHousing: paymentHistoryMonths >= 6,
-        },
-        accounts: {
-          totalAccounts: accounts.length,
-          loansCount: accounts.filter((account) => account.type === "loan")
-            .length,
-          creditCount: accounts.filter((account) => account.type === "credit")
-            .length,
-          depository: accounts.filter(
-            (account) => account.type === "depository",
-          ).length,
-        },
-        balances: {
-          totalBalance: accounts.reduce(
-            (sum, account) => sum + (account.balances.current || 0),
-            0,
-          ),
-          availableFunds: accounts
-            .filter((account) => account.type === "depository")
-            .reduce(
-              (sum, account) => sum + (account.balances.available || 0),
-              0,
-            ),
-        },
-      };
-
-      logger.info({
-        message: "Completed Plaid asset report analysis for underwriting",
-        category: "api",
-        source: "plaid",
-        metadata: {
-          analysisMetrics: {
-            income: analysis.income.annualIncome,
-            dti: analysis.debt.dtiRatio,
-            employmentMonths: analysis.employment.employmentMonths,
-          },
-        },
-      });
-
-      return analysis;
-    } catch (error) {
-      logger.error({
-        message: `Failed to analyze asset report: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          assetReportToken,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Create a merchant onboarding link for Plaid Platform Payments
-   */
-  async createMerchantOnboardingLink(params: PlaidMerchantOnboardingParams) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    // Import storage here to avoid circular dependency
-    const { storage } = await import("../storage");
-
-    try {
-      const { merchantId, legalName, email, redirectUri } = params;
-
-      logger.info({
-        message: `Creating Plaid merchant onboarding link for merchant ${merchantId}`,
-        category: "api",
-        source: "plaid",
-        metadata: { merchantId, legalName },
-      });
-
-      // First check if there's already a merchant in our database
-      const existingPlaidMerchant =
-        await storage.getPlaidMerchantByMerchantId(merchantId);
-
-      // If merchant already exists with completed status, return error
-      if (
-        existingPlaidMerchant &&
-        existingPlaidMerchant.onboardingStatus === "completed"
-      ) {
-        return {
-          merchantId: existingPlaidMerchant.merchantId,
-          plaidCustomerId: existingPlaidMerchant.plaidCustomerId,
-          onboardingStatus: existingPlaidMerchant.onboardingStatus,
-          alreadyOnboarded: true,
-        };
-      }
-
-      // Create a unique client user ID for the merchant
-      const clientUserId = `merchant-${merchantId}-${Date.now()}`;
-
-      // Set up user for link token
-      const user = {
-        client_user_id: clientUserId,
-        legal_name: legalName,
-        email_address: email,
-      };
-
-      // Create link token with payment_initiation product
-      const request: LinkTokenCreateRequest = {
-        user,
-        client_name: "ShiFi Financial",
-        products: [
-          Products.PaymentInitiation,
-          Products.Auth,
-          Products.Transfer,
-        ],
-        country_codes: [CountryCode.Us],
-        language: "en",
-        webhook: `${process.env.PUBLIC_URL || "https://api.shifi.com"}/api/plaid/merchant-webhook`,
-      };
-
-      // Add optional redirect URI if provided
-      if (redirectUri) {
-        request.redirect_uri = redirectUri;
-      }
-
-      const response = await this.client.linkTokenCreate(request);
-
-      logger.info({
-        message: `Created Plaid merchant onboarding link for merchant ${merchantId}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          merchantId,
-          linkToken: response.data.link_token,
-          expiration: response.data.expiration,
-        },
-      });
-
-      // Store or update the plaid merchant record
-      let plaidMerchantRecord;
-      if (existingPlaidMerchant) {
-        // Update existing record
-        plaidMerchantRecord = await storage.updatePlaidMerchant(
-          existingPlaidMerchant.id,
-          {
-            onboardingStatus: "in_progress",
-            onboardingUrl: response.data.link_token,
-          },
-        );
-      } else {
-        // Create new record
-        plaidMerchantRecord = await storage.createPlaidMerchant({
-          merchantId,
-          onboardingStatus: "in_progress",
-          onboardingUrl: response.data.link_token,
-        });
-      }
-
-      return {
-        merchantId,
-        linkToken: response.data.link_token,
-        expiration: response.data.expiration,
-        plaidMerchantId: plaidMerchantRecord.id,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to create Plaid merchant onboarding link: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          merchantId: params.merchantId,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Complete merchant onboarding after Plaid Link flow
-   */
-  async completeMerchantOnboarding(
-    merchantId: number,
-    publicToken: string,
-    accountId: string,
-    originatorId?: string,
-    questionnaireId?: string,
-  ) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    // Import storage here to avoid circular dependency
-    const { storage } = await import("../storage");
-
-    try {
-      logger.info({
-        message: `Completing Plaid merchant onboarding for merchant ${merchantId}`,
-        category: "api",
-        source: "plaid",
-        metadata: { merchantId, accountId, originatorId, questionnaireId },
-      });
-
-      // First, exchange the public token for an access token
-      const { accessToken, itemId } =
-        await this.exchangePublicToken(publicToken);
-
-      // Get the merchant from our database
-      const merchant = await storage.getMerchant(merchantId);
-      if (!merchant) {
-        throw new Error(`Merchant with ID ${merchantId} not found`);
-      }
-
-      // Get plaid merchant record or create if not exists
-      let plaidMerchant =
-        await storage.getPlaidMerchantByMerchantId(merchantId);
-
-      if (!plaidMerchant) {
-        // Create new record if one doesn't exist yet
-        plaidMerchant = await storage.createPlaidMerchant({
-          merchantId,
-          onboardingStatus: "in_progress",
-          accessToken,
-          accountId,
-          originatorId,
-          questionnaireId,
-        });
-      } else {
-        // Update existing record
-        plaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
-          accessToken,
-          accountId,
-          defaultFundingAccount: accountId,
-          originatorId,
-          questionnaireId,
-        });
-      }
-
-      // If we have an originatorId, check the status with Plaid
-      if (originatorId) {
-        try {
-          const originatorStatus =
-            await this.getMerchantOnboardingStatus(originatorId);
-
-          // Log the status we received from Plaid
-          logger.info({
-            message: `Received originator status from Plaid: ${originatorStatus.status}`,
-            category: "api",
-            source: "plaid",
-            metadata: {
-              merchantId,
-              originatorId,
-              status: originatorStatus.status,
-            },
-          });
-
-          // Only mark as completed if Plaid says it's active
-          // Otherwise keep it as in_progress
-          if (originatorStatus.status.toLowerCase() === "active") {
-            // Mark onboarding as complete
-            const updatedPlaidMerchant = await storage.updatePlaidMerchant(
-              plaidMerchant.id,
-              {
-                onboardingStatus: "completed",
-              },
-            );
-
-            return {
-              merchantId,
-              plaidMerchantId: updatedPlaidMerchant.id,
-              status: updatedPlaidMerchant.onboardingStatus,
-              accessToken,
-              accountId,
-              originatorId,
-              originatorStatus: originatorStatus.status,
-            };
-          } else {
-            // Originator exists but isn't active yet
-            return {
-              merchantId,
-              plaidMerchantId: plaidMerchant.id,
-              status: "in_progress",
-              accessToken,
-              accountId,
-              originatorId,
-              originatorStatus: originatorStatus.status,
-            };
-          }
-        } catch (originatorError) {
-          // Log error but continue - we'll mark as in_progress
-          logger.warn({
-            message: `Failed to check originator status with Plaid: ${originatorError instanceof Error ? originatorError.message : String(originatorError)}`,
-            category: "api",
-            source: "plaid",
-            metadata: {
-              merchantId,
-              originatorId,
-              error:
-                originatorError instanceof Error ? originatorError.stack : null,
-            },
-          });
-        }
-      }
-
-      // Mark onboarding as complete (this is the original behavior if we don't have an originatorId)
-      const updatedPlaidMerchant = await storage.updatePlaidMerchant(
-        plaidMerchant.id,
-        {
-          onboardingStatus: "completed",
-        },
-      );
-
-      return {
-        merchantId,
-        plaidMerchantId: updatedPlaidMerchant.id,
-        status: updatedPlaidMerchant.onboardingStatus,
-        accessToken,
-        accountId,
-        originatorId,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to complete Plaid merchant onboarding: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          merchantId,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Check the onboarding status of a merchant with Plaid using /transfer/originator/get
-   */
-  async getMerchantOnboardingStatus(originatorId: string) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    try {
-      logger.info({
-        message: `Checking Plaid merchant onboarding status for originator ${originatorId}`,
-        category: "api",
-        source: "plaid",
-        metadata: { originatorId },
-      });
-
-      // Create request for transfer/originator/get
-      const request: TransferOriginatorGetRequest = {
-        originator_id: originatorId,
-      };
-
-      const response = await this.client.transferOriginatorGet(request);
-
-      logger.info({
-        message: `Retrieved Plaid merchant onboarding status for originator ${originatorId}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          originatorId,
-          status: response.data.originator.status,
-          requestId: response.data.request_id,
-        },
-      });
-
-      return {
-        originatorId: response.data.originator.originator_id,
-        originatorName: response.data.originator.company_name,
-        status: response.data.originator.status,
-        createdAt: response.data.originator.created_at,
-        requestId: response.data.request_id,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to check Plaid merchant onboarding status: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          originatorId,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Create a platform payment transfer - route funds between customers and merchants or ShiFi
-   */
-  async createPlatformPayment(params: PlaidPlatformPaymentParams) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    // Import storage here to avoid circular dependency
-    const { storage } = await import("../storage");
-
-    try {
-      const {
-        amount,
-        merchantId,
-        contractId,
-        description,
-        routeToShifi,
-        facilitatorFee,
-        metadata,
-      } = params;
-
-      logger.info({
-        message: `Creating Plaid platform payment for contract ${contractId}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          amount,
-          merchantId,
-          contractId,
-          routeToShifi,
-        },
-      });
-
-      // Get the contract to check ownership
-      const contract = await storage.getContract(contractId);
-      if (!contract) {
-        throw new Error(`Contract with ID ${contractId} not found`);
-      }
-
-      // Verify contract belongs to the merchant
-      if (contract.merchantId !== merchantId) {
-        throw new Error(
-          `Contract ${contractId} does not belong to merchant ${merchantId}`,
-        );
-      }
-
-      // Get Plaid merchant data
-      const plaidMerchant =
-        await storage.getPlaidMerchantByMerchantId(merchantId);
-      if (!plaidMerchant) {
-        throw new Error(`Merchant ${merchantId} is not onboarded with Plaid`);
-      }
-
-      if (plaidMerchant.onboardingStatus !== "completed") {
-        throw new Error(
-          `Merchant ${merchantId} has not completed Plaid onboarding`,
-        );
-      }
-
-      // Determine routing destination based on:
-      // 1. The explicit routeToShifi parameter (which overrides contract status)
-      // 2. If the contract is owned by ShiFi (purchased)
-
-      // If routeToShifi is explicitly set to true, we'll route to ShiFi regardless of contract status
-      // Otherwise, check if the contract has been purchased by ShiFi
-      const shouldRouteToShifi =
-        routeToShifi || contract.purchasedByShifi === true;
-
-      logger.info({
-        message: `Determining payment routing for contract ${contractId}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          contractId,
-          merchantId,
-          routeToShifiParameter: routeToShifi,
-          contractPurchasedByShifi: contract.purchasedByShifi,
-          finalRouting: shouldRouteToShifi ? "ShiFi" : "Merchant",
-        },
-      });
-
-      // Determine the destination account based on routing flag
-      const destination = shouldRouteToShifi
-        ? process.env.SHIFI_PLAID_ACCOUNT_ID
-        : plaidMerchant.defaultFundingAccount || plaidMerchant.accountId;
-
-      if (!destination) {
-        throw new Error("No destination account available for transfer");
-      }
-
-      // Calculate facilitator fee and routing based on credit tier
-      const { fee: platformFee, routeToShifi: finalRouteToShifi } =
-        await calculatePlatformFee(amount, contractId.toString());
-
-      // Create a transfer intent
-      const transferIntentRequest: any = {
-        amount: amount.toString(),
-        description,
-        account_id: destination,
-        user: {
-          legal_name: `Contract ${contractId}`,
-        },
-        mode: finalRouteToShifi ? "PAYMENT" : "DISBURSEMENT", // TransferIntentCreateMode needs casting in some versions of the SDK
-        ach_class: "ppd", // ACHClass needs casting in some versions of the SDK
-        funding_account_id: destination,
-      };
-
-      // Add facilitator fee if provided (fee that ShiFi collects as a platform)
-      if (platformFee && platformFee > 0) {
-        // Since we're using the Plaid SDK, we'll need to cast to 'any' to add this property
-        // because it might not be in the TypeScript type definition yet
-        (transferIntentRequest as any).facilitator_fee = {
-          amount: platformFee.toString(),
-        };
-      }
-
-      // Create the transfer intent
-      const intentResponse = await this.client.transferIntentCreate(
-        transferIntentRequest,
-      );
-
-      // Record the transfer in our database
-      const transferRecord = await storage.createPlaidTransfer({
-        contractId,
-        merchantId,
-        transferId: intentResponse.data.transfer_intent.id,
-        amount,
-        description,
-        type: finalRouteToShifi ? "credit" : "debit",
-        status: intentResponse.data.transfer_intent.status,
-        routedToShifi: finalRouteToShifi,
-        facilitatorFee: platformFee,
-        metadata: metadata ? JSON.stringify(metadata) : undefined,
-      });
-
-      return {
-        transferId: intentResponse.data.transfer_intent.id,
-        status: intentResponse.data.transfer_intent.status,
-        amount,
-        routedToShifi: finalRouteToShifi,
-        transferRecordId: transferRecord.id,
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to create Plaid platform payment: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          contractId: params.contractId,
-          merchantId: params.merchantId,
-          amount: params.amount,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Get all merchants that are active in Plaid for transfers
-   * Returns merchants who have completed onboarding and have active accounts
-   */
-  async getActivePlaidMerchants() {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    // Import storage here to avoid circular dependency
-    const { storage } = await import("../storage");
-
-    try {
-      logger.info({
-        message: "Getting active Plaid merchants for transfers",
-        category: "api",
-        source: "plaid",
-      });
-
-      // First, use the /transfer/originator/list endpoint to get all merchants from Plaid
-      const originatorsResponse = await this.client.transferOriginatorList({});
-      console.log(
-        "Plaid Originators Response:",
-        JSON.stringify(originatorsResponse.data, null, 2),
-      );
-      const plaidOriginators = originatorsResponse.data.originators || [];
-
-      logger.info({
-        message: `Retrieved ${plaidOriginators.length} originators from Plaid API`,
-        category: "api",
-        source: "plaid",
-      });
-
-      if (plaidOriginators.length === 0) {
-        logger.info({
-          message: "No merchants found in Plaid platform",
-          category: "api",
-          source: "plaid",
-        });
-        return [];
-      }
-
-      // Map the Plaid originators to our merchant data structure
-      const activeMerchants = [];
-
-      for (const originator of plaidOriginators) {
-        try {
-          // Only include active originators
-          if (originator.transfer_diligence_status !== "approved") {
-            logger.info({
-              message: `Skipping non-active originator: ${originator.client_id} with status ${originator.transfer_diligence_status}`,
-              category: "api",
-              source: "plaid",
-            });
-            continue;
-          }
-
-          // Try to find this originator in our database to get the merchant ID
-          const plaidMerchant = await storage.getPlaidMerchantByOriginatorId(
-            originator.client_id,
-          );
-
-          const merchantData: any = {
-            originatorId: originator.client_id,
-            originatorName: originator.company_name,
-            status: originator.status,
-            createdAt: originator.created_at,
-          };
-
-          // If we have this originator in our database, add the merchant details
-          if (plaidMerchant) {
-            merchantData.merchantId = plaidMerchant.merchantId;
-            merchantData.plaidMerchantId = plaidMerchant.id;
-            merchantData.accessToken = plaidMerchant.accessToken || "";
-            merchantData.accountId = plaidMerchant.accountId || "";
-            merchantData.defaultFundingAccount =
-              plaidMerchant.defaultFundingAccount || "";
-
-            // Get the merchant details from our database
-            const merchant = await storage.getMerchant(
-              plaidMerchant.merchantId,
-            );
-            if (merchant) {
-              merchantData.merchantName = merchant.name;
-              merchantData.merchantEmail = merchant.email;
-            }
-          } else {
-            // If we don't have this originator in our database, log it
-            logger.warn({
-              message: `Found originator in Plaid that is not in our database: ${originator.originator_id}`,
-              category: "api",
-              source: "plaid",
-              metadata: {
-                originatorId: originator.originator_id,
-                companyName: originator.company_name,
-              },
-            });
-
-            // Include it in our results anyway since it's an active originator in Plaid
-            merchantData.plaidOnly = true;
-          }
-
-          activeMerchants.push(merchantData);
-        } catch (error) {
-          // If we get an error processing this originator, log it but continue with others
-          logger.warn({
-            message: `Error processing Plaid originator: ${error instanceof Error ? error.message : String(error)}`,
-            category: "api",
-            source: "plaid",
-            metadata: {
-              originatorId: originator.originator_id,
-              error: error instanceof Error ? error.stack : null,
-            },
-          });
-        }
-      }
-
-      // As a fallback, also check our database for any merchants that may not be returned by Plaid API
-      // This helps handle any potential sync issues between our database and Plaid
-      const onboardedMerchants =
-        await storage.getPlaidMerchantsByStatus("completed");
-
-      for (const merchant of onboardedMerchants) {
-        try {
-          // Skip if we already have this merchant in our results
-          if (
-            merchant.originatorId &&
-            activeMerchants.some(
-              (m) => m.originatorId === merchant.originatorId,
-            )
-          ) {
-            continue;
-          }
-
-          if (!merchant.accessToken) {
-            logger.warn({
-              message: `Merchant ${merchant.merchantId} has no access token`,
-              category: "api",
-              source: "plaid",
-            });
-            continue;
-          }
-
-          // Check if the merchant's accounts are still active
-          const accountsResponse = await this.client.accountsGet({
-            access_token: merchant.accessToken,
-          });
-
-          // Check if the merchant has transfer capabilities
-          const hasTransferCapability = accountsResponse.data.accounts.some(
-            (account) =>
-              account.type === "depository" &&
-              ["checking", "savings"].includes(account.subtype || ""),
-          );
-
-          if (hasTransferCapability) {
-            // Create merchant object with only required fields
-            const merchantData: any = {
-              merchantId: merchant.merchantId,
-              plaidMerchantId: merchant.id,
-              originatorId: merchant.originatorId,
-              accessToken: merchant.accessToken || "",
-              accountId: merchant.accountId || "",
-              defaultFundingAccount: merchant.defaultFundingAccount || "",
-              fromDatabaseOnly: true,
-            };
-
-            // Get the merchant details from our database
-            const merchantDetails = await storage.getMerchant(
-              merchant.merchantId,
-            );
-            if (merchantDetails) {
-              merchantData.merchantName = merchantDetails.name;
-              merchantData.merchantEmail = merchantDetails.email;
-            }
-
-            activeMerchants.push(merchantData);
-          }
-        } catch (error) {
-          // If we get an error checking this merchant, log it but continue with others
-          logger.warn({
-            message: `Error checking database merchant status: ${error instanceof Error ? error.message : String(error)}`,
-            category: "api",
-            source: "plaid",
-            metadata: {
-              merchantId: merchant.merchantId,
-              error: error instanceof Error ? error.stack : null,
-            },
-          });
-        }
-      }
-
-      return activeMerchants;
-    } catch (error) {
-      logger.error({
-        message: `Failed to get active Plaid merchants: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-
-  /**
-   * Check status of a platform payment transfer
-   */
-  async checkPlatformPaymentStatus(transferId: string) {
-    if (!this.isInitialized() || !this.client) {
-      throw new Error("Plaid client not initialized");
-    }
-
-    // Import storage here to avoid circular dependency
-    const { storage } = await import("../storage");
-
-    try {
-      logger.info({
-        message: `Checking Plaid platform payment status for transfer ${transferId}`,
-        category: "api",
-        source: "plaid",
-      });
-
-      // Get transfer from Plaid
-      const response = await this.client.transferIntentGet({
-        transfer_intent_id: transferId,
-      });
-
-      const status = response.data.transfer_intent.status;
-
-      // Update status in our database
-      const transferRecord = await storage.getPlaidTransferById(
-        parseInt(transferId),
-      );
-      if (transferRecord) {
-        await storage.updatePlaidTransferStatus(transferRecord.id, status);
-      }
-
-      return {
-        transferId,
-        status,
-        requiresAttention: ["failed", "returned"].includes(
-          status.toLowerCase(),
-        ),
-      };
-    } catch (error) {
-      logger.error({
-        message: `Failed to check Plaid platform payment status: ${error instanceof Error ? error.message : String(error)}`,
-        category: "api",
-        source: "plaid",
-        metadata: {
-          transferId,
-          error: error instanceof Error ? error.stack : null,
-        },
-      });
-
-      throw error;
-    }
-  }
-}
+import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
+import { storage } from '../storage';
+import { logger } from './logger';
+
+// Configure Plaid client
+const configuration = new Configuration({
+  basePath: PlaidEnvironments[process.env.PLAID_ENVIRONMENT as keyof typeof PlaidEnvironments] || PlaidEnvironments.sandbox,
+  baseOptions: {
+    headers: {
+      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
+      'PLAID-SECRET': process.env.PLAID_SECRET,
+    },
+  },
+});
+
+const plaidClient = new PlaidApi(configuration);
 
 /**
- * Calculate platform facilitator fee based on credit tier
- * Tier 1-3: 100% to ShiFi
- * Tier 4/Declined: 10% fee, rest to merchant
+ * Service for interacting with the Plaid API
  */
-async function calculatePlatformFee(
-  amount: number,
-  contractId: string,
-): Promise<{ fee: number; routeToShifi: boolean }> {
-  const underwritingData =
-    await storage.getUnderwritingDataByContractId(contractId);
-
-  // For tier 1-3, route entire payment to ShiFi
-  if (
-    underwritingData?.creditTier &&
-    ["tier1", "tier2", "tier3"].includes(underwritingData.creditTier)
-  ) {
-    return {
-      fee: 0, // No fee since entire amount goes to ShiFi
-      routeToShifi: true, // Route full amount to ShiFi
-    };
+export const plaidService = {
+  /**
+   * Get accounts for a user from Plaid
+   * @param accessToken Plaid access token
+   * @returns Array of accounts
+   */
+  async getAccounts(accessToken: string) {
+    try {
+      const accountsResponse = await plaidClient.accountsGet({
+        access_token: accessToken
+      });
+      
+      return accountsResponse.data.accounts;
+    } catch (error) {
+      logger.error({
+        message: `Error getting accounts from Plaid: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+      
+      throw error;
+    }
+  },
+  
+  /**
+   * Process a webhook from Plaid
+   * @param webhookData Webhook data from Plaid
+   */
+  async processWebhook(webhookData: any) {
+    try {
+      const { webhook_type, webhook_code, item_id } = webhookData;
+      
+      // Get Plaid item from database
+      const item = await storage.getPlaidItemByItemId(item_id);
+      
+      if (!item) {
+        logger.warn({
+          message: `Received webhook for unknown Plaid item: ${item_id}`,
+          category: "webhook",
+          source: "plaid",
+          metadata: {
+            webhookType: webhook_type,
+            webhookCode: webhook_code,
+            itemId: item_id
+          }
+        });
+        return;
+      }
+      
+      // Process different webhook types
+      switch (webhook_type) {
+        case 'ITEM':
+          await this.processItemWebhook(webhook_code, item_id, webhookData);
+          break;
+        case 'TRANSACTIONS':
+          await this.processTransactionsWebhook(webhook_code, item_id, webhookData);
+          break;
+        case 'ASSETS':
+          await this.processAssetsWebhook(webhook_code, item_id, webhookData);
+          break;
+        case 'PAYMENT_INITIATION':
+          await this.processPaymentWebhook(webhook_code, item_id, webhookData);
+          break;
+        default:
+          logger.info({
+            message: `Unhandled webhook type: ${webhook_type}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              webhookType: webhook_type,
+              webhookCode: webhook_code,
+              itemId: item_id
+            }
+          });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error processing Plaid webhook: ${error instanceof Error ? error.message : String(error)}`,
+        category: "webhook",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          webhookData
+        }
+      });
+      
+      throw error;
+    }
+  },
+  
+  /**
+   * Process Item webhooks
+   * @param webhookCode Webhook code
+   * @param itemId Plaid item ID
+   * @param webhookData Full webhook data
+   */
+  async processItemWebhook(webhookCode: string, itemId: string, webhookData: any) {
+    try {
+      switch (webhookCode) {
+        case 'ERROR':
+          // Handle item error
+          await storage.updatePlaidItemError(itemId, {
+            errorCode: webhookData.error.error_code,
+            errorMessage: webhookData.error.error_message,
+            errorType: webhookData.error.error_type,
+            updatedAt: new Date()
+          });
+          
+          logger.error({
+            message: `Plaid item error: ${webhookData.error.error_message}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              itemId,
+              errorCode: webhookData.error.error_code,
+              errorType: webhookData.error.error_type,
+              errorMessage: webhookData.error.error_message
+            }
+          });
+          break;
+          
+        case 'PENDING_EXPIRATION':
+          // Handle pending expiration
+          await storage.updatePlaidItemStatus(itemId, 'pending_expiration');
+          
+          logger.warn({
+            message: `Plaid item pending expiration: ${itemId}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              itemId,
+              daysUntilExpiration: webhookData.consent_expiration_time
+            }
+          });
+          break;
+          
+        case 'USER_PERMISSION_REVOKED':
+          // Handle user permission revoked
+          await storage.updatePlaidItemStatus(itemId, 'revoked');
+          
+          logger.warn({
+            message: `Plaid item permission revoked: ${itemId}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              itemId
+            }
+          });
+          break;
+          
+        default:
+          logger.info({
+            message: `Unhandled item webhook code: ${webhookCode}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              webhookCode,
+              itemId
+            }
+          });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error processing item webhook: ${error instanceof Error ? error.message : String(error)}`,
+        category: "webhook",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          webhookCode,
+          itemId
+        }
+      });
+      
+      throw error;
+    }
+  },
+  
+  /**
+   * Process Assets webhooks
+   * @param webhookCode Webhook code
+   * @param itemId Plaid item ID
+   * @param webhookData Full webhook data
+   */
+  async processAssetsWebhook(webhookCode: string, itemId: string, webhookData: any) {
+    try {
+      switch (webhookCode) {
+        case 'PRODUCT_READY':
+          // Asset report is ready
+          const assetReportId = webhookData.asset_report_id;
+          
+          // Update asset report status
+          await storage.updateAssetReport(assetReportId, {
+            status: 'ready',
+            updatedAt: new Date()
+          });
+          
+          logger.info({
+            message: `Asset report ready: ${assetReportId}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              itemId,
+              assetReportId
+            }
+          });
+          break;
+          
+        case 'ERROR':
+          // Asset report error
+          const errorAssetReportId = webhookData.asset_report_id;
+          
+          // Update asset report with error
+          await storage.updateAssetReportError(errorAssetReportId, {
+            errorCode: webhookData.error.error_code,
+            errorMessage: webhookData.error.error_message,
+            errorType: webhookData.error.error_type,
+            status: 'error',
+            updatedAt: new Date()
+          });
+          
+          logger.error({
+            message: `Asset report error: ${webhookData.error.error_message}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              itemId,
+              assetReportId: errorAssetReportId,
+              errorCode: webhookData.error.error_code,
+              errorType: webhookData.error.error_type,
+              errorMessage: webhookData.error.error_message
+            }
+          });
+          break;
+          
+        default:
+          logger.info({
+            message: `Unhandled assets webhook code: ${webhookCode}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              webhookCode,
+              itemId
+            }
+          });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error processing assets webhook: ${error instanceof Error ? error.message : String(error)}`,
+        category: "webhook",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          webhookCode,
+          itemId
+        }
+      });
+      
+      throw error;
+    }
+  },
+  
+  /**
+   * Process Payment webhooks
+   * @param webhookCode Webhook code
+   * @param itemId Plaid item ID
+   * @param webhookData Full webhook data
+   */
+  async processPaymentWebhook(webhookCode: string, itemId: string, webhookData: any) {
+    try {
+      switch (webhookCode) {
+        case 'PAYMENT_STATUS_UPDATE':
+          // Payment status update
+          const paymentId = webhookData.payment_id;
+          const newStatus = webhookData.new_payment_status;
+          
+          // Update payment status
+          await storage.updatePaymentStatus(paymentId, newStatus);
+          
+          logger.info({
+            message: `Payment status updated: ${paymentId} -> ${newStatus}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              itemId,
+              paymentId,
+              newStatus,
+              oldStatus: webhookData.old_payment_status
+            }
+          });
+          break;
+          
+        default:
+          logger.info({
+            message: `Unhandled payment webhook code: ${webhookCode}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              webhookCode,
+              itemId
+            }
+          });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error processing payment webhook: ${error instanceof Error ? error.message : String(error)}`,
+        category: "webhook",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          webhookCode,
+          itemId
+        }
+      });
+      
+      throw error;
+    }
+  },
+  
+  /**
+   * Process Transactions webhooks
+   * @param webhookCode Webhook code
+   * @param itemId Plaid item ID
+   * @param webhookData Full webhook data
+   */
+  async processTransactionsWebhook(webhookCode: string, itemId: string, webhookData: any) {
+    try {
+      switch (webhookCode) {
+        case 'INITIAL_UPDATE':
+        case 'HISTORICAL_UPDATE':
+        case 'DEFAULT_UPDATE':
+          // Transactions have been updated
+          // Fetch the new transactions in the background
+          setImmediate(async () => {
+            try {
+              const { access_token } = await storage.getPlaidItemByItemId(itemId);
+              await this.syncTransactions(access_token, itemId);
+            } catch (syncError) {
+              logger.error({
+                message: `Error syncing transactions after webhook: ${syncError instanceof Error ? syncError.message : String(syncError)}`,
+                category: "webhook",
+                source: "plaid",
+                metadata: {
+                  error: syncError instanceof Error ? syncError.message : String(syncError),
+                  stack: syncError instanceof Error ? syncError.stack : undefined,
+                  itemId
+                }
+              });
+            }
+          });
+          
+          logger.info({
+            message: `Transactions update webhook received: ${webhookCode}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              itemId,
+              webhookCode,
+              newTransactions: webhookData.new_transactions
+            }
+          });
+          break;
+          
+        case 'TRANSACTIONS_REMOVED':
+          // Transactions have been removed
+          // Remove the specified transactions
+          await storage.removeTransactions(itemId, webhookData.removed_transactions);
+          
+          logger.info({
+            message: `Transactions removed webhook received`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              itemId,
+              removedTransactions: webhookData.removed_transactions
+            }
+          });
+          break;
+          
+        default:
+          logger.info({
+            message: `Unhandled transactions webhook code: ${webhookCode}`,
+            category: "webhook",
+            source: "plaid",
+            metadata: {
+              webhookCode,
+              itemId
+            }
+          });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error processing transactions webhook: ${error instanceof Error ? error.message : String(error)}`,
+        category: "webhook",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          webhookCode,
+          itemId
+        }
+      });
+      
+      throw error;
+    }
+  },
+  
+  /**
+   * Sync transactions for an item
+   * @param accessToken Plaid access token
+   * @param itemId Plaid item ID
+   */
+  async syncTransactions(accessToken: string, itemId: string) {
+    try {
+      // This is a simplified version - in production this would implement
+      // cursor-based pagination as described in Plaid's documentation
+      const transactionsResponse = await plaidClient.transactionsSync({
+        access_token: accessToken,
+        options: {
+          include_personal_finance_category: true
+        }
+      });
+      
+      const { added, modified, removed, has_more } = transactionsResponse.data;
+      
+      // Process transactions
+      // In a real implementation, we would handle batch processing and pagination
+      
+      // Process added transactions
+      if (added.length > 0) {
+        await storage.addTransactions(itemId, added);
+        
+        logger.info({
+          message: `Added ${added.length} transactions for item ${itemId}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            itemId,
+            count: added.length
+          }
+        });
+      }
+      
+      // Process modified transactions
+      if (modified.length > 0) {
+        await storage.updateTransactions(itemId, modified);
+        
+        logger.info({
+          message: `Updated ${modified.length} transactions for item ${itemId}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            itemId,
+            count: modified.length
+          }
+        });
+      }
+      
+      // Process removed transactions
+      if (removed.length > 0) {
+        await storage.removeTransactions(itemId, removed.map(t => t.transaction_id));
+        
+        logger.info({
+          message: `Removed ${removed.length} transactions for item ${itemId}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            itemId,
+            count: removed.length
+          }
+        });
+      }
+      
+      // If there are more transactions to fetch, we would recursively call this function
+      if (has_more) {
+        logger.info({
+          message: `More transactions available for item ${itemId}, continuing sync`,
+          category: "api",
+          source: "plaid"
+        });
+        
+        // In a real implementation, we would continue fetching with the cursor
+      }
+      
+      return {
+        added: added.length,
+        modified: modified.length,
+        removed: removed.length,
+        has_more
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error syncing transactions: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          itemId
+        }
+      });
+      
+      throw error;
+    }
+  },
+  
+  /**
+   * Get bank connection for a contract
+   * @param contractId Contract ID
+   * @returns Bank connection or null if not found
+   */
+  async getBankConnectionForContract(contractId: number) {
+    try {
+      const connection = await storage.getPlaidConnectionForContract(contractId);
+      
+      if (!connection) {
+        return null;
+      }
+      
+      return connection;
+    } catch (error) {
+      logger.error({
+        message: `Error getting bank connection for contract: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          contractId
+        }
+      });
+      
+      throw error;
+    }
   }
-
-  // For tier 4/declined, take 10% fee and route rest to merchant
-  const fee = Math.round(amount * 0.1 * 100) / 100; // 10% fee
-  return {
-    fee,
-    routeToShifi: false, // Route to merchant with fee
-  };
-}
-
-export const plaidService = new PlaidService();
+};
