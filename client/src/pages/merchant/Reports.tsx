@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import MerchantLayout from "@/components/layout/MerchantLayout";
+import MerchantLayout from "@/components/merchant/MerchantLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
