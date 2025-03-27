@@ -102,7 +102,8 @@ export const logSourceEnum = pgEnum("log_source", [
   "analytics",
   "notification",
   "openai",
-  "blockchain"
+  "blockchain",
+  "sesameai"
 ]);
 export const verificationTypeEnum = pgEnum("verification_type", [
   "identity",

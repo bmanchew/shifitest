@@ -9,6 +9,7 @@ export * from './nlpearl';
 export * from './notification';
 export * from './merchantAnalytics';
 export * from './salesRepAnalytics';
+export * from './sesameAI';
 
 import { NotificationService } from './notification';
 import { NLPearlService } from './nlpearl';
@@ -23,3 +24,4 @@ export { merchantAnalyticsService } from './merchantAnalytics';
 export { openaiService } from './openai';
 export { salesRepAnalyticsService } from './salesRepAnalytics';
 export { blockchainService } from './blockchain';
+export { sesameAIService } from './sesameAI';

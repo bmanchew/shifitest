@@ -24,7 +24,7 @@ import { plaidService } from "./services/plaid";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
-import { nlpearlService, notificationService, merchantAnalyticsService } from './services';
+import { nlpearlService, notificationService, merchantAnalyticsService, sesameAIService } from './services';
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
 import { reportsRouter } from "./routes/admin/reports";
@@ -40,6 +40,7 @@ import blockchainRouter from "./routes/blockchain"; // Import blockchain routes
 import salesRepRouter from "./routes/salesRep"; // Import sales rep routes
 import communicationsRouter from "./routes/communications"; // Import communications routes
 import indexRoutes from "./routes/index"; // Import routes from index.ts
+import { registerSesameAIRoutes } from "./routes/sesameAI"; // Import SesameAI routes
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available
@@ -4876,6 +4877,9 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   apiRouter.use("/conversations", communicationsRouter);
   // Also mount the support-tickets endpoint for backward compatibility
   apiRouter.use("/support-tickets", communicationsRouter);
+  
+  // Register SesameAI routes
+  registerSesameAIRoutes(apiRouter);
 
   // Get contract by phone number
   apiRouter.get("/contracts/by-phone/:phoneNumber", async (req: Request, res: Response) => {
