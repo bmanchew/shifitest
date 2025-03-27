@@ -1,15 +1,27 @@
+#!/usr/bin/env python3
 """
 Simplified generator module to mock the Sesame AI CSM behavior
 """
+
+import os
 import torch
 import torchaudio
-from typing import List, Tuple, Optional
+import numpy as np
+from typing import List, Optional, Union
 
 class Segment:
     """
     A segment representing text or audio for the conversational speech model
     """
     def __init__(self, speaker: int, text: str, audio: Optional[torch.Tensor] = None):
+        """
+        Initialize a segment
+        
+        Args:
+            speaker: Speaker ID (0 or 1)
+            text: Text content
+            audio: Optional audio data
+        """
         self.speaker = speaker
         self.text = text
         self.audio = audio
@@ -20,8 +32,8 @@ class Generator:
     """
     def __init__(self):
         """Initialize the generator"""
-        self.sample_rate = 24000  # Standard sample rate for the model
-    
+        self.sample_rate = 24000
+
     def generate(
         self,
         text: str,
@@ -45,27 +57,29 @@ class Generator:
         Returns:
             A tensor containing the generated audio
         """
-        # Log generation request
-        print(f"Generating audio for speaker {speaker}")
-        print(f"Text: '{text[:100]}{'...' if len(text) > 100 else ''}'")
-        print(f"Context: {len(context) if context else 0} segments")
+        # For testing purposes, just generate a simple sine wave
+        # Different frequencies for different speakers
+        freq = 440 if speaker == 0 else 220  # Hz (A4 for female, A3 for male)
         
-        # Calculate approximately how long the audio should be based on text length
-        # Rough estimate: 80ms per character with some randomness
-        chars = len(text)
-        audio_length_samples = int(self.sample_rate * (chars * 0.08))
+        # Calculate duration based on text length (avg reading speed)
+        # Approximately 150 words per minute, or 2.5 words per second
+        # Average English word is 5 characters
+        words = len(text) / 5
+        duration_s = words / 2.5
         
-        # Cap at max_audio_length_ms
-        max_samples = int(self.sample_rate * (max_audio_length_ms / 1000))
-        audio_length_samples = min(audio_length_samples, max_samples)
+        # Ensure minimum and maximum duration
+        duration_s = max(1.0, min(duration_s, max_audio_length_ms / 1000))
         
-        # Create a silent audio tensor
-        audio = torch.zeros(audio_length_samples)
+        # Generate a simple sine wave
+        t = torch.linspace(0, duration_s, int(self.sample_rate * duration_s))
+        audio = torch.sin(2 * np.pi * freq * t)
         
-        # Add a small sine wave to make it not completely silent
-        time = torch.arange(0, audio_length_samples) / self.sample_rate
-        frequency = 440.0  # A4 note
-        audio += 0.01 * torch.sin(2 * torch.pi * frequency * time)
+        # Add some noise to make it sound more natural
+        noise = torch.randn_like(audio) * 0.01
+        audio = audio + noise
+        
+        # Normalize audio to be between -1 and 1
+        audio = audio / torch.max(torch.abs(audio))
         
         return audio
 
@@ -79,5 +93,4 @@ def load_csm_1b(device: str = "cuda") -> Generator:
     Returns:
         A Generator instance
     """
-    print(f"Loading mock CSM-1B model on {device}")
     return Generator()

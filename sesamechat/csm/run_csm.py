@@ -1,11 +1,26 @@
+#!/usr/bin/env python3
 """
-Simple script to test SesameAI conversational speech model (CSM)
+Script to convert text to speech using SesameAI's Conversational Speech Model (CSM)
+This script is called from the SesameAI service in the Node.js backend.
 """
+
 import os
 import sys
+import json
+import argparse
 import torch
 import torchaudio
-from generator import load_csm_1b, Segment
+import numpy as np
+import uuid
+from pathlib import Path
+from typing import List, Optional, Union
+
+# Import the generator from the current directory
+from generator import Segment, load_csm_1b
+
+# Constants
+SAMPLE_RATE = 24000  # The expected sample rate for CSM
+AUDIO_DIR = os.path.join(os.getcwd(), "public", "audio")
 
 def simulate_audio_generation(text, speaker_id=0, output_path=None):
     """
@@ -13,68 +28,86 @@ def simulate_audio_generation(text, speaker_id=0, output_path=None):
     
     Args:
         text: Text to convert to speech
-        speaker_id: Speaker ID (0-1)
+        speaker_id: Speaker ID (0 for female, 1 for male)
         output_path: Path to save the audio file
     
     Returns:
         Path to the generated audio file
     """
-    # Define default output path if not provided
-    if output_path is None:
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'public', 'audio')
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, f'test_audio_{speaker_id}_{hash(text) % 10000}.wav')
+    try:
+        # Make sure the output directory exists
+        os.makedirs(AUDIO_DIR, exist_ok=True)
         
-    print(f"Generating test audio for: '{text[:50]}...'")
-    print(f"Speaker ID: {speaker_id}")
-    print(f"Output path: {output_path}")
-    
-    # Select device
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
-    
-    # Load the model
-    model = load_csm_1b(device)
-    
-    # Generate audio
-    audio = model.generate(
-        text=text,
-        speaker=speaker_id,
-        context=None,
-        max_audio_length_ms=60_000,  # 60 seconds max
-    )
-    
-    # Save the audio file
-    torchaudio.save(
-        output_path,
-        audio.unsqueeze(0).cpu(),
-        model.sample_rate
-    )
-    
-    print(f"Audio saved to: {output_path}")
-    return output_path
+        # Create a model instance
+        model = load_csm_1b(device="cpu")
+        
+        # Generate the audio
+        audio = model.generate(
+            text=text,
+            speaker=speaker_id,
+            context=None,  # No context for initial generation
+            max_audio_length_ms=90_000,  # Max 90 seconds
+            temperature=0.9,
+            topk=50
+        )
+        
+        # Determine the output filename
+        if output_path is None:
+            filename = f"sesameai_{uuid.uuid4().hex[:8]}_{speaker_id}.wav"
+            output_path = os.path.join(AUDIO_DIR, filename)
+        else:
+            # Ensure the path is within the audio directory for security
+            base_filename = os.path.basename(output_path)
+            output_path = os.path.join(AUDIO_DIR, base_filename)
+        
+        # Save the audio
+        torchaudio.save(
+            output_path,
+            audio.unsqueeze(0),  # Add channel dimension
+            SAMPLE_RATE
+        )
+        
+        # Return the relative path for web serving
+        # Strip the 'public' directory from the path, keeping the leading slash
+        rel_path = output_path.replace(os.path.join(os.getcwd(), "public"), "")
+        
+        # Ensure the path starts with a slash for correct web URLs
+        if not rel_path.startswith('/'):
+            rel_path = '/' + rel_path
+            
+        return {
+            "success": True,
+            "path": rel_path
+        }
+    except Exception as e:
+        print(f"Error generating audio: {str(e)}", file=sys.stderr)
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Convert text to speech using SesameAI CSM')
+    parser.add_argument('--text', required=True, help='Text to convert to speech')
+    parser.add_argument('--speaker', type=int, default=0, help='Speaker ID (0=female, 1=male)')
+    parser.add_argument('--output', help='Path to save the output audio file')
+    return parser.parse_args()
 
 def main():
     """
-    Main function to test audio generation
+    Main function to handle CLI invocation
     """
-    # Get the text argument from command line, or use default
-    if len(sys.argv) > 1:
-        text = sys.argv[1]
-    else:
-        text = "Hello, I'm the ShiFi financial assistant. How can I help you with your merchant financing today?"
+    args = parse_args()
     
-    # Get speaker ID from command line, or use default
-    speaker_id = 0
-    if len(sys.argv) > 2:
-        try:
-            speaker_id = int(sys.argv[2])
-        except ValueError:
-            print(f"Invalid speaker ID: {sys.argv[2]}. Using default (0).")
+    result = simulate_audio_generation(
+        text=args.text,
+        speaker_id=args.speaker,
+        output_path=args.output
+    )
     
-    # Generate audio
-    output_path = simulate_audio_generation(text, speaker_id)
-    print(f"Test complete. Audio file saved to: {output_path}")
+    # Print JSON result to stdout for the Node.js process to capture
+    print(json.dumps(result))
 
 if __name__ == "__main__":
     main()

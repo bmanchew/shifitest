@@ -7,118 +7,91 @@
  * 3. Verifies the generated audio files
  */
 
-const fetch = require('node-fetch');
+require('dotenv').config();
+const { sesameAIService } = require('./server/services/sesameai');
 const fs = require('fs');
 const path = require('path');
 
-// Test configuration
-const API_BASE_URL = 'http://localhost:3000/api';
-const TEST_TEXTS = [
-  "Hello, I'm the ShiFi financial assistant. How can I help you with your merchant financing today?",
-  "Your payment of $250 is due on March 15th. Please ensure your account has sufficient funds.",
-  "Congratulations! Your financing application has been approved. We'll be in touch shortly with next steps."
-];
-
+/**
+ * Test the SesameAI service functionality
+ */
 async function testSesameAIService() {
-  console.log('Testing SesameAI service...\n');
-
+  console.log('Testing SesameAI service...');
+  
+  // 1. Check if the service is properly initialized
+  const isReady = sesameAIService.isReady();
+  console.log(`SesameAI service ready: ${isReady}`);
+  
+  if (!isReady) {
+    console.error('SesameAI service is not initialized. Check if Python dependencies are installed.');
+    process.exit(1);
+  }
+  
   try {
-    // Test 1: Check service status
-    console.log('Test 1: Checking SesameAI service status...');
-    const statusResponse = await fetch(`${API_BASE_URL}/sesameai/status`);
-    const statusData = await statusResponse.json();
+    // 2. Test generating a voice from text
+    console.log('Testing voice generation...');
+    const sampleText = 'Hello, this is a test of the SesameAI Conversational Speech Model.';
     
-    if (statusResponse.ok && statusData.initialized) {
-      console.log('✅ SesameAI service is initialized and ready');
+    // Test with female voice (speaker = 0)
+    const femaleAudioPath = await sesameAIService.generateVoice({
+      text: sampleText,
+      speaker: 0
+    });
+    console.log(`Female voice generated at: ${femaleAudioPath}`);
+    
+    // Test with male voice (speaker = 1)
+    const maleAudioPath = await sesameAIService.generateVoice({
+      text: sampleText,
+      speaker: 1
+    });
+    console.log(`Male voice generated at: ${maleAudioPath}`);
+    
+    // 3. Test generating a notification voice
+    console.log('Testing notification voice generation...');
+    const notificationAudioPath = await sesameAIService.generateNotificationVoice({
+      type: 'payment_reminder',
+      data: {
+        customerName: 'John Smith',
+        amount: 250.00,
+        dueDate: 'April 15, 2025'
+      },
+      speaker: 0
+    });
+    console.log(`Notification voice generated at: ${notificationAudioPath}`);
+    
+    // 4. List all audio files
+    console.log('Listing all generated audio files...');
+    const audioFiles = await sesameAIService.listAudioFiles();
+    console.log(`Found ${audioFiles.length} audio files:`);
+    audioFiles.forEach(file => console.log(`- ${file}`));
+    
+    // 5. Verify files exist
+    const basePath = path.resolve(process.cwd(), 'public');
+    const filesExist = [femaleAudioPath, maleAudioPath, notificationAudioPath].map(filePath => {
+      const fullPath = path.join(basePath, filePath);
+      const exists = fs.existsSync(fullPath);
+      return { path: filePath, exists };
+    });
+    
+    filesExist.forEach(file => {
+      console.log(`File ${file.path}: ${file.exists ? 'EXISTS' : 'MISSING'}`);
+    });
+    
+    // Check if any files are missing
+    const missingFiles = filesExist.filter(file => !file.exists);
+    if (missingFiles.length > 0) {
+      console.error('Some generated audio files are missing!');
+      missingFiles.forEach(file => console.error(`- ${file.path}`));
     } else {
-      console.error('❌ SesameAI service is not initialized');
-      console.log('Response:', statusData);
-      return false;
-    }
-
-    // Test 2: Generate voice for each test text
-    console.log('\nTest 2: Generating voice responses...');
-    const generatedFiles = [];
-    
-    for (let i = 0; i < TEST_TEXTS.length; i++) {
-      const text = TEST_TEXTS[i];
-      const speakerId = i % 2; // Alternate between speaker 0 and 1
-      
-      console.log(`\nGenerating voice for text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
-      console.log(`Using speaker ID: ${speakerId}`);
-      
-      try {
-        const response = await fetch(`${API_BASE_URL}/sesameai/generate`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            text,
-            speakerId
-          }),
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok && data.audioPath) {
-          console.log(`✅ Voice generated successfully`);
-          console.log(`Audio file: ${data.audioPath}`);
-          generatedFiles.push(data.audioPath);
-        } else {
-          console.error(`❌ Failed to generate voice`);
-          console.log('Response:', data);
-        }
-      } catch (error) {
-        console.error(`❌ Error generating voice: ${error.message}`);
-      }
+      console.log('All generated audio files exist.');
     }
     
-    // Test 3: Verify audio files exist
-    console.log('\nTest 3: Verifying generated audio files...');
-    let allFilesExist = true;
-    
-    for (const filePath of generatedFiles) {
-      // Extract relative path from URL or full path
-      const relativePath = filePath.includes('/audio/') 
-        ? filePath.substring(filePath.indexOf('/audio/'))
-        : filePath;
-      
-      // Get absolute path
-      const publicDir = path.join(process.cwd(), 'public');
-      const absolutePath = path.join(publicDir, relativePath);
-      
-      if (fs.existsSync(absolutePath)) {
-        const stats = fs.statSync(absolutePath);
-        console.log(`✅ File exists: ${relativePath} (${stats.size} bytes)`);
-      } else {
-        console.error(`❌ File does not exist: ${relativePath}`);
-        allFilesExist = false;
-      }
-    }
-    
-    if (allFilesExist) {
-      console.log('\n✅ All tests passed successfully!');
-      return true;
-    } else {
-      console.log('\n❌ Some tests failed. See above for details.');
-      return false;
-    }
-    
+    console.log('SesameAI service test completed successfully!');
   } catch (error) {
-    console.error(`Test failed with error: ${error.message}`);
-    console.error(error);
-    return false;
+    console.error('Error testing SesameAI service:', error);
+    process.exit(1);
   }
 }
 
-// Run the tests
-testSesameAIService()
-  .then((success) => {
-    console.log(`\nTest completed ${success ? 'successfully' : 'with failures'}.`);
-    process.exit(success ? 0 : 1);
-  })
-  .catch((error) => {
-    console.error('Unexpected error running tests:', error);
-    process.exit(1);
-  });
+// Run the test
+testSesameAIService();

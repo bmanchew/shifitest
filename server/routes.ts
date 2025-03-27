@@ -40,7 +40,7 @@ import blockchainRouter from "./routes/blockchain"; // Import blockchain routes
 import salesRepRouter from "./routes/salesRep"; // Import sales rep routes
 import communicationsRouter from "./routes/communications"; // Import communications routes
 import indexRoutes from "./routes/index"; // Import routes from index.ts
-import { registerSesameAIRoutes } from "./routes/sesameAI"; // Import SesameAI routes
+import registerSesameAIRoutes from "./routes/sesameAI"; // Import SesameAI routes
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available
