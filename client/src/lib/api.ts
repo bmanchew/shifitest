@@ -35,6 +35,7 @@ export const updatePaymentSchedule = async (customerId: string, scheduleData: an
 };
 import { QueryFunction } from "@tanstack/react-query";
 import { API_URL } from '../env';
+import { addCsrfHeader } from './csrf';
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -85,7 +86,7 @@ export async function apiRequest<T = Response>(
   }
 
   // Get auth token from local storage
-  const headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
+  let headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
   
   try {
     const userData = localStorage.getItem("shifi_user");
@@ -97,6 +98,21 @@ export async function apiRequest<T = Response>(
     }
   } catch (error) {
     console.error("Error getting auth token from localStorage:", error);
+  }
+  
+  // For non-GET requests to API endpoints, add CSRF token
+  if (method !== 'GET' && url.startsWith('/api') && !url.includes('/webhook')) {
+    try {
+      // Add CSRF token to headers for state-changing requests
+      const headersWithCsrf = await addCsrfHeader(headers);
+      Object.assign(headers, headersWithCsrf);
+      
+      if (import.meta.env.DEV) {
+        console.log('Added CSRF token to request headers');
+      }
+    } catch (error) {
+      console.error('Failed to add CSRF token to request:', error);
+    }
   }
   
   const res = await fetch(fullUrl, {

@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/queryClient";
 import { User } from "@shared/schema";
+import { fetchCsrfToken } from "./csrf";
 
 export type AuthUser = Omit<User, "password"> & {
   merchantId?: number;
@@ -19,6 +20,10 @@ export interface RegisterParams {
 
 export async function registerUser(params: RegisterParams): Promise<void> {
   try {
+    // First, get a CSRF token to be used for state-changing requests
+    await fetchCsrfToken();
+    
+    // Now make the registration request
     await apiRequest("POST", "/api/auth/register", params);
   } catch (error) {
     console.error("Registration error:", error);
@@ -28,6 +33,10 @@ export async function registerUser(params: RegisterParams): Promise<void> {
 
 export async function loginUser(email: string, password: string): Promise<AuthResult> {
   try {
+    // First, get a CSRF token to be used for state-changing requests
+    await fetchCsrfToken();
+    
+    // Now make the login request
     const data = await apiRequest<AuthResult>("POST", "/api/auth/login", {
       email,
       password,

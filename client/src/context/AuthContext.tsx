@@ -11,13 +11,15 @@ import {
   getUserHomeRoute,
 } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { clearCsrfToken, fetchCsrfToken } from "@/lib/csrf";
+import { apiRequest } from "@/lib/api";
 
 export interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (params: RegisterParams) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -52,24 +54,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     try {
       console.log(`Attempting login for ${email}`);
+      
+      // Fetch CSRF token first
+      await fetchCsrfToken();
 
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-        credentials: "include", // Add this to allow cookies to be sent and stored
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message || `Login failed with status: ${response.status}`,
-        );
-      }
-
-      const data = await response.json();
+      // Use the correct response type
+      const data = await apiRequest<{success: boolean; user: AuthUser}>("POST", "/api/auth/login", { email, password });
       console.log(`Login API response:`, data);
 
       if (!data.user) {
@@ -102,9 +92,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Complete the loading state
       setIsLoading(false);
-
-      // Return the user data so we can use it in the component
-      return user;
     } catch (error) {
       console.error("Login error:", error);
       setIsLoading(false);
@@ -115,7 +102,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const register = async (params: RegisterParams) => {
     setIsLoading(true);
     try {
-      await registerUser(params);
+      // Fetch CSRF token first
+      await fetchCsrfToken();
+      
+      // Call the register endpoint directly using apiRequest
+      await apiRequest("POST", "/api/auth/register", params);
       setIsLoading(false);
     } catch (error) {
       setIsLoading(false);
@@ -123,14 +114,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    clearUserData();
-    setLocation("/");
-    toast({
-      title: "Logged Out",
-      description: "You have been successfully logged out.",
-    });
+  const logout = async () => {
+    try {
+      // Fetch CSRF token first 
+      await fetchCsrfToken();
+      
+      // Call server logout endpoint to clear cookies
+      await apiRequest("POST", "/api/auth/logout");
+      
+      // Clear user state
+      setUser(null);
+      clearUserData();
+      
+      // Clear CSRF token
+      clearCsrfToken();
+      
+      // Redirect to home page
+      setLocation("/");
+      
+      // Show success message
+      toast({
+        title: "Logged Out",
+        description: "You have been successfully logged out.",
+      });
+    } catch (error) {
+      console.error("Error during logout:", error);
+      
+      // Even if the server logout fails, we should still clear local state
+      setUser(null);
+      clearUserData();
+      clearCsrfToken();
+      setLocation("/");
+      
+      toast({
+        title: "Logged Out",
+        description: "You have been logged out, but there was an issue with the server.",
+        variant: "destructive",
+      });
+    }
   };
 
   const value = {

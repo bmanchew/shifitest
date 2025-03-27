@@ -167,6 +167,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+  
+  // Logout endpoint
+  apiRouter.post("/auth/logout", async (req: Request, res: Response) => {
+    try {
+      // Clear authentication cookies
+      res.clearCookie('userId', { 
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/'
+      });
+      
+      res.clearCookie('userRole', {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/'
+      });
+      
+      // Create log for user logout if we have user info
+      if (req.user?.id) {
+        await storage.createLog({
+          level: "info",
+          message: `User logged out`,
+          userId: req.user.id,
+          metadata: JSON.stringify({
+            ip: req.ip,
+            userAgent: req.get("user-agent"),
+          }),
+        });
+      }
+      
+      res.json({ 
+        success: true, 
+        message: "Logged out successfully" 
+      });
+    } catch (error) {
+      logger.error({
+        message: `Logout error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          errorStack: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      res.status(500).json({ 
+        success: false, 
+        message: "Error during logout" 
+      });
+    }
+  });
 
   // User routes
   apiRouter.post("/users", userCreationRateLimiter, async (req: Request, res: Response) => {

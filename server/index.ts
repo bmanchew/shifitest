@@ -4,10 +4,41 @@ import { setupVite, serveStatic, log } from "./vite";
 import { logger, requestLogger } from "./services/logger";
 import { storage } from "./storage";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import { csrfProtectionWithExclusions, csrfTokenHandler, csrfErrorHandler } from "./middleware/csrfMiddleware";
 
 const app = express();
 app.use(express.json());
 app.use(cookieParser()); // Add cookie-parser middleware
+
+// Add Helmet for improved security headers
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://js.stripe.com", "https://cdn.plaid.com"],
+        connectSrc: ["'self'", "https://*.plaid.com", "https://*.stripe.com", "https://api.prefi.io"],
+        frameSrc: ["'self'", "https://js.stripe.com", "https://cdn.plaid.com", "https://link.plaid.com"],
+        imgSrc: ["'self'", "data:", "https:"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    // Setting a long duration for HSTS
+    strictTransportSecurity: {
+      maxAge: 63072000, // 2 years in seconds
+      includeSubDomains: true,
+      preload: true
+    },
+    // Prevent clickjacking
+    frameguard: { 
+      action: "deny" 
+    }
+  })
+);
 
 // Validate required environment variables
 const requiredEnvVars: string[] = [
@@ -140,6 +171,15 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
 
 // Add the request logger middleware for enhanced logging
 app.use(requestLogger);
+
+// Apply our enhanced CSRF protection middleware with exclusions
+app.use('/api', csrfProtectionWithExclusions);
+
+// Add a route to get a CSRF token
+app.get('/api/csrf-token', csrfTokenHandler);
+
+// Add CSRF error handler
+app.use(csrfErrorHandler);
 
 // Keep basic console logging for development
 app.use((req, res, next) => {
