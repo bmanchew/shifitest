@@ -451,50 +451,105 @@ async function startServer() {
     // Start the server on an available port
     try {
       console.log("Starting server on port 5000...");
-      // Always use port 5000 for Replit workflows to work correctly
-      const serverPort = 5000;
+      // Try to start on port 5000 by default
+      const defaultPort = 5000;
+      const maxPort = defaultPort + 10; // Allow up to 10 port attempts
+      let currentPort = defaultPort;
+      let serverStarted = false;
       
-      // Start the server only once on the available port
-      console.log("About to call server.listen()...");
-      const httpServer = server.listen(
-        {
-          port: serverPort,
-          host: "0.0.0.0",
-          reusePort: false,
-        },
-        () => {
-          const serverAddress = httpServer.address();
-          const actualPort =
-            typeof serverAddress === "object" && serverAddress
-              ? serverAddress.port
-              : serverPort;
-          log(`Server listening on http://0.0.0.0:${actualPort}`);
-          logger.info({
-            message: `ShiFi server started on port ${actualPort}`,
-            category: "system",
-            metadata: {
-              environment: app.get("env"),
-              nodeVersion: process.version,
-              address: "0.0.0.0",
-              port: actualPort,
-              deployment: isProd ? 'cloud-run' : 'development'
-            },
-            tags: ["startup", "server"],
-          });
-        },
-      );
-
-      // Store the server instance globally to prevent multiple instances
-      (global as any)["server_instance"] = httpServer;
-
-      httpServer.on("error", (err: Error) => {
-        console.error(`SERVER ERROR: ${err.message}`);
-        logger.error({
-          message: `Server error: ${err.message}`,
-          category: "system",
-          metadata: { error: err.message, stack: err.stack },
+      // Helper function to try starting the server on a specific port
+      const tryStartServer = async (port: number): Promise<any> => {
+        return new Promise(async (resolve, reject) => {
+          // First check if port is available
+          const net = await import('net');
+          const tester = net.createServer()
+            .once('error', (err: Error & { code?: string }) => {
+              // Port in use, try next port
+              if (err.code === 'EADDRINUSE') {
+                if (port >= maxPort) {
+                  return reject(new Error(`Could not find an available port between ${defaultPort} and ${maxPort}`));
+                }
+                
+                logger.warn({
+                  message: `Port ${port} is in use, trying port ${port + 1}`,
+                  category: "system",
+                  source: "internal"
+                });
+                
+                // Try the next port
+                tester.close(() => {
+                  resolve(tryStartServer(port + 1));
+                });
+              } else {
+                reject(err);
+              }
+            })
+            .once('listening', () => {
+              // Port is available, use it to start the actual server
+              tester.close(async () => {
+                try {
+                  // Start the actual server on this available port
+                  console.log(`Starting server on port ${port}...`);
+                  const httpServer = server.listen(
+                    {
+                      port: port,
+                      host: "0.0.0.0",
+                      reusePort: false,
+                    },
+                    () => {
+                      const serverAddress = httpServer.address();
+                      const actualPort =
+                        typeof serverAddress === "object" && serverAddress
+                          ? serverAddress.port
+                          : port;
+                          
+                      // Mark server as successfully started
+                      serverStarted = true;
+                      
+                      log(`Server listening on http://0.0.0.0:${actualPort}`);
+                      logger.info({
+                        message: `ShiFi server started on port ${actualPort}`,
+                        category: "system",
+                        metadata: {
+                          environment: app.get("env"),
+                          nodeVersion: process.version,
+                          address: "0.0.0.0",
+                          port: actualPort,
+                          deployment: isProd ? 'cloud-run' : 'development'
+                        },
+                        tags: ["startup", "server"],
+                      });
+                      
+                      // Store the server instance globally to prevent multiple instances
+                      (global as any)["server_instance"] = httpServer;
+                      resolve(httpServer);
+                    }
+                  );
+                  
+                  // Set up error handling for the server
+                  httpServer.on("error", (err: Error) => {
+                    console.error(`SERVER ERROR: ${err.message}`);
+                    logger.error({
+                      message: `Server error: ${err.message}`,
+                      category: "system",
+                      metadata: { error: err.message, stack: err.stack },
+                    });
+                    
+                    if (!serverStarted) {
+                      reject(err);
+                    }
+                  });
+                } catch (err) {
+                  reject(err);
+                }
+              });
+            })
+            .listen(port, '0.0.0.0');
         });
-      });
+      };
+      
+      // Try to start the server with our helper function
+      const httpServer = await tryStartServer(currentPort);
     } catch (error) {
       logger.error({
         message: `Failed to start server: ${error instanceof Error ? error.message : String(error)}`,

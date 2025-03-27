@@ -1,71 +1,73 @@
-/**
- * CSRF Protection Middleware
- * 
- * This middleware sets up CSRF protection for the application using csurf package.
- * It includes the following features:
- * 1. CSRF token generation endpoint
- * 2. CSRF validation middleware for protected routes
- * 3. Exclusion list for routes that don't need CSRF protection
- */
-
 import { Request, Response, NextFunction } from 'express';
-import csurf from 'csurf';
+import { logger } from '../services/logger';
+import csrf from 'csurf';
 
-// Define the list of routes that should be exempt from CSRF protection
-// These are typically webhook endpoints and authentication endpoints
-const csrfExcludedRoutes = [
-  '/api/plaid/webhook',
-  '/api/didit/webhook',
-  '/api/thanksroger/webhook',
-  '/api/twilio/webhook',
-  '/api/csrf-token', // The token endpoint itself is excluded
-];
-
-// Create CSRF protection middleware with cookie-based tokens
-export const csrfProtection = csurf({
-  cookie: {
-    key: '_csrf',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // Only use secure cookies in production
-    sameSite: 'lax', // Provides some CSRF protection by browsers
-  }
-});
-
-// Middleware to exclude specified routes from CSRF protection
-export function csrfProtectionWithExclusions(req: Request, res: Response, next: NextFunction) {
-  // Check if the current path is in the excluded list
-  const isExcluded = csrfExcludedRoutes.some(route => req.path.includes(route));
+/**
+ * CSRF protection middleware with exclusions for certain endpoints
+ */
+export const csrfProtectionWithExclusions = (req: Request, res: Response, next: NextFunction) => {
+  // List of paths that should be excluded from CSRF protection
+  const excludedPaths = [
+    '/api/csrf-token',         // Endpoint to get a CSRF token
+    '/api/auth/login',         // Login endpoint
+    '/api/auth/register',      // Registration endpoint
+    '/api/plaid/webhook',      // Plaid webhook
+    '/api/stripe/webhook',     // Stripe webhook
+    '/api/twilio/webhook',     // Twilio webhook
+    '/api/communications/merchant/auto-reply' // Auto-reply webhook
+  ];
   
-  // Skip CSRF protection for excluded routes
-  if (isExcluded) {
+  // Check if the request path should be excluded
+  const shouldExclude = excludedPaths.some(path => req.path.startsWith(path));
+  
+  if (shouldExclude) {
+    // Skip CSRF verification for excluded paths
     return next();
   }
   
-  // Apply CSRF protection for all other routes
+  // Apply CSRF protection
+  const csrfProtection = csrf({ cookie: true });
   return csrfProtection(req, res, next);
-}
+};
 
-// Route handler for the CSRF token endpoint
-export function csrfTokenHandler(req: Request, res: Response) {
-  // Send the CSRF token to the client
-  res.json({
-    success: true,
-    csrfToken: req.csrfToken()
+/**
+ * Handler for providing a CSRF token
+ */
+export const csrfTokenHandler = (req: Request, res: Response) => {
+  const csrfProtection = csrf({ cookie: true });
+  
+  csrfProtection(req, res, () => {
+    res.json({ 
+      success: true,
+      csrfToken: req.csrfToken() 
+    });
   });
-}
+};
 
-// Error handler for CSRF validation errors
-export function csrfErrorHandler(err: Error & { code?: string }, req: Request, res: Response, next: NextFunction) {
+/**
+ * Error handler for CSRF errors
+ */
+export const csrfErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
   if (err.code !== 'EBADCSRFTOKEN') {
     return next(err);
   }
   
-  // Handle CSRF token validation failures
-  console.error(`CSRF token validation failed for ${req.method} ${req.path}`);
+  // Log the CSRF error
+  logger.warn({
+    message: `CSRF validation failed for ${req.method} ${req.path}`,
+    category: 'security',
+    source: 'internal',
+    metadata: {
+      path: req.path,
+      method: req.method,
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    }
+  });
   
   // Return a 403 Forbidden response
   res.status(403).json({
     success: false,
-    error: 'CSRF token validation failed. Please refresh the page and try again.'
+    message: 'CSRF validation failed. Please refresh the page and try again.'
   });
-}
+};

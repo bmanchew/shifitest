@@ -1,28 +1,29 @@
-import express, { Router } from 'express';
+import express, { Router, Express } from 'express';
+import { createServer, Server } from 'http';
 import authRoutes from './auth.routes';
 import userRoutes from './user.routes';
 import plaidRoutes from './plaid.routes';
 import { apiRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 
-// Create main router
-const router = express.Router();
+// Create main router for modular routes
+const modulesRouter = express.Router();
 
 // Apply API rate limiting to all API routes
-router.use('/api', apiRateLimiter);
+modulesRouter.use('/api', apiRateLimiter);
 
 // Register all API routes with versioning
-router.use('/api/v1/auth', authRoutes);
-router.use('/api/v1/users', userRoutes);
-router.use('/api/v1/plaid', plaidRoutes);
+modulesRouter.use('/api/v1/auth', authRoutes);
+modulesRouter.use('/api/v1/users', userRoutes);
+modulesRouter.use('/api/v1/plaid', plaidRoutes);
 
 // Support for legacy (non-versioned) routes during transition
-router.use('/api/auth', authRoutes);
-router.use('/api/users', userRoutes);
-router.use('/api/plaid', plaidRoutes);
+modulesRouter.use('/api/auth', authRoutes);
+modulesRouter.use('/api/users', userRoutes);
+modulesRouter.use('/api/plaid', plaidRoutes);
 
 // Add a simple status endpoint for health checks
-router.get('/api/status', (req, res) => {
+modulesRouter.get('/api/status', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'API is operational',
@@ -32,7 +33,7 @@ router.get('/api/status', (req, res) => {
 });
 
 // Track API usage
-router.use('/api', (req, res, next) => {
+modulesRouter.use('/api', (req, res, next) => {
   // Record the request start time
   const start = Date.now();
   
@@ -57,4 +58,14 @@ router.use('/api', (req, res, next) => {
   next();
 });
 
-export default router;
+// Export router for standalone use
+export default modulesRouter;
+
+// Export function compatible with the original routes.ts for server startup
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Apply our modular routes
+  app.use(modulesRouter);
+  
+  // Create and return HTTP server
+  return createServer(app);
+}
