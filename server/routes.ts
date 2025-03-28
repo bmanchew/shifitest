@@ -2,7 +2,7 @@ import express, { type Express, Request, Response, NextFunction } from "express"
 import { createServer, type Server } from "http";
 import { logger } from "./services/logger";
 import { requestLoggerMiddleware, errorLoggerMiddleware } from "./middleware/requestLogger";
-import { setupJanewayRouter } from "./middleware/janeway-handler";
+import { setupJanewayRouter, isJanewayDomain, janewayRootHandler } from "./middleware/janeway-handler";
 import fs from 'fs';
 
 // Import feature-specific routers
@@ -29,6 +29,15 @@ import plaidRouter from "./routes/plaid.routes";
  * Register all application routes with the Express app
  */
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Apply the Janeway Root handler middleware for maximum reliability
+  // This ensures Janeway domain requests are detected and handled appropriately
+  app.use(janewayRootHandler);
+  
+  // Set up the Janeway router FIRST to handle Janeway domain requests with highest priority
+  // This is critical to ensure proper SPA routing in the Replit webview environment
+  const janewayDomainRouter = setupJanewayRouter();
+  app.use(janewayDomainRouter);
+  
   // Create the main API router
   const apiRouter = express.Router();
   
@@ -119,10 +128,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount the API router at /api
   app.use("/api", apiRouter);
-  
-  // Set up the Janeway catch-all router
-  const janewayRouter = setupJanewayRouter();
-  app.use(janewayRouter);
   
   // Configure proper MIME types for Express static middleware
   const staticOptions = {

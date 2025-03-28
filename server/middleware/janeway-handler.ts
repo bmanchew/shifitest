@@ -4,13 +4,40 @@ import { logger } from '../services/logger';
 import fs from 'fs';
 
 /**
+ * Helper function to detect if request is from a Janeway domain
+ * @param req Express Request
+ * @returns Boolean indicating if request is from a Janeway domain
+ */
+export function isJanewayDomain(req: Request): boolean {
+  const host = req.headers.host || '';
+  // Check for both development and production Janeway domains
+  return host.includes('janeway.replit');
+}
+
+/**
+ * Helper function to check if request is for a static asset
+ * @param path Request path
+ * @returns Boolean indicating if request is for a static asset
+ */
+export function isStaticAsset(path: string): boolean {
+  // Comprehensive list of static asset extensions
+  const assetExtensions = ['.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map', '.json'];
+  
+  // Check if path starts with any asset directories or has an asset extension
+  return path.startsWith('/assets/') || 
+         path.startsWith('/static/') || 
+         path.startsWith('/images/') || 
+         path.startsWith('/img/') || 
+         assetExtensions.some(ext => path.endsWith(ext));
+}
+
+/**
  * Special middleware to handle Janeway Replit domains
  * This ensures that the root path in Janeway domains correctly serves index.html
  */
 export function janewayRootHandler(req: Request, res: Response, next: NextFunction) {
-  // Check if this is a request to the root path on a Janeway domain
-  const host = req.headers.host || '';
-  const isJaneway = host.includes('janeway.replit');
+  // Get detailed request information
+  const isJaneway = isJanewayDomain(req);
   const isRootPath = req.path === '/';
   
   // Log detailed information for debugging
@@ -19,7 +46,7 @@ export function janewayRootHandler(req: Request, res: Response, next: NextFuncti
     category: "system",
     source: "internal",
     metadata: { 
-      host, 
+      host: req.headers.host || 'unknown', 
       path: req.path,
       isJaneway,
       isRootPath,
@@ -35,24 +62,25 @@ export function janewayRootHandler(req: Request, res: Response, next: NextFuncti
     }
     
     // Skip static asset requests (they should be handled by static middleware)
-    if (req.path.startsWith('/assets/') || 
-        req.path.endsWith('.js') || 
-        req.path.endsWith('.css') || 
-        req.path.endsWith('.png') || 
-        req.path.endsWith('.jpg') || 
-        req.path.endsWith('.svg')) {
+    if (isStaticAsset(req.path)) {
       return next();
     }
     
     // For all non-API, non-asset routes on Janeway, serve index.html
-    const indexPath = path.join(process.cwd(), 'client', 'dist', 'index.html');
+    // Use an absolute path to be super explicit
+    const indexPath = path.resolve('./client/dist/index.html');
     
     // Check if the file exists first
     if (!fs.existsSync(indexPath)) {
       logger.error({
         message: `Index.html file not found at ${indexPath}`,
         category: "system",
-        source: "internal"
+        source: "internal",
+        metadata: {
+          path: req.path,
+          indexPath,
+          cwd: process.cwd()
+        }
       });
       return next();
     }
@@ -64,7 +92,11 @@ export function janewayRootHandler(req: Request, res: Response, next: NextFuncti
       metadata: { indexPath }
     });
     
-    return res.sendFile(indexPath, (err) => {
+    // Set proper content type before sending
+    res.set('Content-Type', 'text/html');
+    
+    // Send the file with explicit status and options
+    return res.status(200).sendFile(indexPath, (err) => {
       if (err) {
         logger.error({
           message: `Error serving index.html: ${err.message}`,
@@ -73,7 +105,6 @@ export function janewayRootHandler(req: Request, res: Response, next: NextFuncti
           metadata: { 
             error: err.message,
             stack: err.stack,
-            // The Express.js sendFile error may include a statusCode
             statusCode: (err as any).statusCode
           }
         });
@@ -94,47 +125,81 @@ export function janewayRootHandler(req: Request, res: Response, next: NextFuncti
 export function setupJanewayRouter(): Router {
   const router = Router();
   
-  // Catch-all route for Janeway domains (mounted after API routes)
-  router.get('*', (req: Request, res: Response, next: NextFunction) => {
-    const host = req.headers.host || '';
-    const isJaneway = host.includes('janeway.replit');
-    
-    if (isJaneway) {
-      // Skip API requests
-      if (req.path.startsWith('/api/')) {
-        return next();
-      }
-      
-      // Skip static asset requests
-      if (req.path.startsWith('/assets/') || 
-          req.path.endsWith('.js') || 
-          req.path.endsWith('.css') || 
-          req.path.endsWith('.png') || 
-          req.path.endsWith('.jpg') || 
-          req.path.endsWith('.svg')) {
-        return next();
-      }
-      
-      // For all other routes on Janeway domains, serve the SPA's index.html
-      const indexPath = path.join(process.cwd(), 'client', 'dist', 'index.html');
-      
-      logger.info({
-        message: `[Catch-all] Janeway router serving index.html for path: ${req.path}`,
-        category: "system",
-        source: "internal",
-        metadata: { 
-          path: req.path,
-          host: host,
-          indexPath
-        }
-      });
-      
-      return res.sendFile(indexPath);
-    }
-    
-    // For non-Janeway requests, continue with normal handling
-    next();
+  // Add routes for common client-side routes to ensure proper handling
+  // These explicit routes take precedence over the catch-all
+  const clientRoutes = [
+    '/login', 
+    '/dashboard', 
+    '/settings', 
+    '/admin/*', 
+    '/profile',
+    '/merchants',
+    '/contracts',
+    '/notifications'
+  ];
+  
+  // Register explicit routes for common client paths
+  clientRoutes.forEach(route => {
+    router.get(route, handleJanewayClientRoute);
   });
   
+  // Catch-all route for any other paths (mounted after API and explicit routes)
+  router.get('*', handleJanewayClientRoute);
+  
   return router;
+}
+
+/**
+ * Handler function for Janeway client routes
+ * Extracted to avoid code duplication
+ */
+function handleJanewayClientRoute(req: Request, res: Response, next: NextFunction) {
+  // Only handle Janeway domain requests
+  if (!isJanewayDomain(req)) {
+    return next();
+  }
+  
+  // Skip API requests
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  
+  // Skip static asset requests
+  if (isStaticAsset(req.path)) {
+    return next();
+  }
+  
+  // For all non-API, non-asset routes on Janeway domains, serve the SPA's index.html
+  // Use absolute path with path.resolve for maximum reliability
+  const indexPath = path.resolve('./client/dist/index.html');
+  
+  // Check if the file exists first
+  if (!fs.existsSync(indexPath)) {
+    logger.error({
+      message: `Index.html file not found at ${indexPath}`,
+      category: "system",
+      source: "internal",
+      metadata: {
+        path: req.path,
+        indexPath,
+        cwd: process.cwd()
+      }
+    });
+    return next();
+  }
+  
+  logger.info({
+    message: `[Catch-all] Janeway router serving index.html for path: ${req.path}`,
+    category: "system",
+    source: "internal",
+    metadata: { 
+      path: req.path,
+      host: req.headers.host || 'unknown',
+      indexPath
+    }
+  });
+  
+  // Set proper content type and serve
+  res.set('Content-Type', 'text/html');
+  return res.status(200).sendFile(indexPath);
 }
