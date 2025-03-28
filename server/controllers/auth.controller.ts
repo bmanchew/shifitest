@@ -158,7 +158,7 @@ export const authController = {
         lastName,
         role: "customer", // Default role for new registrations
         phone,
-        createdAt: new Date()
+        emailVerified: false // Default to false until verified
       });
       
       // Generate email verification token
@@ -509,21 +509,42 @@ export const authController = {
         });
       }
       
-      // Verify token
-      const verified = await storage.verifyUserEmail(token);
+      // Get verification token to check if it exists and is valid
+      const verificationToken = await storage.getEmailVerificationToken(token);
       
-      if (!verified) {
+      if (!verificationToken) {
         return res.status(400).json({
           success: false,
           message: "Invalid or expired token"
         });
       }
       
+      // If token has expired
+      if (verificationToken.expiresAt && new Date() > verificationToken.expiresAt) {
+        return res.status(400).json({
+          success: false,
+          message: "Verification token has expired"
+        });
+      }
+      
+      // Use consumeEmailVerificationToken to handle the entire verification process
+      const processedToken = await storage.consumeEmailVerificationToken(token);
+      
+      if (!processedToken) {
+        return res.status(400).json({
+          success: false,
+          message: "Failed to verify email. Token may be invalid or already used."
+        });
+      }
+      
+      // Use user ID from the verification token for logging
+      const userId = verificationToken.userId;
+      
       // Log email verification
       logger.info({
-        message: `Email verified for user ID: ${verified.userId}`,
+        message: `Email verified for user ID: ${userId}`,
         category: "user",
-        userId: verified.userId,
+        userId: userId,
         source: "internal",
         metadata: {
           ip: req.ip

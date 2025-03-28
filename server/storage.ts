@@ -25,7 +25,9 @@ import {
   messages, Message, InsertMessage,
   supportTickets, SupportTicket, InsertSupportTicket,
   ticketAttachments, TicketAttachment, InsertTicketAttachment,
-  ticketActivityLog, TicketActivityLog, InsertTicketActivityLog
+  ticketActivityLog, TicketActivityLog, InsertTicketActivityLog,
+  emailVerificationTokens, EmailVerificationToken, InsertEmailVerificationToken,
+  passwordResetTokens, PasswordResetToken, InsertPasswordResetToken
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt, not } from "drizzle-orm";
@@ -39,6 +41,22 @@ export interface IStorage {
   updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
   findOrCreateUserByPhone(phone: string): Promise<User>;
   getAllUsers(): Promise<User[]>;
+  updateUserName(userId: number, firstName?: string, lastName?: string): Promise<User | null>;
+  updateUserPassword(userId: number, hashedPassword: string): Promise<User | undefined>;
+
+  // Email verification operations
+  createEmailVerificationToken(token: InsertEmailVerificationToken): Promise<EmailVerificationToken>;
+  getEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined>;
+  markEmailVerificationTokenUsed(id: number): Promise<EmailVerificationToken | undefined>;
+  consumeEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined>;
+  verifyUserEmail(userId: number): Promise<User | undefined>;
+
+  // Password reset operations
+  createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
+  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenUsed(id: number): Promise<PasswordResetToken | undefined>;
+  verifyPasswordResetToken(token: string): Promise<User | undefined>;
+  invalidatePasswordResetTokens(userId: number): Promise<number>;
 
   // Add to the IStorage interface
   updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined>;
@@ -226,6 +244,7 @@ export interface IStorage {
   // Ticket Activity Log operations
   createTicketActivityLog(activity: InsertTicketActivityLog): Promise<TicketActivityLog>;
   getTicketActivityLogsByTicketId(ticketId: number): Promise<TicketActivityLog[]>;
+  
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1478,6 +1497,212 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return result[0];
+  }
+
+  // Email verification token methods
+  async createEmailVerificationToken(token: InsertEmailVerificationToken): Promise<EmailVerificationToken> {
+    try {
+      const [newToken] = await db
+        .insert(emailVerificationTokens)
+        .values(token)
+        .returning();
+      
+      return newToken;
+    } catch (error) {
+      console.error("Error creating email verification token:", error);
+      throw new Error("Failed to create email verification token");
+    }
+  }
+
+  async getEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined> {
+    try {
+      const [verificationToken] = await db
+        .select()
+        .from(emailVerificationTokens)
+        .where(eq(emailVerificationTokens.token, token));
+      
+      return verificationToken;
+    } catch (error) {
+      console.error("Error getting email verification token:", error);
+      return undefined;
+    }
+  }
+
+  async markEmailVerificationTokenUsed(id: number): Promise<EmailVerificationToken | undefined> {
+    try {
+      const [updatedToken] = await db
+        .update(emailVerificationTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(emailVerificationTokens.id, id))
+        .returning();
+      
+      return updatedToken;
+    } catch (error) {
+      console.error(`Error marking email verification token ${id} as used:`, error);
+      return undefined;
+    }
+  }
+
+  async consumeEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined> {
+    try {
+      // Get the token from database
+      const verificationToken = await this.getEmailVerificationToken(token);
+      
+      if (!verificationToken) {
+        return undefined;
+      }
+      
+      // Check if token is already used
+      if (verificationToken.usedAt) {
+        return undefined;
+      }
+      
+      // Mark token as used
+      const updatedToken = await this.markEmailVerificationTokenUsed(verificationToken.id);
+      
+      if (!updatedToken) {
+        return undefined;
+      }
+      
+      // Verify the user's email
+      const user = await this.verifyUserEmail(verificationToken.userId);
+      
+      if (!user) {
+        return undefined;
+      }
+      
+      return updatedToken;
+    } catch (error) {
+      console.error(`Error consuming email verification token:`, error);
+      return undefined;
+    }
+  }
+
+  async verifyUserEmail(userId: number): Promise<User | undefined> {
+    try {
+      // Add emailVerified field to users table if it doesn't exist yet
+      const [updatedUser] = await db
+        .update(users)
+        .set({ emailVerified: true })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      return updatedUser;
+    } catch (error) {
+      console.error(`Error verifying email for user ${userId}:`, error);
+      return undefined;
+    }
+  }
+
+  // Password reset token methods
+  async createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken> {
+    try {
+      const [newToken] = await db
+        .insert(passwordResetTokens)
+        .values(token)
+        .returning();
+      
+      return newToken;
+    } catch (error) {
+      console.error("Error creating password reset token:", error);
+      throw new Error("Failed to create password reset token");
+    }
+  }
+
+  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    try {
+      const [resetToken] = await db
+        .select()
+        .from(passwordResetTokens)
+        .where(eq(passwordResetTokens.token, token));
+      
+      return resetToken;
+    } catch (error) {
+      console.error("Error getting password reset token:", error);
+      return undefined;
+    }
+  }
+
+  async markPasswordResetTokenUsed(id: number): Promise<PasswordResetToken | undefined> {
+    try {
+      const [updatedToken] = await db
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(passwordResetTokens.id, id))
+        .returning();
+      
+      return updatedToken;
+    } catch (error) {
+      console.error(`Error marking password reset token ${id} as used:`, error);
+      return undefined;
+    }
+  }
+
+  async verifyPasswordResetToken(token: string): Promise<User | undefined> {
+    try {
+      // Get the password reset token
+      const resetToken = await this.getPasswordResetToken(token);
+      
+      if (!resetToken) {
+        return undefined;
+      }
+      
+      // Check if token is expired
+      const now = new Date();
+      if (now > resetToken.expiresAt) {
+        console.warn(`Password reset token expired: ${token}`);
+        return undefined;
+      }
+      
+      // Check if token has been used
+      if (resetToken.usedAt) {
+        console.warn(`Password reset token already used: ${token}`);
+        return undefined;
+      }
+      
+      // Get the user associated with this token
+      const user = await this.getUser(resetToken.userId);
+      return user;
+    } catch (error) {
+      console.error(`Error verifying password reset token ${token}:`, error);
+      return undefined;
+    }
+  }
+
+  async updateUserPassword(userId: number, hashedPassword: string): Promise<User | undefined> {
+    try {
+      const [updatedUser] = await db
+        .update(users)
+        .set({ password: hashedPassword })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      return updatedUser;
+    } catch (error) {
+      console.error(`Error updating password for user ${userId}:`, error);
+      return undefined;
+    }
+  }
+
+  async invalidatePasswordResetTokens(userId: number): Promise<number> {
+    try {
+      // Mark all unused tokens for this user as used
+      const now = new Date();
+      const result = await db
+        .update(passwordResetTokens)
+        .set({ usedAt: now })
+        .where(
+          and(
+            eq(passwordResetTokens.userId, userId),
+            eq(passwordResetTokens.usedAt, null)
+          )
+        );
+      
+      return result.rowCount || 0;
+    } catch (error) {
+      console.error(`Error invalidating password reset tokens for user ${userId}:`, error);
+      return 0;
+    }
   }
 
   // Method to get completed KYC verifications by user ID
