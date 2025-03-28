@@ -21,7 +21,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Check, X, PlusCircle, ExternalLink, Pencil } from "lucide-react";
 import { Link } from "wouter";
-import axios from "axios";
+import { extractApiErrorMessage, isSessionExpiredError } from '@/lib/errorHandling';
 
 export default function MerchantList() {
   const { toast } = useToast();
@@ -48,27 +48,35 @@ export default function MerchantList() {
     queryKey: ["/api/admin/merchants"],
     queryFn: async () => {
       try {
-        const response = await axios.get("/api/admin/merchants");
-        if (response.data.success) {
-          return response.data.merchants;
+        // Use our apiRequest function instead of axios directly to get auth token handling
+        const response = await apiRequest("GET", "/api/admin/merchants");
+        
+        if (response.success) {
+          return response.merchants;
         }
+        
         // Log server-reported error if available
-        if (response.data.message) {
-          console.error("Server error:", response.data.message);
-          throw new Error(response.data.message);
+        if (response.message) {
+          console.error("Server error:", response.message);
+          throw new Error(response.message);
         }
+        
         throw new Error("Failed to fetch merchants");
       } catch (error) {
-        // Enhance error handling for network and axios errors
-        if (axios.isAxiosError(error)) {
-          console.error("Axios error:", error.response?.data || error.message);
-          if (error.response?.status === 500) {
-            throw new Error(`Server error (500): ${error.response?.data?.message || "Internal server error"}`);
-          }
-          throw new Error(`Network error: ${error.message}`);
+        // Enhanced error handling
+        console.error("Merchant list fetching error:", error);
+        
+        // Extract a user-friendly error message
+        const errorMessage = extractApiErrorMessage(error);
+        
+        // Check for specific error types
+        if (isSessionExpiredError(error)) {
+          console.warn("Session expired, redirecting to login...");
+          // The session expired event will be dispatched by apiRequest
+          throw new Error("Your session has expired. Please log in again.");
         }
-        // Re-throw other errors
-        throw error;
+        
+        throw new Error(`Error: ${errorMessage}`);
       }
     },
     onError: (err) => {
