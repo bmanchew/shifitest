@@ -225,6 +225,10 @@ app.get('/api/csrf-token', csrfTokenHandler);
 // Add CSRF error handler
 app.use(csrfErrorHandler);
 
+// Import and use our special Janeway domain handler
+import { janewayRootHandler } from './middleware/janeway-handler';
+app.use(janewayRootHandler);
+
 // Keep basic console logging for development
 app.use((req, res, next) => {
   const start = Date.now();
