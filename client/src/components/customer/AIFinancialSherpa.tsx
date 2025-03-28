@@ -286,9 +286,9 @@ export default function AIFinancialSherpa({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center py-6 text-center">
-          <Avatar className="h-16 w-16 mb-4 bg-indigo-100">
-            <AvatarFallback className="text-indigo-600">
-              <Bot size={28} />
+          <Avatar className="h-16 w-16 mb-4 bg-gradient-to-r from-indigo-100 to-purple-100 border-2 border-indigo-200 shadow-md">
+            <AvatarFallback className="text-indigo-700">
+              <Bot size={32} strokeWidth={1.5} />
             </AvatarFallback>
           </Avatar>
           <h3 className="text-lg font-medium mb-2">Connect Your Bank Account</h3>
@@ -320,9 +320,9 @@ export default function AIFinancialSherpa({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center py-6 text-center">
-          <Avatar className="h-16 w-16 mb-4 bg-indigo-100">
-            <AvatarFallback className="text-indigo-600">
-              <Bot size={28} />
+          <Avatar className="h-16 w-16 mb-4 bg-gradient-to-r from-indigo-100 to-purple-100 border-2 border-indigo-200 shadow-md">
+            <AvatarFallback className="text-indigo-700">
+              <Bot size={32} strokeWidth={1.5} />
             </AvatarFallback>
           </Avatar>
           <h3 className="text-lg font-medium mb-2">Building Your Financial Insights</h3>
@@ -353,9 +353,9 @@ export default function AIFinancialSherpa({
             </Badge>
           </CardTitle>
           <div className="flex items-center space-x-2">
-            <Avatar className="h-8 w-8 bg-indigo-100">
-              <AvatarFallback className="text-indigo-600">
-                <Bot size={16} />
+            <Avatar className="h-10 w-10 bg-gradient-to-r from-indigo-100 to-purple-100 border-2 border-indigo-200">
+              <AvatarFallback className="text-indigo-700">
+                <Bot size={20} strokeWidth={1.5} />
               </AvatarFallback>
             </Avatar>
           </div>
@@ -420,14 +420,14 @@ export default function AIFinancialSherpa({
                       disabled={loadingAudio && activeInsightId === insight.id}
                     >
                       {loadingAudio && activeInsightId === insight.id ? (
-                        <div className="mr-1 h-4 w-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                        <div className="mr-1 h-5 w-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
                       ) : isPlaying && activeInsightId === insight.id ? (
-                        <Pause className="mr-1 h-4 w-4" />
+                        <Pause className="mr-1.5 h-5 w-5 text-indigo-700" />
                       ) : (
-                        <PlayCircle className="mr-1 h-4 w-4" />
+                        <PlayCircle className="mr-1.5 h-5 w-5 text-indigo-700 fill-indigo-100" strokeWidth={1.5} />
                       )}
-                      {isPlaying && activeInsightId === insight.id ? 'Pause' : 'Listen'}
-                      <Headphones className="ml-1 h-3 w-3" />
+                      <span className="font-medium">{isPlaying && activeInsightId === insight.id ? 'Pause' : 'Listen'}</span>
+                      <Headphones className="ml-1.5 h-4 w-4 text-indigo-600" />
                     </Button>
                     
                     {insight.actionText && insight.actionUrl && (
@@ -456,9 +456,9 @@ export default function AIFinancialSherpa({
         
         <TabsContent value="conversation" className="p-0 m-0">
           <CardContent className="pt-6 flex flex-col items-center justify-center py-12 text-center">
-            <Avatar className="h-16 w-16 mb-4 bg-indigo-100">
-              <AvatarFallback className="text-indigo-600">
-                <Volume2 size={28} />
+            <Avatar className="h-16 w-16 mb-4 bg-gradient-to-r from-indigo-100 to-purple-100 border-2 border-indigo-200 shadow-md">
+              <AvatarFallback className="text-indigo-700">
+                <Volume2 size={32} strokeWidth={1.5} />
               </AvatarFallback>
             </Avatar>
             <h3 className="text-lg font-medium mb-2">Ask Your Financial Sherpa</h3>
