@@ -24,25 +24,31 @@ export default function AppWrapper() {
   // Log the configuration for debugging
   console.log("App configuration:", { apiBaseUrl: API_URL, appDomain: APP_DOMAIN });
   
-  // Temporarily disable the redirection logic to prevent redirect loops
+  // Smart domain redirection that avoids loops and handles Janeway environment
   useEffect(() => {
-    // Commenting out the redirection code to debug deployment issues
-    /*
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
-      const isReplitDev = hostname.endsWith('.replit.dev');
+      const currentUrl = window.location.href;
       
-      // Only attempt to redirect if we're not already on a .replit.dev domain
-      // and we have a valid Replit ID
-      if (!isReplitDev && APP_DOMAIN) {
+      // Check if we're in a Janeway environment - never redirect in this case
+      if (hostname.includes('janeway.replit.dev')) {
+        console.log("In Janeway environment, no redirection needed");
+        return;
+      }
+      
+      // Check if we're already on the target domain
+      const isOnTargetDomain = currentUrl.startsWith(APP_DOMAIN);
+      
+      // Only redirect if we have a valid APP_DOMAIN and we're not already there
+      if (APP_DOMAIN && !isOnTargetDomain) {
         const currentPath = window.location.pathname + window.location.search;
         const newUrl = `${APP_DOMAIN}${currentPath}`;
-        console.log(`Redirecting to .replit.dev domain: ${newUrl}`);
+        console.log(`Redirecting to target domain: ${newUrl}`);
         window.location.href = newUrl;
+      } else {
+        console.log("Already on target domain, no redirection needed");
       }
     }
-    */
-    console.log("Domain redirection disabled to prevent loops");
   }, []);
   
   return (
