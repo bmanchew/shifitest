@@ -367,10 +367,17 @@ async function startServer() {
         return next();
       }
       
-      // For all other routes, let the Vite middleware or static file server handle it
-      // This ensures the SPA client router gets control for client-side routes
+      // For client-side routes, serve the index.html to enable client-side routing
       log(`Routing client-side path: ${path} to SPA handler`);
-      next();
+      
+      if (app.get('env') === 'development') {
+        // In development, let Vite handle the SPA routing
+        next();
+      } else {
+        // In production, explicitly serve the index.html file
+        // This ensures the client-side router takes control
+        res.sendFile('index.html', { root: './dist/client' });
+      }
     });
 
     // importantly only setup vite in development and after
