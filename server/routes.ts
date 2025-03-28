@@ -2,6 +2,7 @@ import express, { type Express, Request, Response, NextFunction } from "express"
 import { createServer, type Server } from "http";
 import { logger } from "./services/logger";
 import { requestLoggerMiddleware, errorLoggerMiddleware } from "./middleware/requestLogger";
+import fs from 'fs';
 
 // Import feature-specific routers
 import authRouter from "./routes/auth";
@@ -118,6 +119,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount the API router at /api
   app.use("/api", apiRouter);
   
+  // Configure proper MIME types for Express static middleware
+  const staticOptions = {
+    setHeaders: (res: Response, path: string) => {
+      // Set appropriate MIME types for JavaScript modules and other assets
+      if (path.endsWith('.js') || path.endsWith('.mjs')) {
+        res.set('Content-Type', 'application/javascript');
+      } else if (path.endsWith('.css')) {
+        res.set('Content-Type', 'text/css');
+      }
+      
+      // Log the file being served
+      logger.info({
+        message: `Serving static file: ${path}`,
+        category: "http",
+        source: "static"
+      });
+    }
+  };
+  
+  // Serve static files from the client/dist directory
+  app.use(express.static('./client/dist', staticOptions));
+
   // Global 404 handler for non-API routes (fallback to client-side routing)
   app.use((req: Request, res: Response) => {
     // Only log non-asset 404s to reduce noise
@@ -138,6 +161,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     // For other routes, let the frontend handle it using client-side routing
+    res.set('Content-Type', 'text/html');
     res.status(200).sendFile('index.html', { root: './client/dist' });
   });
   
