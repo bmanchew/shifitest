@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import {
   LayoutDashboard,
   FileText,
@@ -26,6 +27,7 @@ interface MerchantLayoutProps {
 export default function MerchantLayout({ children }: MerchantLayoutProps) {
   const [location] = useLocation();
   const [isMobile, setIsMobile] = useState(false);
+  const { logout } = useAuth(); // Get logout function from auth context
 
   // Check if we are on mobile screen size
   useEffect(() => {
@@ -121,13 +123,14 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
           )}
         </Link>
       ))}
-      <Link 
-        href="/logout"
-        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      <Button 
+        variant="ghost"
+        className="flex w-full items-center justify-start gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+        onClick={() => logout()}
       >
         <LogOut className="h-5 w-5" />
         <span>Logout</span>
-      </Link>
+      </Button>
     </div>
   );
 
