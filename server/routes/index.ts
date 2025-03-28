@@ -6,6 +6,7 @@ import plaidRoutes from './plaid.routes';
 import notificationRoutes from './notification';
 import communicationsRoutes from './communications';
 import merchantFundingRoutes from './merchant-funding';
+import customerRoutes from './customers';
 import { apiRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 
@@ -22,6 +23,7 @@ modulesRouter.use('/api/v1/plaid', plaidRoutes);
 modulesRouter.use('/api/v1/notifications', notificationRoutes);
 modulesRouter.use('/api/v1/communications', communicationsRoutes);
 modulesRouter.use('/api/v1/merchant-funding', merchantFundingRoutes);
+modulesRouter.use('/api/v1/customers', customerRoutes);
 
 // Support for legacy (non-versioned) routes during transition
 modulesRouter.use('/api/auth', authRoutes);
@@ -30,6 +32,7 @@ modulesRouter.use('/api/plaid', plaidRoutes);
 modulesRouter.use('/api/notifications', notificationRoutes);
 modulesRouter.use('/api/communications', communicationsRoutes);
 modulesRouter.use('/api/merchant-funding', merchantFundingRoutes);
+modulesRouter.use('/api/customers', customerRoutes);
 
 // Add a simple status endpoint for health checks
 modulesRouter.get('/api/status', (req, res) => {

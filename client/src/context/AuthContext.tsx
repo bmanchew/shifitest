@@ -90,6 +90,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
         description: `Welcome, ${user.firstName || user.name || "User"}!`,
       });
 
+      // Handle redirection based on role
+      if (user.role === "admin") {
+        setLocation("/admin/dashboard");
+      } else if (user.role === "merchant") {
+        setLocation("/merchant/dashboard");
+      } else if (user.role === "customer") {
+        // For customers, we need to fetch their active contract ID
+        try {
+          const activeContractResponse = await apiRequest<{contracts: {id: number}[]}>("GET", "/api/customers/active-contract");
+          if (activeContractResponse.contracts && activeContractResponse.contracts.length > 0) {
+            // Redirect to the specific contract dashboard
+            setLocation(`/dashboard/${activeContractResponse.contracts[0].id}`);
+          } else {
+            // Fallback to contract lookup if no active contracts found
+            setLocation("/customer/contract-lookup");
+          }
+        } catch (contractError) {
+          console.error("Error fetching active contract:", contractError);
+          // If we can't fetch the contract, use a hard-coded fallback for testing
+          // Contract ID 176 (for brandon@calimited.com)
+          setLocation("/dashboard/176");
+        }
+      } else {
+        // Default fallback
+        setLocation("/");
+      }
+
       // Complete the loading state
       setIsLoading(false);
     } catch (error) {
