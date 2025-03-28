@@ -6,6 +6,8 @@ import axios from 'axios';
 
 // Configuration
 const API_BASE_URL = 'http://localhost:5000/api';
+const BYPASS_CSRF_HEADER = 'X-Csrf-Bypass';
+const BYPASS_CSRF_VALUE = 'test-merchant-setup';
 
 // Test data for creating a merchant
 const merchantData = {
@@ -40,6 +42,11 @@ async function createTestMerchant() {
         name: `${merchantData.firstName} ${merchantData.lastName}`, // Add the name field
         phone: merchantData.phone,
         role: 'merchant' // Explicit role assignment
+      },
+      {
+        headers: {
+          [BYPASS_CSRF_HEADER]: BYPASS_CSRF_VALUE
+        }
       }
     );
     
@@ -69,6 +76,11 @@ async function createTestMerchant() {
         contactName: `${merchantData.firstName} ${merchantData.lastName}`,
         email: merchantData.email,
         phone: merchantData.phone
+      },
+      {
+        headers: {
+          [BYPASS_CSRF_HEADER]: BYPASS_CSRF_VALUE
+        }
       }
     );
     
@@ -83,6 +95,43 @@ async function createTestMerchant() {
       return null;
     }
     console.log('✅ Successfully created merchant with ID:', merchantId);
+    
+    // Now add the business details with MidDesk verification information
+    try {
+      // Create the merchant business details
+      const businessDetailsResponse = await axios.post(
+        `${API_BASE_URL}/merchant-business-details`,
+        {
+          merchantId: merchantId,
+          legalName: `${merchantData.companyName} LLC`,
+          ein: merchantData.taxId,
+          businessStructure: 'LLC',
+          streetAddress: '123 Test St',
+          streetAddress2: 'Suite 100',
+          city: 'Testville',
+          state: 'TX',
+          zipCode: '12345',
+          middeskBusinessId: null,
+          verificationStatus: 'not_started'
+        },
+        {
+          headers: {
+            [BYPASS_CSRF_HEADER]: BYPASS_CSRF_VALUE
+          }
+        }
+      );
+      
+      console.log('Business Details Response:', JSON.stringify(businessDetailsResponse.data, null, 2));
+    } catch (businessError) {
+      console.error('Warning: Failed to create business details:');
+      if (businessError.response) {
+        console.error('Status:', businessError.response.status);
+        console.error('Data:', JSON.stringify(businessError.response.data, null, 2));
+      } else {
+        console.error(businessError.message);
+      }
+      // Continue even if this fails - we've at least created the merchant
+    }
     
     return {
       userId,

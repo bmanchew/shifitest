@@ -26,6 +26,14 @@ export const conversationStatusEnum = pgEnum("conversation_status", [
   "archived",
 ]);
 
+// Verification status enum for MidDesk and other verifications
+export const verificationStatusEnum = pgEnum("verification_status", [
+  "not_started",
+  "pending",
+  "verified",
+  "failed",
+]);
+
 // Support ticket related enums
 export const ticketStatusEnum = pgEnum("ticket_status", [
   "new",
@@ -103,7 +111,8 @@ export const logSourceEnum = pgEnum("log_source", [
   "notification",
   "openai",
   "blockchain",
-  "sesameai"
+  "sesameai",
+  "middesk"
 ]);
 export const verificationTypeEnum = pgEnum("verification_type", [
   "identity",
@@ -508,6 +517,11 @@ export const merchantBusinessDetails = pgTable("merchant_business_details", {
   annualRevenue: doublePrecision("annual_revenue"),
   monthlyRevenue: doublePrecision("monthly_revenue"),
   employeeCount: integer("employee_count"),
+  formationDate: text("formation_date"), // Date the business was formed (for MidDesk)
+  phone: text("phone"), // Business phone (for MidDesk)
+  middeskBusinessId: text("middesk_business_id"), // ID assigned by MidDesk for this business verification
+  verificationStatus: verificationStatusEnum("verification_status").default("not_started"), // Status of the verification with MidDesk
+  verificationData: text("verification_data"), // JSON stringified data from MidDesk
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

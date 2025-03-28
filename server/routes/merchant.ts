@@ -3,6 +3,7 @@ import multer from 'multer';
 import { storage } from '../storage';
 import { plaidService } from '../services/plaid';
 import { diditService } from '../services/didit';
+import { middeskService } from '../services/middesk';
 import { logger } from '../services/logger';
 import emailService from '../services/email';
 import crypto from 'crypto';
@@ -116,6 +117,84 @@ router.post('/signup', upload.any(), async (req, res) => {
         }
       }
     }
+    
+    // Extract business address from request if available
+    const businessAddress = req.body.streetAddress ? {
+      line1: req.body.streetAddress,
+      line2: req.body.streetAddress2 || null,
+      city: req.body.city || '',
+      state: req.body.state || '',
+      postal_code: req.body.zipCode || '',
+      country: 'US',
+      address_type: 'business'
+    } : null;
+    
+    // Start MidDesk business verification
+    let middeskBusinessId = null;
+    let businessVerificationStarted = false;
+    
+    try {
+      if (middeskService.isInitialized()) {
+        // Create MidDesk business verification request
+        const middeskResponse = await middeskService.createBusinessVerification({
+          name: legalBusinessName,
+          tax_id: ein,
+          phone: phone,
+          addresses: businessAddress ? [businessAddress] : undefined,
+          persons: [{
+            first_name: firstName,
+            last_name: lastName,
+            email: email,
+            title: 'Owner'
+          }],
+          external_id: merchant.id.toString(),
+          metadata: {
+            merchant_id: merchant.id.toString(),
+            monthly_revenue: monthlyRevenue.toString()
+          }
+        });
+        
+        if (middeskResponse) {
+          middeskBusinessId = middeskResponse.id;
+          businessVerificationStarted = true;
+          
+          logger.info({
+            message: 'MidDesk business verification initiated successfully',
+            category: 'api',
+            source: 'internal',
+            metadata: {
+              merchantId: merchant.id,
+              middeskBusinessId,
+              status: middeskResponse.status
+            }
+          });
+          
+          // Store the MidDesk business ID with the merchant for future reference
+          await storage.updateMerchantBusinessDetails(merchant.id, {
+            middeskBusinessId,
+            verificationStatus: 'pending'
+          });
+        }
+      } else {
+        logger.warn({
+          message: 'MidDesk service not initialized, skipping business verification',
+          category: 'api',
+          source: 'internal',
+          metadata: { merchantId: merchant.id }
+        });
+      }
+    } catch (middeskError) {
+      // Log the error but continue with KYC verification
+      logger.error({
+        message: `MidDesk business verification failed: ${middeskError instanceof Error ? middeskError.message : String(middeskError)}`,
+        category: 'api',
+        source: 'internal',
+        metadata: {
+          merchantId: merchant.id,
+          error: middeskError instanceof Error ? middeskError.stack : String(middeskError)
+        }
+      });
+    }
 
     // Initiate KYC verification with DiDit
     const kycSession = await diditService.createVerificationSession({
@@ -133,7 +212,9 @@ router.post('/signup', upload.any(), async (req, res) => {
       merchantId: merchant.id,
       kycSessionUrl: kycSession.session_url,
       revenueVerified: true,
-      monthlyRevenue: monthlyRevenue
+      monthlyRevenue: monthlyRevenue,
+      businessVerificationStarted: businessVerificationStarted,
+      businessVerificationId: middeskBusinessId
     });
 
   } catch (error) {
@@ -354,6 +435,98 @@ router.get('/:id/contracts', async (req: Request, res: Response) => {
     res.status(500).json({ 
       success: false, 
       message: 'Failed to retrieve merchant contracts'
+    });
+  }
+});
+
+// Route to check MidDesk business verification status
+router.get('/:id/business-verification', async (req: Request, res: Response) => {
+  try {
+    const merchantId = parseInt(req.params.id);
+
+    if (isNaN(merchantId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid merchant ID format"
+      });
+    }
+
+    // First, get the merchant's business details to retrieve the MidDesk business ID
+    const merchantDetails = await storage.getMerchantBusinessDetails(merchantId);
+
+    if (!merchantDetails) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant business details not found"
+      });
+    }
+
+    // Check if MidDesk verification was initiated
+    if (!merchantDetails.middeskBusinessId) {
+      return res.json({
+        success: true,
+        verificationStatus: "not_started",
+        message: "Business verification has not been initiated yet"
+      });
+    }
+
+    // Check if MidDesk service is initialized
+    if (!middeskService.isInitialized()) {
+      return res.status(503).json({
+        success: false,
+        message: "MidDesk service not available",
+        verificationStatus: merchantDetails.verificationStatus || "unknown"
+      });
+    }
+
+    // Get the verification status from MidDesk
+    const businessVerification = await middeskService.getBusinessVerificationStatus(
+      merchantDetails.middeskBusinessId
+    );
+
+    if (!businessVerification) {
+      return res.status(404).json({
+        success: false,
+        message: "Business verification details not found on MidDesk",
+        verificationStatus: merchantDetails.verificationStatus || "unknown"
+      });
+    }
+
+    // Map MidDesk status to our internal status
+    const internalStatus = middeskService.mapVerificationStatus(businessVerification.status);
+    
+    // Check if status has changed since we last updated our records
+    if (internalStatus !== merchantDetails.verificationStatus) {
+      // Update the merchant business details with new status
+      await storage.updateMerchantBusinessDetails(merchantId, {
+        verificationStatus: internalStatus
+      });
+    }
+
+    return res.json({
+      success: true,
+      verificationStatus: internalStatus,
+      businessId: businessVerification.id,
+      businessName: businessVerification.name,
+      status: businessVerification.status,
+      lastUpdated: businessVerification.updated_at,
+      isVerified: middeskService.isBusinessVerified(businessVerification)
+    });
+
+  } catch (error) {
+    logger.error({
+      message: `Error checking business verification status: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId: req.params.id,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to check business verification status"
     });
   }
 });

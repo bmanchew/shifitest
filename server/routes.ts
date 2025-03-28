@@ -4872,6 +4872,78 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Mount the merchant router for multi-merchant operations (admin view)
   apiRouter.use("/merchants", merchantRouter);
   
+  // Add endpoint for merchant business details
+  apiRouter.post("/merchant-business-details", async (req: Request, res: Response) => {
+    try {
+      const { 
+        merchantId, legalName, ein, businessStructure, 
+        streetAddress, streetAddress2, city, state, zipCode,
+        middeskBusinessId, verificationStatus
+      } = req.body;
+      
+      if (!merchantId) {
+        return res.status(400).json({
+          success: false,
+          message: "Merchant ID is required"
+        });
+      }
+      
+      // Check if merchant exists
+      const merchant = await storage.getMerchant(Number(merchantId));
+      if (!merchant) {
+        return res.status(404).json({
+          success: false,
+          message: "Merchant not found"
+        });
+      }
+
+      // Create business details
+      const businessDetails = await storage.createMerchantBusinessDetails({
+        merchantId: Number(merchantId),
+        legalName,
+        ein,
+        businessStructure,
+        streetAddress,
+        streetAddress2,
+        city,
+        state,
+        zipCode,
+        middeskBusinessId,
+        verificationStatus
+      });
+      
+      logger.info({
+        message: `Created business details for merchant ${merchantId}`,
+        category: "api",
+        source: "internal",
+        metadata: { 
+          merchantId,
+          businessDetailsId: businessDetails.id 
+        }
+      });
+      
+      res.json({
+        success: true,
+        businessDetails
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error creating merchant business details: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: { 
+          requestBody: req.body,
+          error: error instanceof Error ? error.stack : String(error) 
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "Failed to create merchant business details"
+      });
+    }
+  });
+  
   // Mount the merchant API router for authenticated merchant operations
   // This path is for the currently logged-in merchant to access their own dashboard
   apiRouter.use("/merchant-funding", merchantFundingRouter);
