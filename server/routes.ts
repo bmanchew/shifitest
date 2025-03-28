@@ -47,6 +47,7 @@ import communicationsRouter from "./routes/communications"; // Import communicat
 import indexRoutes from "./routes/index"; // Import routes from index.ts
 import registerSesameAIRoutes from "./routes/sesameAI"; // Import SesameAI routes
 import registerFinancialSherpaRoutes from "./routes/financialSherpa"; // Import Financial Sherpa routes
+import authRouter from "./routes/auth.routes"; // Import auth routes
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available
@@ -4894,6 +4895,9 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Mount the SesameAI router for voice generation
   registerSesameAIRoutes(apiRouter);
   registerFinancialSherpaRoutes(apiRouter);
+  
+  // Mount the auth router
+  apiRouter.use("/auth", authRouter);
 
   // Get contract by phone number
   apiRouter.get("/contracts/by-phone/:phoneNumber", async (req: Request, res: Response) => {
