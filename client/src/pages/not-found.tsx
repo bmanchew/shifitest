@@ -9,13 +9,8 @@ export default function NotFound() {
   const [_, setLocation] = useLocation();
   const { user } = useAuth();
 
-  // Redirect to login if requested /login directly and not logged in
-  useEffect(() => {
-    const path = window.location.pathname;
-    if (path === '/login' && !user) {
-      setLocation('/login');
-    }
-  }, [user, setLocation]);
+  // We don't need to redirect to login from /login as this would cause an infinite loop
+  // Instead, App.tsx should handle the routing for /login correctly
 
   const handleGoHome = () => {
     if (user) {

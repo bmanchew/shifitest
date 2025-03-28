@@ -376,14 +376,27 @@ async function startServer() {
       const isDev = process.env.NODE_ENV !== 'production';
       log(`Current environment: ${isDev ? 'development' : 'production'}`);
       
-      if (isDev) {
-        // In development, let Vite handle the SPA routing
-        log(`Passing SPA routing to Vite middleware: ${path}`);
-        return next();
-      } else {
-        // In production, explicitly serve the index.html file
-        log(`Serving SPA index.html for client-side route: ${path}`);
-        return res.sendFile('index.html', { root: './dist/client' });
+      try {
+        if (isDev) {
+          // In development, let Vite handle the SPA routing
+          log(`Passing SPA routing to Vite middleware: ${path}`);
+          return next();
+        } else {
+          // In production, explicitly serve the index.html file
+          log(`Serving SPA index.html for client-side route: ${path}`);
+          return res.sendFile('index.html', { root: './dist/client' });
+        }
+      } catch (error) {
+        logger.error({
+          message: `Error handling SPA route: ${error instanceof Error ? error.message : String(error)}`,
+          category: "system",
+          metadata: {
+            path,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          }
+        });
+        next(error);
       }
     });
 

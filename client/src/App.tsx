@@ -56,9 +56,9 @@ function App() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
-        {/* Public routes */}
-        {!user && <Route path="/" component={Login} />}
-        {!user && <Route path="/login" component={Login} />}
+        {/* Public routes - don't use conditional rendering for login route to prevent routing issues */}
+        <Route path="/" component={user ? (user.role === 'admin' ? AdminDashboard : MerchantDashboard) : Login} />
+        <Route path="/login" component={Login} />
         {!user && <Route path="/merchant/signup" component={lazy(() => import("@/components/merchant/Signup"))} />}
         
         {/* Test route that everyone can access */}
@@ -81,7 +81,7 @@ function App() {
         {/* Admin routes */}
         {user && user.role === "admin" && (
           <>
-            <Route path="/" component={AdminDashboard} />
+            {/* Home route is already handled above */}
             <Route path="/admin" component={AdminDashboard} />
             <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/admin/merchants" component={AdminMerchants} />
@@ -98,7 +98,7 @@ function App() {
         {/* Merchant routes */}
         {user && user.role === "merchant" && (
           <>
-            <Route path="/" component={MerchantDashboard} />
+            {/* Home route is already handled above */}
             <Route path="/merchant" component={MerchantDashboard} />
             <Route path="/merchant/dashboard" component={MerchantDashboard} />
             <Route path="/merchant/contracts" component={MerchantContracts} />

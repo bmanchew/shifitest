@@ -19,8 +19,14 @@ export function buildUrl(url: string): string {
     // For API URLs, we need to ensure consistent handling
     // First, check if API_URL is available
     if (API_URL) {
-      // Use the api base URL with the path (without the /api prefix)
-      return `${API_URL}${url.substring(4)}`;
+      // Check if API_URL already ends with /api
+      if (API_URL.endsWith('/api')) {
+        // API_URL already includes /api, so we only need the path after /api/
+        return `${API_URL}${url.substring(4)}`;
+      } else {
+        // API_URL doesn't include /api, so we keep the full path
+        return `${API_URL}${url}`;
+      }
     }
     
     // Fall back to relative URL if API_URL is not available
