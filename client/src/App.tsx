@@ -58,6 +58,7 @@ function App() {
       <Switch>
         {/* Public routes */}
         {!user && <Route path="/" component={Login} />}
+        {!user && <Route path="/login" component={Login} />}
         {!user && <Route path="/merchant/signup" component={lazy(() => import("@/components/merchant/Signup"))} />}
         
         {/* Test route that everyone can access */}
