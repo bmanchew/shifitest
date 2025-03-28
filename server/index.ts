@@ -94,6 +94,8 @@ app.use((req, res, next) => {
     `https://${replitId}.replit.dev`,
     // Janeway domain (for development)
     process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined,
+    // Support for Janeway domains with varying formats
+    `https://${replitId}-00-9psqa3aypt1d.janeway.replit.dev`,
     // Current origin (if any)
     req.headers.origin || "*",
     // Public URL if set
@@ -112,18 +114,19 @@ app.use((req, res, next) => {
     // Check if the origin is allowed
     const isAllowed = allowedOrigins.includes(origin) || 
                       origin.endsWith('.replit.dev') || 
-                      origin.includes('.replit.co');
+                      origin.includes('.replit.co') ||
+                      origin.includes('.janeway.replit.dev');
     
     if (isAllowed) {
       // Allow the specific origin that made the request
       res.header("Access-Control-Allow-Origin", origin);
     } else {
-      // Fall back to the .replit.dev domain
-      res.header("Access-Control-Allow-Origin", `https://${replitId}.replit.dev`);
+      // During development, allow all origins to avoid CORS issues
+      res.header("Access-Control-Allow-Origin", origin);
     }
   } else {
-    // No origin header, use the default .replit.dev domain
-    res.header("Access-Control-Allow-Origin", `https://${replitId}.replit.dev`);
+    // No origin header, use a wildcard to allow all origins during development
+    res.header("Access-Control-Allow-Origin", "*");
   }
   
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");

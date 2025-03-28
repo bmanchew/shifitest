@@ -286,9 +286,9 @@ export default function AIFinancialSherpa({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center py-6 text-center">
-          <Avatar className="h-16 w-16 mb-4 bg-gradient-to-r from-indigo-100 to-purple-100 border-2 border-indigo-200 shadow-md">
-            <AvatarFallback className="text-indigo-700">
-              <Bot size={32} strokeWidth={1.5} />
+          <Avatar className="h-16 w-16 mb-4 bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-indigo-200 shadow-md">
+            <AvatarFallback className="text-white">
+              <Bot size={32} strokeWidth={1.25} />
             </AvatarFallback>
           </Avatar>
           <h3 className="text-lg font-medium mb-2">Connect Your Bank Account</h3>
@@ -320,9 +320,9 @@ export default function AIFinancialSherpa({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center py-6 text-center">
-          <Avatar className="h-16 w-16 mb-4 bg-gradient-to-r from-indigo-100 to-purple-100 border-2 border-indigo-200 shadow-md">
-            <AvatarFallback className="text-indigo-700">
-              <Bot size={32} strokeWidth={1.5} />
+          <Avatar className="h-16 w-16 mb-4 bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-indigo-200 shadow-md">
+            <AvatarFallback className="text-white">
+              <Bot size={32} strokeWidth={1.25} />
             </AvatarFallback>
           </Avatar>
           <h3 className="text-lg font-medium mb-2">Building Your Financial Insights</h3>
@@ -353,9 +353,9 @@ export default function AIFinancialSherpa({
             </Badge>
           </CardTitle>
           <div className="flex items-center space-x-2">
-            <Avatar className="h-10 w-10 bg-gradient-to-r from-indigo-100 to-purple-100 border-2 border-indigo-200">
-              <AvatarFallback className="text-indigo-700">
-                <Bot size={20} strokeWidth={1.5} />
+            <Avatar className="h-10 w-10 bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-indigo-200 shadow-sm">
+              <AvatarFallback className="text-white">
+                <Bot size={20} strokeWidth={1.25} />
               </AvatarFallback>
             </Avatar>
           </div>
@@ -420,11 +420,17 @@ export default function AIFinancialSherpa({
                       disabled={loadingAudio && activeInsightId === insight.id}
                     >
                       {loadingAudio && activeInsightId === insight.id ? (
-                        <div className="mr-1 h-5 w-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                        <div className="flex-shrink-0 rounded-full w-7 h-7 bg-gradient-to-br from-indigo-200 to-purple-200 shadow-md flex items-center justify-center">
+                          <div className="h-4 w-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                        </div>
                       ) : isPlaying && activeInsightId === insight.id ? (
-                        <Pause className="mr-1.5 h-5 w-5 text-indigo-700" />
+                        <div className="flex-shrink-0 rounded-full w-7 h-7 bg-gradient-to-br from-amber-500 to-red-600 shadow-md flex items-center justify-center">
+                          <Pause className="h-5 w-5 text-white" strokeWidth={1.5} />
+                        </div>
                       ) : (
-                        <PlayCircle className="mr-1.5 h-5 w-5 text-indigo-700 fill-indigo-100" strokeWidth={1.5} />
+                        <div className="flex-shrink-0 rounded-full w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-600 shadow-md flex items-center justify-center">
+                          <PlayCircle className="h-5 w-5 text-white" strokeWidth={1.5} />
+                        </div>
                       )}
                       <span className="font-medium">{isPlaying && activeInsightId === insight.id ? 'Pause' : 'Listen'}</span>
                       <Headphones className="ml-1.5 h-4 w-4 text-indigo-600" />
@@ -456,8 +462,8 @@ export default function AIFinancialSherpa({
         
         <TabsContent value="conversation" className="p-0 m-0">
           <CardContent className="pt-6 flex flex-col items-center justify-center py-12 text-center">
-            <Avatar className="h-16 w-16 mb-4 bg-gradient-to-r from-indigo-100 to-purple-100 border-2 border-indigo-200 shadow-md">
-              <AvatarFallback className="text-indigo-700">
+            <Avatar className="h-16 w-16 mb-4 bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-indigo-200 shadow-md">
+              <AvatarFallback className="text-white">
                 <Volume2 size={32} strokeWidth={1.5} />
               </AvatarFallback>
             </Avatar>

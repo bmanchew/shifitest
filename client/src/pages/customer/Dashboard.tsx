@@ -520,7 +520,9 @@ export default function CustomerDashboard(): React.ReactNode {
         {/* AI Financial Sherpa - Voice-enabled Financial Insights */}
         <div className="mb-8">
           <h2 className="text-xl font-bold mb-4 flex items-center">
-            <Brain className="mr-2 h-5 w-5 text-indigo-600" />
+            <div className="rounded-full w-7 h-7 bg-gradient-to-br from-indigo-400 to-purple-500 shadow flex items-center justify-center mr-2">
+              <Brain className="h-5 w-5 text-white" strokeWidth={1.25} />
+            </div>
             Financial Sherpa
           </h2>
           <AIFinancialSherpa
@@ -538,7 +540,9 @@ export default function CustomerDashboard(): React.ReactNode {
         {/* Cash Management Tools and Financial Data Section */}
         <div className="mb-8">
           <h2 className="text-xl font-bold mb-4 flex items-center">
-            <Wallet className="mr-2 h-5 w-5 text-primary" />
+            <div className="rounded-full w-7 h-7 bg-gradient-to-br from-blue-400 to-teal-500 shadow flex items-center justify-center mr-2">
+              <Wallet className="h-5 w-5 text-white" strokeWidth={1.25} />
+            </div>
             Cash Management Tools
           </h2>
           <div className="grid gap-6 md:grid-cols-3">
