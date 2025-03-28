@@ -23,6 +23,7 @@ import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
 import { blockchainService } from "./services/blockchain";
 import { plaidService } from "./services/plaid";
+import { plaidTransferService } from "./services/plaid.transfers";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
@@ -4001,7 +4002,7 @@ apiRouter.post(
     "/plaid/create-transfer",
     async (req: Request, res: Response) => {
       try {
-        const { contractId, amount, description, accessToken, accountId } = req.body;
+        const { contractId, amount, description, accessToken, accountId, user } = req.body;
 
         if (!contractId || !amount || !accessToken || !accountId) {
           return res.status(400).json({
@@ -4009,34 +4010,6 @@ apiRouter.post(
             message: "Contract ID, amount, access token and account ID are required",
           });
         }
-
-        // Create the transfer using Plaid service
-        const transferResult = await plaidService.createTransfer({
-          accessToken,
-          accountId,
-          amount,
-          description: description || `Payment for contract ${contractId}`,
-        });
-
-        // Store transfer info in database
-        await storage.createLog({
-          level: "info",
-          category: "payment",
-          source: "plaid",
-          message: `Transfer created for contract ${contractId}`,
-          metadata: JSON.stringify({
-            contractId,
-            amount,
-            transferId: transferResult.transferId,
-            status: transferResult.status
-          })
-        });
-
-        res.json({
-          success: true,
-          transferId: transferResult.transferId,
-          status: transferResult.status
-        });
 
         // Get contract details
         const contract = await storage.getContract(parseInt(contractId));
@@ -4049,112 +4022,82 @@ apiRouter.post(
 
         // Get customer details if available
         let customerName = "Customer";
+        let customerEmail = null;
+        let customerPhone = null;
         if (contract.customerId) {
           const customer = await storage.getUser(contract.customerId);
           if (customer) {
             customerName = customer.name;
+            customerEmail = customer.email;
+            customerPhone = customer.phone;
           }
         }
 
-        // Get the bank information from the application progress
-        const applicationProgress =
-          await storage.getApplicationProgressByContractId(
-            parseInt(contractId),
-          );
-        const bankStep = applicationProgress.find(
-          (step) => step.step === "bank",
-        );
+        // Create complete user object for the transfer
+        const transferUser = {
+          legalName: (user && user.legalName) ? user.legalName : customerName,
+          email: (user && user.email) ? user.email : customerEmail,
+          phone: (user && user.phone) ? user.phone : customerPhone
+        };
 
-        if (!bankStep || !bankStep.completed || !bankStep.data) {
+        // First authorize the transfer using the new implementation
+        const authorizationId = await plaidService.authorizeTransfer({
+          accessToken,
+          accountId,
+          amount: amount.toString(),
+          type: 'debit',
+          description: description || `Payment for contract ${contractId}`,
+          user: transferUser
+        });
+
+        if (!authorizationId) {
           return res.status(400).json({
             success: false,
-            message: "Bank account not linked for this contract",
+            message: "Transfer authorization failed. Please check your bank account details and try again."
           });
         }
 
-        // Parse bank data
-        let bankData;
-        try {
-          bankData = JSON.parse(bankStep.data);
-        } catch (parseError) {
-          logger.error({
-            message: `Failed to parse bank data: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
-            category: "api",
-            source: "plaid",
-            metadata: {
-              contractId,
-              bankData: bankStep.data,
-            },
-          });
+        // Create the transfer using the new implementation
+        const transferResult = await plaidService.createTransfer({
+          accessToken,
+          accountId,
+          authorizationId,
+          description: description || `Payment for contract ${contractId}`,
+          metadata: { contractId }
+        });
 
-          return res.status(50).json({
-            success: false,
-            message: "Failed to process bank information",
-          });
-        }
+        // Store transfer info in database
+        await storage.createLog({
+          level: "info",
+          category: "payment",
+          source: "plaid",
+          message: `Transfer created for contract ${contractId}`,
+          metadata: JSON.stringify({
+            contractId,
+            amount,
+            authorizationId,
+            transferId: transferResult.transferId,
+            status: transferResult.status
+          })
+        });
 
-        // In a real app, fetch the access token from your database
-        // For this example, we'll simulate the transfer creation
+        res.json({
+          success: true,
+          transferId: transferResult.transferId,
+          status: transferResult.status
+        });
 
-        // Log the transfer request
+        // Log the successful transfer
         logger.info({
-          message: `Processing payment transfer for contract ${contractId}`,
+          message: `Plaid transfer successfully created for contract ${contractId}`,
           category: "payment",
           source: "plaid",
           metadata: {
             contractId,
             amount,
-            description:
-              description ||
-              `Monthly payment for contract ${contract.contractNumber}`,
-          },
-        });
-
-        // In a real implementation, you would:
-        // 1. Retrieve the access token from your database
-        // 2. Make the actual transfer API call
-        // For now, we'll simulate a successful transfer
-
-        const transferId = "tr_" + Math.random().toString(36).substring(2, 15);
-        const status = "pending";
-
-        // Create a record of the payment
-        const paymentInfo = {
-          contractId: parseInt(contractId),
-          amount,
-          description:
-            description ||
-            `Monthly payment for contract ${contract.contractNumber}`,
-          transferId,
-          status,
-          accountId: bankData.accountId,
-          createdAt: new Date(),
-        };
-
-        // In a real app, store this in your database
-        // For example:
-        // await db.insert(payments).values(paymentInfo);
-
-        // Create a log entry
-        await storage.createLog({
-          level: "info",
-          category: "payment",
-          source: "plaid",
-          message: `Payment initiated for contract ${contractId}`,
-          metadata: JSON.stringify({
-            contractId,
-            amount,
-            transferId,
-            status,
-          }),
-        });
-
-        // Return success response
-        res.json({
-          success: true,
-          transferId,
-          status,
-          message: "Payment initiated successfully",
+            transferId: transferResult.transferId,
+            status: transferResult.status
+          }
         });
       } catch (error) {
         logger.error({
@@ -5706,28 +5649,63 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Create platform payment
   apiRouter.post("/plaid/payment/platform", async (req: Request, res: Response) => {
     try {
-      const { merchantId, contractId, amount, description, routeToShifi, metadata } = req.body;
+      const { merchantId, contractId, amount, description, routeToShifi, metadata, accessToken, accountId, user } = req.body;
 
-      if (!merchantId || !contractId || !amount || !description) {
+      if (!contractId || !amount) {
         return res.status(400).json({
           success: false,
-          message: "merchantId, contractId, amount, and description are required",
+          message: "contractId and amount are required",
         });
       }
 
-      const result = await plaidService.createPlatformPayment({
-        merchantId: parseInt(merchantId),
-        contractId: parseInt(contractId),
-        amount: parseFloat(amount),
-        description,
-        routeToShifi: Boolean(routeToShifi),
-        metadata,
-      });
+      // Check if this is a payment from customer to merchant/ShiFi or a merchant payout
+      if (accessToken && accountId) {
+        // This is a customer payment (debit from customer account)
+        // The payment either goes directly to merchant (via platform) or to ShiFi
+        
+        if (!user || !user.legalName) {
+          return res.status(400).json({
+            success: false,
+            message: "User legal name is required for payments",
+          });
+        }
 
-      res.status(200).json({
-        success: true,
-        data: result
-      });
+        // Process the payment using the new transfer service
+        const result = await plaidService.processPayment({
+          accessToken,
+          accountId,
+          amount: amount.toString(),
+          description: description || `Payment for contract ${contractId}`,
+          user,
+          contractId: parseInt(contractId),
+          merchantId: merchantId ? parseInt(merchantId) : undefined,
+          metadata
+        });
+
+        res.status(200).json({
+          success: true,
+          data: result
+        });
+      } else if (merchantId) {
+        // This is a merchant payout (ShiFi paying the merchant)
+        const result = await plaidTransferService.processMerchantPayout({
+          merchantId: parseInt(merchantId),
+          amount: amount.toString(),
+          description: description || `Payout for contract ${contractId}`,
+          contractId: parseInt(contractId),
+          metadata
+        });
+
+        res.status(200).json({
+          success: true,
+          data: result
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Either accessToken/accountId or merchantId is required",
+        });
+      }
     } catch (error) {
       console.error("Error creating platform payment:", error);
       res.status(500).json({

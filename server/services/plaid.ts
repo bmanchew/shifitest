@@ -1,6 +1,7 @@
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 import { storage } from '../storage';
 import { logger } from './logger';
+import { plaidTransferService } from './plaid.transfers';
 
 // Configure Plaid client
 const configuration = new Configuration({
@@ -559,5 +560,65 @@ export const plaidService = {
       
       throw error;
     }
+  },
+
+  /**
+   * Authorize a transfer (perform risk assessment and balance check)
+   * Uses the transferred service for implementation
+   * @param params Authorization parameters
+   * @returns The authorization ID if approved, or null if declined
+   */
+  async authorizeTransfer(params: any) {
+    return plaidTransferService.authorizeTransfer(params);
+  },
+
+  /**
+   * Create a transfer after authorization is approved
+   * Uses the transferred service for implementation
+   * @param params Transfer parameters
+   * @returns Transfer ID and status
+   */
+  async createTransfer(params: any) {
+    return plaidTransferService.createTransfer(params);
+  },
+
+  /**
+   * Get transfer by ID
+   * Uses the transferred service for implementation
+   * @param transferId The Plaid transfer ID
+   * @returns Transfer details
+   */
+  async getTransfer(transferId: string) {
+    return plaidTransferService.getTransfer(transferId);
+  },
+
+  /**
+   * Cancel a transfer if it's still cancellable
+   * Uses the transferred service for implementation
+   * @param transferId The Plaid transfer ID
+   * @returns Cancellation result
+   */
+  async cancelTransfer(transferId: string) {
+    return plaidTransferService.cancelTransfer(transferId);
+  },
+
+  /**
+   * Process a complete payment from customer to merchant
+   * Uses the transferred service for implementation
+   * @param params Payment parameters
+   * @returns Transfer result
+   */
+  async processPayment(params: any) {
+    return plaidTransferService.processPayment(params);
+  },
+
+  /**
+   * Check platform payment status
+   * Uses the transferred service for implementation
+   * @param transferId Transfer ID to check
+   * @returns Current status of the transfer
+   */
+  async checkPlatformPaymentStatus(transferId: string) {
+    return plaidTransferService.checkPlatformPaymentStatus(transferId);
   }
 };
