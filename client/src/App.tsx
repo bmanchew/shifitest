@@ -59,6 +59,9 @@ function App() {
         {/* Public routes */}
         {!user && <Route path="/" component={Login} />}
         {!user && <Route path="/merchant/signup" component={lazy(() => import("@/components/merchant/Signup"))} />}
+        
+        {/* Test route that everyone can access */}
+        <Route path="/test-page" component={lazy(() => import("@/pages/TestPage"))} />
 
         {/* Customer public routes */}
         <Route path="/offer/:contractId" component={CustomerContractOffer} />

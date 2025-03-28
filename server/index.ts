@@ -359,24 +359,31 @@ async function startServer() {
       
       // Skip API routes - they should be handled by the API middleware
       if (path.startsWith('/api/')) {
+        log(`Skipping SPA routing for API path: ${path}`);
         return next();
       }
       
       // Skip static asset requests that have file extensions (like .js, .css, .png)
       if (path.includes('.') && !path.endsWith('.html')) {
+        log(`Skipping SPA routing for static asset: ${path}`);
         return next();
       }
       
       // For client-side routes, serve the index.html to enable client-side routing
       log(`Routing client-side path: ${path} to SPA handler`);
       
-      if (app.get('env') === 'development') {
+      // Determine if we're in development mode
+      const isDev = process.env.NODE_ENV !== 'production';
+      log(`Current environment: ${isDev ? 'development' : 'production'}`);
+      
+      if (isDev) {
         // In development, let Vite handle the SPA routing
-        next();
+        log(`Passing SPA routing to Vite middleware: ${path}`);
+        return next();
       } else {
         // In production, explicitly serve the index.html file
-        // This ensures the client-side router takes control
-        res.sendFile('index.html', { root: './dist/client' });
+        log(`Serving SPA index.html for client-side route: ${path}`);
+        return res.sendFile('index.html', { root: './dist/client' });
       }
     });
 
