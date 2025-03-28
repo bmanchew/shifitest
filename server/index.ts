@@ -226,7 +226,9 @@ app.get('/api/csrf-token', csrfTokenHandler);
 app.use(csrfErrorHandler);
 
 // Import and use our special Janeway domain handler
-import { janewayRootHandler } from './middleware/janeway-handler';
+import { janewayRootHandler, setupJanewayRouter } from './middleware/janeway-handler';
+
+// First apply the middleware for Janeway requests
 app.use(janewayRootHandler);
 
 // Keep basic console logging for development

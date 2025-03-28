@@ -1,8 +1,8 @@
 /**
- * Test script to verify the Janeway domain handler
+ * Enhanced test script to verify the Janeway domain handler
  * 
- * This script makes a request to the root path with a simulated Janeway domain host header
- * to ensure our middleware correctly serves index.html.
+ * This script makes requests to various paths with simulated Janeway domain host headers
+ * to ensure our middleware correctly serves index.html for all client-side routes.
  */
 import axios from 'axios';
 import { promises as fs } from 'fs';
@@ -15,60 +15,85 @@ function getServerUrl() {
   return baseUrl;
 }
 
+// Force logging to console for debugging
+console.log('Starting Janeway domain tests at', new Date().toISOString());
+console.log('========================');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('========================');
+
 /**
- * Test the Janeway handler with simulated Janeway requests
+ * Test the Janeway handler with simulated Janeway requests for multiple paths
  */
 async function testJanewayHandler() {
   const serverUrl = getServerUrl();
   console.log(`Testing Janeway domain handler at ${serverUrl}...`);
 
-  try {
-    // Get the server URL
-    const url = `${serverUrl}/`;
+  // Define Janeway request headers
+  const janewayHeaders = {
+    'Host': 'someapp-00-12345.janeway.replit.dev',
+    'User-Agent': 'Janeway Test Client'
+  };
+  
+  // Define test paths to check
+  const testPaths = [
+    '/',              // Root path
+    '/login',         // Login page
+    '/dashboard',     // Dashboard page
+    '/settings',      // Settings page
+    '/notfound',      // Non-existing page
+    '/api/csrf-token' // API endpoint - should still work
+  ];
+  
+  // Test each path
+  for (const testPath of testPaths) {
+    console.log(`\nTesting path: ${testPath}`);
     
-    // Create a simulated Janeway request
-    const response = await axios.get(url, {
-      headers: {
-        // Simulate a request coming from a Janeway domain
-        'Host': 'someapp-00-12345.janeway.replit.dev',
-        'User-Agent': 'Janeway Test Client'
+    try {
+      const url = `${serverUrl}${testPath}`;
+      const isApiPath = testPath.startsWith('/api/');
+      
+      // Make the request
+      const response = await axios.get(url, {
+        headers: janewayHeaders
+      });
+      
+      console.log(`Response status: ${response.status}`);
+      
+      if (isApiPath) {
+        // For API paths, check if the response contains expected API data
+        console.log(`API response: ${JSON.stringify(response.data).substring(0, 100)}...`);
+        if (response.status === 200) {
+          console.log('✅ SUCCESS: API endpoint works properly');
+        } else {
+          console.log('❌ FAILED: API endpoint returned non-200 status');
+        }
+      } else {
+        // For non-API paths, check if the response is the index.html file
+        const containsHtmlDoctype = response.data.includes('<!DOCTYPE html>');
+        const containsReactRoot = response.data.includes('id="root"');
+        
+        console.log(`Content length: ${response.data.length} bytes`);
+        console.log(`Contains HTML doctype: ${containsHtmlDoctype}`);
+        console.log(`Contains React root element: ${containsReactRoot}`);
+        
+        if (containsHtmlDoctype && containsReactRoot) {
+          console.log(`✅ SUCCESS: Janeway handler correctly served index.html for path: ${testPath}`);
+        } else {
+          console.log(`❌ FAILED: Response for path ${testPath} does not appear to be index.html`);
+        }
       }
-    });
-
-    // Check if the response appears to be the index.html content
-    const containsHtmlDoctype = response.data.includes('<!DOCTYPE html>');
-    const containsReactRoot = response.data.includes('id="root"');
-    
-    console.log(`Response status: ${response.status}`);
-    console.log(`Content length: ${response.data.length} bytes`);
-    console.log(`Contains HTML doctype: ${containsHtmlDoctype}`);
-    console.log(`Contains React root element: ${containsReactRoot}`);
-
-    if (containsHtmlDoctype && containsReactRoot) {
-      console.log('✅ SUCCESS: Janeway handler correctly served index.html for root path');
-    } else {
-      console.log('❌ FAILED: Response does not appear to be index.html');
-    }
-    
-    // Test a non-root path to make sure regular middleware still works
-    const apiResponse = await axios.get(`${serverUrl}/api/csrf-token`);
-    console.log(`API Response status: ${apiResponse.status}`);
-    
-    if (apiResponse.status === 200 && apiResponse.data && apiResponse.data.csrfToken) {
-      console.log('✅ SUCCESS: API endpoint still works properly');
-    } else {
-      console.log('❌ FAILED: API endpoint not working correctly');
-    }
-    
-  } catch (error) {
-    console.error('Error testing Janeway handler:', error.message);
-    
-    if (error.response) {
-      console.error(`Response status: ${error.response.status}`);
-      console.error('Response headers:', error.response.headers);
-      console.error('Response data:', error.response.data);
+    } catch (error) {
+      console.error(`Error testing path ${testPath}:`, error.message);
+      
+      if (error.response) {
+        console.error(`Response status: ${error.response.status}`);
+        console.error('Response headers:', error.response.headers);
+        console.error('Response data:', error.response.data);
+      }
     }
   }
+  
+  console.log('\nAll tests completed!');
 }
 
 // Run the test

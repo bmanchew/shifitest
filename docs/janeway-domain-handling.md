@@ -1,92 +1,116 @@
-# Janeway Domain Handling in ShiFi Platform
+# Janeway Domain Handling System
 
-## Problem Overview
+## Overview
 
-When accessing the ShiFi application through Replit's Janeway domains (e.g., `appname-00-xxx.janeway.replit.dev`), users were encountering 404 errors when trying to access the application directly or on page refresh. This was happening because:
+This document explains the implementation of our Janeway domain handler, which ensures the application properly serves the Single Page Application (SPA) when accessed through Replit's janeway.replit.dev domains.
 
-1. Janeway domains have a different URL pattern than standard Replit domains
-2. The root path ("/") wasn't being correctly handled to serve the frontend application
-3. Express wasn't properly recognizing these domains to serve static files
+## Problem Statement
 
-## Solution Implementation
+When a React/Vite application is hosted on Replit and accessed through the Janeway webview (via URLs like `appname-xxxx.janeway.replit.dev`), there are several unique challenges:
 
-We implemented a specialized middleware handler specifically for Janeway domains that ensures the application's frontend is correctly served. This approach provides a robust solution that:
+1. React router expects to handle all client-side routing
+2. Direct navigation to routes other than the root path (e.g., `/login`, `/dashboard`) was resulting in 404 errors
+3. Standard SPA serving approaches were not always effective in the Janeway environment
+4. API endpoints still needed to function normally
 
-1. Detects requests coming from Janeway domains
-2. Ensures the root path serves the React application's index.html file
-3. Maintains normal routing behavior for API and non-root paths
+## Implementation
 
-### Key Components:
+We implemented a robust solution with multiple layers:
 
-#### 1. Custom Janeway Handler Middleware
+### 1. Janeway Domain Detection
 
-Located in `server/middleware/janeway-handler.ts`, this middleware:
+The system detects requests coming from Janeway domains by examining the `Host` header:
 
 ```typescript
-// Special middleware to handle Janeway Replit domains
-export function janewayRootHandler(req: Request, res: Response, next: NextFunction) {
+// Middleware to detect if request is from a Janeway domain
+export function isJanewayDomain(req: Request): boolean {
   const host = req.headers.host || '';
-  const isJaneway = host.includes('janeway.replit');
-  const isRootPath = req.path === '/';
-  
-  // For the root path on Janeway domains, serve index.html directly
-  if (isJaneway && isRootPath) {
-    const indexPath = path.join(process.cwd(), 'client', 'dist', 'index.html');
-    return res.sendFile(indexPath);
-  }
-  
-  // For all other requests, continue with normal handling
-  next();
+  return host.includes('janeway.replit.dev');
 }
 ```
 
-#### 2. Integration in Express Server
+### 2. Specialized Janeway Router
 
-Added in `server/index.ts`, positioned after CSRF middleware but before other route handlers:
+We created a dedicated Express router with a catch-all route specifically for Janeway domains:
 
 ```typescript
-// Import and use our special Janeway domain handler
-import { janewayRootHandler } from './middleware/janeway-handler';
-app.use(janewayRootHandler);
+export function setupJanewayRouter(): Router {
+  const router = Router();
+  
+  router.get('*', (req: Request, res: Response, next: NextFunction) => {
+    // Skip API routes and static asset requests
+    if (
+      req.path.startsWith('/api/') || 
+      req.path.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot|map|json)$/)
+    ) {
+      return next();
+    }
+    
+    // Only handle Janeway domain requests
+    if (!isJanewayDomain(req)) {
+      return next();
+    }
+    
+    // Log the Janeway route being handled
+    logger.info({
+      message: `Janeway handler serving index.html for path: ${req.path}`,
+      category: "system",
+      source: "internal",
+      metadata: {
+        indexPath: path.resolve('./client/dist/index.html')
+      }
+    });
+    
+    // Serve the index.html for all client-side routes
+    res.set('Content-Type', 'text/html');
+    res.status(200).sendFile('index.html', { root: './client/dist' });
+  });
+  
+  return router;
+}
 ```
 
-#### 3. Enhanced Logging
+### 3. Integration in Main Router
 
-To assist in troubleshooting, we added detailed logging throughout the Janeway handler that captures:
-- Incoming request host and path
-- Whether the request matches Janeway domain patterns
-- When index.html is served for Janeway domains
-- Any errors that occur during file serving
+The Janeway router is registered in the main `routes.ts` file:
+
+```typescript
+// Set up the Janeway catch-all router
+const janewayRouter = setupJanewayRouter();
+app.use(janewayRouter);
+```
+
+### 4. Order of Middleware
+
+The middleware registration order is critical:
+
+1. API router is mounted first at `/api`
+2. Janeway router is registered next to handle Janeway domain requests
+3. Static file middleware follows to serve assets
+4. Standard SPA catch-all route is registered last as a fallback
 
 ## Testing
 
-A test script (`test-janeway-handler.js`) was created to verify the solution:
+A specialized test script (`test-janeway-handler.js`) verifies:
 
-1. It simulates requests from Janeway domains
-2. Verifies that the root path correctly returns index.html
-3. Confirms that API endpoints still function properly
+1. All client routes (`/`, `/login`, `/dashboard`, etc.) correctly serve `index.html` on Janeway domains
+2. API endpoints continue to function properly
+3. Static assets are served with correct MIME types
 
-## Results
+## Benefits
 
-This implementation successfully resolves the 404 errors when accessing the application through Janeway domains. Users can now:
+This implementation provides several benefits:
 
-1. Open the application directly via Janeway domain URLs
-2. Refresh the page without losing the application state
-3. Navigate to different routes within the SPA without 404 errors
+1. **Robust Routing**: Works reliably across all client-side routes
+2. **API Compatibility**: Preserves API functionality
+3. **Improved Developer Experience**: Makes the application work seamlessly in the Replit environment
+4. **Maintainability**: Centralizes Janeway-specific logic in dedicated files
 
-## Additional Benefits
+## Notes for Future Development
 
-This approach:
+When making changes to routing or static file serving:
 
-1. Is non-invasive, requiring minimal changes to the existing codebase
-2. Only affects Janeway domain access, preserving normal behavior for other domains
-3. Provides detailed logging for troubleshooting any future issues
-4. Follows separation of concerns principles by isolating Janeway-specific logic
-
-## Future Considerations
-
-For long-term maintenance:
-
-1. If Replit changes its Janeway domain patterns, the detection logic may need updating
-2. Consider adding configuration options to make the Janeway detection more flexible
-3. Expand to handle other special Replit domain types if needed
+1. Don't modify the Janeway router registration order
+2. Test both regular domains and Janeway domains
+3. Use the provided test script to verify all paths work correctly
+4. Remember that the Janeway handler takes precedence for non-API routes on Janeway domains

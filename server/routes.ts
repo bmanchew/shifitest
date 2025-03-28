@@ -2,6 +2,7 @@ import express, { type Express, Request, Response, NextFunction } from "express"
 import { createServer, type Server } from "http";
 import { logger } from "./services/logger";
 import { requestLoggerMiddleware, errorLoggerMiddleware } from "./middleware/requestLogger";
+import { setupJanewayRouter } from "./middleware/janeway-handler";
 import fs from 'fs';
 
 // Import feature-specific routers
@@ -118,6 +119,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount the API router at /api
   app.use("/api", apiRouter);
+  
+  // Set up the Janeway catch-all router
+  const janewayRouter = setupJanewayRouter();
+  app.use(janewayRouter);
   
   // Configure proper MIME types for Express static middleware
   const staticOptions = {
