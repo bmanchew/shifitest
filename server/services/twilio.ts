@@ -148,7 +148,16 @@ class TwilioService {
       }
 
       // Format the phone number for Twilio if it doesn't start with +
-      const formattedTo = normalizedPhone.startsWith('+') ? normalizedPhone : `+1${normalizedPhone}`;
+      let formattedTo = normalizedPhone;
+      if (!formattedTo.startsWith('+')) {
+        // If it already starts with "1", just add the + prefix
+        if (formattedTo.startsWith('1')) {
+          formattedTo = `+${formattedTo}`;
+        } else {
+          // Otherwise add +1 prefix
+          formattedTo = `+1${formattedTo}`;
+        }
+      }
       
       logger.info({
         message: `Sending SMS to ${formattedTo} from ${fromNumber}`,
