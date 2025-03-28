@@ -24,23 +24,20 @@ export default function AppWrapper() {
   // Log the configuration for debugging
   console.log("App configuration:", { apiBaseUrl: API_URL, appDomain: APP_DOMAIN });
   
-  // Enable domain redirection from repl.co to replit.dev
+  // Domain handling - don't redirect, just log information
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
-      const isReplitDev = hostname.endsWith('.replit.dev');
-      const isJanewayDev = hostname.includes('janeway.replit.dev');
+      const origin = window.location.origin;
       
-      // Only attempt to redirect if we're not already on a .replit.dev domain
-      // and we have a valid APP_DOMAIN
-      if (!isReplitDev && !isJanewayDev && APP_DOMAIN) {
-        const currentPath = window.location.pathname + window.location.search;
-        const newUrl = `${APP_DOMAIN}${currentPath}`;
-        console.log(`Redirecting to .replit.dev domain: ${newUrl}`);
-        window.location.href = newUrl;
-      } else {
-        console.log(`Current domain: ${hostname}, no redirection needed`);
-      }
+      // Log the domain information for debugging
+      console.log(`Current hostname: ${hostname}`);
+      console.log(`Current origin: ${origin}`);
+      console.log(`APP_DOMAIN from env: ${APP_DOMAIN}`);
+      console.log(`API_URL from env: ${API_URL}`);
+      
+      // Don't redirect - just use the current domain
+      // This prevents issues with Replit webview
     }
   }, []);
   
