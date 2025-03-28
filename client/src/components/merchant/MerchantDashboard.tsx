@@ -4,17 +4,18 @@ import StatCard from "@/components/admin/StatCard";
 import SendApplication from "@/components/merchant/SendApplication";
 import ContractTable from "@/components/merchant/ContractTable";
 import MerchantFunding from "@/components/merchant/MerchantFunding";
+import SalesRepAnalytics from "@/components/merchant/SalesRepAnalytics";
 import { useAuth } from "@/hooks/use-auth";
 import { Contract } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, FileText, DollarSign, BarChart3, BanknoteIcon } from "lucide-react";
+import { Users, FileText, DollarSign, BarChart3, BanknoteIcon, UserRound } from "lucide-react";
 
 export default function MerchantDashboard() {
   const { user } = useAuth();
   const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
   const [activeTab, setActiveTab] = useState<string>("overview");
 
-  const { data: contracts = [] } = useQuery<Contract[]>({
+  const { data: contracts = [], isLoading: isContractsLoading } = useQuery<Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
     queryFn: async () => {
       try {
@@ -125,6 +126,10 @@ export default function MerchantDashboard() {
               <BanknoteIcon className="h-4 w-4 mr-2" />
               Funding
             </TabsTrigger>
+            <TabsTrigger value="sales-analytics">
+              <UserRound className="h-4 w-4 mr-2" />
+              Sales Rep Analytics
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="overview">
@@ -135,12 +140,16 @@ export default function MerchantDashboard() {
 
             {/* Recent Contracts */}
             <div>
-              <ContractTable contracts={contracts} />
+              <ContractTable contracts={contracts} isLoading={isContractsLoading} />
             </div>
           </TabsContent>
           
           <TabsContent value="funding">
             <MerchantFunding />
+          </TabsContent>
+          
+          <TabsContent value="sales-analytics">
+            <SalesRepAnalytics />
           </TabsContent>
         </Tabs>
       </div>
