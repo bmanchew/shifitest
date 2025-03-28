@@ -1,6 +1,7 @@
 import { QueryFunction } from "@tanstack/react-query";
 import { API_URL } from '../env';
 import * as csrfUtils from './csrf';
+import { extractApiErrorMessage, isCsrfError, isSessionExpiredError } from './errorHandling';
 
 /**
  * API utility functions for the application
@@ -32,13 +33,39 @@ export async function throwIfResNotOk(res: Response) {
     try {
       // First try to parse as JSON (most of our API endpoints return JSON errors)
       const errorData = await res.json();
-      const errorMessage =
-        errorData.message || errorData.error || JSON.stringify(errorData);
-      throw new Error(`${res.status}: ${errorMessage}`);
+      
+      // Create an error object with the full response data for better error handling
+      const error = new Error(errorData.message || errorData.error || JSON.stringify(errorData));
+      
+      // Attach the API response data to the error object
+      (error as any).response = {
+        status: res.status,
+        statusText: res.statusText,
+        data: errorData
+      };
+      
+      // Attach error code if available
+      if (errorData.errorCode) {
+        (error as any).code = errorData.errorCode;
+      }
+      
+      throw error;
     } catch (e) {
-      // If parsing as JSON fails, fall back to plain text
-      const text = (await res.text()) || res.statusText;
-      throw new Error(`${res.status}: ${text}`);
+      // If parsing as JSON fails or the error is already thrown from above
+      if (e instanceof SyntaxError) {
+        // JSON parsing failed, fall back to plain text
+        const text = await res.text() || res.statusText;
+        const error = new Error(`${res.status}: ${text}`);
+        (error as any).response = {
+          status: res.status,
+          statusText: res.statusText,
+          data: { message: text }
+        };
+        throw error;
+      }
+      
+      // Re-throw the error from the JSON block
+      throw e;
     }
   }
 }
@@ -127,31 +154,130 @@ export async function apiRequest<T = Response>(
       
       // Check for CSRF token errors specifically - these are special because they can be resolved by refreshing the token
       if (res.status === 403) {
-        const responseText = await res.text();
-        
-        // If it's a CSRF token error, refresh the token and retry the request
-        if (responseText.includes('CSRF') && attempt <= maxRetries) {
-          console.warn(`CSRF token error detected (attempt ${attempt}/${maxRetries}), refreshing token and retrying...`);
+        try {
+          // Try to parse as JSON first
+          const responseData = await res.json();
           
-          // Clear the cached token and force a fresh fetch
-          csrfUtils.clearCsrfToken();
+          // Construct an error object with the response data for proper error detection
+          const csrfError = new Error(responseData.message || 'Forbidden');
+          (csrfError as any).response = {
+            status: res.status,
+            statusText: res.statusText,
+            data: responseData
+          };
           
-          // Update headers with a new CSRF token
-          if (method !== 'GET') {
-            const freshCsrfHeaders = await csrfUtils.addCsrfHeader(headers);
-            Object.assign(headers, freshCsrfHeaders);
+          // Check if this is a CSRF error
+          if (isCsrfError(csrfError) && attempt <= maxRetries) {
+            console.warn(`CSRF token error detected (attempt ${attempt}/${maxRetries}), refreshing token and retrying...`);
+            
+            // Clear the cached token and force a fresh fetch
+            csrfUtils.clearCsrfToken();
+            
+            // Update headers with a new CSRF token
+            if (method !== 'GET') {
+              const freshCsrfHeaders = await csrfUtils.addCsrfHeader(headers);
+              Object.assign(headers, freshCsrfHeaders);
+            }
+            
+            // Wait before retrying with exponential backoff
+            const backoffDelay = retryDelay * Math.pow(2, attempt - 1);
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            
+            // Retry the request
+            return performFetch(attempt + 1);
           }
           
-          // Wait before retrying with exponential backoff
-          const backoffDelay = retryDelay * Math.pow(2, attempt - 1);
-          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          // If it's not a CSRF error or we've exceeded retries, throw the error
+          throw csrfError;
+        } catch (e) {
+          // If JSON parsing fails, fallback to text response
+          if (e instanceof SyntaxError) {
+            const responseText = await res.text();
+            
+            // Check for CSRF in the text
+            if (responseText.includes('CSRF') && attempt <= maxRetries) {
+              console.warn(`CSRF token error detected (attempt ${attempt}/${maxRetries}), refreshing token and retrying...`);
+              
+              // Clear the cached token and force a fresh fetch
+              csrfUtils.clearCsrfToken();
+              
+              // Update headers with a new CSRF token
+              if (method !== 'GET') {
+                const freshCsrfHeaders = await csrfUtils.addCsrfHeader(headers);
+                Object.assign(headers, freshCsrfHeaders);
+              }
+              
+              // Wait before retrying with exponential backoff
+              const backoffDelay = retryDelay * Math.pow(2, attempt - 1);
+              await new Promise(resolve => setTimeout(resolve, backoffDelay));
+              
+              // Retry the request
+              return performFetch(attempt + 1);
+            }
+            
+            // Not a CSRF error or exceeded retries
+            const error = new Error(`Forbidden: ${responseText}`);
+            (error as any).response = {
+              status: res.status,
+              statusText: res.statusText,
+              data: { message: responseText }
+            };
+            throw error;
+          }
           
-          // Retry the request
-          return performFetch(attempt + 1);
+          // Re-throw the error from JSON parsing
+          throw e;
         }
-        
-        // If it's not a CSRF error or we've exceeded retries, throw the error
-        throw new Error(`Forbidden: ${responseText}`);
+      }
+      
+      // Handle authentication errors specifically (session expired)
+      if (res.status === 401) {
+        try {
+          // Try to parse as JSON first
+          const responseData = await res.json();
+          
+          // Construct an error object with the response data
+          const authError = new Error(responseData.message || 'Unauthorized');
+          (authError as any).response = {
+            status: res.status,
+            statusText: res.statusText,
+            data: responseData
+          };
+          
+          // Check if this is a session expired error
+          if (isSessionExpiredError(authError)) {
+            // Log the session expiration
+            console.warn('Session expired. User needs to log in again.');
+            
+            // Create an event for session expiration that components can listen for
+            window.dispatchEvent(new CustomEvent('session-expired'));
+            
+            // Clear auth from localStorage
+            try {
+              localStorage.removeItem('shifi_user');
+            } catch (e) {
+              console.error('Failed to clear user data from localStorage:', e);
+            }
+          }
+          
+          // Throw the error to be handled by the caller
+          throw authError;
+        } catch (e) {
+          // If JSON parsing fails or we re-throw from above
+          if (!(e instanceof SyntaxError)) {
+            throw e;
+          }
+          
+          // JSON parsing failed, fall back to text
+          const responseText = await res.text();
+          const error = new Error(`Unauthorized: ${responseText}`);
+          (error as any).response = {
+            status: res.status,
+            statusText: res.statusText,
+            data: { message: responseText }
+          };
+          throw error;
+        }
       }
       
       // Handle network errors that may benefit from retries
@@ -215,11 +341,7 @@ export const createApiQuery = <T>(
  * @returns Promise with the payment schedule data
  */
 export const fetchPaymentSchedule = async (customerId: string) => {
-  const response = await fetch(`/api/customers/${customerId}/payment-schedule`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch payment schedule: ${response.statusText}`);
-  }
-  return response.json();
+  return apiRequest('GET', `/api/customers/${customerId}/payment-schedule`);
 };
 
 /**
@@ -229,15 +351,5 @@ export const fetchPaymentSchedule = async (customerId: string) => {
  * @returns Promise with the updated payment schedule
  */
 export const updatePaymentSchedule = async (customerId: string, scheduleData: any) => {
-  const response = await fetch(`/api/customers/${customerId}/payment-schedule`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(scheduleData),
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to update payment schedule: ${response.statusText}`);
-  }
-  return response.json();
+  return apiRequest('PUT', `/api/customers/${customerId}/payment-schedule`, scheduleData);
 };

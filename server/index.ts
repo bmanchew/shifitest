@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { csrfProtectionWithExclusions, csrfTokenHandler, csrfErrorHandler } from "./middleware/csrfMiddleware";
 import jwt from "jsonwebtoken";
+import { errorHandler } from "./services/errorHandler";
 
 const app = express();
 app.use(express.json());
@@ -344,43 +345,8 @@ async function startServer() {
     const hasPlaidCredentials = process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET;
     console.log("Plaid credentials available:", hasPlaidCredentials ? "Yes" : "No");
 
-    app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
-
-      // Capture Plaid-specific errors for better debugging
-      let errorDetails = {};
-      
-      if (err.response?.data) {
-        errorDetails = {
-          plaidError: true,
-          errorCode: err.response.data.error_code,
-          errorType: err.response.data.error_type,
-          errorMessage: err.response.data.error_message,
-          displayMessage: err.response.data.display_message
-        };
-      }
-
-      // Log the error with our enhanced logger
-      logger.error({
-        message: `Error: ${message}`,
-        category: "api",
-        source: "internal",
-        metadata: {
-          path: req.path,
-          statusCode: status,
-          stack: err.stack,
-          error: err instanceof Error ? err.message : String(err),
-          errorDetails: Object.keys(errorDetails).length > 0 ? errorDetails : undefined
-        },
-      });
-
-      res.status(status).json({ 
-        success: false,
-        message,
-        ...(Object.keys(errorDetails).length > 0 ? { errorDetails } : {})
-      });
-    });
+    // Use the enhanced error handler middleware
+    app.use(errorHandler);
 
     // importantly only setup vite in development and after
     // setting up all the other routes so the catch-all route
