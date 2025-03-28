@@ -362,18 +362,44 @@ export const authController = {
         expiresAt: new Date(Date.now() + 1 * 60 * 60 * 1000) // 1 hour
       });
       
-      // In a production environment, this would send an actual email
-      // For now, we'll just log it
-      logger.info({
-        message: `Password reset requested for user: ${email}. Reset token: ${resetToken}`,
-        category: "security",
-        userId: user.id,
-        source: "internal",
-        metadata: {
-          ip: req.ip,
-          resetToken // Would not log this in production
-        }
-      });
+      // Use EmailService to send password reset email
+      // Import at the top of the file
+      const emailService = (await import('../services/email')).default;
+      
+      // Send the password reset email
+      const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
+      
+      const emailSent = await emailService.sendPasswordReset(
+        user.email, 
+        userName, 
+        resetToken
+      );
+      
+      if (emailSent) {
+        logger.info({
+          message: `Password reset email sent to user: ${email}`,
+          category: "security",
+          userId: user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            emailSent: true
+          }
+        });
+      } else {
+        // Log failed email send but don't tell the user
+        logger.warn({
+          message: `Password reset email failed to send to user: ${email}`,
+          category: "security",
+          userId: user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            emailSent: false,
+            resetToken // Only log token on failure for debugging
+          }
+        });
+      }
       
       res.status(200).json({
         success: true,
