@@ -141,26 +141,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Serve static files from the client/dist directory
   app.use(express.static('./client/dist', staticOptions));
 
-  // Global 404 handler for non-API routes (fallback to client-side routing)
+  // Handle client-side routing - this MUST come after static file middleware
+  // Sends index.html for all non-API/non-asset requests to let the SPA router handle it
+  app.get('*', (req: Request, res: Response, next: NextFunction) => {
+    // Skip API routes and static asset requests
+    if (req.path.startsWith('/api/') || req.path.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot|map|json)$/)) {
+      return next();
+    }
+    
+    // Log the SPA route being handled
+    logger.info({
+      message: `Handling SPA route: ${req.method} ${req.originalUrl}`,
+      category: "http",
+      source: "router"
+    });
+    
+    // Serve the index.html for SPA routes like login, dashboard, etc.
+    res.set('Content-Type', 'text/html');
+    res.status(200).sendFile('index.html', { root: './client/dist' });
+  });
+  
+  // API 404 handler - catches any unhandled API routes
+  app.use('/api/*', (req: Request, res: Response) => {
+    logger.warn({
+      message: `API 404: ${req.method} ${req.originalUrl} not found`,
+      category: "api",
+      source: "router",
+      metadata: {
+        originalUrl: req.originalUrl,
+        method: req.method
+      }
+    });
+    
+    res.status(404).json({
+      success: false,
+      message: "API endpoint not found",
+      path: req.originalUrl
+    });
+  });
+  
+  // Global 404 handler - any routes not caught by previous handlers
   app.use((req: Request, res: Response) => {
-    // Only log non-asset 404s to reduce noise
-    if (!req.path.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|ttf|eot)$/)) {
-      logger.info({
-        message: `Non-API 404: ${req.method} ${req.originalUrl}`,
-        category: "http",
-        source: "router"
-      });
-    }
+    logger.warn({
+      message: `404 Not Found: ${req.method} ${req.originalUrl}`,
+      category: "http",
+      source: "router"
+    });
     
-    // For API routes, return JSON response
-    if (req.path.startsWith('/api/')) {
-      return res.status(404).json({
-        success: false,
-        message: "API endpoint not found"
-      });
-    }
-    
-    // For other routes, let the frontend handle it using client-side routing
+    // Fall back to serving index.html for any remaining routes
     res.set('Content-Type', 'text/html');
     res.status(200).sendFile('index.html', { root: './client/dist' });
   });
