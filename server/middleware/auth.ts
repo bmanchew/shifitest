@@ -530,3 +530,72 @@ export const isSalesRep = async (req: Request, res: Response, next: NextFunction
 
 // For backward compatibility with existing code
 export const authenticateToken = isAuthenticated;
+
+/**
+ * Middleware to authenticate admin users for the admin API
+ * This combines isAuthenticated and isAdmin into a single middleware
+ * @param req Express Request
+ * @param res Express Response
+ * @param next Express NextFunction
+ */
+export const authenticateAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // First check if the user is authenticated
+    if (!req.user) {
+      logger.warn({
+        message: 'Admin authentication required but no user found on request',
+        category: 'security', 
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+        }
+      });
+      
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    // Then check if the user is an admin
+    if (req.user.role !== 'admin') {
+      logger.warn({
+        message: `User ${req.user.email} (${req.user.id}) attempted to access admin resource with role ${req.user.role}`,
+        category: 'security',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+          userRole: req.user.role
+        }
+      });
+      
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+    
+    next();
+  } catch (error) {
+    logger.error({
+      message: `Admin authentication error: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'security',
+      userId: req.user?.id,
+      source: 'internal',
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred during authentication'
+    });
+  }
+};

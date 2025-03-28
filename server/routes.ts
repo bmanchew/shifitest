@@ -4911,11 +4911,10 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
     });
   }
 });
-  // Mount the admin reports routers
-  apiRouter.use("/admin/reports", reportsRouter);
-  apiRouter.use("/admin", adminReportsRouter);
-  
-  // The admin router is already mounted above
+  // Mount the admin routers with proper namespacing
+  apiRouter.use("/admin/reports", reportsRouter);      // Keeps report-specific routes
+  apiRouter.use("/admin/analysis", adminReportsRouter); // Renames to avoid conflict
+  apiRouter.use("/admin", adminRouter);                // Main admin router
 
   // Mount the underwriting router
   apiRouter.use("/underwriting", underwritingRouter);

@@ -7,13 +7,32 @@ import {
   updateMerchantPerformance,
   updateAllMerchantPerformances
 } from "./merchant-performance";
+import merchantsRouter from "./merchants";
+import { logger } from "../../services/logger";
 
 const router = express.Router();
 
 // Apply admin authentication middleware to all routes
 router.use(authenticateAdmin);
 
-// Existing routes...
+// Attach any request logging middleware
+router.use((req, res, next) => {
+  logger.debug({
+    message: `Admin API request: ${req.method} ${req.path}`,
+    category: "api",
+    userId: req.user?.id,
+    source: "internal",
+    metadata: {
+      path: req.path,
+      method: req.method,
+      query: req.query
+    }
+  });
+  next();
+});
+
+// Register sub-routes
+router.use("/merchants", merchantsRouter);
 
 // Merchant Performance routes
 router.get("/merchant-performances", getAllMerchantPerformances);
