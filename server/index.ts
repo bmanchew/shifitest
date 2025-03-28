@@ -23,7 +23,7 @@ app.use(
         connectSrc: ["'self'", "https://*.plaid.com", "https://*.stripe.com", "https://api.prefi.io"],
         frameSrc: ["'self'", "https://js.stripe.com", "https://cdn.plaid.com", "https://link.plaid.com"],
         imgSrc: ["'self'", "data:", "https:"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
         objectSrc: ["'none'"],
         upgradeInsecureRequests: [],
