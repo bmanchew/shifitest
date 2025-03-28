@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { storage } from '../storage';
 import { logger } from '../services/logger';
+import { db } from '../db';
+import { merchants } from '../../shared/schema';
+import { eq } from 'drizzle-orm';
 
 /**
  * Middleware to check if the user is authenticated
@@ -166,10 +169,6 @@ export const isMerchant = async (req: Request, res: Response, next: NextFunction
     
     // Fetch the merchant record and attach it to the request
     try {
-      // Import the necessary dependencies
-      const { db } = require('../db');
-      const { merchants, eq } = require('../../shared/schema');
-      
       // Get the merchant record for this user
       const merchantRecords = await db.select()
         .from(merchants)
@@ -195,17 +194,33 @@ export const isMerchant = async (req: Request, res: Response, next: NextFunction
         });
       }
       
+      // Create a merchant record with the correct type structure
+      // Use type assertion to resolve TypeScript nullable vs optional field differences
+      const merchantRecord = {
+        id: merchantRecords[0].id,
+        name: merchantRecords[0].name,
+        contactName: merchantRecords[0].contactName,
+        email: merchantRecords[0].email,
+        phone: merchantRecords[0].phone,
+        address: merchantRecords[0].address || undefined,
+        active: merchantRecords[0].active ?? undefined,
+        archived: merchantRecords[0].archived ?? undefined,
+        createdAt: merchantRecords[0].createdAt || undefined,
+        userId: merchantRecords[0].userId || undefined
+      };
+      
       // Attach merchant to request
-      req.merchant = merchantRecords[0];
+      req.merchant = merchantRecord as Express.Request['merchant'];
       
       // Log the successful merchant identification
+      const merchantId = merchantRecord.id;
       logger.debug({
-        message: `Merchant identified: ${req.merchant.id} for user ${req.user.id}`,
+        message: `Merchant identified: ${merchantId} for user ${req.user.id}`,
         category: 'security',
         userId: req.user.id,
         source: 'internal',
         metadata: {
-          merchantId: req.merchant.id,
+          merchantId: merchantId,
           userId: req.user.id,
           path: req.path
         }
@@ -297,6 +312,62 @@ export const isAdminOrMerchant = async (req: Request, res: Response, next: NextF
         success: false,
         message: 'Admin or merchant access required'
       });
+    }
+    
+    // If user is a merchant, fetch merchant data
+    if (req.user.role === 'merchant') {
+      try {
+        // Get the merchant record for this user
+        const merchantRecords = await db.select()
+          .from(merchants)
+          .where(eq(merchants.userId, req.user.id))
+          .limit(1);
+        
+        if (merchantRecords.length > 0) {
+          // Create a merchant record with the correct type structure
+          const merchantRecord = {
+            id: merchantRecords[0].id,
+            name: merchantRecords[0].name,
+            contactName: merchantRecords[0].contactName,
+            email: merchantRecords[0].email,
+            phone: merchantRecords[0].phone,
+            address: merchantRecords[0].address || undefined,
+            active: merchantRecords[0].active ?? undefined,
+            archived: merchantRecords[0].archived ?? undefined,
+            createdAt: merchantRecords[0].createdAt || undefined,
+            userId: merchantRecords[0].userId || undefined
+          };
+          
+          // Attach merchant to request
+          req.merchant = merchantRecord as Express.Request['merchant'];
+          
+          logger.debug({
+            message: `Merchant identified in isAdminOrMerchant: ${merchantRecord.id} for user ${req.user.id}`,
+            category: 'security',
+            userId: req.user.id,
+            source: 'internal',
+            metadata: {
+              merchantId: merchantRecord.id,
+              userId: req.user.id,
+              path: req.path
+            }
+          });
+        }
+      } catch (dbError) {
+        // Log the error but don't block access
+        logger.error({
+          message: `Non-blocking DB error in isAdminOrMerchant: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+          category: 'database',
+          userId: req.user.id,
+          source: 'internal',
+          metadata: {
+            error: dbError instanceof Error ? dbError.message : String(dbError),
+            stack: dbError instanceof Error ? dbError.stack : undefined,
+            path: req.path,
+            method: req.method
+          }
+        });
+      }
     }
     
     next();
