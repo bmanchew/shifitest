@@ -24,6 +24,7 @@ export enum EmailTemplateType {
   PAYMENT_REMINDER = 'payment_reminder',
   PAYMENT_RECEIVED = 'payment_received',
   CONTRACT_SIGNED = 'contract_signed',
+  CUSTOMER_MAGIC_LINK = 'customer_magic_link',
 }
 
 // Basic email interface
@@ -396,6 +397,57 @@ export class EmailService {
 
     return this.sendEmail({
       to: customerEmail,
+      subject,
+      html,
+      text
+    });
+  }
+
+  /**
+   * Send magic link for passwordless login
+   */
+  async sendMagicLink(userEmail: string, userName: string, token: string): Promise<boolean> {
+    const subject = 'ShiFi - Magic Link to Sign In';
+    const baseUrl = this.getAppBaseUrl();
+    const loginLink = `${baseUrl}/login/magic?token=${token}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #333;">Sign in to ShiFi</h1>
+
+        <p>Hello ${userName},</p>
+
+        <p>You requested a magic link to sign in to your ShiFi account. Click the button below to securely sign in:</p>
+
+        <a href="${loginLink}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0;">Sign In to ShiFi</a>
+
+        <p>This link will expire in 15 minutes and can only be used once.</p>
+
+        <p>If you didn't request this login link, please ignore this email. No action is needed.</p>
+
+        <p>Best regards,<br>The ShiFi Team</p>
+      </div>
+    `;
+
+    const text = `
+      Sign in to ShiFi
+
+      Hello ${userName},
+
+      You requested a magic link to sign in to your ShiFi account. Use the link below to securely sign in:
+
+      ${loginLink}
+
+      This link will expire in 15 minutes and can only be used once.
+
+      If you didn't request this login link, please ignore this email. No action is needed.
+
+      Best regards,
+      The ShiFi Team
+    `;
+
+    return this.sendEmail({
+      to: userEmail,
       subject,
       html,
       text

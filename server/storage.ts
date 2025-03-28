@@ -27,7 +27,8 @@ import {
   ticketAttachments, TicketAttachment, InsertTicketAttachment,
   ticketActivityLog, TicketActivityLog, InsertTicketActivityLog,
   emailVerificationTokens, EmailVerificationToken, InsertEmailVerificationToken,
-  passwordResetTokens, PasswordResetToken, InsertPasswordResetToken
+  passwordResetTokens, PasswordResetToken, InsertPasswordResetToken,
+  oneTimePasswords, OneTimePassword, InsertOneTimePassword
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt, not } from "drizzle-orm";
@@ -57,6 +58,14 @@ export interface IStorage {
   markPasswordResetTokenUsed(id: number): Promise<PasswordResetToken | undefined>;
   verifyPasswordResetToken(token: string): Promise<User | undefined>;
   invalidatePasswordResetTokens(userId: number): Promise<number>;
+  
+  // OTP operations
+  createOneTimePassword(otp: InsertOneTimePassword): Promise<OneTimePassword>;
+  getOneTimePasswordByCode(code: string, phone: string): Promise<OneTimePassword | undefined>;
+  getOneTimePasswordByPhone(phone: string, purpose?: string): Promise<OneTimePassword | undefined>;
+  markOneTimePasswordUsed(id: number): Promise<OneTimePassword | undefined>;
+  verifyOneTimePassword(code: string, phone: string): Promise<boolean>;
+  invalidateOneTimePasswords(phone: string): Promise<number>;
 
   // Add to the IStorage interface
   updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined>;
@@ -1701,6 +1710,146 @@ export class DatabaseStorage implements IStorage {
       return result.rowCount || 0;
     } catch (error) {
       console.error(`Error invalidating password reset tokens for user ${userId}:`, error);
+      return 0;
+    }
+  }
+  
+  // One-Time Password (OTP) methods
+  async createOneTimePassword(otp: InsertOneTimePassword): Promise<OneTimePassword> {
+    try {
+      // First, invalidate any existing unused OTPs for this phone number
+      await this.invalidateOneTimePasswords(otp.phone);
+      
+      // Create new OTP
+      const [newOtp] = await db
+        .insert(oneTimePasswords)
+        .values(otp)
+        .returning();
+      
+      return newOtp;
+    } catch (error) {
+      console.error("Error creating one-time password:", error);
+      throw new Error("Failed to create one-time password");
+    }
+  }
+  
+  async getOneTimePasswordByCode(code: string, phone: string): Promise<OneTimePassword | undefined> {
+    try {
+      const [otp] = await db
+        .select()
+        .from(oneTimePasswords)
+        .where(
+          and(
+            eq(oneTimePasswords.otp, code),
+            eq(oneTimePasswords.phone, phone),
+            eq(oneTimePasswords.usedAt, null)
+          )
+        );
+      
+      return otp;
+    } catch (error) {
+      console.error(`Error getting OTP for phone ${phone}:`, error);
+      return undefined;
+    }
+  }
+  
+  async getOneTimePasswordByPhone(phone: string, purpose?: string): Promise<OneTimePassword | undefined> {
+    try {
+      let query = db
+        .select()
+        .from(oneTimePasswords)
+        .where(
+          and(
+            eq(oneTimePasswords.phone, phone),
+            eq(oneTimePasswords.usedAt, null)
+          )
+        )
+        .orderBy(desc(oneTimePasswords.createdAt))
+        .limit(1);
+      
+      // Add purpose filter if specified
+      if (purpose) {
+        query = query.where(eq(oneTimePasswords.purpose, purpose));
+      }
+      
+      const [otp] = await query;
+      return otp;
+    } catch (error) {
+      console.error(`Error getting recent OTP for phone ${phone}:`, error);
+      return undefined;
+    }
+  }
+  
+  async markOneTimePasswordUsed(id: number): Promise<OneTimePassword | undefined> {
+    try {
+      const [updatedOtp] = await db
+        .update(oneTimePasswords)
+        .set({ 
+          usedAt: new Date(),
+          verified: true 
+        })
+        .where(eq(oneTimePasswords.id, id))
+        .returning();
+      
+      return updatedOtp;
+    } catch (error) {
+      console.error(`Error marking OTP ${id} as used:`, error);
+      return undefined;
+    }
+  }
+  
+  async verifyOneTimePassword(code: string, phone: string): Promise<boolean> {
+    try {
+      // Get the OTP
+      const otp = await this.getOneTimePasswordByCode(code, phone);
+      
+      if (!otp) {
+        console.warn(`No matching OTP found for phone ${phone}`);
+        return false;
+      }
+      
+      // Check if OTP is expired
+      const now = new Date();
+      if (now > otp.expiresAt) {
+        console.warn(`OTP expired for phone ${phone}`);
+        
+        // Update attempt count
+        await db
+          .update(oneTimePasswords)
+          .set({ 
+            attempts: (otp.attempts || 0) + 1
+          })
+          .where(eq(oneTimePasswords.id, otp.id));
+          
+        return false;
+      }
+      
+      // Mark this OTP as used
+      await this.markOneTimePasswordUsed(otp.id);
+      return true;
+    } catch (error) {
+      console.error(`Error verifying OTP for phone ${phone}:`, error);
+      return false;
+    }
+  }
+  
+  async invalidateOneTimePasswords(phone: string): Promise<number> {
+    try {
+      // Mark all unused OTPs for this phone as used
+      const now = new Date();
+      const result = await db
+        .update(oneTimePasswords)
+        .set({ usedAt: now })
+        .where(
+          and(
+            eq(oneTimePasswords.phone, phone),
+            eq(oneTimePasswords.usedAt, null)
+          )
+        );
+      
+      return result.rowCount || 0;
+    } catch (error) {
+      console.error(`Error invalidating OTPs for phone ${phone}:`, error);
       return 0;
     }
   }

@@ -29,4 +29,16 @@ router.get('/verify-email/:token', authController.verifyEmail);
 // Resend verification email route with rate limiting
 router.post('/resend-verification', authRateLimiter, authController.resendVerificationEmail);
 
+// Magic link request route with rate limiting (for customers only)
+router.post('/magic-link', authRateLimiter, authController.requestMagicLink);
+
+// Magic link verification route
+router.get('/magic-link/verify/:token', authController.verifyMagicLink);
+
+// OTP request route with rate limiting (for customers only)
+router.post('/otp', authRateLimiter, authController.requestOtp);
+
+// OTP verification route with rate limiting
+router.post('/otp/verify', authRateLimiter, authController.verifyOtp);
+
 export default router;

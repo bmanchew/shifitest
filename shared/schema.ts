@@ -1001,3 +1001,29 @@ export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect
 export type InsertEmailVerificationToken = z.infer<typeof insertEmailVerificationTokenSchema>;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
+
+// One-Time Password (OTP) for customer authentication
+export const oneTimePasswords = pgTable("one_time_passwords", {
+  id: serial("id").primaryKey(),
+  phone: text("phone").notNull(), // The phone number the OTP was sent to
+  email: text("email"), // Optional email for tracking
+  otp: text("otp").notNull(), // The actual OTP code
+  purpose: text("purpose").notNull().default("authentication"), // The purpose of this OTP (authentication, verification, etc.)
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(), // When this OTP expires (typically 10-15 minutes)
+  usedAt: timestamp("used_at"), // When the OTP was used (null if unused)
+  attempts: integer("attempts").default(0), // Number of failed attempts
+  verified: boolean("verified").default(false), // Whether this OTP was successfully verified
+  ipAddress: text("ip_address"), // IP address that requested this OTP
+  userAgent: text("user_agent"), // User agent that requested this OTP
+});
+
+export const insertOneTimePasswordSchema = createInsertSchema(oneTimePasswords).omit({
+  id: true,
+  usedAt: true,
+  verified: true,
+  attempts: true,
+});
+
+export type OneTimePassword = typeof oneTimePasswords.$inferSelect;
+export type InsertOneTimePassword = z.infer<typeof insertOneTimePasswordSchema>;

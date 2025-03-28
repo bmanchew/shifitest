@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 import { storage } from "../storage";
 import { logger } from "../services/logger";
 import crypto from "crypto";
+import emailService from "../services/email";
+import { twilioService } from "../services/twilio";
 
 /**
  * Authentication controller
@@ -654,6 +656,457 @@ export const authController = {
       res.status(500).json({
         success: false,
         message: "An error occurred while sending the verification email"
+      });
+    }
+  },
+
+  /**
+   * Request a magic link for passwordless login (customers only)
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async requestMagicLink(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required"
+        });
+      }
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      
+      // If user not found or is not a customer, still return success to prevent email enumeration
+      if (!user || user.role !== "customer") {
+        logger.info({
+          message: `Magic link requested for ${!user ? 'non-existent' : 'non-customer'} email: ${email}`,
+          category: "security",
+          source: "internal",
+          metadata: {
+            ip: req.ip
+          }
+        });
+        
+        return res.status(200).json({
+          success: true,
+          message: "If a matching customer account exists, a magic link has been sent to your email"
+        });
+      }
+      
+      // Generate magic link token
+      const magicToken = crypto.randomBytes(32).toString('hex');
+      
+      // Store token (reusing email verification token table)
+      await storage.createEmailVerificationToken({
+        userId: user.id,
+        token: magicToken,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+      });
+      
+      // Send the magic link email
+      const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer';
+      
+      const emailSent = await emailService.sendMagicLink(
+        user.email, 
+        userName, 
+        magicToken
+      );
+      
+      if (emailSent) {
+        logger.info({
+          message: `Magic link email sent to customer: ${email}`,
+          category: "security",
+          userId: user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            emailSent: true
+          }
+        });
+      } else {
+        // Log failed email send but don't tell the user
+        logger.warn({
+          message: `Magic link email failed to send to customer: ${email}`,
+          category: "security",
+          userId: user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            emailSent: false,
+            magicToken // Only log token on failure for debugging in development
+          }
+        });
+      }
+      
+      res.status(200).json({
+        success: true,
+        message: "If a matching customer account exists, a magic link has been sent to your email"
+      });
+    } catch (error) {
+      logger.error({
+        message: `Magic link request error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          email: req.body.email
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while processing your request"
+      });
+    }
+  },
+  
+  /**
+   * Verify a magic link token and login the user
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async verifyMagicLink(req: Request, res: Response) {
+    try {
+      const { token } = req.params;
+      
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          message: "Token is required"
+        });
+      }
+      
+      // Get verification token to check if it exists and is valid
+      const verificationToken = await storage.getEmailVerificationToken(token);
+      
+      if (!verificationToken) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired magic link"
+        });
+      }
+      
+      // If token has expired
+      if (verificationToken.expiresAt && new Date() > verificationToken.expiresAt) {
+        return res.status(400).json({
+          success: false,
+          message: "Magic link has expired"
+        });
+      }
+      
+      // Get user details
+      const user = await storage.getUser(verificationToken.userId);
+      
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: "User not found"
+        });
+      }
+      
+      // Verify this is a customer
+      if (user.role !== "customer") {
+        logger.warn({
+          message: `Non-customer user (${user.role}) attempted to use magic link: ${user.email}`,
+          category: "security",
+          userId: user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip
+          }
+        });
+        
+        return res.status(403).json({
+          success: false,
+          message: "Magic link login is only available for customers"
+        });
+      }
+      
+      // Mark token as used
+      await storage.consumeEmailVerificationToken(token);
+      
+      // Generate JWT token
+      const jwtToken = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_SECRET || 'default_jwt_secret',
+        { expiresIn: '24h' }
+      );
+      
+      // Log successful login
+      logger.info({
+        message: `User logged in via magic link: ${user.email}`,
+        category: "security",
+        userId: user.id,
+        source: "internal",
+        metadata: {
+          ip: req.ip,
+          loginMethod: "magic_link"
+        }
+      });
+      
+      // Return token and user info
+      res.status(200).json({
+        success: true,
+        token: jwtToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Magic link verification error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          token: req.params.token
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while verifying your magic link"
+      });
+    }
+  },
+  
+  /**
+   * Request an OTP code for login (customers only)
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async requestOtp(req: Request, res: Response) {
+    try {
+      const { phone } = req.body;
+      
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number is required"
+        });
+      }
+      
+      // Normalize phone number (remove any non-digit characters)
+      const normalizedPhone = phone.replace(/\D/g, '');
+      
+      // Find user by phone
+      const user = await storage.getUserByPhone(normalizedPhone);
+      
+      // If user not found or is not a customer, still return success to prevent phone number enumeration
+      if (!user || user.role !== "customer") {
+        logger.info({
+          message: `OTP requested for ${!user ? 'non-existent' : 'non-customer'} phone: ${normalizedPhone}`,
+          category: "security",
+          source: "internal",
+          metadata: {
+            ip: req.ip
+          }
+        });
+        
+        return res.status(200).json({
+          success: true,
+          message: "If a matching customer account exists, an OTP code has been sent to your phone"
+        });
+      }
+      
+      // Generate 6-digit OTP code
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Store OTP in database
+      await storage.createOneTimePassword({
+        phone: normalizedPhone,
+        otp: otpCode,
+        purpose: "login",
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        userAgent: req.headers["user-agent"] || null,
+        ipAddress: req.ip
+      });
+      
+      // Send OTP via SMS
+      const messageSent = await twilioService.sendOtp(normalizedPhone, otpCode);
+      
+      if (messageSent) {
+        logger.info({
+          message: `OTP sent to customer: ${normalizedPhone}`,
+          category: "security",
+          userId: user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            smsSent: true
+          }
+        });
+      } else {
+        // Log failed SMS send but don't tell the user
+        logger.warn({
+          message: `OTP failed to send to customer: ${normalizedPhone}`,
+          category: "security",
+          userId: user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            smsSent: false,
+            otpCode // Only log code on failure for debugging in development
+          }
+        });
+      }
+      
+      res.status(200).json({
+        success: true,
+        message: "If a matching customer account exists, an OTP code has been sent to your phone"
+      });
+    } catch (error) {
+      logger.error({
+        message: `OTP request error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          phone: req.body.phone
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while processing your request"
+      });
+    }
+  },
+  
+  /**
+   * Verify OTP code and login the user
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async verifyOtp(req: Request, res: Response) {
+    try {
+      const { phone, otp } = req.body;
+      
+      if (!phone || !otp) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number and OTP code are required"
+        });
+      }
+      
+      // Normalize phone number
+      const normalizedPhone = phone.replace(/\D/g, '');
+      
+      // Verify OTP
+      const isValid = await storage.verifyOneTimePassword(otp, normalizedPhone);
+      
+      if (!isValid) {
+        logger.warn({
+          message: `Invalid OTP attempt for phone: ${normalizedPhone}`,
+          category: "security",
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            otp: otp
+          }
+        });
+        
+        return res.status(401).json({
+          success: false,
+          message: "Invalid or expired OTP code"
+        });
+      }
+      
+      // Get user by phone
+      const user = await storage.getUserByPhone(normalizedPhone);
+      
+      if (!user) {
+        logger.error({
+          message: `OTP verified but user not found for phone: ${normalizedPhone}`,
+          category: "security",
+          source: "internal",
+          metadata: {
+            ip: req.ip
+          }
+        });
+        
+        return res.status(500).json({
+          success: false,
+          message: "An error occurred while processing your login"
+        });
+      }
+      
+      // Verify this is a customer
+      if (user.role !== "customer") {
+        logger.warn({
+          message: `Non-customer user (${user.role}) attempted to use OTP login: ${user.email}`,
+          category: "security",
+          userId: user.id,
+          source: "internal",
+          metadata: {
+            ip: req.ip
+          }
+        });
+        
+        return res.status(403).json({
+          success: false,
+          message: "OTP login is only available for customers"
+        });
+      }
+      
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_SECRET || 'default_jwt_secret',
+        { expiresIn: '24h' }
+      );
+      
+      // Log successful login
+      logger.info({
+        message: `User logged in via OTP: ${user.email}`,
+        category: "security",
+        userId: user.id,
+        source: "internal",
+        metadata: {
+          ip: req.ip,
+          loginMethod: "otp"
+        }
+      });
+      
+      // Return token and user info
+      res.status(200).json({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `OTP verification error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "security",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          phone: req.body.phone
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while verifying your OTP code"
       });
     }
   }

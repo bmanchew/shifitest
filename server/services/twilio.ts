@@ -11,6 +11,9 @@ class TwilioService {
   private client: twilio.Twilio | null = null;
   private initialized = false;
   private twilioPhone: string | undefined;
+  
+  // Characters to use for OTP generation (excluding similar looking characters)
+  private otpCharset = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
   constructor() {
     this.initialize();
@@ -253,6 +256,64 @@ class TwilioService {
       });
       return false;
     }
+  }
+  
+  /**
+   * Generate a random OTP code
+   * @param length Length of the OTP code
+   * @returns A random alphanumeric OTP code
+   */
+  generateOtpCode(length: number = 6): string {
+    let otp = '';
+    const charsetLength = this.otpCharset.length;
+    
+    for (let i = 0; i < length; i++) {
+      const randomIndex = Math.floor(Math.random() * charsetLength);
+      otp += this.otpCharset.charAt(randomIndex);
+    }
+    
+    return otp;
+  }
+  
+  /**
+   * Send a one-time password via SMS
+   * @param phoneNumber The phone number to send the OTP to
+   * @param otpCode The OTP code to send
+   * @param purpose The purpose of the OTP (e.g., 'login', 'verification')
+   * @returns Result of sending the SMS
+   */
+  async sendOtp(
+    phoneNumber: string, 
+    otpCode: string, 
+    purpose: string = 'login'
+  ): Promise<{
+    success: boolean;
+    messageId?: string;
+    error?: string;
+    isSimulated?: boolean;
+  }> {
+    // Create the message text
+    const messageText = `Your ShiFi verification code is: ${otpCode}. This code will expire in 15 minutes. Don't share this code with anyone.`;
+    
+    // Log the OTP sending event but mask the actual code in logs
+    logger.info({
+      message: `Sending OTP to ${phoneNumber} for ${purpose}`,
+      category: 'auth',
+      source: 'twilio',
+      metadata: {
+        phoneNumber,
+        purpose,
+        codeLength: otpCode.length,
+        // Only log the first and last character for debugging
+        codeMasked: `${otpCode.charAt(0)}****${otpCode.charAt(otpCode.length - 1)}`
+      }
+    });
+    
+    // Send the SMS message with the OTP
+    return this.sendSMS({
+      to: phoneNumber,
+      body: messageText
+    });
   }
 }
 
