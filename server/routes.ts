@@ -135,13 +135,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: "http",
         source: "static"
       });
-    }
+    },
+    // Make sure the files are properly cached - improve performance
+    cacheControl: true,
+    etag: true,
+    lastModified: true,
+    // Support index.html in directories for SPA routing
+    index: 'index.html'
   };
   
   // Serve static files from the client/dist directory
   app.use(express.static('./client/dist', staticOptions));
 
-  // Handle client-side routing - this MUST come after static file middleware
+  // Explicit root path handler - ensures that the root URL works correctly
+  app.get('/', (req: Request, res: Response) => {
+    logger.info({
+      message: `Handling root path request`,
+      category: "http",
+      source: "router"
+    });
+    
+    // Serve index.html for the root path
+    res.set('Content-Type', 'text/html');
+    res.status(200).sendFile('index.html', { root: './client/dist' });
+  });
+  
+  // Handle client-side routing - this comes after static file middleware and root handler
   // Sends index.html for all non-API/non-asset requests to let the SPA router handle it
   app.get('*', (req: Request, res: Response, next: NextFunction) => {
     // Skip API routes and static asset requests
