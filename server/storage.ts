@@ -174,6 +174,7 @@ export interface IStorage {
   // Merchant Business Details operations
   getMerchantBusinessDetails(id: number): Promise<MerchantBusinessDetails | undefined>;
   getMerchantBusinessDetailsByMerchantId(merchantId: number): Promise<MerchantBusinessDetails | undefined>;
+  getAllMerchantBusinessDetailsByMerchantId(merchantId: number): Promise<MerchantBusinessDetails[]>;
   createMerchantBusinessDetails(details: InsertMerchantBusinessDetails): Promise<MerchantBusinessDetails>;
   updateMerchantBusinessDetails(id: number, details: Partial<InsertMerchantBusinessDetails>): Promise<MerchantBusinessDetails | undefined>;
 
@@ -2111,6 +2112,10 @@ export class DatabaseStorage implements IStorage {
     const [details] = await db.select().from(merchantBusinessDetails).where(eq(merchantBusinessDetails.merchantId, merchantId));
     return details || undefined;
   }
+  
+  async getAllMerchantBusinessDetailsByMerchantId(merchantId: number): Promise<MerchantBusinessDetails[]> {
+    return await db.select().from(merchantBusinessDetails).where(eq(merchantBusinessDetails.merchantId, merchantId));
+  }
 
   async createMerchantBusinessDetails(details: InsertMerchantBusinessDetails): Promise<MerchantBusinessDetails> {
     const [newDetails] = await db.insert(merchantBusinessDetails).values({
@@ -2127,6 +2132,18 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(eq(merchantBusinessDetails.id, id))
+      .returning();
+
+    return updatedDetails;
+  }
+  
+  async updateMerchantBusinessDetailsByMerchantId(merchantId: number, details: Partial<InsertMerchantBusinessDetails>): Promise<MerchantBusinessDetails | undefined> {
+    const [updatedDetails] = await db.update(merchantBusinessDetails)
+      .set({
+        ...details,
+        updatedAt: new Date()
+      })
+      .where(eq(merchantBusinessDetails.merchantId, merchantId))
       .returning();
 
     return updatedDetails;

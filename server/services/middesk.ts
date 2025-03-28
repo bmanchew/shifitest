@@ -10,6 +10,20 @@ import { logger } from './logger';
  * - Processing webhooks
  */
 
+// Interface for our simplified business verification data
+interface BusinessVerificationData {
+  legalName: string;
+  ein: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  phoneNumber?: string;
+  businessType?: string;
+  website?: string;
+}
+
 // Define MidDesk API response interfaces
 interface MiddeskBusiness {
   id: string;
@@ -286,6 +300,69 @@ class MiddeskService {
     // In a production environment, you would likely have more sophisticated logic here
     // based on the verification subscriptions and their results
     return verification.status === 'completed';
+  }
+
+  /**
+   * Submit a business for verification using our simplified data format
+   * This converts our internal data format to MidDesk's expected format
+   * @param data Business details to verify
+   * @returns MidDesk business verification object or null on failure
+   */
+  async submitBusinessVerification(data: BusinessVerificationData): Promise<MiddeskBusiness | null> {
+    if (!this.isInitialized()) {
+      logger.error({
+        message: 'Cannot submit business verification: MidDesk service not initialized',
+        category: 'api',
+        source: 'middesk',
+        metadata: { businessName: data.legalName }
+      });
+      return null;
+    }
+
+    // Map our data format to MidDesk's expected format
+    const params: MiddeskBusinessCreateParams = {
+      name: data.legalName,
+      tax_id: data.ein,
+      phone: data.phoneNumber,
+      website: data.website,
+      addresses: [
+        {
+          line1: data.addressLine1,
+          line2: data.addressLine2,
+          city: data.city,
+          state: data.state,
+          postal_code: data.zipCode,
+          country: 'US',
+          address_type: 'business'
+        }
+      ]
+    };
+
+    try {
+      logger.info({
+        message: 'Submitting business for MidDesk verification',
+        category: 'api',
+        source: 'middesk',
+        metadata: {
+          businessName: data.legalName,
+          ein: data.ein ? `${data.ein.substring(0, 2)}...` : 'Not provided' // Log only partial EIN for privacy
+        }
+      });
+
+      // Use our existing method to create the verification
+      return await this.createBusinessVerification(params);
+    } catch (error) {
+      logger.error({
+        message: `Failed to submit business verification: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'middesk',
+        metadata: {
+          businessName: data.legalName,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      return null;
+    }
   }
 }
 

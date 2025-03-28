@@ -439,6 +439,100 @@ router.get('/:id/contracts', async (req: Request, res: Response) => {
   }
 });
 
+// Add endpoint to submit a business for verification
+router.post('/:id/submit-verification', async (req: Request, res: Response) => {
+  try {
+    const merchantId = parseInt(req.params.id);
+    
+    if (isNaN(merchantId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid merchant ID format"
+      });
+    }
+
+    // First, get the merchant's business details
+    const merchantDetails = await storage.getMerchantBusinessDetailsByMerchantId(merchantId);
+
+    if (!merchantDetails) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant business details not found"
+      });
+    }
+
+    // Check if the business is already verified
+    if (merchantDetails.middeskBusinessId) {
+      return res.status(400).json({
+        success: false,
+        message: "Business verification has already been submitted",
+        verificationStatus: merchantDetails.verificationStatus,
+        middeskBusinessId: merchantDetails.middeskBusinessId
+      });
+    }
+
+    // Make sure MidDesk service is initialized
+    if (!middeskService.isInitialized()) {
+      return res.status(503).json({
+        success: false,
+        message: "MidDesk service not available"
+      });
+    }
+
+    // Submit business to MidDesk for verification
+    const verificationResult = await middeskService.submitBusinessVerification({
+      legalName: merchantDetails.legalName || '',
+      ein: merchantDetails.ein || '',
+      addressLine1: merchantDetails.addressLine1 || '',
+      addressLine2: merchantDetails.addressLine2 || '',
+      city: merchantDetails.city || '',
+      state: merchantDetails.state || '',
+      zipCode: merchantDetails.zipCode || '',
+      phoneNumber: merchantDetails.phone || '',
+      businessType: merchantDetails.businessStructure || 'LLC',
+      website: merchantDetails.websiteUrl || ''
+    });
+
+    if (!verificationResult || !verificationResult.id) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to submit business for verification"
+      });
+    }
+
+    // Update the merchant business details with MidDesk business ID and status
+    await storage.updateMerchantBusinessDetailsByMerchantId(merchantId, {
+      middeskBusinessId: verificationResult.id,
+      verificationStatus: 'pending',
+      verificationData: JSON.stringify(verificationResult)
+    });
+
+    // Return success response
+    return res.json({
+      success: true,
+      message: "Business verification submitted successfully",
+      middeskBusinessId: verificationResult.id,
+      verificationStatus: 'pending'
+    });
+
+  } catch (error) {
+    logger.error({
+      message: `Error submitting business verification: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId: req.params.id,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to submit business verification"
+    });
+  }
+});
+
 // Route to check MidDesk business verification status
 router.get('/:id/business-verification', async (req: Request, res: Response) => {
   try {
@@ -452,7 +546,7 @@ router.get('/:id/business-verification', async (req: Request, res: Response) => 
     }
 
     // First, get the merchant's business details to retrieve the MidDesk business ID
-    const merchantDetails = await storage.getMerchantBusinessDetails(merchantId);
+    const merchantDetails = await storage.getMerchantBusinessDetailsByMerchantId(merchantId);
 
     if (!merchantDetails) {
       return res.status(404).json({
@@ -498,7 +592,7 @@ router.get('/:id/business-verification', async (req: Request, res: Response) => 
     // Check if status has changed since we last updated our records
     if (internalStatus !== merchantDetails.verificationStatus) {
       // Update the merchant business details with new status
-      await storage.updateMerchantBusinessDetails(merchantId, {
+      await storage.updateMerchantBusinessDetailsByMerchantId(merchantId, {
         verificationStatus: internalStatus
       });
     }

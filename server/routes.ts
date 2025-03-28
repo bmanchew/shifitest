@@ -4872,7 +4872,150 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Mount the merchant router for multi-merchant operations (admin view)
   apiRouter.use("/merchants", merchantRouter);
   
-  // Add endpoint for merchant business details
+  // Endpoint for submitting a merchant for MidDesk verification
+  apiRouter.post("/merchant/:id/submit-verification", async (req: Request, res: Response) => {
+    try {
+      const merchantId = parseInt(req.params.id);
+      
+      if (isNaN(merchantId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid merchant ID format"
+        });
+      }
+
+      // First, get the merchant
+      const merchant = await storage.getMerchant(merchantId);
+      if (!merchant) {
+        return res.status(404).json({
+          success: false,
+          message: "Merchant not found"
+        });
+      }
+      
+      // Get the merchant business details
+      const businessDetailsArray = await storage.getAllMerchantBusinessDetailsByMerchantId(merchantId);
+      if (!businessDetailsArray || businessDetailsArray.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Merchant business details not found"
+        });
+      }
+      
+      const businessDetails = businessDetailsArray[0];
+      
+      // Check if already has a MidDesk business ID
+      if (businessDetails.middeskBusinessId) {
+        return res.status(400).json({
+          success: false,
+          message: "Business verification has already been initiated",
+          verificationStatus: businessDetails.verificationStatus,
+          middeskBusinessId: businessDetails.middeskBusinessId
+        });
+      }
+      
+      // Submit to MidDesk API using submitBusinessVerification method
+      const middeskResponse = await middeskService.submitBusinessVerification({
+        legalName: businessDetails.legalName,
+        ein: businessDetails.ein,
+        addressLine1: businessDetails.addressLine1,
+        addressLine2: businessDetails.addressLine2,
+        city: businessDetails.city,
+        state: businessDetails.state,
+        zipCode: businessDetails.zipCode,
+        phoneNumber: businessDetails.phone || merchant.phone || '',
+        businessType: businessDetails.businessStructure || 'LLC',
+        website: businessDetails.websiteUrl || ''
+      });
+      
+      // Update the business details with MidDesk info
+      const updatedBusinessDetails = await storage.updateMerchantBusinessDetails(businessDetails.id, {
+        middeskBusinessId: middeskResponse.id,
+        verificationStatus: 'pending', 
+        verificationData: JSON.stringify(middeskResponse)
+      });
+      
+      // Return success with MidDesk response
+      return res.status(200).json({
+        success: true,
+        middeskBusinessId: middeskResponse.id,
+        verificationStatus: 'pending',
+        message: 'Business verification initiated successfully'
+      });
+      
+    } catch (error) {
+      logger.error(`Error submitting business for verification: ${error instanceof Error ? error.message : String(error)}`, {
+        category: "api",
+        source: "internal",
+        metadata: {
+          merchantId: req.params.id,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to submit business for verification"
+      });
+    }
+  });
+  
+  // Add endpoints for merchant business details
+  
+  // GET endpoint to retrieve merchant business details
+  apiRouter.get("/merchant-business-details", async (req: Request, res: Response) => {
+    try {
+      const { merchantId } = req.query;
+      
+      if (!merchantId) {
+        return res.status(400).json({
+          success: false,
+          message: "Merchant ID is required"
+        });
+      }
+      
+      // Check if merchant exists
+      const merchant = await storage.getMerchant(Number(merchantId));
+      if (!merchant) {
+        return res.status(404).json({
+          success: false,
+          message: "Merchant not found"
+        });
+      }
+
+      // Get business details for the merchant
+      const businessDetails = await storage.getAllMerchantBusinessDetailsByMerchantId(Number(merchantId));
+      
+      logger.info({
+        message: `Retrieved business details for merchant ${merchantId}`,
+        category: "api",
+        source: "internal",
+        metadata: { 
+          merchantId,
+          detailsFound: businessDetails.length > 0
+        }
+      });
+      
+      res.json(businessDetails);
+    } catch (error) {
+      logger.error({
+        message: `Error retrieving merchant business details: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: { 
+          requestQuery: req.query,
+          error: error instanceof Error ? error.stack : String(error) 
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "Failed to retrieve merchant business details"
+      });
+    }
+  });
+  
+  // POST endpoint to create merchant business details
   apiRouter.post("/merchant-business-details", async (req: Request, res: Response) => {
     try {
       const { 
@@ -4903,8 +5046,8 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
         legalName,
         ein,
         businessStructure,
-        streetAddress,
-        streetAddress2,
+        addressLine1: streetAddress,
+        addressLine2: streetAddress2,
         city,
         state,
         zipCode,

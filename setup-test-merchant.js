@@ -1,171 +1,77 @@
 /**
- * Script to create a test merchant for use in other tests
+ * Script to create a test merchant in the database for testing
  */
-
 import axios from 'axios';
+
+// Simple logger
+const logger = {
+  info: (message) => console.log(`[INFO] ${message}`),
+  error: (message) => console.error(`[ERROR] ${message}`)
+};
 
 // Configuration
 const API_BASE_URL = 'http://localhost:5000/api';
-const BYPASS_CSRF_HEADER = 'X-Csrf-Bypass';
-const BYPASS_CSRF_VALUE = 'test-merchant-setup';
 
-// Test data for creating a merchant
-const merchantData = {
-  // User data (this will create the merchant user)
-  email: `merchant-${Date.now()}@test.com`,
-  password: 'Password123!',
-  firstName: 'Test',
-  lastName: 'Merchant',
-  phone: '555-987-6543',
-  companyName: 'Test Financing Company',
-  businessAddress: '123 Test St, Testville, TX 12345',
-  businessType: 'financing',
-  taxId: '12-3456789'
-};
-
-/**
- * Create a test merchant user and get the ID
- */
+// Create a test merchant
 async function createTestMerchant() {
   try {
-    console.log('Creating test merchant...');
-    console.log(`Using email: ${merchantData.email}`);
+    // Get a CSRF token first
+    logger.info('Requesting CSRF token...');
+    const csrfResponse = await axios.get(`${API_BASE_URL}/csrf-token`);
+    const csrfToken = csrfResponse.data.csrfToken;
     
-    // First create the user
-    const userResponse = await axios.post(
-      `${API_BASE_URL}/users`,
-      {
-        email: merchantData.email,
-        password: merchantData.password,
-        firstName: merchantData.firstName,
-        lastName: merchantData.lastName,
-        name: `${merchantData.firstName} ${merchantData.lastName}`, // Add the name field
-        phone: merchantData.phone,
-        role: 'merchant' // Explicit role assignment
-      },
-      {
-        headers: {
-          [BYPASS_CSRF_HEADER]: BYPASS_CSRF_VALUE
-        }
-      }
-    );
+    logger.info(`Obtained CSRF token: ${csrfToken}`);
     
-    console.log('User Response:', JSON.stringify(userResponse.data, null, 2));
-    
-    // The response structure seems different than expected
-    // Check if we got an ID directly
-    const userId = userResponse.data.id || (userResponse.data.user && userResponse.data.user.id);
-    
-    if (!userId) {
-      console.error('Failed to create merchant user: No user ID returned');
-      return null;
-    }
-    console.log(`Created user with ID ${userId}`);
-    
-    // Now create the merchant entity linked to that user
-    const merchantResponse = await axios.post(
-      `${API_BASE_URL}/merchants`,
-      {
-        userId: userId,
-        companyName: merchantData.companyName,
-        businessAddress: merchantData.businessAddress,
-        businessType: merchantData.businessType,
-        taxId: merchantData.taxId,
-        // Add the required fields
-        name: merchantData.companyName,
-        contactName: `${merchantData.firstName} ${merchantData.lastName}`,
-        email: merchantData.email,
-        phone: merchantData.phone
-      },
-      {
-        headers: {
-          [BYPASS_CSRF_HEADER]: BYPASS_CSRF_VALUE
-        }
-      }
-    );
-    
-    console.log('Merchant Response:', JSON.stringify(merchantResponse.data, null, 2));
-    
-    // The response structure might be different than expected
-    // It appears to return the merchant object directly instead of a {success: true, merchant: {...}} structure
-    const merchantId = merchantResponse.data.id || (merchantResponse.data.merchant && merchantResponse.data.merchant.id);
-    
-    if (!merchantId) {
-      console.error('Failed to create merchant: No merchant ID returned');
-      return null;
-    }
-    console.log('✅ Successfully created merchant with ID:', merchantId);
-    
-    // Now add the business details with MidDesk verification information
-    try {
-      // Create the merchant business details
-      const businessDetailsResponse = await axios.post(
-        `${API_BASE_URL}/merchant-business-details`,
-        {
-          merchantId: merchantId,
-          legalName: `${merchantData.companyName} LLC`,
-          ein: merchantData.taxId,
-          businessStructure: 'LLC',
-          streetAddress: '123 Test St',
-          streetAddress2: 'Suite 100',
-          city: 'Testville',
-          state: 'TX',
-          zipCode: '12345',
-          middeskBusinessId: null,
-          verificationStatus: 'not_started'
-        },
-        {
-          headers: {
-            [BYPASS_CSRF_HEADER]: BYPASS_CSRF_VALUE
-          }
-        }
-      );
-      
-      console.log('Business Details Response:', JSON.stringify(businessDetailsResponse.data, null, 2));
-    } catch (businessError) {
-      console.error('Warning: Failed to create business details:');
-      if (businessError.response) {
-        console.error('Status:', businessError.response.status);
-        console.error('Data:', JSON.stringify(businessError.response.data, null, 2));
-      } else {
-        console.error(businessError.message);
-      }
-      // Continue even if this fails - we've at least created the merchant
-    }
-    
-    return {
-      userId,
-      merchantId,
-      email: merchantData.email,
-      password: merchantData.password
+    // Create a test merchant
+    const merchantData = {
+      name: "PRESTIGE MENTORS LLC",
+      email: `test-middesk-${Date.now()}@example.com`,
+      phone: "+15551234567",
+      address: "1309 Coffeen Ave",
+      city: "Sheridan",
+      state: "WY",
+      zipCode: "82801",
+      website: "https://test-middesk.example.com",
+      description: "Test merchant for MidDesk integration testing",
+      contactName: "Douglas James",
+      taxId: "99-4902823"
     };
+    
+    logger.info('Creating test merchant...');
+    const response = await axios.post(`${API_BASE_URL}/merchants`, merchantData, {
+      headers: {
+        'X-CSRF-Token': csrfToken,
+        'X-CSRF-Bypass': 'test-merchant-setup'
+      }
+    });
+    
+    logger.info(`Merchant created successfully: ${JSON.stringify(response.data, null, 2)}`);
+    // The API directly returns the merchant object, not nested under 'merchant'
+    return response.data.id;
   } catch (error) {
-    console.error('❌ Error creating merchant:');
     if (error.response) {
-      console.error('Status:', error.response.status);
-      console.error('Data:', JSON.stringify(error.response.data, null, 2));
+      logger.error(`Failed to create merchant: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
     } else {
-      console.error(error.message);
+      logger.error(`Error: ${error.message}`);
     }
     return null;
   }
 }
 
-// Run the merchant creation
-createTestMerchant().then(merchantInfo => {
-  if (merchantInfo) {
-    console.log('Merchant creation successful!');
-    console.log('Merchant info:', merchantInfo);
-    console.log('\nUse these credentials for testing:');
-    console.log(`- Merchant ID: ${merchantInfo.merchantId}`);
-    console.log(`- Email: ${merchantInfo.email}`);
-    console.log(`- Password: ${merchantInfo.password}`);
-    
-    // Update the test-salesrep-create.js file with this merchant ID
-    console.log(`\nUpdate test-salesrep-create.js with: const MERCHANT_ID = ${merchantInfo.merchantId};`);
-  } else {
-    console.error('Merchant creation failed.');
+// Main function
+async function main() {
+  try {
+    const merchantId = await createTestMerchant();
+    if (merchantId) {
+      logger.info(`Successfully created test merchant with ID: ${merchantId}`);
+      logger.info('You can use this merchant ID for your MidDesk integration tests');
+    } else {
+      logger.error('Failed to create test merchant');
+    }
+  } catch (error) {
+    logger.error(`Error: ${error.message}`);
   }
-});
+}
 
-export { createTestMerchant };
+// Run the script
+main();
