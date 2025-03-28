@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
   Bot,
-  PlaySquare,
+  PlayCircle,
   Pause,
   Headphones,
   Brain,
@@ -424,7 +424,7 @@ export default function AIFinancialSherpa({
                       ) : isPlaying && activeInsightId === insight.id ? (
                         <Pause className="mr-1 h-4 w-4" />
                       ) : (
-                        <PlaySquare className="mr-1 h-4 w-4" />
+                        <PlayCircle className="mr-1 h-4 w-4" />
                       )}
                       {isPlaying && activeInsightId === insight.id ? 'Pause' : 'Listen'}
                       <Headphones className="ml-1 h-3 w-3" />

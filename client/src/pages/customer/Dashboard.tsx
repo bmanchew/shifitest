@@ -25,9 +25,13 @@ import {
   CheckCircle,
   Building,
   User,
-  RefreshCw
+  RefreshCw,
+  PlayCircle,
+  Bot,
+  Brain
 } from "lucide-react";
 import BankConnection from "@/components/customer/BankConnection";
+import AIFinancialSherpa from "@/components/customer/AIFinancialSherpa";
 import { Logo } from "@/components/ui/logo";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
@@ -511,6 +515,24 @@ export default function CustomerDashboard(): React.ReactNode {
               </div>
             </CardContent>
           </Card>
+        </div>
+        
+        {/* AI Financial Sherpa - Voice-enabled Financial Insights */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold mb-4 flex items-center">
+            <Brain className="mr-2 h-5 w-5 text-indigo-600" />
+            Financial Sherpa
+          </h2>
+          <AIFinancialSherpa
+            customerId={contract?.customerId || 0}
+            customerName={userData?.firstName ? `${userData.firstName} ${userData.lastName || ''}` : userData?.name || 'Customer'}
+            contract={contract}
+            financialData={financialData}
+            isLoading={isLoadingFinancialData}
+            hasBankConnection={!!bankConnectionDetails}
+            onConnectBank={() => handleViewBankConnection(contract.id)}
+            onRefreshData={refetchFinancialData}
+          />
         </div>
 
         {/* Cash Management Tools and Financial Data Section */}
