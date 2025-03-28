@@ -927,9 +927,8 @@ export const authController = {
         phone: normalizedPhone,
         otp: otpCode,
         purpose: "login",
-        createdAt: new Date(),
         expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-        userAgent: req.headers["user-agent"] || null,
+        userAgent: req.headers["user-agent"] || undefined,
         ipAddress: req.ip
       });
       
@@ -940,9 +939,9 @@ export const authController = {
         logger.info({
           message: `OTP sent to customer: ${normalizedPhone}`,
           category: "security",
-          userId: user.id,
           source: "internal",
           metadata: {
+            userId: user.id,
             ip: req.ip,
             smsSent: true
           }
@@ -952,9 +951,9 @@ export const authController = {
         logger.warn({
           message: `OTP failed to send to customer: ${normalizedPhone}`,
           category: "security",
-          userId: user.id,
           source: "internal",
           metadata: {
+            userId: user.id,
             ip: req.ip,
             smsSent: false,
             otpCode // Only log code on failure for debugging in development
@@ -1048,9 +1047,9 @@ export const authController = {
         logger.warn({
           message: `Non-customer user (${user.role}) attempted to use OTP login: ${user.email}`,
           category: "security",
-          userId: user.id,
           source: "internal",
           metadata: {
+            userId: user.id,
             ip: req.ip
           }
         });
@@ -1072,9 +1071,9 @@ export const authController = {
       logger.info({
         message: `User logged in via OTP: ${user.email}`,
         category: "security",
-        userId: user.id,
         source: "internal",
         metadata: {
+          userId: user.id,
           ip: req.ip,
           loginMethod: "otp"
         }
