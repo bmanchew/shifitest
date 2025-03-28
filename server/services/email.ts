@@ -98,10 +98,42 @@ export class EmailService {
   }
 
   /**
+   * Get the application base URL
+   * This method uses environment variables to determine the correct app URL
+   */
+  private getAppBaseUrl(): string {
+    // Check for PUBLIC_URL, but verify it doesn't look like an API webhook URL
+    if (process.env.PUBLIC_URL && !process.env.PUBLIC_URL.includes('/api/')) {
+      return process.env.PUBLIC_URL;
+    }
+    
+    // If we have a REPLIT_DOMAINS variable (preferred in newer Replit instances), use the first one
+    if (process.env.REPLIT_DOMAINS) {
+      const domains = process.env.REPLIT_DOMAINS.split(',');
+      return `https://${domains[0].trim()}`;
+    }
+    
+    // If we have a REPLIT_DEV_DOMAIN, use that
+    if (process.env.REPLIT_DEV_DOMAIN) {
+      return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+    }
+    
+    // If we have a REPL_ID, construct the URL
+    if (process.env.REPL_ID) {
+      return `https://${process.env.REPL_ID}.replit.dev`;
+    }
+    
+    // Fallback to our default domain
+    return 'https://shifi.ai';
+  }
+
+  /**
    * Send merchant welcome email with credentials
    */
   async sendMerchantWelcome(merchantEmail: string, merchantName: string, temporaryPassword: string): Promise<boolean> {
     const subject = 'Welcome to ShiFi - Your Merchant Account is Ready';
+    const baseUrl = this.getAppBaseUrl();
+    const loginLink = `${baseUrl}/login`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -119,7 +151,7 @@ export class EmailService {
 
         <p><strong>Important:</strong> For security reasons, you'll be asked to change your password on your first login.</p>
 
-        <a href="https://shifi.ai/login" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px;">Log In Now</a>
+        <a href="${loginLink}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px;">Log In Now</a>
 
         <p style="margin-top: 30px;">If you have any questions, please contact our support team at support@shifi.ai.</p>
 
@@ -140,7 +172,7 @@ export class EmailService {
 
       Important: For security reasons, you'll be asked to change your password on your first login.
 
-      Log in at: https://shifi.ai/login
+      Log in at: ${loginLink}
 
       If you have any questions, please contact our support team at support@shifi.ai.
 
@@ -161,7 +193,8 @@ export class EmailService {
    */
   async sendMerchantPasswordReset(merchantEmail: string, merchantName: string, resetToken: string): Promise<boolean> {
     const subject = 'ShiFi - Password Reset Instructions';
-    const resetLink = `https://shifi.ai/reset-password?token=${resetToken}`;
+    const baseUrl = this.getAppBaseUrl();
+    const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -210,7 +243,8 @@ export class EmailService {
    */
   async sendPasswordReset(userEmail: string, userName: string, resetToken: string): Promise<boolean> {
     const subject = 'ShiFi - Password Reset Request';
-    const resetLink = `https://shifi.ai/reset-password?token=${resetToken}`;
+    const baseUrl = this.getAppBaseUrl();
+    const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -261,6 +295,8 @@ export class EmailService {
    */
   async sendPaymentReminder(customerEmail: string, customerName: string, amount: number, dueDate: string, contractNumber: string): Promise<boolean> {
     const subject = 'ShiFi - Payment Reminder';
+    const baseUrl = this.getAppBaseUrl();
+    const paymentLink = `${baseUrl}/customer/payments`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -277,7 +313,7 @@ export class EmailService {
           <p>Contract #: ${contractNumber}</p>
         </div>
 
-        <a href="https://shifi.ai/customer/payments" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px;">Make Payment</a>
+        <a href="${paymentLink}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px;">Make Payment</a>
 
         <p style="margin-top: 30px;">If you have already made this payment, please disregard this message.</p>
 
@@ -299,7 +335,7 @@ export class EmailService {
       Due Date: ${dueDate}
       Contract #: ${contractNumber}
 
-      To make a payment, visit: https://shifi.ai/customer/payments
+      To make a payment, visit: ${paymentLink}
 
       If you have already made this payment, please disregard this message.
 
