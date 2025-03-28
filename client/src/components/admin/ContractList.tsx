@@ -14,6 +14,8 @@ import { format } from "date-fns";
 import { useLocation, Link } from "wouter";
 import { Contract } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface ContractListProps {
   contracts: Contract[];
@@ -23,6 +25,8 @@ interface ContractListProps {
 export default function ContractList({ contracts, isLoading }: ContractListProps) {
   const [_, navigate] = useLocation();
   const [customers, setCustomers] = useState<Record<number, { name: string; email: string }>>({});
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const { toast } = useToast();
   
   useEffect(() => {
     // Fetch customer data for all contracts
@@ -38,10 +42,11 @@ export default function ContractList({ contracts, isLoading }: ContractListProps
     });
     
     if (uniqueCustomerIds.length > 0) {
+      setIsLoadingCustomers(true);
+      
       Promise.all(
         uniqueCustomerIds.map(customerId => 
-          fetch(`/api/users/${customerId}`)
-            .then(res => res.ok ? res.json() : null)
+          apiRequest("GET", `/api/users/${customerId}`)
             .catch(err => {
               console.error(`Error fetching customer ${customerId}:`, err);
               return null;
@@ -62,9 +67,20 @@ export default function ContractList({ contracts, isLoading }: ContractListProps
           }
         });
         setCustomers(newCustomers);
+      })
+      .catch(error => {
+        console.error("Error fetching customer data:", error);
+        toast({
+          title: "Error loading customer information",
+          description: "Unable to load customer details. Please try refreshing the page.",
+          variant: "destructive"
+        });
+      })
+      .finally(() => {
+        setIsLoadingCustomers(false);
       });
     }
-  }, [contracts]);
+  }, [contracts, toast]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -90,12 +106,12 @@ export default function ContractList({ contracts, isLoading }: ContractListProps
 
   const getCustomerName = (customerId: number | null) => {
     if (!customerId) return "No Customer";
-    return customers[customerId]?.name || "Loading...";
+    return customers[customerId]?.name || (isLoadingCustomers ? "Loading..." : "Unknown");
   };
 
   const getCustomerEmail = (customerId: number | null) => {
     if (!customerId) return "";
-    return customers[customerId]?.email || "";
+    return customers[customerId]?.email || (isLoadingCustomers ? "" : "Email unavailable");
   };
 
   const handleViewDetails = (contractId: number) => {
