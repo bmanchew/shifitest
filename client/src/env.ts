@@ -22,20 +22,36 @@ const getReplitId = (): string => {
   return '';
 };
 
-// Always use .replit.dev domain
-const useReplitDev = import.meta.env.VITE_USE_REPLIT_DEV === 'true';
+// Check if we're in a Replit development environment
+// Janeway domains contain "janeway.replit.dev" so we should detect them
+const useReplitDev = import.meta.env.VITE_USE_REPLIT_DEV === 'true' || 
+  (typeof window !== 'undefined' && window.location.hostname.includes('janeway.replit.dev'));
 
 // Build the base domain
 const getReplitDomain = (): string => {
-  const replitId = getReplitId();
-  if (!replitId) return '';
+  // Always prefer the current origin when in browser
+  if (typeof window !== 'undefined') {
+    // Check if we're in a Janeway environment
+    if (window.location.hostname.includes('janeway.replit.dev')) {
+      return window.location.origin;
+    }
+  }
   
-  // Force .replit.dev domain
+  const replitId = getReplitId();
+  if (!replitId) {
+    // Fall back to current hostname if we can't determine the domain
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
+    }
+    return '';
+  }
+  
+  // Force .replit.dev domain if specified and not in Janeway
   if (useReplitDev) {
     return `https://${replitId}.replit.dev`;
   }
   
-  // Fall back to current hostname if we can't determine the domain
+  // Fall back to current hostname
   if (typeof window !== 'undefined') {
     return window.location.origin;
   }
