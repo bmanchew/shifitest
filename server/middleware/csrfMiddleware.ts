@@ -20,12 +20,17 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
   // Check if the request path should be excluded
   const shouldExclude = excludedPaths.some(path => req.path.startsWith(path));
   
+  // Add debugging
+  console.log(`CSRF check for path: ${req.path}, method: ${req.method}, excluded: ${shouldExclude}`);
+  
   if (shouldExclude) {
     // Skip CSRF verification for excluded paths
+    console.log(`CSRF protection bypassed for: ${req.path}`);
     return next();
   }
   
   // Apply CSRF protection
+  console.log(`Applying CSRF protection for: ${req.path}`);
   const csrfProtection = csrf({ cookie: true });
   return csrfProtection(req, res, next);
 };
@@ -52,6 +57,9 @@ export const csrfErrorHandler = (err: any, req: Request, res: Response, next: Ne
     return next(err);
   }
   
+  // Add detailed console logging for debugging
+  console.error(`CSRF ERROR: Path=${req.path}, Method=${req.method}, Headers=${JSON.stringify(req.headers)}`);
+  
   // Log the CSRF error
   logger.warn({
     message: `CSRF validation failed for ${req.method} ${req.path}`,
@@ -61,7 +69,8 @@ export const csrfErrorHandler = (err: any, req: Request, res: Response, next: Ne
       path: req.path,
       method: req.method,
       ip: req.ip,
-      userAgent: req.headers['user-agent']
+      userAgent: req.headers['user-agent'],
+      csrfToken: req.headers['csrf-token'] || req.headers['x-csrf-token']
     }
   });
   

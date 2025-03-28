@@ -450,9 +450,59 @@ async function startServer() {
 
     // Start the server on an available port
     try {
+      // Check for environment variable PORT
+      const envPort = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+      const forcePort = process.env.FORCE_PORT === 'true';
+      
+      // If PORT is set and FORCE_PORT is true, use that port directly
+      if (envPort && forcePort) {
+        console.log(`Starting server on forced port ${envPort} from environment variable...`);
+        const httpServer = server.listen(
+          {
+            port: envPort,
+            host: "0.0.0.0",
+            reusePort: false,
+          },
+          () => {
+            const serverAddress = httpServer.address();
+            if (serverAddress && typeof serverAddress !== 'string') {
+              const { port } = serverAddress;
+              console.log(`Server is running at http://0.0.0.0:${port}`);
+              
+              logger.info({
+                message: `Server started on port ${port}`,
+                category: "system",
+                source: "internal",
+                metadata: {
+                  port,
+                  host: '0.0.0.0'
+                }
+              });
+            }
+          }
+        );
+        
+        // Setup error handling for the server
+        httpServer.on("error", (err: Error) => {
+          logger.error({
+            message: `Server error: ${err.message}`,
+            category: "system",
+            source: "internal",
+            metadata: {
+              error: err.message,
+              stack: err.stack
+            }
+          });
+          console.error("Server error:", err);
+        });
+        
+        return httpServer;
+      }
+      
+      // Otherwise use the port finding logic
       console.log("Starting server on port 5000...");
       // Try to start on port 5000 by default
-      const defaultPort = 5000;
+      const defaultPort = envPort || 5000;
       const maxPort = defaultPort + 10; // Allow up to 10 port attempts
       let currentPort = defaultPort;
       let serverStarted = false;

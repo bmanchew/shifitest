@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/api";
 import { User } from "@shared/schema";
 import { fetchCsrfToken } from "./csrf";
 

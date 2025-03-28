@@ -28,56 +28,18 @@ export default function Login() {
 
     try {
       console.log("Attempting login with:", email);
+      console.log("Login component: Before login function call");
 
-      // Make the login API call directly to see the response
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Login failed with status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log("Login API response:", data);
-
-      if (!data.user) {
-        throw new Error("Invalid response format - missing user data");
-      }
-      
-      // Check if the token is returned in the response
-      if (!data.user.token) {
-        console.error("No token returned from the server!");
-        console.log("User data:", data.user);
-      } else {
-        console.log("Token received:", data.user.token.substring(0, 20) + "...");
-        
-        // Manually store the user data with token in localStorage for debugging
-        localStorage.setItem("shifi_user_debug", JSON.stringify(data.user));
-      }
-
-      // Now call the auth context login method with the user data
+      // Use the login function from AuthContext which properly handles CSRF tokens
       await login(email, password);
-
+      
       // If we get here, login was successful
-      console.log("Login successful");
+      console.log("Login component: Login successful");
+      
+      // Note: Navigation is handled in the AuthContext after successful login
 
-      // Redirect based on user role
-      if (data.user.role === "admin") {
-        setLocation("/admin");
-      } else if (data.user.role === "merchant") {
-        setLocation("/merchant");
-      } else if (data.user.role === "customer") {
-        setLocation("/customer");
-      } else {
-        setLocation("/");
-      }
     } catch (error) {
-      console.error("Login failed:", error);
+      console.error("Login component: Login failed:", error);
       toast({
         title: "Login Failed",
         description:
@@ -86,6 +48,7 @@ export default function Login() {
             : "Invalid email or password. Please try again.",
         variant: "destructive",
       });
+    } finally {
       setIsLoading(false);
     }
   };

@@ -1,45 +1,8 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { apiRequest } from "./api";
-import { API_URL } from '../env';
+import { apiRequest, buildUrl, throwIfResNotOk } from "./api";
 
 // Re-export apiRequest to maintain backward compatibility
 export { apiRequest };
-
-// Helper to build full URL with API base URL if it's an API endpoint
-function buildUrl(url: string): string {
-  // If it's already an absolute URL, return it as is
-  if (url.startsWith('http')) {
-    return url;
-  }
-  
-  // If it's an API call that starts with /api/, replace with full API URL
-  if (url.startsWith('/api/')) {
-    if (API_URL) {
-      return `${API_URL}${url.substring(4)}`;
-    }
-    // Fall back to relative URL if API_URL is not available
-    return url;
-  }
-  
-  // For other relative URLs, use them as is
-  return url;
-}
-
-// Proper error handling for API responses
-async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    try {
-      // First try to parse as JSON
-      const errorData = await res.json();
-      const errorMessage = errorData.message || errorData.error || JSON.stringify(errorData);
-      throw new Error(`${res.status}: ${errorMessage}`);
-    } catch (e) {
-      // Fall back to plain text
-      const text = (await res.text()) || res.statusText;
-      throw new Error(`${res.status}: ${text}`);
-    }
-  }
-}
 
 type UnauthorizedBehavior = "returnNull" | "throw";
 
