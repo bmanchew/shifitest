@@ -164,7 +164,74 @@ export const isMerchant = async (req: Request, res: Response, next: NextFunction
       });
     }
     
-    next();
+    // Fetch the merchant record and attach it to the request
+    try {
+      // Import the necessary dependencies
+      const { db } = require('../db');
+      const { merchants, eq } = require('../../shared/schema');
+      
+      // Get the merchant record for this user
+      const merchantRecords = await db.select()
+        .from(merchants)
+        .where(eq(merchants.userId, req.user.id))
+        .limit(1);
+      
+      if (merchantRecords.length === 0) {
+        logger.warn({
+          message: `User ${req.user.email} (${req.user.id}) has merchant role but no merchant record found`,
+          category: 'security',
+          userId: req.user.id,
+          source: 'internal',
+          metadata: {
+            path: req.path,
+            method: req.method,
+            userRole: req.user.role
+          }
+        });
+        
+        return res.status(404).json({
+          success: false,
+          message: 'Merchant record not found'
+        });
+      }
+      
+      // Attach merchant to request
+      req.merchant = merchantRecords[0];
+      
+      // Log the successful merchant identification
+      logger.debug({
+        message: `Merchant identified: ${req.merchant.id} for user ${req.user.id}`,
+        category: 'security',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          merchantId: req.merchant.id,
+          userId: req.user.id,
+          path: req.path
+        }
+      });
+      
+      next();
+    } catch (dbError) {
+      logger.error({
+        message: `Database error fetching merchant record: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+        category: 'database',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+          stack: dbError instanceof Error ? dbError.stack : undefined,
+          path: req.path,
+          method: req.method
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: 'Error fetching merchant profile'
+      });
+    }
+    
   } catch (error) {
     logger.error({
       message: `Merchant authorization error: ${error instanceof Error ? error.message : String(error)}`,

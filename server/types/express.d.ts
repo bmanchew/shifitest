@@ -12,6 +12,20 @@ declare global {
         phone: string | null;
         emailVerified?: boolean;
       };
+      
+      // Merchant record when the authenticated user is a merchant
+      merchant?: {
+        id: number;
+        name: string;
+        contactName: string;
+        email: string;
+        phone: string;
+        address?: string;
+        active?: boolean;
+        archived?: boolean;
+        createdAt?: Date | string;
+        userId?: number;
+      };
     }
   }
 }
