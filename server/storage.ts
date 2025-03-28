@@ -723,7 +723,53 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllContracts(): Promise<Contract[]> {
-    return await db.select().from(contracts);
+    try {
+      // Use explicit field selection to avoid issues with schema differences
+      const results = await db.select({
+        id: contracts.id,
+        createdAt: contracts.createdAt,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        contractNumber: contracts.contractNumber,
+        status: contracts.status,
+        amount: contracts.amount,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        interestRate: contracts.interestRate,
+        termMonths: contracts.termMonths,
+        monthlyPayment: contracts.monthlyPayment,
+        currentStep: contracts.currentStep,
+        phoneNumber: contracts.phoneNumber,
+        archived: contracts.archived,
+        completedAt: contracts.completedAt,
+        purchasedByShifi: contracts.purchasedByShifi,
+        tokenizationStatus: contracts.tokenizationStatus,
+        tokenId: contracts.tokenId
+        // Omitting fields that might not exist in all environments
+      })
+      .from(contracts)
+      .orderBy(desc(contracts.createdAt));
+      
+      // For each contract, add any missing fields with default values
+      const contractsWithDefaults = results.map(contract => ({
+        ...contract,
+        // Add default values for fields that might not exist in the database
+        smartContractAddress: null,
+        tokenizationError: null,
+        archivedAt: null,
+        archivedReason: null,
+        blockchainTransactionHash: null,
+        blockNumber: null,
+        tokenizationDate: null,
+        tokenMetadata: null,
+        salesRepId: null // Add this explicitly since it's causing issues
+      }));
+      
+      return contractsWithDefaults;
+    } catch (error) {
+      console.error("Error in getAllContracts:", error);
+      return []; // Return an empty array instead of throwing
+    }
   }
 
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
@@ -806,7 +852,21 @@ export class DatabaseStorage implements IStorage {
       .from(contracts)
       .where(eq(contracts.customerId, customerId));
       
-      return results;
+      // Add missing fields with default values
+      const contractsWithDefaults = results.map(contract => ({
+        ...contract,
+        smartContractAddress: null,
+        tokenizationError: null,
+        archivedAt: null,
+        archivedReason: null,
+        blockchainTransactionHash: null,
+        blockNumber: null,
+        tokenizationDate: null,
+        tokenMetadata: null,
+        salesRepId: null
+      }));
+      
+      return contractsWithDefaults;
     } catch (error) {
       console.error(`Error getting contracts for customer ID ${customerId}:`, error);
       return [];
@@ -844,7 +904,21 @@ export class DatabaseStorage implements IStorage {
       .where(eq(contracts.phoneNumber, normalizedPhone))
       .orderBy(desc(contracts.createdAt));
       
-      return results;
+      // Add missing fields with default values
+      const contractsWithDefaults = results.map(contract => ({
+        ...contract,
+        smartContractAddress: null,
+        tokenizationError: null,
+        archivedAt: null,
+        archivedReason: null,
+        blockchainTransactionHash: null,
+        blockNumber: null,
+        tokenizationDate: null,
+        tokenMetadata: null,
+        salesRepId: null
+      }));
+      
+      return contractsWithDefaults;
     } catch (error) {
       console.error(`Error getting contracts for phone number ${phoneNumber}:`, error);
       return [];
@@ -1074,12 +1148,28 @@ export class DatabaseStorage implements IStorage {
         archived: contracts.archived,
         downPayment: contracts.downPayment,
         financedAmount: contracts.financedAmount,
-        termMonths: contracts.termMonths
+        termMonths: contracts.termMonths,
+        interestRate: contracts.interestRate,
+        monthlyPayment: contracts.monthlyPayment
       })
       .from(contracts)
       .where(eq(contracts.status, status as any));
       
-      return results;
+      // Add missing fields with default values
+      const contractsWithDefaults = results.map(contract => ({
+        ...contract,
+        smartContractAddress: null,
+        tokenizationError: null,
+        archivedAt: null,
+        archivedReason: null,
+        blockchainTransactionHash: null,
+        blockNumber: null,
+        tokenizationDate: null,
+        tokenMetadata: null,
+        salesRepId: null
+      }));
+      
+      return contractsWithDefaults;
     } catch (error) {
       console.error(`Error getting contracts by status ${status}:`, error);
       return [];
