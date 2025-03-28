@@ -13,11 +13,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const { login } = useAuth();
   const { toast } = useToast();
   const [_, setLocation] = useLocation();
@@ -50,6 +61,61 @@ export default function Login() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!forgotPasswordEmail || !forgotPasswordEmail.includes('@')) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsResettingPassword(true);
+    
+    try {
+      // Get CSRF token first
+      const csrfResponse = await fetch('/api/csrf-token');
+      const { csrfToken } = await csrfResponse.json();
+      
+      // Send password reset request
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
+        credentials: 'include',
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        toast({
+          title: "Password Reset Requested",
+          description: "If an account exists with this email, we've sent instructions to reset your password.",
+          duration: 6000,
+        });
+        setIsForgotPasswordOpen(false);
+        setForgotPasswordEmail("");
+      } else {
+        throw new Error(data.message || "Something went wrong. Please try again.");
+      }
+    } catch (error) {
+      console.error("Password reset request failed:", error);
+      toast({
+        title: "Request Failed",
+        description: error instanceof Error ? error.message : "Failed to request password reset. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -98,6 +164,11 @@ export default function Login() {
                     variant="link"
                     size="sm"
                     className="px-0 h-auto text-xs font-normal"
+                    onClick={() => {
+                      setForgotPasswordEmail(email);
+                      setIsForgotPasswordOpen(true);
+                    }}
+                    type="button"
                   >
                     Forgot password?
                   </Button>
@@ -144,6 +215,50 @@ export default function Login() {
           />
         </div>
       </div>
+      
+      {/* Forgot Password Dialog */}
+      <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset your password</DialogTitle>
+            <DialogDescription>
+              Enter your email address and we'll send you instructions to reset your password.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleForgotPassword} className="space-y-4 py-3">
+            <div className="space-y-2">
+              <Label htmlFor="reset-email">Email</Label>
+              <Input
+                id="reset-email"
+                type="email"
+                placeholder="your.email@example.com"
+                value={forgotPasswordEmail}
+                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
+            
+            <DialogFooter className="pt-4">
+              <Button 
+                variant="outline" 
+                type="button" 
+                onClick={() => setIsForgotPasswordOpen(false)}
+                disabled={isResettingPassword}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isResettingPassword}
+              >
+                {isResettingPassword ? "Sending..." : "Send Instructions"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
