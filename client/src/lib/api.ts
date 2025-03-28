@@ -14,12 +14,18 @@ export function buildUrl(url: string): string {
     return url;
   }
   
-  // If it's an API call that starts with /api/, replace it with the full API URL
+  // If it's an API call that starts with /api/
   if (url.startsWith('/api/')) {
+    // For API URLs, we need to ensure consistent handling
+    // First, check if API_URL is available
     if (API_URL) {
+      // Use the api base URL with the path (without the /api prefix)
       return `${API_URL}${url.substring(4)}`;
     }
+    
     // Fall back to relative URL if API_URL is not available
+    // This will use the current origin as base
+    console.log(`API_URL not available, using relative URL: ${url}`);
     return url;
   }
   
