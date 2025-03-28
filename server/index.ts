@@ -350,6 +350,28 @@ async function startServer() {
 
     // Use the enhanced error handler middleware
     app.use(errorHandler);
+    
+    // Add a catch-all route for SPA client-side routing
+    // This needs to be after API routes but before Vite middleware
+    // This route only handles GET requests that are not /api/* paths
+    app.get("*", (req, res, next) => {
+      const path = req.path;
+      
+      // Skip API routes - they should be handled by the API middleware
+      if (path.startsWith('/api/')) {
+        return next();
+      }
+      
+      // Skip static asset requests that have file extensions (like .js, .css, .png)
+      if (path.includes('.') && !path.endsWith('.html')) {
+        return next();
+      }
+      
+      // For all other routes, let the Vite middleware or static file server handle it
+      // This ensures the SPA client router gets control for client-side routes
+      log(`Routing client-side path: ${path} to SPA handler`);
+      next();
+    });
 
     // importantly only setup vite in development and after
     // setting up all the other routes so the catch-all route
