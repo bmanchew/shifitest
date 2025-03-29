@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShiFi Google TTS Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #f0f4f8;
+            color: #333;
+        }
+        h1 {
+            color: #1a365d;
+            border-bottom: 2px solid #1a365d;
+            padding-bottom: 0.5rem;
+        }
+        .audio-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .audio-card h2 {
+            margin-top: 0;
+            color: #2d3748;
+        }
+        .btn {
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0.5rem 0.5rem 0.5rem 0;
+            font-size: 0.9rem;
+        }
+        .btn:hover {
+            background-color: #3182ce;
+        }
+        .btn.danger {
+            background-color: #e53e3e;
+        }
+        .btn.danger:hover {
+            background-color: #c53030;
+        }
+        .results {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f0f4f8;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        audio {
+            width: 100%;
+            margin: 1rem 0;
+        }
+        .error {
+            color: #e53e3e;
+        }
+        .success {
+            color: #38a169;
+        }
+        .audioControls {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .playBtn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #4299e1;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            cursor: pointer;
+            border: none;
+        }
+        .playBtn:hover {
+            background-color: #3182ce;
+        }
+        .audioProgress {
+            flex-grow: 1;
+            height: 8px;
+            border-radius: 4px;
+            background-color: #e2e8f0;
+            position: relative;
+            overflow: hidden;
+        }
+        .audioProgressFill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background-color: #4299e1;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #cbd5e0;
+            margin-bottom: 10px;
+            font-family: inherit;
+        }
+    </style>
+</head>
+<body>
+    <h1>ShiFi Google TTS Test</h1>
+    
+    <div class="audio-card">
+        <h2>Generate Speech from Text</h2>
+        <p>Enter text and hear it spoken using Google's Text-to-Speech API.</p>
+        
+        <div>
+            <textarea id="inputText" placeholder="Enter text to convert to speech...">Welcome to ShiFi Financial, where we provide intelligent financial solutions powered by AI. How can I help you today?</textarea>
+            
+            <div>
+                <button class="btn" id="generateBtn">Generate Speech</button>
+                <label>
+                    <input type="radio" name="speaker" value="0" checked> Female Voice
+                </label>
+                <label>
+                    <input type="radio" name="speaker" value="1"> Male Voice
+                </label>
+            </div>
+        </div>
+        
+        <div id="generatedAudio" style="display: none; margin-top: 20px;">
+            <h3>Generated Audio</h3>
+            <div class="audioControls">
+                <button class="playBtn" id="mp3PlayBtn">▶</button>
+                <div class="audioProgress" id="mp3Progress">
+                    <div class="audioProgressFill" id="mp3ProgressFill"></div>
+                </div>
+            </div>
+            <audio id="mp3Player" preload="auto"></audio>
+            
+            <div class="audioControls">
+                <button class="playBtn" id="wavPlayBtn">▶</button>
+                <div class="audioProgress" id="wavProgress">
+                    <div class="audioProgressFill" id="wavProgressFill"></div>
+                </div>
+            </div>
+            <audio id="wavPlayer" preload="auto"></audio>
+            
+            <div>
+                <p><strong>MP3 URL:</strong> <span id="mp3Url"></span></p>
+                <p><strong>WAV URL:</strong> <span id="wavUrl"></span></p>
+            </div>
+        </div>
+        
+        <div id="results" class="results"></div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputText = document.getElementById('inputText');
+            const generateBtn = document.getElementById('generateBtn');
+            const resultsDiv = document.getElementById('results');
+            const generatedAudio = document.getElementById('generatedAudio');
+            const mp3Player = document.getElementById('mp3Player');
+            const wavPlayer = document.getElementById('wavPlayer');
+            const mp3PlayBtn = document.getElementById('mp3PlayBtn');
+            const wavPlayBtn = document.getElementById('wavPlayBtn');
+            const mp3Progress = document.getElementById('mp3Progress');
+            const wavProgress = document.getElementById('wavProgress');
+            const mp3ProgressFill = document.getElementById('mp3ProgressFill');
+            const wavProgressFill = document.getElementById('wavProgressFill');
+            const mp3UrlSpan = document.getElementById('mp3Url');
+            const wavUrlSpan = document.getElementById('wavUrl');
+            
+            // Setup audio progress tracking
+            function setupAudioProgress(audio, progressFill) {
+                audio.addEventListener('timeupdate', () => {
+                    const percent = (audio.currentTime / audio.duration) * 100;
+                    progressFill.style.width = `${percent}%`;
+                });
+                
+                audio.addEventListener('ended', () => {
+                    progressFill.style.width = '0%';
+                });
+            }
+            
+            setupAudioProgress(mp3Player, mp3ProgressFill);
+            setupAudioProgress(wavPlayer, wavProgressFill);
+            
+            // Play/pause controls
+            mp3PlayBtn.addEventListener('click', () => {
+                if (mp3Player.paused) {
+                    wavPlayer.pause();
+                    mp3Player.play();
+                    mp3PlayBtn.textContent = '❚❚';
+                    wavPlayBtn.textContent = '▶';
+                } else {
+                    mp3Player.pause();
+                    mp3PlayBtn.textContent = '▶';
+                }
+            });
+            
+            wavPlayBtn.addEventListener('click', () => {
+                if (wavPlayer.paused) {
+                    mp3Player.pause();
+                    wavPlayer.play();
+                    wavPlayBtn.textContent = '❚❚';
+                    mp3PlayBtn.textContent = '▶';
+                } else {
+                    wavPlayer.pause();
+                    wavPlayBtn.textContent = '▶';
+                }
+            });
+            
+            // Reset audio player state
+            mp3Player.addEventListener('ended', () => {
+                mp3PlayBtn.textContent = '▶';
+            });
+            
+            wavPlayer.addEventListener('ended', () => {
+                wavPlayBtn.textContent = '▶';
+            });
+            
+            // Generate speech from text
+            generateBtn.addEventListener('click', async () => {
+                const text = inputText.value.trim();
+                if (!text) {
+                    resultsDiv.innerHTML = '<p class="error">Please enter some text to convert to speech.</p>';
+                    return;
+                }
+                
+                const speaker = document.querySelector('input[name="speaker"]:checked').value;
+                
+                try {
+                    resultsDiv.innerHTML = '<p>Generating speech...</p>';
+                    generateBtn.disabled = true;
+                    
+                    // First, get a CSRF token
+                    const csrfResponse = await fetch('/api/csrf-token', {
+                        credentials: 'include'
+                    });
+                    
+                    if (!csrfResponse.ok) {
+                        throw new Error('Failed to get CSRF token');
+                    }
+                    
+                    const csrfData = await csrfResponse.json();
+                    const csrfToken = csrfData.csrfToken;
+                    
+                    // Make request to the voice-insight endpoint
+                    const response = await fetch('/api/financial-sherpa/voice-insight', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            insightId: `test-${Date.now()}`,
+                            text,
+                            speaker: parseInt(speaker),
+                            useGTTS: true  // Use Google TTS instead of mock
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Failed to generate speech: ${response.status} ${errorText}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Show the generated audio section
+                        generatedAudio.style.display = 'block';
+                        
+                        // Add cache-busting timestamp to URLs
+                        const mp3Url = `${data.mp3Url}?t=${Date.now()}`;
+                        const wavUrl = `${data.audioUrl}?t=${Date.now()}`;
+                        
+                        // Set audio sources
+                        mp3Player.src = mp3Url;
+                        wavPlayer.src = wavUrl;
+                        
+                        // Display URLs
+                        mp3UrlSpan.textContent = data.mp3Url;
+                        wavUrlSpan.textContent = data.audioUrl;
+                        
+                        // Reset play buttons
+                        mp3PlayBtn.textContent = '▶';
+                        wavPlayBtn.textContent = '▶';
+                        
+                        // Show success message
+                        resultsDiv.innerHTML = `<p class="success">Speech generated successfully!</p>`;
+                    } else {
+                        resultsDiv.innerHTML = `<p class="error">Failed to generate speech: ${data.error || 'Unknown error'}</p>`;
+                    }
+                } catch (error) {
+                    resultsDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+                    console.error('Error generating speech:', error);
+                } finally {
+                    generateBtn.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -7,10 +7,15 @@ import { logger } from './logger';
 
 const execPromise = util.promisify(exec);
 
+// Define voice engine types
+export type VoiceEngine = 'mock' | 'gtts' | 'huggingface';
+
 export interface GenerateVoiceOptions {
   text: string;
   speaker?: number; // 0 for female (default), 1 for male
   outputPath?: string;
+  engine?: VoiceEngine; // Which voice engine to use
+  modelId?: string; // For Hugging Face, the model ID to use (default: sesame/csm-1b)
 }
 
 export interface GenerateNotificationVoiceOptions {
@@ -18,26 +23,34 @@ export interface GenerateNotificationVoiceOptions {
   data: Record<string, any>;
   speaker?: number;
   outputPath?: string;
+  engine?: VoiceEngine; // Which voice engine to use
+  modelId?: string; // For Hugging Face, the model ID to use
 }
 
 /**
  * Service to interact with SesameAI's Conversational Speech Model (CSM)
+ * and Google Text-to-Speech (gTTS) as an alternative
  * 
  * This service handles:
  * - Text-to-speech generation for both generic text and notifications
  * - Audio file management
- * - Integration with SesameAI's CSM Python module
+ * - Integration with SesameAI's CSM Python module and gTTS
  */
 export class SesameAIService {
   private initialized = false;
   private audioOutputDir: string;
   private pythonInterpreter: string = 'python3.11'; // Require Python 3.11 specifically
   private csm_script_path: string;
+  private gtts_script_path: string;
+  private huggingface_script_path: string;
+  private defaultEngine: VoiceEngine = 'gtts'; // Default to Google TTS which is more reliable
   
   constructor() {
     // Initialize paths
     this.audioOutputDir = path.join(process.cwd(), 'public', 'audio');
     this.csm_script_path = path.join(process.cwd(), 'sesamechat', 'csm', 'run_csm.py');
+    this.gtts_script_path = path.join(process.cwd(), 'sesamechat', 'csm', 'run_gtts.py');
+    this.huggingface_script_path = path.join(process.cwd(), 'sesamechat', 'csm', 'run_huggingface.py');
     
     // Ensure output directory exists
     this.initialize();
@@ -53,24 +66,77 @@ export class SesameAIService {
         fs.mkdirSync(this.audioOutputDir, { recursive: true });
       }
       
-      // Check if the CSM script exists
-      if (!fs.existsSync(this.csm_script_path)) {
-        logger.error({
-          message: 'SesameAI CSM script not found',
+      // Initialize as not ready
+      this.initialized = false;
+      
+      // Check which voice engines are available
+      const availableEngines: VoiceEngine[] = [];
+      
+      // Check for Google TTS (preferred for reliability)
+      if (fs.existsSync(this.gtts_script_path)) {
+        availableEngines.push('gtts');
+        logger.info({
+          message: 'Google TTS script found',
           source: 'sesameai',
-          category: 'api',
-          metadata: { path: this.csm_script_path }
+          category: 'system'
+        });
+      }
+      
+      // Check for Hugging Face (best quality)
+      if (fs.existsSync(this.huggingface_script_path)) {
+        availableEngines.push('huggingface');
+        logger.info({
+          message: 'Hugging Face speech script found',
+          source: 'sesameai',
+          category: 'system'
+        });
+      }
+      
+      // Check for mock CSM (fallback)
+      if (fs.existsSync(this.csm_script_path)) {
+        availableEngines.push('mock');
+        logger.info({
+          message: 'Mock CSM script found',
+          source: 'sesameai',
+          category: 'system'
+        });
+      }
+      
+      // Set default engine based on availability
+      if (availableEngines.includes('gtts')) {
+        this.defaultEngine = 'gtts';
+      } else if (availableEngines.includes('huggingface')) {
+        this.defaultEngine = 'huggingface';
+      } else if (availableEngines.includes('mock')) {
+        this.defaultEngine = 'mock';
+      } else {
+        logger.error({
+          message: 'No voice engine scripts found',
+          source: 'sesameai',
+          category: 'system',
+          metadata: { 
+            gttsPath: this.gtts_script_path,
+            huggingfacePath: this.huggingface_script_path,
+            csmPath: this.csm_script_path
+          }
         });
         return;
       }
       
-      this.initialized = true;
+      // Mark as initialized if we have at least one engine
+      this.initialized = availableEngines.length > 0;
       
-      logger.info({
-        message: 'SesameAI service initialized successfully',
-        source: 'sesameai',
-        category: 'system'
-      });
+      if (this.initialized) {
+        logger.info({
+          message: 'SesameAI service initialized successfully',
+          source: 'sesameai',
+          category: 'system',
+          metadata: { 
+            availableEngines,
+            defaultEngine: this.defaultEngine
+          }
+        });
+      }
     } catch (error: any) {
       logger.error({
         message: `Failed to initialize SesameAI service: ${error.message}`,
@@ -99,7 +165,52 @@ export class SesameAIService {
       throw new Error('SesameAI service is not initialized');
     }
     
-    const { text, speaker = 0, outputPath } = options;
+    const { 
+      text, 
+      speaker = 0, 
+      outputPath, 
+      engine = this.defaultEngine,
+      modelId
+    } = options;
+    
+    // Select the appropriate script based on requested engine
+    let scriptPath: string;
+    let engineName: string;
+    
+    switch (engine) {
+      case 'gtts':
+        scriptPath = this.gtts_script_path;
+        engineName = 'Google TTS';
+        break;
+      case 'huggingface':
+        scriptPath = this.huggingface_script_path;
+        engineName = 'Hugging Face Speech';
+        break;
+      case 'mock':
+      default:
+        scriptPath = this.csm_script_path;
+        engineName = 'SesameAI CSM (Mock)';
+        break;
+    }
+    
+    // Fall back to a different engine if the requested one is not available
+    if (!fs.existsSync(scriptPath)) {
+      if (fs.existsSync(this.gtts_script_path)) {
+        scriptPath = this.gtts_script_path;
+        engineName = 'Google TTS (Fallback)';
+      } else if (fs.existsSync(this.csm_script_path)) {
+        scriptPath = this.csm_script_path;
+        engineName = 'SesameAI CSM (Fallback)';
+      } else {
+        throw new Error(`Requested voice engine ${engine} is not available, and no fallback engines found`);
+      }
+      
+      logger.warn({
+        message: `Requested voice engine ${engine} is not available, falling back to ${engineName}`,
+        source: 'sesameai',
+        category: 'api'
+      });
+    }
     
     // Ensure we're using a path with the public prefix for the Python script
     // but strip it when returning the URL for the client
@@ -117,22 +228,32 @@ export class SesameAIService {
       // Escape text for shell command using proper quoting
       const escapedText = JSON.stringify(text);
       
-      // Run Python script to generate audio
-      const cmd = `${this.pythonInterpreter} ${this.csm_script_path} --text ${escapedText} --speaker ${speaker} --output "${fullOutputPath}"`;
+      // Build the command based on the engine
+      let cmd = `${this.pythonInterpreter} ${scriptPath} --text ${escapedText} --speaker ${speaker} --output "${fullOutputPath}"`;
+      
+      // Add model ID parameter for Hugging Face if provided
+      if (engine === 'huggingface' && modelId) {
+        cmd += ` --model "${modelId}"`;
+      }
       
       logger.info({
-        message: 'Generating voice with SesameAI CSM',
+        message: `Generating voice with ${engineName}`,
         source: 'sesameai',
         category: 'api',
-        metadata: { textLength: text.length, speaker }
+        metadata: { 
+          textLength: text.length, 
+          speaker,
+          engine: engineName,
+          ...(modelId && { modelId })
+        }
       });
       
       const { stdout, stderr } = await execPromise(cmd);
       
       // Log all stdout and stderr for debugging
-      console.log("Python script stdout:", stdout);
+      console.log(`${engineName} script stdout:`, stdout);
       if (stderr) {
-        console.log("Python script stderr:", stderr);
+        console.log(`${engineName} script stderr:`, stderr);
       }
       
       // Default return values
@@ -147,7 +268,10 @@ export class SesameAIService {
             message: `Python script error: ${result.error}`,
             source: 'sesameai',
             category: 'api',
-            metadata: { error: result.error }
+            metadata: { 
+              error: result.error,
+              engine: engineName
+            }
           });
           throw new Error(result.error || 'Unknown error from Python script');
         }
@@ -177,7 +301,8 @@ export class SesameAIService {
             stdout,
             stderr,
             error: error.message,
-            stack: error.stack
+            stack: error.stack,
+            engine: engineName
           }
         });
         
@@ -190,7 +315,10 @@ export class SesameAIService {
           message: `Warning during voice generation: ${stderr}`,
           source: 'sesameai',
           category: 'api',
-          metadata: { stderr }
+          metadata: { 
+            stderr,
+            engine: engineName
+          }
         });
       }
       
@@ -219,7 +347,10 @@ export class SesameAIService {
         message: `Error generating voice: ${error.message}`,
         source: 'sesameai',
         category: 'api',
-        metadata: { error: error.stack }
+        metadata: { 
+          error: error.stack,
+          engine: engineName
+        }
       });
       
       throw new Error(`Failed to generate voice: ${error.message}`);
@@ -233,7 +364,14 @@ export class SesameAIService {
    * @returns Object containing paths to the generated audio files (WAV and optionally MP3)
    */
   async generateNotificationVoice(options: GenerateNotificationVoiceOptions): Promise<{ audioUrl: string; mp3Url?: string }> {
-    const { type, data, speaker = 0, outputPath } = options;
+    const { 
+      type, 
+      data, 
+      speaker = 0, 
+      outputPath, 
+      engine = this.defaultEngine,
+      modelId
+    } = options;
     
     // Generate appropriate notification text based on type and data
     const text = this.generateNotificationText(type, data);
@@ -242,7 +380,9 @@ export class SesameAIService {
     return this.generateVoice({
       text,
       speaker,
-      outputPath
+      outputPath,
+      engine,
+      modelId
     });
   }
   
