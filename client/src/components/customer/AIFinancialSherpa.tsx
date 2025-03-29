@@ -86,7 +86,9 @@ export default function AIFinancialSherpa({
     }
     
     // Add savings insights
-    if (financialData.accounts && financialData.accounts.some((a: any) => a.type === 'savings')) {
+    if (financialData.accounts && financialData.accounts.accounts && 
+        Array.isArray(financialData.accounts.accounts) && 
+        financialData.accounts.accounts.some((a: any) => a.type === 'savings')) {
       const savingsRate = financialData.savingsRate || 5;
       const idealRate = 20;
       insights.push({
