@@ -734,145 +734,46 @@ export default function AIFinancialSherpa({
         </TabsContent>
         
         <TabsContent value="conversation" className="p-0 m-0">
-          {actionPlan && (
-            <div className={`transition-all duration-300 overflow-hidden ${summaryVisible ? 'max-h-96' : 'max-h-0'}`}>
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 border-b border-emerald-200">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center">
-                    <CheckCircle2 className="h-5 w-5 mr-2 text-emerald-600" />
-                    <h3 className="font-medium text-emerald-800">Recommended Action Plan</h3>
-                  </div>
-                </div>
-                <div className="bg-white rounded-md p-3 shadow-sm mb-2">
-                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{actionPlan}</pre>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div className="flex flex-col h-[500px]">
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div 
-                    key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div 
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        message.role === 'user' 
-                          ? 'bg-indigo-100 text-indigo-900' 
-                          : 'bg-white border border-gray-200'
-                      }`}
-                    >
-                      {message.role === 'assistant' && (
-                        <div className="flex items-center mb-1">
-                          <Avatar className="h-6 w-6 mr-2">
-                            <AvatarFallback className="bg-gradient-to-br from-indigo-400 to-purple-500 text-white text-xs">
-                              AI
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-xs text-gray-500">Financial Sherpa</span>
-                        </div>
-                      )}
-                      
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      
-                      {message.role === 'assistant' && (
-                        <div className="flex justify-between items-center mt-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={`text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 p-0 h-6 ${!message.audioUrl || (loadingAudio && currentAudioMessage === message.id) ? 'opacity-50' : ''}`}
-                            onClick={() => playMessageAudio(message)}
-                            disabled={!message.audioUrl || (loadingAudio && currentAudioMessage === message.id)}
-                          >
-                            {loadingAudio && currentAudioMessage === message.id ? (
-                              <div className="h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-1" />
-                            ) : isPlayingAudio && currentAudioMessage === message.id ? (
-                              <Pause className="h-3 w-3 mr-1" />
-                            ) : (
-                              <PlayCircle className="h-3 w-3 mr-1" />
-                            )}
-                            <span className="text-xs">{isPlayingAudio && currentAudioMessage === message.id ? 'Pause' : 'Listen'}</span>
-                            <Headphones className="ml-1 h-3 w-3" />
-                          </Button>
-                          
-                          <span className="text-xs text-gray-400">
-                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      )}
-                      
-                      {message.role === 'user' && (
-                        <div className="flex justify-end mt-1">
-                          <span className="text-xs text-indigo-400">
-                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                
-                {isSendingMessage && (
-                  <div className="flex justify-start">
-                    <div className="max-w-[80%] rounded-lg p-3 bg-white border border-gray-200">
-                      <div className="flex items-center">
-                        <Avatar className="h-6 w-6 mr-2">
-                          <AvatarFallback className="bg-gradient-to-br from-indigo-400 to-purple-500 text-white text-xs">
-                            AI
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex space-x-1">
-                          <div className="h-2 w-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                          <div className="h-2 w-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                          <div className="h-2 w-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div ref={messagesEndRef} />
-              </div>
-            </ScrollArea>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <Avatar className="h-24 w-24 mb-6 bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-indigo-200 shadow-md">
+              <AvatarFallback className="text-white">
+                <Volume2 size={40} strokeWidth={1.5} />
+              </AvatarFallback>
+            </Avatar>
             
-            <CardFooter className="border-t p-4">
-              <div className="flex items-center w-full space-x-2">
-                {actionPlan && (
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    className="flex-shrink-0"
-                    onClick={toggleSummary}
-                  >
-                    <ClipboardCheck className="h-4 w-4 text-emerald-600" />
-                  </Button>
-                )}
-                <Textarea
-                  placeholder="Type your financial question here..."
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  className="flex-1 min-h-10 max-h-32"
-                />
-                <Button 
-                  className="bg-indigo-600 hover:bg-indigo-700 flex-shrink-0" 
-                  size="icon"
-                  onClick={handleSendMessage}
-                  disabled={isSendingMessage || !userInput.trim()}
-                >
-                  <SendHorizonal className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardFooter>
-          </div>
+            <h3 className="text-xl font-medium mb-3">Speak with Your Financial Sherpa</h3>
+            
+            <p className="text-sm text-gray-500 max-w-md mb-8">
+              Press the button below to start a voice conversation with your AI Financial Sherpa and get personalized advice.
+            </p>
+            
+            <Button 
+              size="lg" 
+              className={`rounded-full w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 p-0 shadow-md hover:shadow-lg transition-all ${loadingAudio ? 'opacity-70 cursor-wait' : ''}`}
+              onClick={() => {
+                // Here we would trigger the voice interaction
+                // For now, just simulate with a loading state
+                setLoadingAudio(true);
+                toast({
+                  title: "Voice Activation",
+                  description: "Voice conversation feature is coming soon!",
+                  variant: "default",
+                });
+                setTimeout(() => setLoadingAudio(false), 1500);
+              }}
+              disabled={loadingAudio}
+            >
+              {loadingAudio ? (
+                <div className="h-8 w-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <PlayCircle size={40} className="text-white" />
+              )}
+            </Button>
+            
+            <p className="text-xs text-gray-400 mt-6">
+              Powered by SesameAI voice technology
+            </p>
+          </CardContent>
         </TabsContent>
       </Tabs>
     </Card>
