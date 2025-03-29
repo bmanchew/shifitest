@@ -24,6 +24,7 @@ import { diditService } from "./services/didit";
 import { blockchainService } from "./services/blockchain";
 import { plaidService } from "./services/plaid";
 import { plaidTransferService } from "./services/plaid.transfers";
+import { middeskService } from "./services/middesk";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
@@ -4873,7 +4874,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   apiRouter.use("/merchants", merchantRouter);
   
   // Endpoint for submitting a merchant for MidDesk verification
-  apiRouter.post("/merchant/:id/submit-verification", async (req: Request, res: Response) => {
+  apiRouter.post("/merchants/:id/submit-verification", async (req: Request, res: Response) => {
     try {
       const merchantId = parseInt(req.params.id);
       

@@ -53,53 +53,70 @@ async function verifyExistingMerchant() {
     
     console.log("   Business details created successfully");
     
-    // Now submit this business for verification using the endpoint
+    // Now submit this business for verification using the endpoint (or get existing verification)
     console.log("5. Submitting business for MidDesk verification...");
-    const verifyResponse = await axios.post(`http://localhost:5000/api/merchant/${merchantId}/submit-verification`, {}, {
+    
+    let verificationInfo = null;
+    
+    try {
+      const verifyResponse = await axios.post(`http://localhost:5000/api/merchants/${merchantId}/submit-verification`, {}, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Bypass': 'test-middesk-integration'
+        }
+      });
+      
+      console.log("   Verification submission result:", JSON.stringify(verifyResponse.data, null, 2));
+      
+      if (verifyResponse.data.success) {
+        console.log("\n✅ MidDesk verification successfully initiated");
+        console.log("   MidDesk Business ID:", verifyResponse.data.middeskBusinessId);
+        console.log("   Verification Status:", verifyResponse.data.verificationStatus);
+        verificationInfo = verifyResponse.data;
+      } else {
+        console.log("\n❌ MidDesk verification failed to initiate");
+        console.log("   Error:", verifyResponse.data.message);
+      }
+    } catch (error) {
+      // Check if this is a 400 error because verification already exists
+      if (error.response && error.response.status === 400 && error.response.data.middeskBusinessId) {
+        console.log("   Verification already exists:", JSON.stringify(error.response.data, null, 2));
+        console.log("\n✅ MidDesk verification already exists");
+        console.log("   MidDesk Business ID:", error.response.data.middeskBusinessId);
+        console.log("   Verification Status:", error.response.data.verificationStatus);
+        verificationInfo = error.response.data;
+      } else {
+        throw error; // Re-throw if it's a different error
+      }
+    }
+    
+    // Check the verification status after submission
+    const statusResponse = await axios.get(`http://localhost:5000/api/merchants/${merchantId}`, {
       headers: {
-        'Content-Type': 'application/json',
         'X-CSRF-Bypass': 'test-middesk-integration'
       }
     });
     
-    console.log("   Verification submission result:", verifyResponse.data);
-    
-    if (verifyResponse.data.success) {
-      console.log("\n✅ MidDesk verification successfully initiated");
-      console.log("   MidDesk Business ID:", verifyResponse.data.middeskBusinessId);
-      console.log("   Verification Status:", verifyResponse.data.verificationStatus);
+    console.log("\n6. Current merchant record:", statusResponse.data ? "Retrieved" : "Failed");
+    if (statusResponse.data) {
+      console.log("   Merchant Name:", statusResponse.data.name);
+      console.log("   Merchant ID:", statusResponse.data.id);
       
-      // Check the verification status after submission
-      const statusResponse = await axios.get(`http://localhost:5000/api/merchant/${merchantId}`, {
+      // Get the business details with verification status
+      const detailsResponse = await axios.get(`http://localhost:5000/api/merchant-business-details?merchantId=${merchantId}`, {
         headers: {
           'X-CSRF-Bypass': 'test-middesk-integration'
         }
       });
       
-      console.log("\n6. Current merchant record:", statusResponse.data.success ? "Retrieved" : "Failed");
-      if (statusResponse.data.success) {
-        console.log("   Merchant Name:", statusResponse.data.merchant.name);
-        console.log("   Merchant ID:", statusResponse.data.merchant.id);
-        
-        // Get the business details with verification status
-        const detailsResponse = await axios.get(`http://localhost:5000/api/merchant-business-details?merchantId=${merchantId}`, {
-          headers: {
-            'X-CSRF-Bypass': 'test-middesk-integration'
-          }
-        });
-        
-        if (detailsResponse.data && detailsResponse.data.length > 0) {
-          const details = detailsResponse.data[0];
-          console.log("\n7. Business verification details:");
-          console.log("   Legal Name:", details.legalName);
-          console.log("   EIN:", details.ein);
-          console.log("   MidDesk Business ID:", details.middeskBusinessId);
-          console.log("   Verification Status:", details.verificationStatus);
-        }
+      if (detailsResponse.data && detailsResponse.data.length > 0) {
+        const details = detailsResponse.data[0];
+        console.log("\n7. Business verification details:");
+        console.log("   Legal Name:", details.legalName);
+        console.log("   EIN:", details.ein);
+        console.log("   MidDesk Business ID:", details.middeskBusinessId);
+        console.log("   Verification Status:", details.verificationStatus);
       }
-    } else {
-      console.log("\n❌ MidDesk verification failed to initiate");
-      console.log("   Error:", verifyResponse.data.message);
     }
     
     console.log("\n=== Test Complete ===");
