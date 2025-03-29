@@ -201,13 +201,40 @@ export default function AIFinancialSherpa({
         // Update insight with generated audio URL
         insight.audioUrl = data.audioUrl;
         setCurrentAudioUrl(data.audioUrl);
-        setIsPlaying(true);
         
-        // Play the audio
+        // Create a new Audio object to prevent interruption issues
+        const newAudio = new Audio(data.audioUrl);
+        
+        // Set up event listeners on the new audio object
+        newAudio.addEventListener('ended', () => {
+          setIsPlaying(false);
+          setActiveInsightId(null);
+        });
+        
+        // Replace the current audio reference
         if (audioRef.current) {
-          audioRef.current.src = data.audioUrl;
-          audioRef.current.play();
+          audioRef.current.pause();
         }
+        audioRef.current = newAudio;
+        
+        // Play the audio after a short delay to ensure it's loaded
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.play()
+              .then(() => {
+                setIsPlaying(true);
+              })
+              .catch(error => {
+                console.error('Error playing audio:', error);
+                setIsPlaying(false);
+                toast({
+                  title: 'Audio Playback Failed',
+                  description: 'There was a problem playing the audio. Please try again.',
+                  variant: 'destructive',
+                });
+              });
+          }
+        }, 100);
       } else {
         throw new Error(data.error || 'Unknown error generating audio');
       }
