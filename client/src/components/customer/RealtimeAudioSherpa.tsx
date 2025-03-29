@@ -177,29 +177,41 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         if (error.name === 'NotAllowedError') {
           console.error('🚫 Microphone permission denied by user');
           toast({
-            title: 'Microphone Access Denied',
-            description: 'You denied microphone access. Please enable it in your browser settings to use the voice feature.',
-            variant: 'destructive'
+            title: 'Microphone Access Required',
+            description: 'Financial Sherpa needs microphone access to hear your voice. Click the lock/site info icon in your browser address bar and enable microphone access.',
+            variant: 'destructive',
+            duration: 8000 // Show for longer so user can read instructions
           });
         } else if (error.name === 'NotFoundError') {
           console.error('🚫 No microphone found on this device');
           toast({
             title: 'No Microphone Found',
-            description: 'No microphone was detected on your device. Please connect a microphone and try again.',
-            variant: 'destructive'
+            description: 'No microphone was detected on your device. Please connect a microphone or check your device settings and try again.',
+            variant: 'destructive',
+            duration: 8000
+          });
+        } else if (error.name === 'NotReadableError') {
+          console.error('🚫 Microphone is already in use by another application');
+          toast({
+            title: 'Microphone Busy',
+            description: 'Your microphone is being used by another application. Please close other apps using the microphone.',
+            variant: 'destructive',
+            duration: 8000
           });
         } else {
           toast({
             title: 'Microphone Access Error',
-            description: `Error accessing microphone: ${error.message}`,
-            variant: 'destructive'
+            description: `Error accessing microphone: ${error.message}. Try refreshing the page or checking browser settings.`,
+            variant: 'destructive',
+            duration: 8000
           });
         }
       } else {
         toast({
           title: 'Microphone Access Error',
-          description: 'Please allow microphone access to use the voice feature.',
-          variant: 'destructive'
+          description: 'Please allow microphone access to use the voice feature. You may need to reload the page.',
+          variant: 'destructive',
+          duration: 8000
         });
       }
       return false;
