@@ -485,21 +485,26 @@ export default function AIFinancialSherpa({
     if (loadingAudio) return;
     
     setLoadingAudio(true);
+    console.log("Starting voice conversation for customer:", customerId);
     
     try {
       // First, get a CSRF token
+      console.log("Fetching CSRF token...");
       const csrfResponse = await fetch('/api/csrf-token', {
         credentials: 'include'
       });
       
       if (!csrfResponse.ok) {
+        console.error("Failed to get CSRF token. Status:", csrfResponse.status);
         throw new Error('Failed to get CSRF token');
       }
       
       const csrfData = await csrfResponse.json();
       const csrfToken = csrfData.csrfToken;
+      console.log("CSRF token received successfully");
       
       // Make the API call to start a voice conversation
+      console.log("Making API call to start conversation...");
       const response = await fetch('/api/financial-sherpa/start-conversation', {
         method: 'POST',
         headers: {
@@ -513,24 +518,33 @@ export default function AIFinancialSherpa({
         }),
       });
       
+      // Log full error details if the request fails
       if (!response.ok) {
-        throw new Error('Failed to start voice conversation');
+        console.error("Start conversation response not OK. Status:", response.status);
+        const errorText = await response.text();
+        console.error("Error details:", errorText);
+        throw new Error(`Failed to start voice conversation: ${response.status} ${errorText}`);
       }
       
+      console.log("Response received, parsing JSON...");
       const data = await response.json();
+      console.log("Response data:", data);
       
       if (data.success && data.message) {
+        console.log("Successfully started conversation with ID:", data.conversationId);
         // Update conversation
         setMessages([data.message]);
         setConversationId(data.conversationId);
         
         // Play the greeting audio
         if (data.message.audioUrl) {
+          console.log("Playing greeting audio from URL:", data.message.audioUrl);
           // Create a new Audio object to prevent interruption issues
           const newAudio = new Audio(data.message.audioUrl);
           
           // Set up event listeners on the new audio object
           newAudio.addEventListener('ended', () => {
+            console.log("Audio playback completed");
             setIsPlayingAudio(false);
             setCurrentAudioMessage(null);
             setLoadingAudio(false);
@@ -545,6 +559,7 @@ export default function AIFinancialSherpa({
           // Play the audio
           audioRef.current.play()
             .then(() => {
+              console.log("Audio playback started successfully");
               setIsPlayingAudio(true);
               setCurrentAudioMessage(data.message.id);
             })
@@ -558,9 +573,11 @@ export default function AIFinancialSherpa({
               });
             });
         } else {
+          console.warn("No audio URL provided in the response");
           setLoadingAudio(false);
         }
       } else {
+        console.error("API returned success=false or missing message:", data);
         throw new Error(data.error || 'Unknown error starting conversation');
       }
     } catch (error) {
