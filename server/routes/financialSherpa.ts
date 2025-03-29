@@ -486,13 +486,23 @@ router.post('/voice-insight', async (req, res) => {
       outputPath: `public/audio/insights/insight-${insightId}-${Date.now()}.wav`
     });
     
-    // Convert the full file path to a URL path that can be used in the frontend
-    const audioUrl = audioPath.replace(/^public/, '');
-    
-    return res.json({
-      success: true,
-      audioUrl: audioUrl
-    });
+    // If audioPath is an object with audioUrl and mp3Url properties, use them directly
+    if (typeof audioPath === 'object') {
+      return res.json({
+        success: true,
+        audioUrl: audioPath.audioUrl,
+        mp3Url: audioPath.mp3Url
+      });
+    } else {
+      const audioUrl = audioPath.replace(/^public/, '');
+      // Generate mp3Url by changing wav to mp3 in the path
+      const mp3Url = audioUrl.replace(/\.wav$/, '.mp3');
+      return res.json({
+        success: true,
+        audioUrl: audioUrl,
+        mp3Url: mp3Url
+      });
+    }
   } catch (error: any) {
     logger.error({
       message: `Error generating voice for insight: ${error.message}`,
@@ -600,21 +610,19 @@ router.post('/start-conversation', async (req, res) => {
     });
     
     // Generate voice for the greeting
-    const audioPath = await sesameAIService.generateVoice({
+    const audioResult = await sesameAIService.generateVoice({
       text: greeting,
       speaker,
       outputPath: `public/audio/conversations/greeting-${customerId}-${Date.now()}.wav`
     });
-    
-    // Convert the full file path to a URL path that can be used in the frontend
-    const audioUrl = audioPath.replace(/^public/, '');
     
     // Create conversation message response
     const message = {
       id: `message-${Date.now()}`,
       role: 'assistant',
       content: greeting,
-      audioUrl,
+      audioUrl: audioResult.audioUrl,
+      mp3Url: audioResult.mp3Url,
       timestamp: new Date()
     };
     

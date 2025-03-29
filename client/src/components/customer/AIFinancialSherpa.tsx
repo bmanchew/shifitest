@@ -43,6 +43,7 @@ interface SherpaMessage {
   role: 'user' | 'assistant';
   content: string;
   audioUrl?: string;
+  mp3Url?: string;
   timestamp: Date;
 }
 
@@ -379,12 +380,12 @@ export default function AIFinancialSherpa({
           
           const data = await response.json();
           
-          if (data.success && data.audioUrl) {
-            // Update message with audio URL
+          if (data.success && (data.audioUrl || data.mp3Url)) {
+            // Update message with audio URLs
             setMessages(prev => 
               prev.map(msg => 
                 msg.id === assistantMessage.id 
-                  ? { ...msg, audioUrl: data.audioUrl } 
+                  ? { ...msg, audioUrl: data.audioUrl, mp3Url: data.mp3Url } 
                   : msg
               )
             );
@@ -406,7 +407,7 @@ export default function AIFinancialSherpa({
   
   // Play audio for a message in conversation
   const playMessageAudio = async (message: SherpaMessage) => {
-    if (!message.audioUrl) {
+    if (!message.audioUrl && !message.mp3Url) {
       toast({
         title: 'Audio Not Available',
         description: 'Voice narration is not available for this message.',
@@ -427,13 +428,89 @@ export default function AIFinancialSherpa({
     setLoadingAudio(true);
     
     try {
+      // Try MP3 first as it has better browser compatibility, fall back to WAV
+      const audioUrl = message.mp3Url || message.audioUrl;
+      console.log("Attempting to play audio from URL:", audioUrl);
+      
+      // Add cache-busting parameter to avoid caching issues
+      const urlWithCacheBust = `${audioUrl}?t=${Date.now()}`;
+      
       // Create a new Audio object to prevent interruption issues
-      const newAudio = new Audio(message.audioUrl);
+      const newAudio = new Audio(urlWithCacheBust);
+      
+      // Add error event listener to detect format issues
+      newAudio.addEventListener('error', (e) => {
+        console.error('Audio loading error:', e);
+        console.error('Audio element error code:', newAudio.error?.code);
+        console.error('Audio element error message:', newAudio.error?.message);
+        
+        // If MP3 failed and we have WAV as backup, try that instead
+        if (message.mp3Url && message.audioUrl && message.mp3Url !== message.audioUrl) {
+          console.log("MP3 failed, trying WAV fallback");
+          const wavUrl = `${message.audioUrl}?t=${Date.now()}`;
+          const wavAudio = new Audio(wavUrl);
+          
+          wavAudio.addEventListener('error', (wavError) => {
+            console.error('WAV audio loading error:', wavError);
+            console.error('WAV audio error code:', wavAudio.error?.code);
+            console.error('WAV audio error message:', wavAudio.error?.message);
+            setLoadingAudio(false);
+            toast({
+              title: 'Audio Loading Failed',
+              description: `All audio formats failed to load. Please try again later.`,
+              variant: 'destructive',
+            });
+          });
+          
+          wavAudio.addEventListener('ended', () => {
+            setIsPlayingAudio(false);
+            setCurrentAudioMessage(null);
+            setLoadingAudio(false);
+          });
+          
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
+          audioRef.current = wavAudio;
+          
+          wavAudio.play()
+            .then(() => {
+              setIsPlayingAudio(true);
+              setLoadingAudio(false);
+            })
+            .catch(wavPlayError => {
+              console.error('Error playing WAV audio:', wavPlayError);
+              setIsPlayingAudio(false);
+              setLoadingAudio(false);
+              setCurrentAudioMessage(null);
+              toast({
+                title: 'Audio Playback Failed',
+                description: 'All audio formats failed to play. Please try again later.',
+                variant: 'destructive',
+              });
+            });
+          return;
+        }
+        
+        setLoadingAudio(false);
+        toast({
+          title: 'Audio Loading Failed',
+          description: `Error loading audio file: ${newAudio.error?.message || 'Unknown error'}`,
+          variant: 'destructive',
+        });
+      });
       
       // Set up event listeners on the new audio object
       newAudio.addEventListener('ended', () => {
+        console.log("Audio playback completed");
         setIsPlayingAudio(false);
         setCurrentAudioMessage(null);
+        setLoadingAudio(false);
+      });
+      
+      // Add canplaythrough event to ensure the audio is fully loaded before playing
+      newAudio.addEventListener('canplaythrough', () => {
+        console.log("Audio can play through without buffering");
       });
       
       // Replace the current audio reference
@@ -442,27 +519,24 @@ export default function AIFinancialSherpa({
       }
       audioRef.current = newAudio;
       
-      // Play the audio after a short delay to ensure it's loaded
-      setTimeout(() => {
-        if (audioRef.current) {
-          audioRef.current.play()
-            .then(() => {
-              setIsPlayingAudio(true);
-              setLoadingAudio(false);
-            })
-            .catch(error => {
-              console.error('Error playing audio:', error);
-              setIsPlayingAudio(false);
-              setLoadingAudio(false);
-              setCurrentAudioMessage(null);
-              toast({
-                title: 'Audio Playback Failed',
-                description: 'There was a problem playing the audio. Please try again.',
-                variant: 'destructive',
-              });
-            });
-        }
-      }, 100);
+      // Play the audio
+      audioRef.current.play()
+        .then(() => {
+          console.log("Audio playback started successfully");
+          setIsPlayingAudio(true);
+          setLoadingAudio(false);
+        })
+        .catch(error => {
+          console.error('Error playing audio:', error);
+          setIsPlayingAudio(false);
+          setLoadingAudio(false);
+          setCurrentAudioMessage(null);
+          toast({
+            title: 'Audio Playback Failed',
+            description: 'There was a problem playing the audio. Please try again.',
+            variant: 'destructive',
+          });
+        });
     } catch (error) {
       console.error('Error playing audio:', error);
       setLoadingAudio(false);
@@ -536,22 +610,74 @@ export default function AIFinancialSherpa({
         setMessages([data.message]);
         setConversationId(data.conversationId);
         
-        // Play the greeting audio
-        if (data.message.audioUrl) {
-          console.log("Playing greeting audio from URL:", data.message.audioUrl);
+        // Play the greeting audio - prefer MP3 for better compatibility
+        if (data.message.mp3Url || data.message.audioUrl) {
+          // Try MP3 first if available (better browser compatibility)
+          const audioToPlay = data.message.mp3Url || data.message.audioUrl;
+          console.log("Playing greeting audio from URL:", audioToPlay);
           
           // Use a more robust audio URL that includes a timestamp to avoid caching issues
-          const audioUrl = `${data.message.audioUrl}?t=${Date.now()}`;
+          const audioUrl = `${audioToPlay}?t=${Date.now()}`;
           console.log("Using audio URL with cache-busting:", audioUrl);
           
           // Create a new Audio object to prevent interruption issues
           const newAudio = new Audio(audioUrl);
           
-          // Add event listener for errors
+          // Add error event listener to detect format issues
           newAudio.addEventListener('error', (e) => {
             console.error('Audio loading error:', e);
             console.error('Audio element error code:', newAudio.error?.code);
             console.error('Audio element error message:', newAudio.error?.message);
+            
+            // If MP3 failed and we have WAV as backup, try that instead
+            if (data.message.mp3Url && data.message.audioUrl && data.message.mp3Url !== data.message.audioUrl) {
+              console.log("MP3 failed, trying WAV fallback");
+              const wavUrl = `${data.message.audioUrl}?t=${Date.now()}`;
+              const wavAudio = new Audio(wavUrl);
+              
+              wavAudio.addEventListener('error', (wavError) => {
+                console.error('WAV audio loading error:', wavError);
+                console.error('WAV audio error code:', wavAudio.error?.code);
+                console.error('WAV audio error message:', wavAudio.error?.message);
+                setLoadingAudio(false);
+                toast({
+                  title: 'Audio Loading Failed',
+                  description: `All audio formats failed to load. Please try again later.`,
+                  variant: 'destructive',
+                });
+              });
+              
+              wavAudio.addEventListener('ended', () => {
+                setIsPlayingAudio(false);
+                setCurrentAudioMessage(null);
+                setLoadingAudio(false);
+              });
+              
+              if (audioRef.current) {
+                audioRef.current.pause();
+              }
+              audioRef.current = wavAudio;
+              
+              wavAudio.play()
+                .then(() => {
+                  setIsPlayingAudio(true);
+                  setCurrentAudioMessage(data.message.id);
+                  setLoadingAudio(false);
+                })
+                .catch(wavPlayError => {
+                  console.error('Error playing WAV audio:', wavPlayError);
+                  setIsPlayingAudio(false);
+                  setLoadingAudio(false);
+                  setCurrentAudioMessage(null);
+                  toast({
+                    title: 'Audio Playback Failed',
+                    description: 'All audio formats failed to play. Please try again later.',
+                    variant: 'destructive',
+                  });
+                });
+              return;
+            }
+            
             setLoadingAudio(false);
             toast({
               title: 'Audio Loading Failed',
