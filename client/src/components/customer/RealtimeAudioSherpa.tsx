@@ -568,12 +568,25 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
     if (conversationState === 'idle') {
       startConversation();
       
-      // Pre-initialize audio recording to prompt for microphone permission right away
-      initializeAudioRecording().then(initialized => {
-        console.log('Microphone initialized on component mount:', initialized);
-      }).catch(error => {
-        console.error('Error initializing microphone on mount:', error);
-      });
+      // Pre-initialize audio recording to prompt for microphone permission right away,
+      // but handle the permission denial more gracefully on initial mount
+      const requestPermission = async () => {
+        try {
+          // Just request permission without full initialization
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          
+          // If we got here, permission was granted; release the stream
+          stream.getTracks().forEach(track => track.stop());
+          
+          console.log('Microphone permission granted on component mount');
+        } catch (error) {
+          // Just log the error, but don't show a toast since the component is just mounting
+          console.log('Microphone permission will be requested again when recording starts');
+        }
+      };
+      
+      // Request permission but don't show error message on initial load
+      requestPermission();
     }
     
     // Cleanup function to end conversation when component unmounts
