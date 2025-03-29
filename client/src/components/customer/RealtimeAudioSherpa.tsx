@@ -25,7 +25,7 @@ type ConversationState =
   | 'responding'     // AI is responding (possibly with audio)
   | 'error';         // An error has occurred
 
-// Interface for a message in the conversation
+// Message object for storing conversation history
 interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -34,6 +34,7 @@ interface Message {
   audioUrl?: string; // URL to the audio file, if available
 }
 
+// Props for the component
 interface RealtimeAudioSherpaProps {
   customerId?: number;
   customerName?: string;
@@ -42,10 +43,12 @@ interface RealtimeAudioSherpaProps {
 
 const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
   customerId,
-  customerName = 'Customer',
-  financialData
+  customerName: initialCustomerName = 'Customer',
+  financialData: initialFinancialData
 }) => {
   // State
+  const [customerName, setCustomerName] = useState<string>(initialCustomerName);
+  const [financialData, setFinancialData] = useState<any>(initialFinancialData);
   const [conversationState, setConversationState] = useState<ConversationState>('idle');
   const [messages, setMessages] = useState<Message[]>([]);
   const [audioEnabled, setAudioEnabled] = useState(true);
@@ -66,182 +69,13 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
   // Toast hook for notifications
   const { toast } = useToast();
 
-  // Effect for automatically scrolling to the bottom of the messages
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
-  
-  // Auto-start conversation when component mounts
-  useEffect(() => {
-    if (conversationState === 'idle') {
-      startConversation();
-      
-      // Pre-initialize audio recording to prompt for microphone permission right away
-      initializeAudioRecording().then(initialized => {
-        console.log('Microphone initialized on component mount:', initialized);
-      }).catch(error => {
-        console.error('Error initializing microphone on mount:', error);
-      });
-    }
-    
-    // Cleanup function to end conversation when component unmounts
-    return () => {
-      if (conversationState !== 'idle') {
-        endConversation();
-      }
-    };
-  }, []);
-
-  // Initialize WebSocket connection
-  const initializeWebSocket = () => {
-    setConversationState('connecting');
-    setLoadingText('Connecting to AI...');
-    
-    // Determine the WebSocket URL
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/openai/realtime`;
-    
-    // Create WebSocket
-    const socket = new WebSocket(wsUrl);
-    webSocketRef.current = socket;
-
-    // Set up event handlers
-    socket.onopen = () => {
-      console.log('WebSocket connection established');
-      setConnected(true);
-      
-      // Request a new session
-      socket.send(JSON.stringify({
-        type: 'create_session',
-        voice: 'nova', // Use 'nova' voice for Financial Sherpa
-        instructions: `You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help ${customerName} understand their financial data, provide insights on their contracts, and answer questions about financial products and services. Keep your responses friendly, concise, and professional. ${
-          financialData ? 'Use the financial data available to provide personalized insights.' : 'Encourage connecting bank accounts to provide more personalized insights.'
-        }`
-      }));
-    };
-
-    socket.onmessage = handleWebSocketMessage;
-
-    socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setConversationState('error');
-      toast({
-        title: 'Connection Error',
-        description: 'Failed to connect to the audio service. Please try again later.',
-        variant: 'destructive'
-      });
-    };
-
-    socket.onclose = () => {
-      console.log('WebSocket connection closed');
-      setConnected(false);
-      setSessionId(null);
-      if (conversationState !== 'error') {
-        setConversationState('idle');
-      }
-    };
-  };
-
-  // Handle incoming WebSocket messages
-  const handleWebSocketMessage = (event: MessageEvent) => {
-    try {
-      const data = JSON.parse(event.data);
-      
-      switch (data.type) {
-        case 'welcome':
-          console.log('Connected to WebSocket server:', data);
-          break;
-        
-        case 'session_created':
-          console.log('✅ Session created successfully:', {
-            sessionId: data.sessionId,
-            voice: data.voice
-          });
-          setSessionId(data.sessionId);
-          setConversationState('connected');
-          
-          // Add system welcome message
-          addMessage({
-            id: `system-${Date.now()}`,
-            role: 'system',
-            content: `Welcome to Financial Sherpa, ${customerName}. You can now speak with me by pressing and holding the microphone button. How can I help you today?`,
-            timestamp: Date.now()
-          });
-          break;
-
-        case 'transcription':
-          console.log('📝 Transcription received:', data.text);
-          setTranscription(data.text);
-          break;
-
-        case 'message':
-          if (data.role === 'assistant') {
-            console.log('💬 Assistant message received:', data.content);
-            setConversationState('responding');
-            
-            // Add assistant message
-            addMessage({
-              id: `assistant-${Date.now()}`,
-              role: 'assistant',
-              content: data.content,
-              timestamp: Date.now()
-            });
-            
-            // When message is done, go back to connected state
-            setConversationState('connected');
-          }
-          break;
-
-        case 'audio':
-          if (audioEnabled) {
-            console.log('🔊 Audio data received from OpenAI', {
-              dataSize: data.audio ? data.audio.length : 0,
-              timestamp: new Date().toISOString()
-            });
-            playAudio(data.audio);
-          }
-          break;
-
-        case 'error':
-          console.error('❌ Error from server:', data);
-          toast({
-            title: 'Error',
-            description: data.message || 'An error occurred',
-            variant: 'destructive'
-          });
-          break;
-
-        case 'session_ended':
-          console.log('Session ended:', data);
-          setSessionId(null);
-          setConversationState('idle');
-          break;
-
-        case 'session.authenticate':
-          console.log('🔐 Authentication message received');
-          break;
-          
-        case 'session.status':
-          console.log('📊 Session status update:', data);
-          break;
-
-        default:
-          console.log('⚠️ Unknown message type:', data);
-      }
-    } catch (error) {
-      console.error('Error processing WebSocket message:', error);
-    }
-  };
-
   // Add a message to the conversation
   const addMessage = (message: Message) => {
     setMessages(prevMessages => [...prevMessages, message]);
   };
 
   // Initialize audio recording
-  const initializeAudioRecording = async () => {
+  const initializeAudioRecording = async (): Promise<boolean> => {
     console.log('🎤 Initializing audio recording and requesting microphone permissions');
     
     try {
@@ -433,14 +267,198 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
     setAudioEnabled(!audioEnabled);
   };
 
-  // Start a conversation
-  const startConversation = () => {
-    if (conversationState === 'idle') {
-      // Clear previous conversation
-      setMessages([]);
+  // Handle incoming WebSocket messages
+  const handleWebSocketMessage = (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data);
       
-      // Initialize WebSocket
-      initializeWebSocket();
+      switch (data.type) {
+        case 'welcome':
+          console.log('Connected to WebSocket server:', data);
+          break;
+        
+        case 'session_created':
+          console.log('✅ Session created successfully:', {
+            sessionId: data.sessionId,
+            voice: data.voice
+          });
+          setSessionId(data.sessionId);
+          setConversationState('connected');
+          
+          // Add system welcome message
+          addMessage({
+            id: `system-${Date.now()}`,
+            role: 'system',
+            content: `Welcome to Financial Sherpa, ${customerName}. You can now speak with me by pressing and holding the microphone button. How can I help you today?`,
+            timestamp: Date.now()
+          });
+          break;
+
+        case 'transcription':
+          console.log('📝 Transcription received:', data.text);
+          setTranscription(data.text);
+          break;
+
+        case 'message':
+          if (data.role === 'assistant') {
+            console.log('💬 Assistant message received:', data.content);
+            setConversationState('responding');
+            
+            // Add assistant message
+            addMessage({
+              id: `assistant-${Date.now()}`,
+              role: 'assistant',
+              content: data.content,
+              timestamp: Date.now()
+            });
+            
+            // When message is done, go back to connected state
+            setConversationState('connected');
+          }
+          break;
+
+        case 'audio':
+          if (audioEnabled) {
+            console.log('🔊 Audio data received from OpenAI', {
+              dataSize: data.audio ? data.audio.length : 0,
+              timestamp: new Date().toISOString()
+            });
+            playAudio(data.audio);
+          }
+          break;
+
+        case 'error':
+          console.error('❌ Error from server:', data);
+          toast({
+            title: 'Error',
+            description: data.message || 'An error occurred',
+            variant: 'destructive'
+          });
+          break;
+
+        case 'session_ended':
+          console.log('Session ended:', data);
+          setSessionId(null);
+          setConversationState('idle');
+          break;
+
+        case 'session.authenticate':
+          console.log('🔐 Authentication message received');
+          break;
+          
+        case 'session.status':
+          console.log('📊 Session status update:', data);
+          break;
+
+        default:
+          console.log('⚠️ Unknown message type:', data);
+      }
+    } catch (error) {
+      console.error('Error processing WebSocket message:', error);
+    }
+  };
+
+  // Initialize WebSocket connection
+  const initializeWebSocket = async (): Promise<void> => {
+    try {
+      setConversationState('connecting');
+      setLoadingText('Initializing Financial Sherpa...');
+      
+      console.log('🔄 Fetching Realtime configuration...');
+      
+      // First fetch configuration from the API
+      const response = await fetch('/api/financial-sherpa/realtime', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customerId: customerId || 0,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to initialize: ${response.status} ${response.statusText}`);
+      }
+      
+      const config = await response.json();
+      
+      if (!config.success) {
+        throw new Error(config.error || 'Failed to get configuration');
+      }
+      
+      console.log('✅ Received configuration:', config);
+      
+      // Update customer name and financial data if available from the server
+      if (config.customerName && !customerName) {
+        setCustomerName(config.customerName);
+      }
+      
+      if (config.financialData) {
+        setFinancialData(config.financialData);
+      }
+      
+      setLoadingText('Connecting to AI...');
+      
+      // Determine the WebSocket URL using the endpoint from the config
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}${config.wsEndpoint}`;
+      
+      console.log(`🔌 Connecting to WebSocket: ${wsUrl}`);
+      
+      // Create WebSocket
+      const socket = new WebSocket(wsUrl);
+      webSocketRef.current = socket;
+
+      // Set up event handlers
+      socket.onopen = () => {
+        console.log('🟢 WebSocket connection established');
+        setConnected(true);
+        
+        // Request a new session
+        const instructions = `You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help ${config.customerName || customerName || 'the customer'} understand their financial data, provide insights on their contracts, and answer questions about financial products and services. Keep your responses friendly, concise, and professional. ${
+          (config.financialData || financialData) ? 'Use the financial data available to provide personalized insights.' : 'Encourage connecting bank accounts to provide more personalized insights.'
+        }`;
+        
+        console.log('📝 Sending session creation with instructions:', instructions);
+        
+        socket.send(JSON.stringify({
+          type: 'create_session',
+          voice: 'nova', // Use 'nova' voice for Financial Sherpa
+          instructions: instructions
+        }));
+      };
+
+      socket.onmessage = handleWebSocketMessage;
+
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setConversationState('error');
+        toast({
+          title: 'Connection Error',
+          description: 'Failed to connect to the audio service. Please try again later.',
+          variant: 'destructive'
+        });
+      };
+
+      socket.onclose = () => {
+        console.log('WebSocket connection closed');
+        setConnected(false);
+        setSessionId(null);
+        if (conversationState !== 'error') {
+          setConversationState('idle');
+        }
+      };
+      
+    } catch (error) {
+      console.error('❌ WebSocket initialization error:', error);
+      setConversationState('error');
+      toast({
+        title: 'Connection Error',
+        description: error instanceof Error ? error.message : 'Failed to connect to the AI service',
+        variant: 'destructive'
+      });
+      throw error; // Re-throw to allow caller to handle it
     }
   };
 
@@ -464,6 +482,27 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
     setRecording(false);
     setConversationState('idle');
     setSessionId(null);
+  };
+
+  // Start a conversation
+  const startConversation = async () => {
+    if (conversationState === 'idle') {
+      // Clear previous conversation
+      setMessages([]);
+      
+      try {
+        // Initialize WebSocket
+        await initializeWebSocket();
+      } catch (error) {
+        console.error('Failed to start conversation:', error);
+        toast({
+          title: 'Connection Error',
+          description: 'Failed to initialize the AI conversation. Please try again later.',
+          variant: 'destructive'
+        });
+        setConversationState('error');
+      }
+    }
   };
 
   // Render loading state
@@ -497,6 +536,34 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         return <Badge variant="outline">Unknown</Badge>;
     }
   };
+
+  // Effect for automatically scrolling to the bottom of the messages
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+  
+  // Auto-start conversation when component mounts
+  useEffect(() => {
+    if (conversationState === 'idle') {
+      startConversation();
+      
+      // Pre-initialize audio recording to prompt for microphone permission right away
+      initializeAudioRecording().then(initialized => {
+        console.log('Microphone initialized on component mount:', initialized);
+      }).catch(error => {
+        console.error('Error initializing microphone on mount:', error);
+      });
+    }
+    
+    // Cleanup function to end conversation when component unmounts
+    return () => {
+      if (conversationState !== 'idle') {
+        endConversation();
+      }
+    };
+  }, []);
 
   return (
     <Card className="w-full max-w-4xl mx-auto">
@@ -578,7 +645,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
             </ScrollArea>
             
             <div className="flex justify-center items-center gap-4">
-              {conversationState === 'thinking' || conversationState === 'responding' ? (
+              {['thinking', 'responding'].includes(conversationState) ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted rounded-full px-4 py-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>{conversationState === 'thinking' ? 'Processing...' : 'Responding...'}</span>
@@ -589,7 +656,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={endConversation}
-                    disabled={conversationState === 'thinking' || conversationState === 'responding'}
+                    disabled={['thinking', 'responding'].includes(conversationState)}
                     className="rounded-full"
                   >
                     End Conversation
@@ -604,10 +671,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
                     onTouchStart={startRecording}
                     onTouchEnd={stopRecording}
                     disabled={
-                      conversationState === 'connecting' || 
-                      conversationState === 'thinking' || 
-                      conversationState === 'responding' ||
-                      conversationState === 'error'
+                      conversationState !== 'connected' && conversationState !== 'recording'
                     }
                   >
                     {recording ? <MicOff className="h-8 w-8 text-white" /> : <Mic className="h-8 w-8 text-white" />}

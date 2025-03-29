@@ -806,6 +806,104 @@ function generateCustomerGreeting(customer: any, options: {
 }
 
 /**
+ * @route POST /api/financial-sherpa/realtime
+ * @description Get configuration for realtime conversation with OpenAI
+ * @access Private
+ */
+router.post('/realtime', async (req, res) => {
+  try {
+    const { customerId } = req.body;
+    
+    if (!customerId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Customer ID is required'
+      });
+    }
+    
+    logger.info({
+      message: `Initializing realtime conversation for customer ${customerId}`,
+      category: 'api',
+      source: 'openai',
+      metadata: { customerId }
+    });
+    
+    // Get customer data for context
+    let customerName = 'Customer';
+    let financialData = null;
+    
+    try {
+      // Get user info (customer)
+      const user = await storage.getUser(parseInt(customerId));
+      if (user) {
+        customerName = user.firstName ? `${user.firstName} ${user.lastName || ''}` : 'Customer';
+      }
+      
+      // Get financial data summary
+      const contracts = await storage.getContractsByCustomerId(parseInt(customerId));
+      if (contracts && contracts.length > 0) {
+        const activeContracts = contracts.filter(c => c.status === 'active' || c.status === 'pending');
+        if (activeContracts.length > 0) {
+          const contract = activeContracts[0];
+          const contractAssetReports = await storage.getAssetReportsByContractId(contract.id);
+          
+          if (contractAssetReports && contractAssetReports.length > 0) {
+            // Get most recent asset report with analysis data
+            const latestReport = contractAssetReports
+              .filter(report => report.analysisData)
+              .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
+            
+            if (latestReport && latestReport.analysisData) {
+              financialData = {
+                hasPlaidData: true,
+                contractId: contract.id,
+                contractAmount: contract.amount,
+                // Extract number of accounts from analysis data if available
+                numberOfAccounts: latestReport.analysisData ? 
+                  (JSON.parse(latestReport.analysisData)?.numberOfAccounts || 0) : 0
+              };
+            }
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn({
+        message: `Error getting customer data for realtime conversation: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'internal',
+        metadata: { 
+          customerId,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      // Continue without detailed customer data
+    }
+    
+    // Return configuration for realtime conversation
+    // The actual WebSocket connection will be handled by the OpenAI Realtime WebSocket service
+    return res.json({
+      success: true,
+      wsEndpoint: '/api/openai/realtime',
+      customerId,
+      customerName,
+      financialData
+    });
+  } catch (error: any) {
+    logger.error({
+      message: `Error initializing realtime conversation: ${error.message}`,
+      category: 'api',
+      source: 'openai',
+      metadata: { error: error.stack }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to initialize realtime conversation'
+    });
+  }
+});
+
+/**
  * Register Financial Sherpa routes with the provided router
  * @param apiRouter Express Router instance to mount routes on
  */

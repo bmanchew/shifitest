@@ -25,7 +25,8 @@ export type LogSource =
   | "twilio" 
   | "sendgrid" 
   | "stripe" 
-  | "openai";
+  | "openai"
+  | "sesameai";
 
 // Base log interface
 interface BaseLog {
