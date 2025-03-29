@@ -10,6 +10,7 @@ import jwt from "jsonwebtoken";
 import { errorHandler } from "./services/errorHandler";
 import fs from "fs";
 import path from "path";
+import { openAIRealtimeWebSocketService } from "./services/openaiRealtimeWebSocket";
 
 const app = express();
 app.use(express.json());
@@ -22,7 +23,7 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://js.stripe.com", "https://cdn.plaid.com"],
-        connectSrc: ["'self'", "https://*.plaid.com", "https://*.stripe.com", "https://api.prefi.io"],
+        connectSrc: ["'self'", "https://*.plaid.com", "https://*.stripe.com", "https://api.prefi.io", "https://*.openai.com", "wss://*.openai.com", "ws://localhost:*", "ws://*:*"],
         frameSrc: ["'self'", "https://js.stripe.com", "https://cdn.plaid.com", "https://link.plaid.com"],
         imgSrc: ["'self'", "data:", "https:"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
@@ -346,6 +347,17 @@ async function startServer() {
     }
 
     const server = await registerRoutes(app);
+    
+    // Initialize the OpenAI Realtime WebSocket service
+    openAIRealtimeWebSocketService.initialize({ 
+      server,
+      path: '/api/openai/realtime'
+    });
+    logger.info('OpenAI Realtime WebSocket service initialized', {
+      category: 'system',
+      source: 'openai'
+    });
+    
     // Check if Plaid credentials are available
     const hasPlaidCredentials = process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET;
     console.log("Plaid credentials available:", hasPlaidCredentials ? "Yes" : "No");

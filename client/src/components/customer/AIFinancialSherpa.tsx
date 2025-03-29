@@ -19,11 +19,13 @@ import {
   BarChart3,
   DollarSign,
   TrendingUp,
-  Volume2
+  Volume2,
+  Mic
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import RealtimeAudioSherpa from './RealtimeAudioSherpa';
 
 // Define interface for financial insights
 interface FinancialInsight {
