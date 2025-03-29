@@ -539,8 +539,26 @@ export default function AIFinancialSherpa({
         // Play the greeting audio
         if (data.message.audioUrl) {
           console.log("Playing greeting audio from URL:", data.message.audioUrl);
+          
+          // Use a more robust audio URL that includes a timestamp to avoid caching issues
+          const audioUrl = `${data.message.audioUrl}?t=${Date.now()}`;
+          console.log("Using audio URL with cache-busting:", audioUrl);
+          
           // Create a new Audio object to prevent interruption issues
-          const newAudio = new Audio(data.message.audioUrl);
+          const newAudio = new Audio(audioUrl);
+          
+          // Add event listener for errors
+          newAudio.addEventListener('error', (e) => {
+            console.error('Audio loading error:', e);
+            console.error('Audio element error code:', newAudio.error?.code);
+            console.error('Audio element error message:', newAudio.error?.message);
+            setLoadingAudio(false);
+            toast({
+              title: 'Audio Loading Failed',
+              description: `Error loading audio file: ${newAudio.error?.message || 'Unknown error'}`,
+              variant: 'destructive',
+            });
+          });
           
           // Set up event listeners on the new audio object
           newAudio.addEventListener('ended', () => {
@@ -548,6 +566,11 @@ export default function AIFinancialSherpa({
             setIsPlayingAudio(false);
             setCurrentAudioMessage(null);
             setLoadingAudio(false);
+          });
+          
+          // Add canplaythrough event to ensure the audio is fully loaded before playing
+          newAudio.addEventListener('canplaythrough', () => {
+            console.log("Audio can play through without buffering");
           });
           
           // Replace the current audio reference

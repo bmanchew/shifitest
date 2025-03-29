@@ -92,9 +92,9 @@ export class SesameAIService {
    * Generate voice from text
    * 
    * @param options Options for voice generation
-   * @returns Path to the generated audio file
+   * @returns Object containing paths to the generated audio files (WAV and optionally MP3)
    */
-  async generateVoice(options: GenerateVoiceOptions): Promise<string> {
+  async generateVoice(options: GenerateVoiceOptions): Promise<{ audioUrl: string; mp3Url?: string }> {
     if (!this.initialized) {
       throw new Error('SesameAI service is not initialized');
     }
@@ -129,6 +129,10 @@ export class SesameAIService {
       
       const { stdout, stderr } = await execPromise(cmd);
       
+      // Default return values
+      let audioUrl = '';
+      let mp3Url: string | undefined = undefined;
+      
       // Parse the JSON response from Python script if available
       try {
         const result = JSON.parse(stdout);
@@ -136,9 +140,20 @@ export class SesameAIService {
           throw new Error(result.error || 'Unknown error from Python script');
         }
         
-        // If the Python script returned a path, use it
+        // Check for WAV path from the Python script
         if (result.path) {
-          return result.path;
+          audioUrl = result.path;
+          
+          // Check if MP3 path was returned for better browser compatibility
+          if (result.mp3Path) {
+            mp3Url = result.mp3Path;
+            logger.info({
+              message: 'MP3 version of audio was generated',
+              source: 'sesameai', 
+              category: 'api',
+              metadata: { mp3Url }
+            });
+          }
         }
       } catch (error: any) {
         // If stdout is not valid JSON, ignore and continue
@@ -158,14 +173,26 @@ export class SesameAIService {
         });
       }
       
-      // Verify file was created
-      if (!fs.existsSync(fullOutputPath)) {
-        throw new Error('Failed to generate audio file');
+      // If we couldn't get the path from JSON result, compute it manually
+      if (!audioUrl) {
+        // Verify WAV file was created
+        if (!fs.existsSync(fullOutputPath)) {
+          throw new Error('Failed to generate audio file');
+        }
+        
+        // Return the path relative to the public directory for client access
+        audioUrl = fullOutputPath.replace(path.join(process.cwd(), 'public'), '');
+        audioUrl = audioUrl.startsWith('/') ? audioUrl : `/${audioUrl}`;
+        
+        // Check for MP3 version that might have been created
+        const mp3OutputPath = fullOutputPath.replace('.wav', '.mp3');
+        if (fs.existsSync(mp3OutputPath)) {
+          mp3Url = mp3OutputPath.replace(path.join(process.cwd(), 'public'), '');
+          mp3Url = mp3Url.startsWith('/') ? mp3Url : `/${mp3Url}`;
+        }
       }
       
-      // Return the path relative to the public directory for client access
-      const publicPath = fullOutputPath.replace(path.join(process.cwd(), 'public'), '');
-      return publicPath.startsWith('/') ? publicPath : `/${publicPath}`;
+      return { audioUrl, mp3Url };
     } catch (error: any) {
       logger.error({
         message: `Error generating voice: ${error.message}`,
@@ -182,9 +209,9 @@ export class SesameAIService {
    * Generate voice for a notification
    * 
    * @param options Options for notification voice generation
-   * @returns Path to the generated audio file
+   * @returns Object containing paths to the generated audio files (WAV and optionally MP3)
    */
-  async generateNotificationVoice(options: GenerateNotificationVoiceOptions): Promise<string> {
+  async generateNotificationVoice(options: GenerateNotificationVoiceOptions): Promise<{ audioUrl: string; mp3Url?: string }> {
     const { type, data, speaker = 0, outputPath } = options;
     
     // Generate appropriate notification text based on type and data

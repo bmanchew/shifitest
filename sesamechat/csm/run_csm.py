@@ -10,6 +10,7 @@ import json
 import argparse
 import uuid
 import traceback
+import subprocess
 from pathlib import Path
 
 # Import required packages
@@ -36,15 +37,25 @@ except ImportError as e:
     }))
     sys.exit(1)
 
+# Check for ffmpeg (needed for format conversion)
+try:
+    subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    FFMPEG_AVAILABLE = True
+except (subprocess.SubprocessError, FileNotFoundError):
+    FFMPEG_AVAILABLE = False
+    print("Warning: ffmpeg not found, MP3 conversion will not be available", file=sys.stderr)
+
 # Constants
 SAMPLE_RATE = 24000  # The expected sample rate for CSM
 PROJECT_DIR = os.getcwd()
 AUDIO_DIR = os.path.join(PROJECT_DIR, "public", "audio")
 INSIGHTS_DIR = os.path.join(AUDIO_DIR, "insights")
+CONVERSATIONS_DIR = os.path.join(AUDIO_DIR, "conversations")
 
 # Ensure audio directories exist
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(INSIGHTS_DIR, exist_ok=True)
+os.makedirs(CONVERSATIONS_DIR, exist_ok=True)
 
 def generate_audio(text, speaker_id=0, output_path=None):
     """
@@ -106,6 +117,29 @@ def generate_audio(text, speaker_id=0, output_path=None):
         if not os.path.exists(output_path):
             raise Exception(f"Audio file was not created at {output_path}")
         
+        # Also create an MP3 version for better browser compatibility
+        mp3_path = output_path.replace('.wav', '.mp3')
+        if FFMPEG_AVAILABLE:
+            try:
+                # Use FFmpeg to convert WAV to MP3
+                subprocess.run([
+                    'ffmpeg', 
+                    '-y',  # Overwrite output files without asking
+                    '-i', output_path,  # Input file
+                    '-acodec', 'libmp3lame',  # MP3 codec
+                    '-ab', '192k',  # Bitrate
+                    '-ac', '1',  # Mono output
+                    mp3_path  # Output file
+                ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+                print(f"Successfully created MP3 version at {mp3_path}", file=sys.stderr)
+            except subprocess.SubprocessError as e:
+                print(f"Warning: Failed to convert to MP3: {str(e)}", file=sys.stderr)
+                mp3_path = None
+        else:
+            mp3_path = None
+            print("Warning: FFmpeg not available, skipping MP3 conversion", file=sys.stderr)
+        
         # Return the relative path for web serving
         # Strip the 'public' directory from the path for client-side URLs
         rel_path = output_path.replace(os.path.join(PROJECT_DIR, "public"), "")
@@ -114,9 +148,18 @@ def generate_audio(text, speaker_id=0, output_path=None):
         if not rel_path.startswith('/'):
             rel_path = '/' + rel_path
             
+        # Do the same for MP3 path if available
+        if mp3_path:
+            mp3_rel_path = mp3_path.replace(os.path.join(PROJECT_DIR, "public"), "")
+            if not mp3_rel_path.startswith('/'):
+                mp3_rel_path = '/' + mp3_rel_path
+        else:
+            mp3_rel_path = None
+            
         return {
             "success": True,
             "path": rel_path,
+            "mp3Path": mp3_rel_path,
             "fullPath": output_path
         }
     except Exception as e:

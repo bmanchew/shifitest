@@ -407,18 +407,16 @@ router.post('/generate-insights-voice', async (req, res) => {
       const insightText = `${insight.title}. ${insight.description}`;
       
       try {
-        const audioPath = await sesameAIService.generateVoice({
+        const result = await sesameAIService.generateVoice({
           text: insightText,
           speaker,
           outputPath: `public/audio/insights/insight-${insight.id}-${Date.now()}.wav`
         });
         
-        // Convert the full file path to a URL path that can be used in the frontend
-        const audioUrl = audioPath.replace(/^public/, '');
-        
         return {
           insightId: insight.id,
-          audioUrl: audioUrl,
+          audioUrl: result.audioUrl,
+          mp3Url: result.mp3Url,
           success: true
         };
       } catch (error: any) {
