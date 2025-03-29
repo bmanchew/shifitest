@@ -1,24 +1,28 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import {
-  Bot,
-  PlayCircle,
+import { 
+  Bot, 
+  PlayCircle, 
   Pause,
   Headphones,
   Brain,
   Sparkles,
-  Volume2,
+  PiggyBank,
+  SendHorizonal,
+  CheckCircle2,
+  ClipboardCheck,
   MessageSquare,
   BarChart3,
   DollarSign,
-  PiggyBank,
-  TrendingUp
+  TrendingUp,
+  Volume2
 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Define interface for financial insights
@@ -31,6 +35,15 @@ interface FinancialInsight {
   audioUrl?: string;
   actionText?: string;
   actionUrl?: string;
+}
+
+// Define message interface for chat
+interface SherpaMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  audioUrl?: string;
+  timestamp: Date;
 }
 
 // Define interface for component props
@@ -57,10 +70,29 @@ export default function AIFinancialSherpa({
 }: AIFinancialSherpaProps) {
   const { toast } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  
+  // State for insights tab
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
   const [activeInsightId, setActiveInsightId] = useState<string | null>(null);
   const [loadingAudio, setLoadingAudio] = useState(false);
+  
+  // State for conversation tab
+  const [messages, setMessages] = useState<SherpaMessage[]>([
+    {
+      id: '1',
+      role: 'assistant',
+      content: `Hi ${customerName}! I'm your Financial Sherpa. Ask me anything about your finances, and I'll provide personalized guidance based on your financial data.`,
+      timestamp: new Date()
+    }
+  ]);
+  const [userInput, setUserInput] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [currentAudioMessage, setCurrentAudioMessage] = useState<string | null>(null);
+  const [actionPlan, setActionPlan] = useState<string | null>(null);
+  const [summaryVisible, setSummaryVisible] = useState(false);
   
   // Sample insights based on financial data
   const getInsights = (): FinancialInsight[] => {
@@ -141,6 +173,13 @@ export default function AIFinancialSherpa({
   };
   
   const insights = getInsights();
+  
+  // Scroll to bottom whenever messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
   
   // Handle playing audio for a specific insight
   const playInsightAudio = async (insight: FinancialInsight) => {
@@ -250,6 +289,196 @@ export default function AIFinancialSherpa({
     }
   };
   
+  // Handle sending a message in conversation tab
+  const handleSendMessage = async () => {
+    if (!userInput.trim()) return;
+    
+    const userMessage: SherpaMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: userInput,
+      timestamp: new Date()
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    setUserInput('');
+    setIsSendingMessage(true);
+    
+    try {
+      // First, get a CSRF token
+      const csrfResponse = await fetch('/api/csrf-token', {
+        credentials: 'include'
+      });
+      
+      if (!csrfResponse.ok) {
+        throw new Error('Failed to get CSRF token');
+      }
+      
+      const csrfData = await csrfResponse.json();
+      const csrfToken = csrfData.csrfToken;
+      
+      // Generate a response based on user input and financial data
+      // In a real implementation, you would call your backend API here
+      // For now, we'll simulate a response
+      setTimeout(async () => {
+        // Generate mock response based on content
+        const userQuestion = userInput.toLowerCase();
+        let responseContent = '';
+        let generatedActionPlan = null;
+        
+        if (userQuestion.includes('budget') || userQuestion.includes('spending')) {
+          responseContent = `Based on your financial data, I can see that your highest spending categories are entertainment (25%), dining (18%), and transportation (15%). You might want to consider setting a monthly budget for each category to help manage your expenses more effectively.`;
+          generatedActionPlan = '1. Set up monthly budget for top spending categories\n2. Reduce entertainment expenses by 10%\n3. Track dining expenses weekly\n4. Consider carpooling to reduce transportation costs';
+        } else if (userQuestion.includes('save') || userQuestion.includes('saving')) {
+          responseContent = `Great question about saving! Currently, you're saving about ${financialData?.savingsRate || 5}% of your income, which is below the recommended 15-20%. I suggest starting with a goal to save 10% and gradually increasing it. Consider automatic transfers to a high-yield savings account on payday.`;
+          generatedActionPlan = '1. Increase savings rate from 5% to 10%\n2. Set up automatic transfers on payday\n3. Open a high-yield savings account\n4. Review and adjust savings plan quarterly';
+        } else if (userQuestion.includes('debt') || userQuestion.includes('loan') || userQuestion.includes('payment')) {
+          responseContent = `Regarding your current debt situation, you have a loan with a monthly payment of ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(contract?.monthlyPayment || 500)}. Making consistent on-time payments will help improve your credit score. Based on your income, this payment represents about 15% of your monthly take-home pay, which is within the recommended range.`;
+          generatedActionPlan = '1. Continue making on-time monthly payments\n2. Consider setting up automatic payments\n3. Look into refinancing options if interest rates have decreased\n4. Consider making extra payments when possible to reduce total interest paid';
+        } else if (userQuestion.includes('invest') || userQuestion.includes('investment')) {
+          responseContent = `For investment advice, I recommend diversifying your portfolio. Based on your risk profile and financial goals, a mix of index funds, bonds, and possibly some individual stocks could be appropriate. Remember that investment involves risk, and it's important to consider your long-term goals and time horizon.`;
+          generatedActionPlan = '1. Allocate 60% to broad market index funds\n2. Allocate 30% to bond funds for stability\n3. Consider 10% for individual stocks if comfortable with risk\n4. Set up automatic investment contributions\n5. Review portfolio allocation annually';
+        } else {
+          responseContent = `Thanks for your question! Based on your financial data, I can see that you have a healthy balance across accounts, though there's always room for optimization. Your contract payments are on track, and your spending patterns show good discipline. Is there a specific area of your finances you'd like me to dive deeper into?`;
+        }
+        
+        const assistantMessage: SherpaMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: responseContent,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, assistantMessage]);
+        setIsSendingMessage(false);
+        
+        if (generatedActionPlan) {
+          setActionPlan(generatedActionPlan);
+        }
+        
+        // Generate audio for the assistant's message
+        try {
+          // Now make the request with the CSRF token
+          const response = await fetch('/api/sesameai/generate-voice', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              text: responseContent.slice(0, 300), // Limit text length for audio
+              speaker: 0, // Female voice
+            }),
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to generate audio');
+          }
+          
+          const data = await response.json();
+          
+          if (data.success && data.audioUrl) {
+            // Update message with audio URL
+            setMessages(prev => 
+              prev.map(msg => 
+                msg.id === assistantMessage.id 
+                  ? { ...msg, audioUrl: data.audioUrl } 
+                  : msg
+              )
+            );
+          }
+        } catch (error) {
+          console.error('Error generating audio:', error);
+        }
+      }, 1500); // Simulate API delay
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setIsSendingMessage(false);
+      toast({
+        title: 'Message Failed',
+        description: 'There was a problem sending your message. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  // Play audio for a message in conversation
+  const playMessageAudio = async (message: SherpaMessage) => {
+    if (!message.audioUrl) {
+      toast({
+        title: 'Audio Not Available',
+        description: 'Voice narration is not available for this message.',
+        variant: 'default',
+      });
+      return;
+    }
+    
+    // If already playing this message, just pause
+    if (isPlayingAudio && currentAudioMessage === message.id) {
+      audioRef.current?.pause();
+      setIsPlayingAudio(false);
+      setCurrentAudioMessage(null);
+      return;
+    }
+    
+    setCurrentAudioMessage(message.id);
+    setLoadingAudio(true);
+    
+    try {
+      // Create a new Audio object to prevent interruption issues
+      const newAudio = new Audio(message.audioUrl);
+      
+      // Set up event listeners on the new audio object
+      newAudio.addEventListener('ended', () => {
+        setIsPlayingAudio(false);
+        setCurrentAudioMessage(null);
+      });
+      
+      // Replace the current audio reference
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      audioRef.current = newAudio;
+      
+      // Play the audio after a short delay to ensure it's loaded
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.play()
+            .then(() => {
+              setIsPlayingAudio(true);
+              setLoadingAudio(false);
+            })
+            .catch(error => {
+              console.error('Error playing audio:', error);
+              setIsPlayingAudio(false);
+              setLoadingAudio(false);
+              setCurrentAudioMessage(null);
+              toast({
+                title: 'Audio Playback Failed',
+                description: 'There was a problem playing the audio. Please try again.',
+                variant: 'destructive',
+              });
+            });
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      setLoadingAudio(false);
+      setCurrentAudioMessage(null);
+      toast({
+        title: 'Audio Playback Failed',
+        description: 'There was a problem playing the audio. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  // Toggle summary visibility
+  const toggleSummary = () => {
+    setSummaryVisible(!summaryVisible);
+  };
+
   // Handle audio playback events
   useEffect(() => {
     const audio = audioRef.current;
@@ -384,7 +613,7 @@ export default function AIFinancialSherpa({
     );
   }
   
-  // Render full insights view
+  // Render full component with tabs
   return (
     <Card className="border-indigo-200 shadow-md overflow-hidden">
       <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-100">
@@ -406,7 +635,7 @@ export default function AIFinancialSherpa({
         </div>
       </CardHeader>
       
-      <Tabs defaultValue="insights">
+      <Tabs defaultValue="conversation">
         <div className="px-6 pt-2 border-b">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="insights" className="data-[state=active]:bg-indigo-50">
@@ -505,21 +734,145 @@ export default function AIFinancialSherpa({
         </TabsContent>
         
         <TabsContent value="conversation" className="p-0 m-0">
-          <CardContent className="pt-6 flex flex-col items-center justify-center py-12 text-center">
-            <Avatar className="h-16 w-16 mb-4 bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-indigo-200 shadow-md">
-              <AvatarFallback className="text-white">
-                <Volume2 size={32} strokeWidth={1.5} />
-              </AvatarFallback>
-            </Avatar>
-            <h3 className="text-lg font-medium mb-2">Ask Your Financial Sherpa</h3>
-            <p className="text-sm text-gray-500 max-w-md mb-6">
-              Voice conversation with your AI Financial Sherpa is coming soon. You'll be able to ask questions and get personalized financial guidance through voice interactions.
-            </p>
-            <Button variant="outline" disabled className="opacity-70">
-              <Sparkles className="mr-2 h-4 w-4" />
-              Coming Soon
-            </Button>
-          </CardContent>
+          {actionPlan && (
+            <div className={`transition-all duration-300 overflow-hidden ${summaryVisible ? 'max-h-96' : 'max-h-0'}`}>
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 border-b border-emerald-200">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center">
+                    <CheckCircle2 className="h-5 w-5 mr-2 text-emerald-600" />
+                    <h3 className="font-medium text-emerald-800">Recommended Action Plan</h3>
+                  </div>
+                </div>
+                <div className="bg-white rounded-md p-3 shadow-sm mb-2">
+                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{actionPlan}</pre>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex flex-col h-[500px]">
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-4">
+                {messages.map((message) => (
+                  <div 
+                    key={message.id}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div 
+                      className={`max-w-[80%] rounded-lg p-3 ${
+                        message.role === 'user' 
+                          ? 'bg-indigo-100 text-indigo-900' 
+                          : 'bg-white border border-gray-200'
+                      }`}
+                    >
+                      {message.role === 'assistant' && (
+                        <div className="flex items-center mb-1">
+                          <Avatar className="h-6 w-6 mr-2">
+                            <AvatarFallback className="bg-gradient-to-br from-indigo-400 to-purple-500 text-white text-xs">
+                              AI
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs text-gray-500">Financial Sherpa</span>
+                        </div>
+                      )}
+                      
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      
+                      {message.role === 'assistant' && (
+                        <div className="flex justify-between items-center mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 p-0 h-6 ${!message.audioUrl || (loadingAudio && currentAudioMessage === message.id) ? 'opacity-50' : ''}`}
+                            onClick={() => playMessageAudio(message)}
+                            disabled={!message.audioUrl || (loadingAudio && currentAudioMessage === message.id)}
+                          >
+                            {loadingAudio && currentAudioMessage === message.id ? (
+                              <div className="h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-1" />
+                            ) : isPlayingAudio && currentAudioMessage === message.id ? (
+                              <Pause className="h-3 w-3 mr-1" />
+                            ) : (
+                              <PlayCircle className="h-3 w-3 mr-1" />
+                            )}
+                            <span className="text-xs">{isPlayingAudio && currentAudioMessage === message.id ? 'Pause' : 'Listen'}</span>
+                            <Headphones className="ml-1 h-3 w-3" />
+                          </Button>
+                          
+                          <span className="text-xs text-gray-400">
+                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {message.role === 'user' && (
+                        <div className="flex justify-end mt-1">
+                          <span className="text-xs text-indigo-400">
+                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                
+                {isSendingMessage && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[80%] rounded-lg p-3 bg-white border border-gray-200">
+                      <div className="flex items-center">
+                        <Avatar className="h-6 w-6 mr-2">
+                          <AvatarFallback className="bg-gradient-to-br from-indigo-400 to-purple-500 text-white text-xs">
+                            AI
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex space-x-1">
+                          <div className="h-2 w-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="h-2 w-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="h-2 w-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+            
+            <CardFooter className="border-t p-4">
+              <div className="flex items-center w-full space-x-2">
+                {actionPlan && (
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    className="flex-shrink-0"
+                    onClick={toggleSummary}
+                  >
+                    <ClipboardCheck className="h-4 w-4 text-emerald-600" />
+                  </Button>
+                )}
+                <Textarea
+                  placeholder="Type your financial question here..."
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  className="flex-1 min-h-10 max-h-32"
+                />
+                <Button 
+                  className="bg-indigo-600 hover:bg-indigo-700 flex-shrink-0" 
+                  size="icon"
+                  onClick={handleSendMessage}
+                  disabled={isSendingMessage || !userInput.trim()}
+                >
+                  <SendHorizonal className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardFooter>
+          </div>
         </TabsContent>
       </Tabs>
     </Card>
