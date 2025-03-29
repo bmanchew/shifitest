@@ -8,6 +8,8 @@ import helmet from "helmet";
 import { csrfProtectionWithExclusions, csrfTokenHandler, csrfErrorHandler } from "./middleware/csrfMiddleware";
 import jwt from "jsonwebtoken";
 import { errorHandler } from "./services/errorHandler";
+import fs from "fs";
+import path from "path";
 
 const app = express();
 app.use(express.json());
@@ -372,7 +374,41 @@ async function startServer() {
         }
         
         res.setHeader('Content-Type', contentType);
-        return res.sendFile(filePath);
+        
+        try {
+          // Use stream instead of sendFile for better error handling
+          const stream = fs.createReadStream(filePath);
+          
+          stream.on('error', (error) => {
+            logger.error({
+              message: `Error streaming audio file: ${error.message}`,
+              category: "system",
+              metadata: {
+                path: req.path,
+                filePath,
+                error: error.message,
+                stack: error.stack
+              }
+            });
+            res.status(500).send(`Error streaming audio file: ${error.message}`);
+          });
+          
+          stream.pipe(res);
+        } catch (error) {
+          logger.error({
+            message: `Error serving audio file: ${error instanceof Error ? error.message : String(error)}`,
+            category: "system",
+            metadata: {
+              path: req.path,
+              filePath,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined
+            }
+          });
+          res.status(500).send(`Error serving audio file`);
+        }
+        
+        return;
       }
       
       log(`Audio file not found: ${filePath}, continuing to next handler`);
