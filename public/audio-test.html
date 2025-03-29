@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio File Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .audio-test {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        h2 {
+            margin-top: 0;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>Audio File Testing</h1>
+    <p>This page tests if audio files are being served correctly from the server.</p>
+
+    <div class="audio-test">
+        <h2>MP3 Test</h2>
+        <p>Testing MP3 file: <code>conversations/greeting-45-1743211508424.mp3</code></p>
+        <button onclick="testAudio('/audio/conversations/greeting-45-1743211508424.mp3', 'mp3-status')">Test MP3</button>
+        <audio id="mp3-player" controls style="display:none;"></audio>
+        <div id="mp3-status" class="status"></div>
+    </div>
+
+    <div class="audio-test">
+        <h2>WAV Test</h2>
+        <p>Testing WAV file: <code>conversations/greeting-45-1743211508424.wav</code></p>
+        <button onclick="testAudio('/audio/conversations/greeting-45-1743211508424.wav', 'wav-status')">Test WAV</button>
+        <audio id="wav-player" controls style="display:none;"></audio>
+        <div id="wav-status" class="status"></div>
+    </div>
+
+    <script>
+        function testAudio(url, statusElementId) {
+            const statusElement = document.getElementById(statusElementId);
+            const audioId = statusElementId.replace('-status', '-player');
+            const audioElement = document.getElementById(audioId);
+            
+            statusElement.innerHTML = 'Testing...';
+            statusElement.className = 'status';
+            audioElement.style.display = 'none';
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const audioUrl = URL.createObjectURL(blob);
+                    audioElement.src = audioUrl;
+                    audioElement.style.display = 'block';
+                    
+                    statusElement.innerHTML = `✅ Success! File loaded successfully. Content-Type: ${blob.type}, Size: ${(blob.size / 1024).toFixed(2)} KB`;
+                    statusElement.className = 'status success';
+
+                    // Test if audio can actually play
+                    audioElement.oncanplaythrough = () => {
+                        statusElement.innerHTML += '<br>✅ Audio can be played!';
+                    };
+                    
+                    audioElement.onerror = (e) => {
+                        statusElement.innerHTML += '<br>❌ Error playing audio: ' + e.target.error.message;
+                        statusElement.className = 'status error';
+                    };
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    statusElement.innerHTML = `❌ Error: ${error.message}`;
+                    statusElement.className = 'status error';
+                });
+        }
+    </script>
+</body>
+</html>

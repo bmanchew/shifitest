@@ -1,0 +1,27 @@
+Failed to load resource: the server responded with a status of 404 (Not Found)Understand this errorAI
+AIFinancialSherpa.tsx:562 Starting voice conversation for customer: 45
+AIFinancialSherpa.tsx:566 Fetching CSRF token...
+AIFinancialSherpa.tsx:578 CSRF token received successfully
+AIFinancialSherpa.tsx:581 Making API call to start conversation...
+AIFinancialSherpa.tsx:603 Response received, parsing JSON...
+AIFinancialSherpa.tsx:605 Response data: Object
+AIFinancialSherpa.tsx:608 Successfully started conversation with ID: conv-45-1743211997749
+AIFinancialSherpa.tsx:617 Playing greeting audio from URL: /audio/conversations/greeting-45-1743211995080.mp3
+AIFinancialSherpa.tsx:621 Using audio URL with cache-busting: /audio/conversations/greeting-45-1743211995080.mp3?t=1743211997730
+AIFinancialSherpa.tsx:628 Audio loading error: Event
+(anonymous) @ AIFinancialSherpa.tsx:628Understand this errorAI
+AIFinancialSherpa.tsx:629 Audio element error code: 4
+(anonymous) @ AIFinancialSherpa.tsx:629Understand this errorAI
+AIFinancialSherpa.tsx:630 Audio element error message: DEMUXER_ERROR_COULD_NOT_OPEN: FFmpegDemuxer: open context failed
+(anonymous) @ AIFinancialSherpa.tsx:630Understand this errorAI
+AIFinancialSherpa.tsx:634 MP3 failed, trying WAV fallback
+AIFinancialSherpa.tsx:716 Error playing audio: NotSupportedError: Failed to load because no supported source was found.
+(anonymous) @ AIFinancialSherpa.tsx:716Understand this errorAI
+AIFinancialSherpa.tsx:639 WAV audio loading error: Event
+(anonymous) @ AIFinancialSherpa.tsx:639Understand this errorAI
+AIFinancialSherpa.tsx:640 WAV audio error code: 4
+(anonymous) @ AIFinancialSherpa.tsx:640Understand this errorAI
+AIFinancialSherpa.tsx:641 WAV audio error message: DEMUXER_ERROR_COULD_NOT_OPEN: FFmpegDemuxer: open context failed
+(anonymous) @ AIFinancialSherpa.tsx:641Understand this errorAI
+AIFinancialSherpa.tsx:668 Error playing WAV audio: NotSupportedError: Failed to load because no supported source was found.
+(anonymous) @ AIFinancialSherpa.tsx:668

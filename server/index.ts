@@ -351,6 +351,34 @@ async function startServer() {
     // Use the enhanced error handler middleware
     app.use(errorHandler);
     
+    // Add explicit routes for audio files
+    app.get("/audio/*", (req, res, next) => {
+      const filePath = path.join(process.cwd(), 'public', req.path);
+      
+      log(`Serving audio file: ${req.path} from ${filePath}`);
+      
+      // Check if the file exists
+      if (fs.existsSync(filePath)) {
+        // Determine MIME type based on extension
+        const ext = path.extname(filePath).toLowerCase();
+        let contentType = 'application/octet-stream'; // Default
+        
+        if (ext === '.mp3') {
+          contentType = 'audio/mpeg';
+        } else if (ext === '.wav') {
+          contentType = 'audio/wav';
+        } else if (ext === '.ogg') {
+          contentType = 'audio/ogg';
+        }
+        
+        res.setHeader('Content-Type', contentType);
+        return res.sendFile(filePath);
+      }
+      
+      log(`Audio file not found: ${filePath}, continuing to next handler`);
+      next();
+    });
+    
     // Add a catch-all route for SPA client-side routing
     // This needs to be after API routes but before Vite middleware
     // This route only handles GET requests that are not /api/* paths
