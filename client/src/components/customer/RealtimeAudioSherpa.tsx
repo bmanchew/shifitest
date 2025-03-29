@@ -389,8 +389,8 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
   // Render loading state
   const renderLoadingState = () => {
     return (
-      <div className="flex flex-col items-center justify-center p-6">
-        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+      <div className="flex flex-col items-center justify-center py-10">
+        <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
         <p className="text-center text-muted-foreground">{loadingText}</p>
       </div>
     );
@@ -420,48 +420,50 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
 
   return (
     <Card className="w-full max-w-4xl mx-auto">
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-10 w-10 bg-primary">
-              <Volume2 className="h-6 w-6 text-primary-foreground" />
-            </Avatar>
-            <div>
-              <CardTitle>Financial Sherpa</CardTitle>
-              <CardDescription>Your AI financial assistant</CardDescription>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {renderStatusBadge()}
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={toggleAudio}
-              title={audioEnabled ? "Mute audio" : "Unmute audio"}
-            >
-              {audioEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent>
+      <CardContent className="p-6">
         {conversationState === 'idle' ? (
-          <div className="text-center p-8">
-            <Volume2 className="h-16 w-16 mx-auto mb-4 text-primary opacity-60" />
-            <h3 className="text-xl font-semibold mb-2">Talk to Financial Sherpa</h3>
-            <p className="text-muted-foreground mb-6">
-              Your AI-powered financial assistant can answer questions about your finances,
-              contracts, and provide personalized insights.
+          <div className="flex flex-col items-center justify-center py-16">
+            <Button 
+              onClick={startConversation} 
+              className="h-32 w-32 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300 mb-6 flex items-center justify-center"
+              size="lg"
+            >
+              <Volume2 className="h-16 w-16 text-white" />
+            </Button>
+            <h3 className="text-xl font-semibold mb-2">Ask Financial Sherpa</h3>
+            <p className="text-muted-foreground text-center max-w-md">
+              Click to start your AI financial assistant
             </p>
-            <Button onClick={startConversation}>Start Conversation</Button>
           </div>
         ) : conversationState === 'connecting' ? (
           renderLoadingState()
         ) : (
           <>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <Avatar className="h-10 w-10 bg-primary">
+                  <Volume2 className="h-6 w-6 text-primary-foreground" />
+                </Avatar>
+                <div>
+                  <h3 className="font-medium">Financial Sherpa</h3>
+                  <p className="text-sm text-muted-foreground">AI Assistant</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {renderStatusBadge()}
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={toggleAudio}
+                  title={audioEnabled ? "Mute audio" : "Unmute audio"}
+                >
+                  {audioEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+                </Button>
+              </div>
+            </div>
+            
             {/* Messages display */}
-            <ScrollArea className="h-[400px] pr-4">
+            <ScrollArea className="h-[350px] mb-6">
               <div className="space-y-4">
                 {messages.map((message) => (
                   <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -494,59 +496,48 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
-          </>
-        )}
-      </CardContent>
-
-      {conversationState !== 'idle' && (
-        <>
-          <Separator />
-          <CardFooter className="p-4 flex justify-between items-center">
-            <div className="flex-1">
+            
+            <div className="flex justify-center items-center gap-4">
               {conversationState === 'thinking' || conversationState === 'responding' ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted rounded-full px-4 py-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>{conversationState === 'thinking' ? 'Processing...' : 'Responding...'}</span>
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Info className="h-4 w-4" />
-                  <span>Press and hold to speak</span>
-                </div>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={endConversation}
+                    disabled={conversationState === 'thinking' || conversationState === 'responding'}
+                    className="rounded-full"
+                  >
+                    End Conversation
+                  </Button>
+                  
+                  <Button
+                    size="icon"
+                    variant="default"
+                    className={`rounded-full h-16 w-16 ${recording ? 'bg-red-500 hover:bg-red-600 scale-110' : 'bg-gradient-to-r from-indigo-500 to-purple-600'} shadow-md transition-all duration-200`}
+                    onMouseDown={startRecording}
+                    onMouseUp={stopRecording}
+                    onTouchStart={startRecording}
+                    onTouchEnd={stopRecording}
+                    disabled={
+                      conversationState === 'connecting' || 
+                      conversationState === 'thinking' || 
+                      conversationState === 'responding' ||
+                      conversationState === 'error'
+                    }
+                  >
+                    {recording ? <MicOff className="h-8 w-8 text-white" /> : <Mic className="h-8 w-8 text-white" />}
+                  </Button>
+                </>
               )}
             </div>
-            
-            <div className="flex gap-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={endConversation}
-                disabled={conversationState === 'thinking' || conversationState === 'responding'}
-              >
-                End Conversation
-              </Button>
-              
-              <Button
-                size="icon"
-                variant="default"
-                className={`rounded-full h-12 w-12 ${recording ? 'bg-red-500 hover:bg-red-600' : ''}`}
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onTouchStart={startRecording}
-                onTouchEnd={stopRecording}
-                disabled={
-                  conversationState === 'connecting' || 
-                  conversationState === 'thinking' || 
-                  conversationState === 'responding' ||
-                  conversationState === 'error'
-                }
-              >
-                {recording ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-              </Button>
-            </div>
-          </CardFooter>
-        </>
-      )}
+          </>
+        )}
+      </CardContent>
     </Card>
   );
 };
