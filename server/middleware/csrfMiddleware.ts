@@ -15,7 +15,8 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     '/api/stripe/webhook',     // Stripe webhook
     '/api/twilio/webhook',     // Twilio webhook
     '/api/communications/merchant/auto-reply', // Auto-reply webhook
-    '/api/financial-sherpa/realtime' // Financial Sherpa WebSocket initialization
+    '/api/financial-sherpa/realtime', // Financial Sherpa WebSocket initialization
+    '/api/openai/realtime'     // OpenAI Realtime WebSocket endpoint
   ];
   
   // Check if the request path should be excluded
