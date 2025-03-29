@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShiFi Audio Playback Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #f0f4f8;
+            color: #333;
+        }
+        h1 {
+            color: #1a365d;
+            border-bottom: 2px solid #1a365d;
+            padding-bottom: 0.5rem;
+        }
+        .audio-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .audio-card h2 {
+            margin-top: 0;
+            color: #2d3748;
+        }
+        .btn {
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0.5rem 0.5rem 0.5rem 0;
+            font-size: 0.9rem;
+        }
+        .btn:hover {
+            background-color: #3182ce;
+        }
+        .btn.danger {
+            background-color: #e53e3e;
+        }
+        .btn.danger:hover {
+            background-color: #c53030;
+        }
+        .results {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f0f4f8;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        audio {
+            width: 100%;
+            margin: 1rem 0;
+        }
+        .error {
+            color: #e53e3e;
+        }
+        .success {
+            color: #38a169;
+        }
+        .hidden {
+            display: none;
+        }
+        .audioControls {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .playBtn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #4299e1;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            cursor: pointer;
+            border: none;
+        }
+        .playBtn:hover {
+            background-color: #3182ce;
+        }
+        .audioProgress {
+            flex-grow: 1;
+            height: 8px;
+            border-radius: 4px;
+            background-color: #e2e8f0;
+            position: relative;
+            overflow: hidden;
+        }
+        .audioProgressFill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background-color: #4299e1;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+    <h1>ShiFi Audio Playback Test</h1>
+    
+    <div class="audio-card">
+        <h2>Test Static Audio Files</h2>
+        <p>This section tests playback of static audio files.</p>
+        
+        <h3>MP3 Test</h3>
+        <div class="audioControls">
+            <button class="playBtn" id="testMp3Btn">▶</button>
+            <div class="audioProgress" id="testMp3Progress">
+                <div class="audioProgressFill" id="testMp3ProgressFill"></div>
+            </div>
+        </div>
+        <audio id="testMp3Player" class="hidden">
+            <source src="/audio/test_audio.mp3" type="audio/mpeg">
+            Your browser does not support the audio element.
+        </audio>
+        <div id="testMp3Results" class="results"></div>
+        
+        <h3>WAV Test</h3>
+        <div class="audioControls">
+            <button class="playBtn" id="testWavBtn">▶</button>
+            <div class="audioProgress" id="testWavProgress">
+                <div class="audioProgressFill" id="testWavProgressFill"></div>
+            </div>
+        </div>
+        <audio id="testWavPlayer" class="hidden">
+            <source src="/audio/test_audio.wav" type="audio/wav">
+            Your browser does not support the audio element.
+        </audio>
+        <div id="testWavResults" class="results"></div>
+    </div>
+    
+    <div class="audio-card">
+        <h2>Test Conversation Audio Files</h2>
+        <p>This section tests playback of conversation audio files.</p>
+        
+        <h3>Conversation MP3 Test</h3>
+        <div class="audioControls">
+            <button class="playBtn" id="convMp3Btn">▶</button>
+            <div class="audioProgress" id="convMp3Progress">
+                <div class="audioProgressFill" id="convMp3ProgressFill"></div>
+            </div>
+        </div>
+        <audio id="convMp3Player" class="hidden">
+            <!-- The conversation MP3 URL will be set dynamically -->
+        </audio>
+        <div id="convMp3Results" class="results"></div>
+        
+        <h3>Conversation WAV Test</h3>
+        <div class="audioControls">
+            <button class="playBtn" id="convWavBtn">▶</button>
+            <div class="audioProgress" id="convWavProgress">
+                <div class="audioProgressFill" id="convWavProgressFill"></div>
+            </div>
+        </div>
+        <audio id="convWavPlayer" class="hidden">
+            <!-- The conversation WAV URL will be set dynamically -->
+        </audio>
+        <div id="convWavResults" class="results"></div>
+    </div>
+    
+    <div class="audio-card">
+        <h2>Dynamic Audio Creation and Playback</h2>
+        <p>This section tests creating and playing audio using the Audio constructor.</p>
+        
+        <h3>Dynamic MP3 Creation</h3>
+        <button class="btn" id="createDynamicMp3Btn">Create Dynamic MP3 Player</button>
+        <button class="btn" id="playDynamicMp3Btn">Play Dynamic MP3</button>
+        <div id="dynamicMp3Results" class="results"></div>
+        
+        <h3>Dynamic WAV Creation</h3>
+        <button class="btn" id="createDynamicWavBtn">Create Dynamic WAV Player</button>
+        <button class="btn" id="playDynamicWavBtn">Play Dynamic WAV</button>
+        <div id="dynamicWavResults" class="results"></div>
+
+        <h3>Cache-busting Test</h3>
+        <button class="btn" id="createCacheBustBtn">Create Cache-busted MP3 Player</button>
+        <button class="btn" id="playCacheBustBtn">Play with Cache-busting</button>
+        <div id="cacheBustResults" class="results"></div>
+    </div>
+    
+    <div class="audio-card">
+        <h2>API Testing</h2>
+        <p>This section tests the API endpoints that generate and return audio file paths.</p>
+        
+        <h3>Test Financial Sherpa Start Conversation</h3>
+        <button class="btn" id="testStartConversationBtn">Test Start Conversation API</button>
+        <button class="btn danger hidden" id="playApiAudioBtn">Play Returned Audio</button>
+        <div id="apiTestResults" class="results"></div>
+    </div>
+
+    <script>
+        // Logging helper function
+        function logResult(elementId, message, isError = false) {
+            const timestamp = new Date().toLocaleTimeString();
+            const className = isError ? 'error' : 'success';
+            document.getElementById(elementId).innerHTML += 
+                `<div class="${className}">[${timestamp}] ${message}</div>`;
+        }
+
+        // Setup audio players with progress
+        function setupAudioPlayer(audioId, btnId, progressId, progressFillId, resultsId) {
+            const audio = document.getElementById(audioId);
+            const btn = document.getElementById(btnId);
+            const progressFill = document.getElementById(progressFillId);
+            
+            // Update progress bar
+            audio.addEventListener('timeupdate', () => {
+                if (audio.duration) {
+                    const progress = (audio.currentTime / audio.duration) * 100;
+                    progressFill.style.width = progress + '%';
+                }
+            });
+            
+            // Handle play/pause
+            btn.addEventListener('click', () => {
+                if (audio.paused) {
+                    // Reset results
+                    document.getElementById(resultsId).innerHTML = '';
+                    
+                    // Log loading
+                    logResult(resultsId, 'Loading audio...');
+                    
+                    // Play audio
+                    audio.play()
+                        .then(() => {
+                            logResult(resultsId, 'Audio playback started successfully');
+                            btn.textContent = '⏸';
+                        })
+                        .catch(error => {
+                            logResult(resultsId, `Error playing audio: ${error.message || 'Unknown error'}`, true);
+                            console.error('Audio playback error:', error);
+                        });
+                } else {
+                    audio.pause();
+                    btn.textContent = '▶';
+                    logResult(resultsId, 'Audio playback paused');
+                }
+            });
+            
+            // Reset button on end
+            audio.addEventListener('ended', () => {
+                btn.textContent = '▶';
+                logResult(resultsId, 'Audio playback completed');
+            });
+            
+            // Log errors
+            audio.addEventListener('error', () => {
+                logResult(resultsId, `Audio error: ${audio.error?.message || 'Unknown error'}`, true);
+                console.error('Audio error:', audio.error);
+            });
+            
+            // Log when can play
+            audio.addEventListener('canplay', () => {
+                logResult(resultsId, 'Audio can play (buffered enough)');
+            });
+            
+            return audio;
+        }
+        
+        // Initialize all audio players
+        document.addEventListener('DOMContentLoaded', () => {
+            // Static files
+            const testMp3Player = setupAudioPlayer('testMp3Player', 'testMp3Btn', 'testMp3Progress', 'testMp3ProgressFill', 'testMp3Results');
+            const testWavPlayer = setupAudioPlayer('testWavPlayer', 'testWavBtn', 'testWavProgress', 'testWavProgressFill', 'testWavResults');
+            
+            // Get the latest conversation audio files
+            fetch('/audio/conversations/')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Failed to list conversation directory: ${response.status} ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(files => {
+                    // Find the latest MP3 and WAV files
+                    const mp3Files = files.filter(file => file.endsWith('.mp3'))
+                        .sort((a, b) => b.localeCompare(a)); // Sort descending
+                    
+                    const wavFiles = files.filter(file => file.endsWith('.wav'))
+                        .sort((a, b) => b.localeCompare(a)); // Sort descending
+                    
+                    if (mp3Files.length > 0) {
+                        const mp3Url = mp3Files[0];
+                        const convMp3Player = document.getElementById('convMp3Player');
+                        convMp3Player.innerHTML = `<source src="${mp3Url}" type="audio/mpeg">`;
+                        
+                        logResult('convMp3Results', `Loaded latest MP3: ${mp3Url}`);
+                        setupAudioPlayer('convMp3Player', 'convMp3Btn', 'convMp3Progress', 'convMp3ProgressFill', 'convMp3Results');
+                    } else {
+                        logResult('convMp3Results', 'No MP3 files found in conversations directory', true);
+                    }
+                    
+                    if (wavFiles.length > 0) {
+                        const wavUrl = wavFiles[0];
+                        const convWavPlayer = document.getElementById('convWavPlayer');
+                        convWavPlayer.innerHTML = `<source src="${wavUrl}" type="audio/wav">`;
+                        
+                        logResult('convWavResults', `Loaded latest WAV: ${wavUrl}`);
+                        setupAudioPlayer('convWavPlayer', 'convWavBtn', 'convWavProgress', 'convWavProgressFill', 'convWavResults');
+                    } else {
+                        logResult('convWavResults', 'No WAV files found in conversations directory', true);
+                    }
+                })
+                .catch(error => {
+                    logResult('convMp3Results', `Error fetching conversation files: ${error.message}`, true);
+                    logResult('convWavResults', `Error fetching conversation files: ${error.message}`, true);
+                });
+            
+            // Dynamic audio creation
+            let dynamicMp3Audio = null;
+            let dynamicWavAudio = null;
+            
+            document.getElementById('createDynamicMp3Btn').addEventListener('click', () => {
+                // Create new Audio object for MP3
+                dynamicMp3Audio = new Audio('/audio/test_audio.mp3');
+                
+                // Add listeners
+                dynamicMp3Audio.addEventListener('canplay', () => {
+                    logResult('dynamicMp3Results', 'Dynamic MP3 audio can play');
+                });
+                
+                dynamicMp3Audio.addEventListener('error', () => {
+                    logResult('dynamicMp3Results', `Dynamic MP3 error: ${dynamicMp3Audio.error?.message || 'Unknown error'}`, true);
+                    console.error('Dynamic MP3 error:', dynamicMp3Audio.error);
+                });
+                
+                dynamicMp3Audio.addEventListener('ended', () => {
+                    logResult('dynamicMp3Results', 'Dynamic MP3 playback completed');
+                });
+                
+                logResult('dynamicMp3Results', 'Dynamic MP3 audio object created');
+            });
+            
+            document.getElementById('playDynamicMp3Btn').addEventListener('click', () => {
+                if (!dynamicMp3Audio) {
+                    logResult('dynamicMp3Results', 'Please create the dynamic MP3 player first', true);
+                    return;
+                }
+                
+                dynamicMp3Audio.play()
+                    .then(() => {
+                        logResult('dynamicMp3Results', 'Dynamic MP3 playback started');
+                    })
+                    .catch(error => {
+                        logResult('dynamicMp3Results', `Dynamic MP3 play error: ${error.message || 'Unknown error'}`, true);
+                        console.error('Dynamic MP3 play error:', error);
+                    });
+            });
+            
+            document.getElementById('createDynamicWavBtn').addEventListener('click', () => {
+                // Create new Audio object for WAV
+                dynamicWavAudio = new Audio('/audio/test_audio.wav');
+                
+                // Add listeners
+                dynamicWavAudio.addEventListener('canplay', () => {
+                    logResult('dynamicWavResults', 'Dynamic WAV audio can play');
+                });
+                
+                dynamicWavAudio.addEventListener('error', () => {
+                    logResult('dynamicWavResults', `Dynamic WAV error: ${dynamicWavAudio.error?.message || 'Unknown error'}`, true);
+                    console.error('Dynamic WAV error:', dynamicWavAudio.error);
+                });
+                
+                dynamicWavAudio.addEventListener('ended', () => {
+                    logResult('dynamicWavResults', 'Dynamic WAV playback completed');
+                });
+                
+                logResult('dynamicWavResults', 'Dynamic WAV audio object created');
+            });
+            
+            document.getElementById('playDynamicWavBtn').addEventListener('click', () => {
+                if (!dynamicWavAudio) {
+                    logResult('dynamicWavResults', 'Please create the dynamic WAV player first', true);
+                    return;
+                }
+                
+                dynamicWavAudio.play()
+                    .then(() => {
+                        logResult('dynamicWavResults', 'Dynamic WAV playback started');
+                    })
+                    .catch(error => {
+                        logResult('dynamicWavResults', `Dynamic WAV play error: ${error.message || 'Unknown error'}`, true);
+                        console.error('Dynamic WAV play error:', error);
+                    });
+            });
+            
+            // Cache-busting test
+            let cacheBustAudio = null;
+            
+            document.getElementById('createCacheBustBtn').addEventListener('click', () => {
+                // Add timestamp to prevent caching
+                const cacheBustUrl = `/audio/test_audio.mp3?t=${Date.now()}`;
+                cacheBustAudio = new Audio(cacheBustUrl);
+                
+                // Add listeners
+                cacheBustAudio.addEventListener('canplay', () => {
+                    logResult('cacheBustResults', 'Cache-busted audio can play');
+                });
+                
+                cacheBustAudio.addEventListener('error', () => {
+                    logResult('cacheBustResults', `Cache-busted error: ${cacheBustAudio.error?.message || 'Unknown error'}`, true);
+                    console.error('Cache-busted error:', cacheBustAudio.error);
+                });
+                
+                cacheBustAudio.addEventListener('ended', () => {
+                    logResult('cacheBustResults', 'Cache-busted playback completed');
+                });
+                
+                logResult('cacheBustResults', `Cache-busted audio object created with URL: ${cacheBustUrl}`);
+            });
+            
+            document.getElementById('playCacheBustBtn').addEventListener('click', () => {
+                if (!cacheBustAudio) {
+                    logResult('cacheBustResults', 'Please create the cache-busted player first', true);
+                    return;
+                }
+                
+                cacheBustAudio.play()
+                    .then(() => {
+                        logResult('cacheBustResults', 'Cache-busted playback started');
+                    })
+                    .catch(error => {
+                        logResult('cacheBustResults', `Cache-busted play error: ${error.message || 'Unknown error'}`, true);
+                        console.error('Cache-busted play error:', error);
+                    });
+            });
+            
+            // API testing
+            let apiResponseAudio = null;
+            
+            document.getElementById('testStartConversationBtn').addEventListener('click', async () => {
+                const resultsElement = document.getElementById('apiTestResults');
+                resultsElement.innerHTML = '';
+                
+                logResult('apiTestResults', 'Fetching CSRF token...');
+                
+                try {
+                    // First, get a CSRF token
+                    const csrfResponse = await fetch('/api/csrf-token', {
+                        credentials: 'include'
+                    });
+                    
+                    if (!csrfResponse.ok) {
+                        throw new Error(`Failed to get CSRF token: ${csrfResponse.status} ${csrfResponse.statusText}`);
+                    }
+                    
+                    const csrfData = await csrfResponse.json();
+                    const csrfToken = csrfData.csrfToken;
+                    logResult('apiTestResults', 'CSRF token received successfully');
+                    
+                    // Make the API call to start a voice conversation
+                    logResult('apiTestResults', 'Making API call to start conversation...');
+                    const response = await fetch('/api/financial-sherpa/start-conversation', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            customerId: 45,
+                            speaker: 0, // Female voice
+                        }),
+                    });
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Failed to start voice conversation: ${response.status} ${errorText}`);
+                    }
+                    
+                    logResult('apiTestResults', 'Response received, parsing JSON...');
+                    const data = await response.json();
+                    logResult('apiTestResults', `API Response: ${JSON.stringify(data, null, 2)}`);
+                    
+                    if (data.success && data.message) {
+                        logResult('apiTestResults', `Successfully started conversation with ID: ${data.conversationId}`);
+                        
+                        // Check for audio URLs
+                        if (data.message.mp3Url || data.message.audioUrl) {
+                            const mp3Url = data.message.mp3Url;
+                            const wavUrl = data.message.audioUrl;
+                            
+                            logResult('apiTestResults', `MP3 URL: ${mp3Url || 'Not provided'}`);
+                            logResult('apiTestResults', `WAV URL: ${wavUrl || 'Not provided'}`);
+                            
+                            // Create audio object
+                            const audioToPlay = mp3Url || wavUrl;
+                            const audioUrl = `${audioToPlay}?t=${Date.now()}`;
+                            
+                            logResult('apiTestResults', `Creating audio object with URL: ${audioUrl}`);
+                            apiResponseAudio = new Audio(audioUrl);
+                            
+                            // Add event listeners
+                            apiResponseAudio.addEventListener('canplay', () => {
+                                logResult('apiTestResults', 'API audio can play');
+                            });
+                            
+                            apiResponseAudio.addEventListener('error', () => {
+                                logResult('apiTestResults', `API audio error: ${apiResponseAudio.error?.message || 'Unknown error'}`, true);
+                                
+                                // Detailed error logging
+                                if (apiResponseAudio.error) {
+                                    logResult('apiTestResults', `Error code: ${apiResponseAudio.error.code}`, true);
+                                    logResult('apiTestResults', `Error message: ${apiResponseAudio.error.message}`, true);
+                                }
+                                
+                                // Try WAV if MP3 failed
+                                if (mp3Url && wavUrl && mp3Url !== wavUrl) {
+                                    logResult('apiTestResults', 'MP3 failed, trying WAV fallback');
+                                    
+                                    const wavUrlWithTime = `${wavUrl}?t=${Date.now()}`;
+                                    logResult('apiTestResults', `Creating WAV audio with URL: ${wavUrlWithTime}`);
+                                    
+                                    const wavAudio = new Audio(wavUrlWithTime);
+                                    
+                                    wavAudio.addEventListener('canplay', () => {
+                                        logResult('apiTestResults', 'WAV fallback can play');
+                                    });
+                                    
+                                    wavAudio.addEventListener('error', () => {
+                                        logResult('apiTestResults', `WAV fallback error: ${wavAudio.error?.message || 'Unknown error'}`, true);
+                                        
+                                        // Detailed error logging
+                                        if (wavAudio.error) {
+                                            logResult('apiTestResults', `WAV error code: ${wavAudio.error.code}`, true);
+                                            logResult('apiTestResults', `WAV error message: ${wavAudio.error.message}`, true);
+                                        }
+                                    });
+                                    
+                                    apiResponseAudio = wavAudio;
+                                }
+                            });
+                            
+                            // Show the play button
+                            document.getElementById('playApiAudioBtn').classList.remove('hidden');
+                        } else {
+                            logResult('apiTestResults', 'No audio URLs provided in the response', true);
+                        }
+                    } else {
+                        logResult('apiTestResults', `API returned success=false or missing message: ${JSON.stringify(data)}`, true);
+                    }
+                } catch (error) {
+                    logResult('apiTestResults', `Error during API test: ${error.message}`, true);
+                    console.error('API test error:', error);
+                }
+            });
+            
+            document.getElementById('playApiAudioBtn').addEventListener('click', () => {
+                if (!apiResponseAudio) {
+                    logResult('apiTestResults', 'No API audio available to play', true);
+                    return;
+                }
+                
+                logResult('apiTestResults', 'Attempting to play API audio...');
+                
+                apiResponseAudio.play()
+                    .then(() => {
+                        logResult('apiTestResults', 'API audio playback started');
+                    })
+                    .catch(error => {
+                        logResult('apiTestResults', `API audio play error: ${error.message || 'Unknown error'}`, true);
+                        console.error('API audio play error:', error);
+                    });
+            });
+        });
+    </script>
+</body>
+</html>

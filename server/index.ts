@@ -357,10 +357,43 @@ async function startServer() {
     app.get("/audio/*", (req, res, next) => {
       const filePath = path.join(process.cwd(), 'public', req.path);
       
-      log(`Serving audio file: ${req.path} from ${filePath}`);
+      log(`Serving audio request: ${req.path} from ${filePath}`);
       
-      // Check if the file exists
+      // Check if the path exists
       if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        
+        // Handle directory listing for audio folders
+        if (stats.isDirectory()) {
+          try {
+            // Return a JSON array of file paths in the directory
+            const files = fs.readdirSync(filePath)
+              .filter(file => !file.startsWith('.')) // Exclude hidden files
+              .map(file => {
+                const fullPath = path.join(req.path, file);
+                return fullPath; // Return the relative URL path
+              });
+            
+            log(`Returning directory listing for: ${filePath} with ${files.length} files`);
+            res.json(files);
+            return;
+          } catch (dirError) {
+            logger.error({
+              message: `Error listing audio directory: ${dirError instanceof Error ? dirError.message : String(dirError)}`,
+              category: "system",
+              metadata: {
+                path: req.path,
+                filePath,
+                error: dirError instanceof Error ? dirError.message : String(dirError),
+                stack: dirError instanceof Error ? dirError.stack : undefined
+              }
+            });
+            res.status(500).json({ error: 'Error listing directory' });
+            return;
+          }
+        }
+        
+        // Handle file serving
         // Determine MIME type based on extension
         const ext = path.extname(filePath).toLowerCase();
         let contentType = 'application/octet-stream'; // Default
@@ -411,7 +444,7 @@ async function startServer() {
         return;
       }
       
-      log(`Audio file not found: ${filePath}, continuing to next handler`);
+      log(`Audio path not found: ${filePath}, continuing to next handler`);
       next();
     });
     
