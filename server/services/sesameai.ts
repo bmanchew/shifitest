@@ -129,6 +129,12 @@ export class SesameAIService {
       
       const { stdout, stderr } = await execPromise(cmd);
       
+      // Log all stdout and stderr for debugging
+      console.log("Python script stdout:", stdout);
+      if (stderr) {
+        console.log("Python script stderr:", stderr);
+      }
+      
       // Default return values
       let audioUrl = '';
       let mp3Url: string | undefined = undefined;
@@ -137,6 +143,12 @@ export class SesameAIService {
       try {
         const result = JSON.parse(stdout);
         if (result.success === false) {
+          logger.error({
+            message: `Python script error: ${result.error}`,
+            source: 'sesameai',
+            category: 'api',
+            metadata: { error: result.error }
+          });
           throw new Error(result.error || 'Unknown error from Python script');
         }
         
@@ -156,20 +168,29 @@ export class SesameAIService {
           }
         }
       } catch (error: any) {
-        // If stdout is not valid JSON, ignore and continue
-        logger.warn({
+        // If stdout is not valid JSON, log full details and rethrow
+        logger.error({
           message: `Could not parse Python script output: ${error.message}`,
           source: 'sesameai',
           category: 'api',
-          metadata: { stdout }
+          metadata: { 
+            stdout,
+            stderr,
+            error: error.message,
+            stack: error.stack
+          }
         });
+        
+        // This is likely an issue with the Python script, so rethrow
+        throw new Error(`Python script output parsing error: ${error.message}. Check the logs for more details.`);
       }
       
       if (stderr) {
         logger.warn({
           message: `Warning during voice generation: ${stderr}`,
           source: 'sesameai',
-          category: 'api'
+          category: 'api',
+          metadata: { stderr }
         });
       }
       
