@@ -165,11 +165,26 @@ export default function AIFinancialSherpa({
     setLoadingAudio(true);
     
     try {
+      // First, get a CSRF token
+      const csrfResponse = await fetch('/api/csrf-token', {
+        credentials: 'include'
+      });
+      
+      if (!csrfResponse.ok) {
+        throw new Error('Failed to get CSRF token');
+      }
+      
+      const csrfData = await csrfResponse.json();
+      const csrfToken = csrfData.csrfToken;
+      
+      // Now make the request with the CSRF token
       const response = await fetch('/api/sesameai/generate-voice', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
         },
+        credentials: 'include',
         body: JSON.stringify({
           text: insight.description,
           speaker: 0, // Female voice
