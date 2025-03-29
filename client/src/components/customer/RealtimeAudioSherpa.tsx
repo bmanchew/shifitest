@@ -72,6 +72,27 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+  
+  // Auto-start conversation when component mounts
+  useEffect(() => {
+    if (conversationState === 'idle') {
+      startConversation();
+      
+      // Pre-initialize audio recording to prompt for microphone permission right away
+      initializeAudioRecording().then(initialized => {
+        console.log('Microphone initialized on component mount:', initialized);
+      }).catch(error => {
+        console.error('Error initializing microphone on mount:', error);
+      });
+    }
+    
+    // Cleanup function to end conversation when component unmounts
+    return () => {
+      if (conversationState !== 'idle') {
+        endConversation();
+      }
+    };
+  }, []);
 
   // Initialize WebSocket connection
   const initializeWebSocket = () => {
