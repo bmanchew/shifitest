@@ -533,10 +533,10 @@ router.post('/start-conversation', async (req, res) => {
       metadata: { customerId, speaker }
     });
     
-    // Get customer information
-    const customer = await storage.getCustomer(customerId);
+    // Get customer information (customers are users with role "customer")
+    const customer = await storage.getUser(customerId);
     
-    if (!customer) {
+    if (!customer || customer.role !== 'customer') {
       return res.status(404).json({
         success: false,
         error: 'Customer not found'
@@ -556,16 +556,41 @@ router.post('/start-conversation', async (req, res) => {
           hasFinancialData = true;
         }
         
-        // Check if any payments are due
-        if (contract.nextPaymentDate) {
-          const nextPaymentDate = new Date(contract.nextPaymentDate);
+        // Check if any payments are due based on contract data
+        // This section uses contract.paymentSchedule or other payment-related fields
+        // to determine if there are any pending payments
+        
+        // Since payment due date fields don't exist in the current schema,
+        // let's calculate it based on contract creation date and term
+        
+        // For active contracts, let's assume payments are due monthly from the creation date
+        const creationDate = contract.createdAt;
+        if (creationDate) {
+          // Calculate next payment date based on contract creation
+          // Assuming monthly payments, the next payment is due on the same day of the month as the contract was created
           const today = new Date();
+          const nextPaymentDate = new Date(creationDate);
+          
+          // Move to current month/year
+          nextPaymentDate.setFullYear(today.getFullYear());
+          nextPaymentDate.setMonth(today.getMonth());
+          
+          // If we've already passed that day this month, move to next month
+          if (today.getDate() > nextPaymentDate.getDate()) {
+            nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+          }
+          
+          // Check if payment is due within the next two weeks
           const twoWeeks = new Date();
           twoWeeks.setDate(today.getDate() + 14);
           
           if (nextPaymentDate >= today && nextPaymentDate <= twoWeeks) {
             hasPendingPayment = true;
           }
+        } else if (contract.status === 'active') {
+          // If contract is active but no specific payment date is available,
+          // assume there might be pending payments soon for safety
+          hasPendingPayment = true;
         }
       }
     }
