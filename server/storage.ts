@@ -955,19 +955,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createContract(contract: InsertContract): Promise<Contract> {
-    // Create a sanitized version of the contract data, excluding fields that may not exist yet in the database
-    const { archived, archivedAt, archivedReason, ...contractData } = contract as any;
-    
-    // Insert the filtered contract data
-    const [newContract] = await db.insert(contracts).values(contractData).returning();
-    
-    // Return the contract with default values for archived fields
-    return {
-      ...newContract,
-      archived: false,
-      archivedAt: null,
-      archivedReason: null
-    };
+    try {
+      // Create a sanitized version of the contract data, excluding fields that may not exist yet in the database
+      const { archived, archivedAt, archivedReason, ...contractData } = contract as any;
+      
+      // Explicitly set fields that might cause issues if they don't exist in the database yet
+      // Remove salesRepId if it's null or undefined to avoid referential integrity issues
+      const cleanedContractData = { ...contractData };
+      if (cleanedContractData.salesRepId === null || cleanedContractData.salesRepId === undefined) {
+        delete cleanedContractData.salesRepId;
+      }
+      
+      // Insert the filtered contract data
+      const [newContract] = await db.insert(contracts).values(cleanedContractData).returning();
+      
+      // Return the contract with default values for archived fields
+      return {
+        ...newContract,
+        archived: false,
+        archivedAt: null,
+        archivedReason: null
+      };
+    } catch (error) {
+      console.error('Error in createContract:', error);
+      throw error;
+    }
   }
 
   async updateContractStatus(id: number, status: string): Promise<Contract | undefined> {

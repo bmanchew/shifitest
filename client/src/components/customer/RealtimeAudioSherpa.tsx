@@ -366,12 +366,19 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
       
       console.log('🔄 Fetching Realtime configuration...');
       
+      // Import the CSRF utility
+      const { addCsrfHeader } = await import('@/lib/csrf');
+      
+      // Add CSRF token to headers
+      const headers = await addCsrfHeader({
+        'Content-Type': 'application/json',
+      });
+      
       // First fetch configuration from the API
       const response = await fetch('/api/financial-sherpa/realtime', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
+        credentials: 'include', // Include cookies for CSRF validation
         body: JSON.stringify({
           customerId: customerId || 0,
         }),

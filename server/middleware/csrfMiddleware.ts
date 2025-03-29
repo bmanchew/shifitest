@@ -14,14 +14,15 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     '/api/plaid/webhook',      // Plaid webhook
     '/api/stripe/webhook',     // Stripe webhook
     '/api/twilio/webhook',     // Twilio webhook
-    '/api/communications/merchant/auto-reply' // Auto-reply webhook
+    '/api/communications/merchant/auto-reply', // Auto-reply webhook
+    '/api/financial-sherpa/realtime' // Financial Sherpa WebSocket initialization
   ];
   
   // Check if the request path should be excluded
   const shouldExclude = excludedPaths.some(path => req.path.startsWith(path));
   
   // Check for test bypass header - allow multiple test bypass values for different test scripts
-  const bypassValues = ['test-merchant-setup', 'test-middesk-integration'];
+  const bypassValues = ['test-merchant-setup', 'test-middesk-integration', 'test-contract-setup'];
   const hasBypassHeader = bypassValues.includes(req.headers['x-csrf-bypass'] as string);
 
   // Add debugging
