@@ -2475,7 +2475,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         }
 
         // Regular contract flow
-        const { contractId, signatureData, customerName } = req.body;
+        const { contractId, signatureData, customerName, thankRogerContractId } = req.body;
 
         if (!contractId || !signatureData || !customerName) {
           return res.status(400).json({
@@ -2491,52 +2491,19 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           console.warn(
             "Thanks Roger API key not configured, falling back to simulation",
           );
-        } else {
-          try {
-            // Use the Thanks Roger API for electronic signatures
-            console.log(
-              `Using Thanks Roger API key (${thanksRogerApiKey.substring(0, 3)}...${thanksRogerApiKey.substring(thanksRogerApiKey.length - 3)}) for contract signing`,
-            );
-
-            // In a production environment, we would make an actual API call
-            // For demo purposes, we'll simulate a successful signature
-            // but use the real API key in our logs
-
-            // In a production environment, this is how we would make the call:
-            /*
-          const signatureResponse = await fetch("https://api.thanksroger.com/v1/signatures", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${thanksRogerApiKey}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              contractId: contractId.toString(),
-              signatureData,
-              signerName: customerName,
-              contractNumber: `SHI-${contractId.toString().padStart(4, '0')}`,
-              timestamp: new Date().toISOString()
-            })
+          
+          // Create a simulated API response instead of making a real API call
+          return res.json({
+            success: true,
+            signatureId: "SIG" + Math.floor(10000000 + Math.random() * 90000000),
+            contractId,
+            signedAt: new Date().toISOString(),
+            status: "signed",
+            documentUrl: "https://example.com/contracts/signed.pdf",
           });
-
-          if (!signatureResponse.ok) {
-            throw new Error(`Thanks Roger API error: ${signatureResponse.status} ${`signatureResponse.statusText}`);
-          }
-
-          const data = await signatureResponse.json();
-          if (!data.success) {
-            throw new Error(`Signature submission failed: ${data.message || 'Unknown error'}`);
-          }
-          */
-
-            console.log(
-              `Simulating successful Thanks Roger API call for contract ${contractId} signature`,
-            );
-          } catch (signingError) {
-            console.error("Thanks Roger API error:", signingError);
-            throw signingError;
-          }
         }
+          
+        // If we've gotten here, we have an API key, so let's proceed with normal flow
 
         // Create log for contract signing
         await storage.createLog({
@@ -2547,20 +2514,47 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           metadata: JSON.stringify({ contractId, customerName }),
         });
 
-        // Simulate successful API response
-        setTimeout(() => {
-          const response = {
-            success: true,
-            signatureId:
-              "SIG" + Math.floor(10000000 + Math.random() * 90000000),
-            contractId,
-            signedAt: new Date().toISOString(),
-            status: "signed",
-            documentUrl: "https://example.com/contracts/signed.pdf",
-          };
+        // Make the actual API call to ThankRoger using our service
+        try {
+          // Use our service to sign the contract
+          const signResult = await thanksRogerService.signContract({
+            contractId: thankRogerContractId || contractId.toString(),
+            signatureData,
+            signerName: customerName,
+            signatureDate: new Date().toISOString(),
+          });
 
-          res.json(response);
-        }, 1000); // Simulate API delay
+          logger.info({
+            message: `ThankRoger API signing successful for contract ${contractId}`,
+            category: "contract",
+            source: "thanksroger",
+            metadata: { 
+              contractId, 
+              signatureId: signResult.signatureId,
+              documentUrl: signResult.documentUrl 
+            }
+          });
+
+          // Return the actual API response
+          res.json({
+            success: true,
+            signatureId: signResult.signatureId,
+            contractId,
+            signedAt: signResult.signedAt,
+            status: signResult.status,
+            documentUrl: signResult.documentUrl
+          });
+        } catch (apiError) {
+          logger.error({
+            message: `ThankRoger API signing failed: ${apiError instanceof Error ? apiError.message : String(apiError)}`,
+            category: "contract",
+            source: "thanksroger",
+            metadata: { contractId }
+          });
+          
+          // Re-throw to be caught by the outer catch block
+          throw apiError;
+        }
       } catch (error) {
         console.error("Contract signing error:", error);
 
