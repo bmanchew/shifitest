@@ -155,7 +155,10 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           break;
         
         case 'session_created':
-          console.log('Session created:', data);
+          console.log('✅ Session created successfully:', {
+            sessionId: data.sessionId,
+            voice: data.voice
+          });
           setSessionId(data.sessionId);
           setConversationState('connected');
           
@@ -169,13 +172,13 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           break;
 
         case 'transcription':
-          console.log('Transcription received:', data);
+          console.log('📝 Transcription received:', data.text);
           setTranscription(data.text);
           break;
 
         case 'message':
           if (data.role === 'assistant') {
-            console.log('Assistant message received:', data);
+            console.log('💬 Assistant message received:', data.content);
             setConversationState('responding');
             
             // Add assistant message
@@ -193,13 +196,16 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
 
         case 'audio':
           if (audioEnabled) {
-            console.log('Audio data received');
+            console.log('🔊 Audio data received from OpenAI', {
+              dataSize: data.audio ? data.audio.length : 0,
+              timestamp: new Date().toISOString()
+            });
             playAudio(data.audio);
           }
           break;
 
         case 'error':
-          console.error('Error from server:', data);
+          console.error('❌ Error from server:', data);
           toast({
             title: 'Error',
             description: data.message || 'An error occurred',
@@ -213,8 +219,16 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           setConversationState('idle');
           break;
 
+        case 'session.authenticate':
+          console.log('🔐 Authentication message received');
+          break;
+          
+        case 'session.status':
+          console.log('📊 Session status update:', data);
+          break;
+
         default:
-          console.log('Unknown message type:', data);
+          console.log('⚠️ Unknown message type:', data);
       }
     } catch (error) {
       console.error('Error processing WebSocket message:', error);
@@ -228,25 +242,60 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
 
   // Initialize audio recording
   const initializeAudioRecording = async () => {
+    console.log('🎤 Initializing audio recording and requesting microphone permissions');
+    
     try {
+      // Check if mediaDevices API is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('❌ Media Devices API not supported in this browser');
+        toast({
+          title: 'Browser Not Supported',
+          description: 'Your browser does not support audio recording. Please try a different browser.',
+          variant: 'destructive'
+        });
+        return false;
+      }
+      
       // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('📢 Requesting microphone permissions...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
+      console.log('✅ Microphone permissions granted successfully');
+      
+      // Get audio tracks information
+      const audioTracks = stream.getAudioTracks();
+      console.log('🎙️ Audio tracks:', audioTracks.map(track => ({
+        label: track.label,
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState
+      })));
       
       // Create MediaRecorder
+      console.log('🔄 Creating MediaRecorder instance');
       const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = recorder;
       
       // Set up event handlers
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
+          console.log(`📦 Audio data available: ${event.data.size} bytes`);
           audioChunksRef.current.push(event.data);
         }
       };
       
       recorder.onstop = async () => {
+        console.log(`🛑 Recording stopped, processing ${audioChunksRef.current.length} audio chunks`);
         // Process recorded audio
         if (audioChunksRef.current.length > 0) {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          console.log(`🔊 Created audio blob of size: ${audioBlob.size} bytes`);
           audioChunksRef.current = [];
           
           // Convert to base64
@@ -255,6 +304,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
             const base64Audio = reader.result?.toString().split(',')[1];
             
             if (base64Audio && webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+              console.log(`📤 Sending audio data to server - ${base64Audio.length} chars (base64)`);
               // Send audio data to server
               webSocketRef.current.send(JSON.stringify({
                 type: 'audio_data',
@@ -263,12 +313,15 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
               
               setConversationState('thinking');
               setLoadingText('Transcribing...');
+            } else {
+              console.error('❌ Cannot send audio data - WebSocket not available or base64 conversion failed');
             }
           };
           reader.readAsDataURL(audioBlob);
 
           // Add user message when transcription is available
           if (transcription) {
+            console.log(`💬 Adding user message with transcription: ${transcription}`);
             addMessage({
               id: `user-${Date.now()}`,
               role: 'user',
@@ -280,14 +333,41 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         }
       };
 
+      console.log('✅ Audio recording setup complete and ready');
       return true;
     } catch (error) {
-      console.error('Error initializing audio recording:', error);
-      toast({
-        title: 'Microphone Access Error',
-        description: 'Please allow microphone access to use the voice feature.',
-        variant: 'destructive'
-      });
+      console.error('❌ Error initializing audio recording:', error);
+      
+      // Provide more detailed error messages based on the type of error
+      if (error instanceof DOMException) {
+        if (error.name === 'NotAllowedError') {
+          console.error('🚫 Microphone permission denied by user');
+          toast({
+            title: 'Microphone Access Denied',
+            description: 'You denied microphone access. Please enable it in your browser settings to use the voice feature.',
+            variant: 'destructive'
+          });
+        } else if (error.name === 'NotFoundError') {
+          console.error('🚫 No microphone found on this device');
+          toast({
+            title: 'No Microphone Found',
+            description: 'No microphone was detected on your device. Please connect a microphone and try again.',
+            variant: 'destructive'
+          });
+        } else {
+          toast({
+            title: 'Microphone Access Error',
+            description: `Error accessing microphone: ${error.message}`,
+            variant: 'destructive'
+          });
+        }
+      } else {
+        toast({
+          title: 'Microphone Access Error',
+          description: 'Please allow microphone access to use the voice feature.',
+          variant: 'destructive'
+        });
+      }
       return false;
     }
   };

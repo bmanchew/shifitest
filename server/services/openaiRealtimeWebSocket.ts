@@ -226,12 +226,35 @@ class OpenAIRealtimeWebSocketService {
         temperature: data.temperature || 0.7
       };
 
+      logger.info('Creating OpenAI Realtime session with options', {
+        options: sessionOptions,
+        clientId,
+        category: 'openai',
+        source: 'openai'
+      });
+
       const session = await openAIRealtimeService.createRealtimeSession(sessionOptions);
+      
+      logger.info('Successfully created OpenAI Realtime session', {
+        sessionId: session.id,
+        clientId,
+        model: session.model,
+        voice: session.voice,
+        category: 'openai',
+        source: 'openai'
+      });
       
       // Store the session ID with the client
       client.sessionId = session.id;
 
       // Connect to OpenAI's WebSocket server
+      logger.info('Connecting to OpenAI Realtime WebSocket server', {
+        sessionId: session.id,
+        clientId,
+        category: 'openai',
+        source: 'openai'
+      });
+      
       const openaiSocket = new WebSocket('wss://api.openai.com/v1/realtime/ws');
       
       // Store the OpenAI WebSocket connection
@@ -239,6 +262,13 @@ class OpenAIRealtimeWebSocketService {
 
       // Set up event handlers for the OpenAI WebSocket
       openaiSocket.on('open', () => {
+        logger.info('OpenAI WebSocket connection opened, authenticating session', {
+          sessionId: session.id,
+          clientId,
+          category: 'openai',
+          source: 'openai'
+        });
+        
         // Send authentication message to OpenAI
         openaiSocket.send(JSON.stringify({
           type: 'session.authenticate',
@@ -262,9 +292,38 @@ class OpenAIRealtimeWebSocketService {
       });
 
       openaiSocket.on('message', (message) => {
-        // Forward OpenAI's messages to the client
-        if (client.socket.readyState === WebSocket.OPEN) {
-          client.socket.send(message.toString());
+        try {
+          // Log incoming messages from OpenAI (without logging full audio data which would be too large)
+          const messageString = message.toString();
+          const parsedMessage = JSON.parse(messageString);
+          
+          // Create a safe copy for logging that doesn't include potentially large audio data
+          const logMessage = { ...parsedMessage };
+          if (logMessage.type === 'audio') {
+            logMessage.audio = '[AUDIO_DATA]'; // Replace audio data with placeholder for logging
+          }
+          
+          logger.info('Received message from OpenAI', {
+            type: parsedMessage.type,
+            messageType: logMessage.type,
+            sessionId: session.id,
+            clientId,
+            category: 'openai',
+            source: 'openai'
+          });
+          
+          // Forward OpenAI's messages to the client
+          if (client.socket.readyState === WebSocket.OPEN) {
+            client.socket.send(messageString);
+          }
+        } catch (error) {
+          logger.error('Error handling message from OpenAI', {
+            error,
+            sessionId: session.id,
+            clientId,
+            category: 'openai',
+            source: 'openai'
+          });
         }
       });
 
@@ -335,12 +394,27 @@ class OpenAIRealtimeWebSocketService {
     const client = this.clients.get(clientId);
     
     if (!client || !client.sessionId) {
+      logger.warn('Received audio data for client without active session', {
+        clientId,
+        hasClient: !!client,
+        category: 'openai',
+        source: 'openai'
+      });
       return;
     }
 
     const openaiSocket = this.openaiConnections.get(client.sessionId);
     
     if (!openaiSocket || openaiSocket.readyState !== WebSocket.OPEN) {
+      logger.warn('No active OpenAI connection for audio data', {
+        clientId,
+        sessionId: client.sessionId,
+        hasOpenAISocket: !!openaiSocket,
+        openAISocketState: openaiSocket ? openaiSocket.readyState : 'null',
+        category: 'openai',
+        source: 'openai'
+      });
+      
       client.socket.send(JSON.stringify({
         type: 'error',
         message: 'No active OpenAI connection'
@@ -349,6 +423,16 @@ class OpenAIRealtimeWebSocketService {
     }
 
     try {
+      // Log audio data receipt (without the actual audio data which is too large)
+      logger.info('Forwarding audio data to OpenAI', {
+        clientId,
+        sessionId: client.sessionId,
+        timestamp: data.timestamp || Date.now(),
+        audioDataSize: data.audio ? data.audio.length : 0,
+        category: 'openai',
+        source: 'openai'
+      });
+      
       // Forward the audio data to OpenAI
       openaiSocket.send(JSON.stringify({
         type: 'audio',
