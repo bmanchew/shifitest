@@ -160,6 +160,13 @@ class OpenAIRealtimeService {
         throw new Error('OpenAI Realtime service is not initialized');
       }
 
+      logger.info('Creating OpenAI Realtime session with options', {
+        apiAvailable: !!this.apiKey,
+        apiKeyLength: this.apiKey ? this.apiKey.length : 0,
+        category: 'openai',
+        source: 'openai'
+      });
+
       const defaultOptions: RealtimeSessionOptions = {
         model: this.defaultModel,
         modalities: ['audio', 'text'],
@@ -181,6 +188,14 @@ class OpenAIRealtimeService {
       };
 
       const requestOptions = { ...defaultOptions, ...options };
+      
+      logger.info('Making API request to OpenAI Realtime API', {
+        url: `${this.baseUrl}/realtime/sessions`,
+        model: requestOptions.model,
+        voice: requestOptions.voice,
+        category: 'openai',
+        source: 'openai'
+      });
 
       const response = await axios.post(
         `${this.baseUrl}/realtime/sessions`,

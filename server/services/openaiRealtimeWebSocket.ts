@@ -233,6 +233,13 @@ class OpenAIRealtimeWebSocketService {
         source: 'openai'
       });
 
+      logger.info('Calling OpenAI Realtime service to create session', {
+        clientId,
+        sessionOptions,
+        category: 'openai',
+        source: 'openai'
+      });
+      
       const session = await openAIRealtimeService.createRealtimeSession(sessionOptions);
       
       logger.info('Successfully created OpenAI Realtime session', {
