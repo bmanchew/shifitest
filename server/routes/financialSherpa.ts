@@ -511,6 +511,111 @@ router.post('/voice-insight', async (req, res) => {
 });
 
 /**
+ * @route POST /api/financial-sherpa/start-conversation
+ * @description Start a voice conversation with Financial Sherpa by generating an introduction
+ * @access Private
+ */
+router.post('/start-conversation', async (req, res) => {
+  try {
+    const { customerId, speaker = 0 } = req.body;
+    
+    if (!customerId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Customer ID is required'
+      });
+    }
+    
+    logger.info({
+      message: `Starting voice conversation for customer ${customerId}`,
+      category: 'api',
+      source: 'sesameai',
+      metadata: { customerId, speaker }
+    });
+    
+    // Get customer information
+    const customer = await storage.getCustomer(customerId);
+    
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Customer not found'
+      });
+    }
+    
+    // Check if customer has financial data from Plaid connections
+    const contracts = await storage.getContractsByCustomerId(customerId);
+    let hasFinancialData = false;
+    let hasPendingPayment = false;
+    
+    if (contracts && contracts.length > 0) {
+      // Check for asset reports
+      for (const contract of contracts) {
+        const assetReports = await storage.getAssetReportsByContractId(contract.id);
+        if (assetReports && assetReports.length > 0) {
+          hasFinancialData = true;
+        }
+        
+        // Check if any payments are due
+        if (contract.nextPaymentDate) {
+          const nextPaymentDate = new Date(contract.nextPaymentDate);
+          const today = new Date();
+          const twoWeeks = new Date();
+          twoWeeks.setDate(today.getDate() + 14);
+          
+          if (nextPaymentDate >= today && nextPaymentDate <= twoWeeks) {
+            hasPendingPayment = true;
+          }
+        }
+      }
+    }
+    
+    // Generate appropriate greeting based on customer data
+    const greeting = generateCustomerGreeting(customer, {
+      hasFinancialData,
+      hasPendingPayment
+    });
+    
+    // Generate voice for the greeting
+    const audioPath = await sesameAIService.generateVoice({
+      text: greeting,
+      speaker,
+      outputPath: `public/audio/conversations/greeting-${customerId}-${Date.now()}.wav`
+    });
+    
+    // Convert the full file path to a URL path that can be used in the frontend
+    const audioUrl = audioPath.replace(/^public/, '');
+    
+    // Create conversation message response
+    const message = {
+      id: `message-${Date.now()}`,
+      role: 'assistant',
+      content: greeting,
+      audioUrl,
+      timestamp: new Date()
+    };
+    
+    return res.json({
+      success: true,
+      message,
+      conversationId: `conv-${customerId}-${Date.now()}`
+    });
+  } catch (error: any) {
+    logger.error({
+      message: `Error starting voice conversation: ${error.message}`,
+      category: 'api',
+      source: 'sesameai',
+      metadata: { error: error.stack }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to start voice conversation'
+    });
+  }
+});
+
+/**
  * Determine the appropriate category for an insight based on its content
  */
 function determineCategory(title: string, description: string): 'spending' | 'saving' | 'investment' | 'debt' {
@@ -626,6 +731,47 @@ function generateFallbackInsights(financialData: any): any[] {
   }
   
   return insights;
+}
+
+/**
+ * Generate a personalized greeting for the customer based on their data
+ * @param customer Customer data
+ * @param options Additional options for greeting customization
+ * @returns Personalized greeting text
+ */
+function generateCustomerGreeting(customer: any, options: { 
+  hasFinancialData: boolean; 
+  hasPendingPayment: boolean;
+}): string {
+  const { hasFinancialData, hasPendingPayment } = options;
+  const customerName = customer.firstName || customer.name || 'there';
+  const currentHour = new Date().getHours();
+  let timeOfDay = 'day';
+  
+  if (currentHour < 12) {
+    timeOfDay = 'morning';
+  } else if (currentHour < 18) {
+    timeOfDay = 'afternoon';
+  } else {
+    timeOfDay = 'evening';
+  }
+  
+  // Start with basic greeting
+  let greeting = `Good ${timeOfDay}, ${customerName}. I'm your ShiFi Financial Sherpa. `;
+  
+  // Modify greeting based on data availability
+  if (hasFinancialData) {
+    if (hasPendingPayment) {
+      greeting += "I notice you have a payment coming up soon. I can help you understand your overall financial picture and prepare for that payment. ";
+    } else {
+      greeting += "I'm here to provide insights about your financial situation and help you make informed financial decisions. ";
+    }
+    greeting += "What would you like to know about your finances today?";
+  } else {
+    greeting += "I don't see any linked bank accounts yet. To get personalized insights, you'll need to connect your financial accounts. Would you like me to help you with that, or do you have any general financial questions I can assist with?";
+  }
+  
+  return greeting;
 }
 
 /**

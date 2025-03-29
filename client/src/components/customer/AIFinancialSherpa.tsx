@@ -91,6 +91,7 @@ export default function AIFinancialSherpa({
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [currentAudioMessage, setCurrentAudioMessage] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [actionPlan, setActionPlan] = useState<string | null>(null);
   const [summaryVisible, setSummaryVisible] = useState(false);
   
@@ -479,6 +480,100 @@ export default function AIFinancialSherpa({
     setSummaryVisible(!summaryVisible);
   };
 
+  // Start a voice conversation with the Financial Sherpa
+  const startVoiceConversation = async () => {
+    if (loadingAudio) return;
+    
+    setLoadingAudio(true);
+    
+    try {
+      // First, get a CSRF token
+      const csrfResponse = await fetch('/api/csrf-token', {
+        credentials: 'include'
+      });
+      
+      if (!csrfResponse.ok) {
+        throw new Error('Failed to get CSRF token');
+      }
+      
+      const csrfData = await csrfResponse.json();
+      const csrfToken = csrfData.csrfToken;
+      
+      // Make the API call to start a voice conversation
+      const response = await fetch('/api/financial-sherpa/start-conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          customerId,
+          speaker: 0, // Female voice
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to start voice conversation');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.message) {
+        // Update conversation
+        setMessages([data.message]);
+        setConversationId(data.conversationId);
+        
+        // Play the greeting audio
+        if (data.message.audioUrl) {
+          // Create a new Audio object to prevent interruption issues
+          const newAudio = new Audio(data.message.audioUrl);
+          
+          // Set up event listeners on the new audio object
+          newAudio.addEventListener('ended', () => {
+            setIsPlayingAudio(false);
+            setCurrentAudioMessage(null);
+            setLoadingAudio(false);
+          });
+          
+          // Replace the current audio reference
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
+          audioRef.current = newAudio;
+          
+          // Play the audio
+          audioRef.current.play()
+            .then(() => {
+              setIsPlayingAudio(true);
+              setCurrentAudioMessage(data.message.id);
+            })
+            .catch(error => {
+              console.error('Error playing audio:', error);
+              setLoadingAudio(false);
+              toast({
+                title: 'Audio Playback Failed',
+                description: 'There was a problem playing the audio. Please try again.',
+                variant: 'destructive',
+              });
+            });
+        } else {
+          setLoadingAudio(false);
+        }
+      } else {
+        throw new Error(data.error || 'Unknown error starting conversation');
+      }
+    } catch (error) {
+      console.error('Error starting voice conversation:', error);
+      setLoadingAudio(false);
+      toast({
+        title: 'Conversation Failed',
+        description: 'We were unable to start a voice conversation. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+  
   // Handle audio playback events
   useEffect(() => {
     const audio = audioRef.current;
@@ -751,15 +846,8 @@ export default function AIFinancialSherpa({
               size="lg" 
               className={`rounded-full w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 p-0 shadow-md hover:shadow-lg transition-all ${loadingAudio ? 'opacity-70 cursor-wait' : ''}`}
               onClick={() => {
-                // Here we would trigger the voice interaction
-                // For now, just simulate with a loading state
-                setLoadingAudio(true);
-                toast({
-                  title: "Voice Activation",
-                  description: "Voice conversation feature is coming soon!",
-                  variant: "default",
-                });
-                setTimeout(() => setLoadingAudio(false), 1500);
+                // Trigger the voice interaction with the backend
+                startVoiceConversation();
               }}
               disabled={loadingAudio}
             >
