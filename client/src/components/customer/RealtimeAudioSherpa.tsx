@@ -439,6 +439,26 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
       const socket = new WebSocket(wsUrl);
       webSocketRef.current = socket;
 
+      // Set up connection timeout
+      const connectionTimeoutId = setTimeout(() => {
+        if (conversationState === 'connecting') {
+          console.error('❌ WebSocket connection timed out');
+          
+          // Close the socket if it's still open but not fully initialized
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.close();
+          }
+          
+          setConversationState('error');
+          toast({
+            title: 'Connection Timeout',
+            description: 'Connection to AI timed out. Please try again later.',
+            variant: 'destructive',
+            duration: 5000
+          });
+        }
+      }, 15000); // 15 second timeout
+
       // Set up event handlers
       socket.onopen = () => {
         console.log('🟢 WebSocket connection established');
@@ -451,17 +471,38 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         
         console.log('📝 Sending session creation with instructions:', instructions);
         
-        socket.send(JSON.stringify({
-          type: 'create_session',
-          voice: 'alloy', // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse
-          instructions: instructions
-        }));
+        // Send session creation request
+        try {
+          socket.send(JSON.stringify({
+            type: 'create_session',
+            voice: 'alloy', // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse
+            instructions: instructions
+          }));
+          
+          console.log('✅ Session creation request sent successfully');
+        } catch (sendError) {
+          console.error('❌ Error sending session creation request:', sendError);
+          clearTimeout(connectionTimeoutId);
+          setConversationState('error');
+          toast({
+            title: 'Connection Error',
+            description: 'Failed to initialize AI session. Please try again later.',
+            variant: 'destructive'
+          });
+        }
       };
 
-      socket.onmessage = handleWebSocketMessage;
+      socket.onmessage = (event) => {
+        // Clear the connection timeout as soon as we receive any message
+        clearTimeout(connectionTimeoutId);
+        
+        // Process the message
+        handleWebSocketMessage(event);
+      };
 
       socket.onerror = (error) => {
         console.error('WebSocket error:', error);
+        clearTimeout(connectionTimeoutId);
         setConversationState('error');
         toast({
           title: 'Connection Error',
@@ -472,6 +513,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
 
       socket.onclose = () => {
         console.log('WebSocket connection closed');
+        clearTimeout(connectionTimeoutId);
         setConnected(false);
         setSessionId(null);
         if (conversationState !== 'error') {
