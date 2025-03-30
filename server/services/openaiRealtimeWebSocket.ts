@@ -380,6 +380,24 @@ class OpenAIRealtimeWebSocketService {
             this.connectionTimeouts.delete(session.id);
           }
           
+          // Set a safety timeout to force-send transcription_session.created if not received from OpenAI
+          // This ensures the client UI doesn't get stuck in initializing state
+          const SESSION_READY_TIMEOUT = 5000; // 5 seconds
+          const readyTimeout = setTimeout(() => {
+            console.log(`⏱️ OpenAI session initialization timeout reached for ${session.id}, force-sending ready event`);
+            if (client.socket.readyState === 1) {
+              client.socket.send(JSON.stringify({
+                type: 'transcription_session.created', // Use the exact same event type expected by client
+                sessionId: session.id,
+                timestamp: Date.now(),
+                message: 'OpenAI transcription session is now ready for audio (timeout triggered)'
+              }));
+            }
+          }, SESSION_READY_TIMEOUT);
+          
+          // Store the timeout so we can clear it if transcription_session.created is received normally
+          this.connectionTimeouts.set(session.id, readyTimeout);
+          
           // Initialize a session update with authentication
           // Use the client_secret from the session as the authentication token in the URL
           // No need to send an explicit auth message as authentication is already
@@ -426,6 +444,13 @@ class OpenAIRealtimeWebSocketService {
             if (parsedMessage.type === 'transcription_session.created') {
               console.log(`✅ Transcription session CREATED for session ${session.id} at ${new Date().toISOString()}`);
               
+              // Clear any existing ready timeout since we received the real event
+              if (this.connectionTimeouts.has(session.id)) {
+                console.log(`Clearing ready timeout for session ${session.id} as real event was received`);
+                clearTimeout(this.connectionTimeouts.get(session.id)!);
+                this.connectionTimeouts.delete(session.id);
+              }
+              
               // Send a special event to the client that the session is fully initialized
               if (client.socket.readyState === 1) {
                 client.socket.send(JSON.stringify({
@@ -434,6 +459,14 @@ class OpenAIRealtimeWebSocketService {
                   sessionId: session.id,
                   timestamp: Date.now(),
                   message: 'OpenAI transcription session is now ready for audio'
+                }));
+                
+                // Also send the transcription_session.created event directly
+                // This ensures the client receives the exact event type it expects
+                client.socket.send(JSON.stringify({
+                  type: 'transcription_session.created',
+                  sessionId: session.id,
+                  timestamp: Date.now()
                 }));
               }
             }

@@ -536,9 +536,15 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           break;
           
         case 'transcription_session.created':
-          console.log('🎯 Transcription session created event received directly from OpenAI at:', new Date().toISOString());
+          console.log('🎯 Transcription session created event received at:', new Date().toISOString());
           // Set the session as ready for audio
           setOpenaiSessionReady(true);
+          
+          // If we're in 'connecting' state, change to 'connected'
+          if (conversationState === 'connecting') {
+            setConversationState('connected');
+            setLoadingText('');
+          }
           
           // Log the exact state of the system when transcription_session.created received
           console.log('🔄 System State:', {
