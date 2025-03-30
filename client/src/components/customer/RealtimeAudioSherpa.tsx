@@ -386,6 +386,9 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           setConversationState('connected');
           setLoadingText('');
           
+          // Note: We don't set openaiSessionReady here, we wait for transcription_session.created event
+          console.log('⏳ Waiting for OpenAI to complete session initialization...');
+          
           // Log events for debugging
           if (data.events) {
             console.log('📝 Session events:', data.events);
@@ -492,6 +495,18 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           
         case 'session.status':
           console.log('📊 Session status update:', data);
+          break;
+          
+        case 'transcription_session.created':
+          console.log('🎯 Transcription session created event received directly from OpenAI at:', new Date().toISOString());
+          // Set the session as ready for audio
+          setOpenaiSessionReady(true);
+          toast({
+            title: 'AI Ready',
+            description: 'Financial Sherpa is ready for your voice questions',
+            variant: 'default',
+            duration: 3000
+          });
           break;
 
         default:
@@ -741,6 +756,11 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
 
   // Render status badge
   const renderStatusBadge = () => {
+    // Special case: connected but OpenAI session not fully ready
+    if (conversationState === 'connected' && !openaiSessionReady) {
+      return <Badge variant="outline" className="bg-yellow-100 text-yellow-800">Initializing...</Badge>;
+    }
+    
     switch (conversationState) {
       case 'idle':
         return <Badge variant="outline">Disconnected</Badge>;
@@ -908,7 +928,13 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
                     onTouchStart={startRecording}
                     onTouchEnd={stopRecording}
                     disabled={
-                      conversationState !== 'connected' && conversationState !== 'recording'
+                      (conversationState !== 'connected' && conversationState !== 'recording') || 
+                      (conversationState === 'connected' && !openaiSessionReady)
+                    }
+                    title={
+                      conversationState === 'connected' && !openaiSessionReady 
+                        ? "Waiting for AI session to fully initialize..." 
+                        : "Press and hold to speak"
                     }
                   >
                     {recording ? <MicOff className="h-8 w-8 text-white" /> : <Mic className="h-8 w-8 text-white" />}
