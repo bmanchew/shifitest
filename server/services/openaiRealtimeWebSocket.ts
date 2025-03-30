@@ -355,20 +355,15 @@ class OpenAIRealtimeWebSocketService {
       try {
         console.log(`Connecting to OpenAI's WebSocket with session ID: ${session.id}`);
         
-        // Use both URL parameters and headers for authentication
-        // to ensure compatibility with different versions of the API
+        // OpenAI Realtime API requires authentication in URL, not just headers
+        // This is a critical fix for the WebSocket connection issues
+
+        // Include the API key in URL as required by OpenAI spec
+        const wsUrl = `wss://api.openai.com/v1/realtime?intent=transcription&authorization=Bearer%20${this.apiKey}`;
+        console.log(`Connecting to OpenAI Realtime API with URL: ${wsUrl} (with authentication in URL)`);
         
-        // Include the API key in URL and also in Authorization header
-        const wsUrl = `wss://api.openai.com/v1/realtime?intent=transcription`;
-        console.log(`Connecting to OpenAI Realtime API with URL: ${wsUrl} (with Authentication header)`);
-        
-        const openaiSocket = new WebSocket(wsUrl, {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'OpenAI-Beta': 'realtime=v1',
-            'User-Agent': 'ShiFi Financial/1.0.0 Node.js WebSocket Client'
-          }
-        });
+        // Create WebSocket without authentication headers since auth is in URL
+        const openaiSocket = new WebSocket(wsUrl);
         
         // Store the OpenAI WebSocket connection
         this.openaiConnections.set(session.id, openaiSocket);
@@ -429,15 +424,14 @@ class OpenAIRealtimeWebSocketService {
           // Store the timeout so we can clear it if transcription_session.created is received normally
           this.connectionTimeouts.set(session.id, readyTimeout);
           
-          // Initialize a session update with authentication
-          // Use the client_secret from the session as the authentication token in the URL
-          // No need to send an explicit auth message as authentication is already
-          // done via the Authorization header when connecting
+          // Initialize a session with the correct 'create' event
+          // This is critical for the OpenAI Realtime API to work properly
+          // Based on OpenAI's documentation, we need to send 'transcription_session.create'
           
-          // Use transcription_session.update for transcription intent
+          // Use transcription_session.create to initialize the session (not update)
           // Specify audio format explicitly as pcm16 (16-bit PCM at 24kHz sample rate)
-          const sessionUpdatePayload = {
-            type: 'transcription_session.update',
+          const sessionCreatePayload = {
+            type: 'transcription_session.create', // FIXED: Changed from 'update' to 'create'
             event_id: `event_${uuidv4()}`,
             session: {
               input_audio_format: 'pcm16',
@@ -450,8 +444,8 @@ class OpenAIRealtimeWebSocketService {
               }
             }
           };
-          console.log(`Sending transcription_session.update payload to OpenAI for session ${session.id}`);
-          openaiSocket.send(JSON.stringify(sessionUpdatePayload));
+          console.log(`Sending transcription_session.create payload to OpenAI for session ${session.id}`);
+          openaiSocket.send(JSON.stringify(sessionCreatePayload));
 
           // Notify the client that the session is ready
           client.socket.send(JSON.stringify({
