@@ -135,6 +135,8 @@ class OpenAIRealtimeWebSocketService {
         if (message instanceof Buffer || message instanceof ArrayBuffer) {
           // Handle binary audio data
           const client = this.clients.get(clientId);
+          
+          // Check if this client has an active session
           if (client && client.sessionId) {
             const openaiSocket = this.openaiConnections.get(client.sessionId);
             if (openaiSocket && openaiSocket.readyState === 1) { // 1 = OPEN
@@ -147,14 +149,30 @@ class OpenAIRealtimeWebSocketService {
               console.log(`Received binary audio data from client ${clientId}, size: ${size} bytes`);
               openaiSocket.send(message);
             } else {
+              // Connection exists but isn't ready
               console.warn(`Received binary audio data from client ${clientId}, but OpenAI connection is not ready`);
+              
+              // Send a clear error message back to the client
               client.socket.send(JSON.stringify({
                 type: 'error',
-                message: 'No active OpenAI connection for audio data'
+                message: 'OpenAI connection is initializing. Please wait for the AI Ready notification before speaking.',
+                code: 'OPENAI_CONNECTION_NOT_READY',
+                timestamp: new Date().toISOString()
               }));
             }
           } else {
+            // No session exists for this client
             console.warn(`Received binary audio data from client ${clientId}, but no session exists`);
+            
+            // If we have a client socket, send an error message
+            if (client && client.socket && client.socket.readyState === WS_OPEN) {
+              client.socket.send(JSON.stringify({
+                type: 'error',
+                message: 'No active session. The AI is still initializing or has not been started.',
+                code: 'NO_SESSION_EXISTS',
+                timestamp: new Date().toISOString()
+              }));
+            }
           }
         } else {
           // Handle JSON message
