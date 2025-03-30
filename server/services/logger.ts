@@ -16,7 +16,8 @@ export type LogCategory =
   | "notification" 
   | "contract"
   | "payment"
-  | "database";
+  | "database"
+  | "realtime";
 
 // Log sources
 export type LogSource = 

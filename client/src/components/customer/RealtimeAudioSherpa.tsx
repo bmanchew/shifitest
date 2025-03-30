@@ -43,6 +43,12 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
   // Use ref instead of state for openaiSessionReady to avoid race conditions with WebSocket
   const openaiSessionReadyRef = useRef(false);
   
+  // For tracking last error notification time to avoid spamming
+  const lastErrorNotificationRef = useRef<number | null>(null);
+  
+  // Store pending audio chunks before session is ready
+  const pendingAudioChunksRef = useRef<Blob[]>([]);
+  
   // Refs
   const webSocketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -53,6 +59,9 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
   
   // Keep track of conversation state
   const [conversationState, setConversationState] = useState<ConversationState>('idle');
+
+  // Timer to check if session is ready - add timeout if server forgets to respond
+  const sessionReadyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Add a new message to the conversation
   const addMessage = (message: Message) => {
@@ -61,18 +70,6 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
   
   // Initialize audio recording
   const initializeAudioRecording = async (): Promise<boolean> => {
-    // Double-check OpenAI session ready state before initializing
-    if (!openaiSessionReadyRef.current) {
-      console.warn('❌ Cannot initialize audio recording - OpenAI session not fully ready');
-      toast({
-        title: 'AI Still Initializing',
-        description: 'Please wait a moment before trying to record',
-        variant: 'default',
-        duration: 3000
-      });
-      return false;
-    }
-    
     try {
       console.log('🎤 Initializing audio recording...');
       
@@ -87,19 +84,6 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       
       console.log('✅ Microphone access granted');
       
-      // Check session ready state again after microphone permission granted
-      if (!openaiSessionReadyRef.current) {
-        console.warn('⚠️ OpenAI session is no longer ready after microphone setup');
-        stream.getTracks().forEach(track => track.stop()); // Release microphone
-        toast({
-          title: 'Session Status Changed',
-          description: 'The AI session needs to reinitialize',
-          variant: 'destructive',
-          duration: 3000
-        });
-        return false;
-      }
-      
       // Create MediaRecorder instance
       const recorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm', // Use webm for better compatibility
@@ -111,50 +95,132 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       // Set up event handlers
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-          
-          // Check if we can send this data immediately (if stream is active)
           if (webSocketRef.current && 
               webSocketRef.current.readyState === WebSocket.OPEN && 
               openaiSessionReadyRef.current) {
+            // If session is ready, send audio data immediately
             console.log(`📤 Sending audio chunk (${event.data.size} bytes) - OpenAI session ready: ${openaiSessionReadyRef.current}`);
             webSocketRef.current.send(event.data);
           } else {
-            console.warn(`⚠️ Not sending audio chunk - WebSocket: ${webSocketRef.current?.readyState}, OpenAI ready: ${openaiSessionReadyRef.current}`);
+            // If session is not ready, store chunks in a buffer to send once session is ready
+            console.log(`⏳ Buffering audio chunk (${event.data.size} bytes) - OpenAI session not ready yet`);
+            pendingAudioChunksRef.current.push(event.data);
+            
+            // If we've buffered too much audio (e.g., more than 3 seconds worth), warn the user
+            if (pendingAudioChunksRef.current.length > 30) { // Assuming 100ms chunks, 30 = 3s
+              console.warn('⚠️ Large audio buffer accumulating while waiting for session readiness');
+              // Consider showing UI feedback if session is taking too long
+              if (conversationState === 'recording') {
+                toast({
+                  title: 'AI Still Initializing',
+                  description: 'Please wait a moment before continuing to speak',
+                  variant: 'default',
+                  duration: 2000
+                });
+              }
+            }
           }
         }
       };
       
-      // Handle recording stop event
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         console.log('🛑 MediaRecorder stopped');
         
-        if (audioChunksRef.current.length === 0) {
+        // Check if we have any audio chunks
+        const hasLiveChunks = audioChunksRef.current.length > 0;
+        const hasPendingChunks = pendingAudioChunksRef.current.length > 0;
+        
+        if (!hasLiveChunks && !hasPendingChunks) {
           console.warn('⚠️ No audio chunks recorded');
           return;
         }
         
         try {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          console.log(`🔊 Created audio blob of size: ${audioBlob.size} bytes`);
-          audioChunksRef.current = [];
-          
-          // Double-check session readiness before sending audio
-          // This is a critical check to ensure we don't send audio before OpenAI is fully ready
-          if (!openaiSessionReadyRef.current) {
-            console.warn('⚠️ OpenAI session not fully ready yet - cannot send audio');
-            toast({
-              title: 'AI Still Initializing',
-              description: 'Please wait a moment for the AI to fully initialize before speaking',
-              variant: 'default',
-              duration: 3000
-            });
-            return;
+          // Process pending chunks if any exist and OpenAI session is now ready
+          if (hasPendingChunks && openaiSessionReadyRef.current && 
+              webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+            console.log(`📤 Sending ${pendingAudioChunksRef.current.length} pending audio chunks now that session is ready`);
+            
+            // Send each pending chunk individually to maintain proper timing
+            for (const chunk of pendingAudioChunksRef.current) {
+              webSocketRef.current.send(chunk);
+              // Small delay to avoid flooding the network
+              await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            
+            // Clear the pending chunks after sending
+            pendingAudioChunksRef.current = [];
           }
           
-          // Process the audio data if WebSocket and OpenAI session are both ready
-          processAudioData(audioBlob);
-          
+          // Process any additional chunks recorded in audioChunksRef
+          if (hasLiveChunks) {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            console.log(`🔊 Created audio blob of size: ${audioBlob.size} bytes`);
+            audioChunksRef.current = [];
+            
+            // Try to send binary audio directly if WebSocket is available AND OpenAI session is ready
+            if (webSocketRef.current && 
+                webSocketRef.current.readyState === WebSocket.OPEN && 
+                openaiSessionReadyRef.current) {
+              try {
+                console.log(`📤 Sending binary audio data to server - ${audioBlob.size} bytes`);
+                
+                // Send binary audio data directly for better performance
+                webSocketRef.current.send(audioBlob);
+                
+                // Also send end_of_stream message to signal the end of audio data
+                webSocketRef.current.send(JSON.stringify({
+                  type: 'end_of_stream'
+                }));
+                
+                setConversationState('thinking');
+                setLoadingText('Transcribing...');
+              } catch (error) {
+                console.error('❌ Error sending binary audio data:', error);
+                
+                // Fallback to base64 encoding if binary send fails
+                console.log('⚠️ Falling back to base64 encoding for audio data');
+                
+                // Convert to base64 as fallback
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  const base64Audio = reader.result?.toString().split(',')[1];
+                  
+                  if (base64Audio && 
+                      webSocketRef.current && 
+                      webSocketRef.current.readyState === WebSocket.OPEN && 
+                      openaiSessionReadyRef.current) {
+                    console.log(`📤 Sending audio data to server - ${base64Audio.length} chars (base64)`);
+                    // Send audio data to server
+                    webSocketRef.current.send(JSON.stringify({
+                      type: 'audio_data',
+                      audio: base64Audio
+                    }));
+                    
+                    // Also send end_of_stream message
+                    webSocketRef.current.send(JSON.stringify({
+                      type: 'end_of_stream'
+                    }));
+                  } else {
+                    console.error(`❌ Cannot send audio data - WebSocket: ${webSocketRef.current?.readyState}, OpenAI ready: ${openaiSessionReadyRef.current}`);
+                  }
+                };
+                reader.readAsDataURL(audioBlob);
+              }
+            } else {
+              console.error('❌ Cannot send audio data - WebSocket not available or session not ready');
+              console.log(`Debug info - WebSocket: ${webSocketRef.current?.readyState}, OpenAI ready: ${openaiSessionReadyRef.current}`);
+              
+              // Store this as pending audio if WebSocket is connected but OpenAI session isn't ready
+              if (webSocketRef.current && 
+                  webSocketRef.current.readyState === WebSocket.OPEN && 
+                  !openaiSessionReadyRef.current) {
+                console.log('⏳ Storing audio blob in pending buffer until session is ready');
+                pendingAudioChunksRef.current.push(audioBlob);
+              }
+            }
+          }
+
           // Add user message when transcription is available
           if (transcription) {
             console.log(`💬 Adding user message with transcription: ${transcription}`);
@@ -167,65 +233,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
             setTranscription('');
           }
         } catch (error) {
-          console.error('❌ Error processing audio after recording:', error);
-        }
-      };
-      
-      // Helper function to process and send audio data
-      const processAudioData = (audioBlob: Blob) => {
-        // Try to send binary audio directly if WebSocket is available AND OpenAI session is ready
-        if (webSocketRef.current && 
-            webSocketRef.current.readyState === WebSocket.OPEN && 
-            openaiSessionReadyRef.current) {
-          try {
-            console.log(`📤 Sending binary audio data to server - ${audioBlob.size} bytes - OpenAI session ready: ${openaiSessionReadyRef.current}`);
-            
-            // Send binary audio data directly for better performance
-            // This bypasses the base64 encoding/decoding overhead
-            webSocketRef.current.send(audioBlob);
-            
-            // Also send end_of_stream message to signal the end of audio data
-            webSocketRef.current.send(JSON.stringify({
-              type: 'end_of_stream'
-            }));
-            
-            setConversationState('thinking');
-            setLoadingText('Transcribing...');
-          } catch (error) {
-            console.error('❌ Error sending binary audio data:', error);
-            
-            // Fallback to base64 encoding if binary send fails
-            console.log('⚠️ Falling back to base64 encoding for audio data');
-            
-            // Convert to base64 as fallback
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64Audio = reader.result?.toString().split(',')[1];
-              
-              if (base64Audio && 
-                  webSocketRef.current && 
-                  webSocketRef.current.readyState === WebSocket.OPEN && 
-                  openaiSessionReadyRef.current) {
-                console.log(`📤 Sending audio data to server - ${base64Audio.length} chars (base64) - OpenAI session ready: ${openaiSessionReadyRef.current}`);
-                // Send audio data to server
-                webSocketRef.current.send(JSON.stringify({
-                  type: 'audio_data',
-                  audio: base64Audio
-                }));
-                
-                // Also send end_of_stream message
-                webSocketRef.current.send(JSON.stringify({
-                  type: 'end_of_stream'
-                }));
-              } else {
-                console.error(`❌ Cannot send audio data - WebSocket: ${webSocketRef.current?.readyState}, OpenAI ready: ${openaiSessionReadyRef.current}, base64 available: ${!!base64Audio}`);
-              }
-            };
-            reader.readAsDataURL(audioBlob);
-          }
-        } else {
-          console.error('❌ Cannot send audio data - WebSocket not available or OpenAI session not ready');
-          console.log(`WebSocket ready: ${!!webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN}, OpenAI session ready: ${openaiSessionReadyRef.current}`);
+          console.error('Error processing audio chunks:', error);
         }
       };
       
@@ -289,7 +297,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
     
     // Check if OpenAI session is fully ready
     if (!openaiSessionReadyRef.current) {
-      console.warn('OpenAI session not fully ready yet - waiting for transcription_session.created event');
+      console.warn('⚠️ OpenAI session not fully ready yet - waiting for transcription_session.created event');
       toast({
         title: 'AI Initializing',
         description: 'Please wait a moment for the AI to fully initialize',
@@ -308,6 +316,8 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
     // Start recording
     if (mediaRecorderRef.current) {
       console.log('📢 Starting recording at:', new Date().toISOString());
+      // Clear any previously pending audio chunks when starting a new recording
+      pendingAudioChunksRef.current = [];
       audioChunksRef.current = [];
       mediaRecorderRef.current.start(100); // Collect data every 100ms
       setRecording(true);
@@ -355,6 +365,23 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
     setAudioEnabled(!audioEnabled);
   };
   
+  // Handle error notifications with throttling
+  const showErrorNotification = (title: string, message: string) => {
+    const now = Date.now();
+    // Only show one error notification per second
+    if (!lastErrorNotificationRef.current || (now - lastErrorNotificationRef.current) > 1000) {
+      lastErrorNotificationRef.current = now;
+      toast({
+        title,
+        description: message,
+        variant: 'destructive',
+        duration: 3000
+      });
+    } else {
+      console.log(`Suppressed error notification: "${title}" - too frequent`);
+    }
+  };
+  
   // Handle incoming WebSocket messages
   const handleWebSocketMessage = (event: MessageEvent) => {
     try {
@@ -362,31 +389,20 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       if (event.data instanceof Blob || event.data instanceof ArrayBuffer) {
         console.log('📨 Binary WebSocket message received (likely audio data)');
         // Process binary data if needed
-        // In this case, we don't need to do anything with binary responses as they're
-        // not expected from our server. OpenAI would send audio as base64 in JSON.
         return;
       }
       
       // For text data, try to parse as JSON
-      console.log('📨 WebSocket message received', 
+      console.log('📨 WebSocket message received:', 
         typeof event.data === 'string' 
-          ? '(data content redacted for privacy)' 
-          : '(binary data received)');
+          ? event.data.substring(0, 100) + (event.data.length > 100 ? '...' : '') 
+          : 'Non-string data received');
       
       const data = JSON.parse(event.data);
-      console.log('🔍 WebSocket message type:', data.type, '(message content redacted for privacy)');
       
-      // Update session state instantly on specific event types
-      // This is a critical fix for ensuring we properly track session state
-      if (data.type === 'transcription_session.created') {
-        console.log('🎯 Setting OpenAI session ready state to TRUE');
-        openaiSessionReadyRef.current = true;
-      } else if (data.type === 'error' || data.type === 'session_ended') {
-        console.log('🎯 Setting OpenAI session ready state to FALSE due to:', data.type);
-        openaiSessionReadyRef.current = false;
-      } else if (data.type === 'server_event' && data.event === 'openai_session_created') {
-        console.log('🎯 Setting OpenAI session ready state to TRUE via server_event');
-        openaiSessionReadyRef.current = true;
+      // Only log message types that aren't verbose
+      if (data.type !== 'transcription' && data.type !== 'audio') {
+        console.log('🔍 WebSocket message type:', data.type);
       }
       
       switch (data.type) {
@@ -402,41 +418,125 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
             timestamp: new Date().toISOString()
           });
           setSessionId(data.sessionId);
-          setConversationState('connected');
-          setLoadingText('');
+          
+          // Set a 5-second fallback timeout for session readiness
+          // If we don't receive transcription_session.created within this time,
+          // force set the session to ready
+          if (sessionReadyTimeoutRef.current) {
+            clearTimeout(sessionReadyTimeoutRef.current);
+          }
+          
+          sessionReadyTimeoutRef.current = setTimeout(() => {
+            if (!openaiSessionReadyRef.current) {
+              console.warn('⚠️ OpenAI session readiness timeout - forcing to ready state');
+              // Force session to ready state after timeout
+              openaiSessionReadyRef.current = true;
+              
+              // Ensure UI reflects the session is ready
+              if (conversationState === 'connecting') {
+                setConversationState('connected');
+                setLoadingText('');
+              }
+            }
+          }, 5000);
           
           // Note: We don't set openaiSessionReadyRef here, we wait for transcription_session.created event
           console.log('⏳ Waiting for OpenAI to complete session initialization...');
           
-          // Log events for debugging
-          if (data.events) {
-            console.log('📝 Session events:', data.events);
+          // Add welcome message if not yet in connected state
+          if (conversationState !== 'connected') {
+            setConversationState('connected');
+            setLoadingText('');
+            
+            const welcomeMessage = `Welcome to Financial Sherpa, ${customerName || 'there'}. You can now speak with me by pressing and holding the microphone button. How can I help you today?`;
+            console.log('💬 Adding welcome message:', welcomeMessage);
+            
+            addMessage({
+              id: `system-${Date.now()}`,
+              role: 'system',
+              content: welcomeMessage,
+              timestamp: Date.now()
+            });
           }
-          
-          // Add system welcome message
-          const welcomeMessage = `Welcome to Financial Sherpa, ${customerName || 'there'}. You can now speak with me by pressing and holding the microphone button. How can I help you today?`;
-          console.log('💬 Adding welcome message (content redacted for privacy)');
-          
-          addMessage({
-            id: `system-${Date.now()}`,
-            role: 'system',
-            content: welcomeMessage,
-            timestamp: Date.now()
-          });
           break;
           
         case 'session_authenticate_success':
           console.log('🔐 OpenAI Session authenticated successfully');
           break;
 
+        case 'transcription_session.created':
+          console.log('🎯 Transcription session created event received at:', new Date().toISOString());
+          // This is the critical event from OpenAI that tells us the session is truly ready
+          // Set the session as ready for audio using ref for immediate effect
+          openaiSessionReadyRef.current = true;
+          
+          // Clear any session ready timeout since we got the proper event
+          if (sessionReadyTimeoutRef.current) {
+            clearTimeout(sessionReadyTimeoutRef.current);
+            sessionReadyTimeoutRef.current = null;
+          }
+          
+          // If we're in 'connecting' state, change to 'connected'
+          if (conversationState === 'connecting') {
+            setConversationState('connected');
+            setLoadingText('');
+          }
+          
+          // Process any pending audio chunks that were collected before session was ready
+          if (pendingAudioChunksRef.current.length > 0 && 
+              webSocketRef.current && 
+              webSocketRef.current.readyState === WebSocket.OPEN) {
+            console.log(`📤 Processing ${pendingAudioChunksRef.current.length} pending audio chunks now that session is ready`);
+            
+            // Create a function to send chunks with a small delay
+            const sendPendingChunks = async () => {
+              if (!webSocketRef.current) return;
+              
+              for (const chunk of pendingAudioChunksRef.current) {
+                if (webSocketRef.current.readyState === WebSocket.OPEN) {
+                  webSocketRef.current.send(chunk);
+                  // Small delay to avoid flooding the network
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                }
+              }
+              
+              // Signal end of stream after sending all pending chunks
+              if (webSocketRef.current.readyState === WebSocket.OPEN) {
+                webSocketRef.current.send(JSON.stringify({
+                  type: 'end_of_stream'
+                }));
+              }
+              
+              // Clear the pending chunks
+              pendingAudioChunksRef.current = [];
+            };
+            
+            // Execute the async function
+            sendPendingChunks();
+          }
+          
+          // Log the exact state of the system when transcription_session.created received
+          console.log('🔄 System State:', {
+            sessionId: sessionId,
+            connected: connected,
+            conversationState: conversationState,
+            recording: recording,
+            openaiSessionReady: openaiSessionReadyRef.current,
+            webSocketState: webSocketRef.current ? webSocketRef.current.readyState : 'no-websocket',
+            pendingAudioChunks: pendingAudioChunksRef.current.length,
+            mediaRecorderExists: !!mediaRecorderRef.current,
+            timestamp: new Date().toISOString()
+          });
+          break;
+
         case 'transcription':
-          console.log('📝 Transcription received (content redacted for privacy)');
+          // Don't log transcription updates to avoid console spam
           setTranscription(data.text);
           break;
 
         case 'message':
           if (data.role === 'assistant') {
-            console.log('💬 Assistant message received (content redacted for privacy)');
+            console.log('💬 Assistant message received:', data.content);
             setConversationState('responding');
             
             // Add assistant message
@@ -453,145 +553,85 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
           break;
 
         case 'audio':
-          if (audioEnabled) {
-            console.log('🔊 Audio data received from OpenAI', {
-              dataSize: data.audio ? data.audio.length : 0,
-              timestamp: new Date().toISOString()
-            });
+          if (audioEnabled && data.audio) {
             playAudio(data.audio);
           }
           break;
 
         case 'error':
           console.error('❌ Error from server at:', new Date().toISOString(), data);
-          openaiSessionReadyRef.current = false; // Reset the session ready flag on any error
           
           // Handle specific error codes differently
           if (data.code === 'NO_SESSION_EXISTS') {
-            console.warn('🛑 Received NO_SESSION_EXISTS error - waiting for session initialization');
-            // Don't show a toast for this, as it's a normal part of initialization
-            // Instead, force the conversationState to 'connecting' to prevent early audio recording
-            if (conversationState !== 'connecting') {
-              setConversationState('connecting');
-              setLoadingText('Waiting for AI initialization...');
+            console.warn('⚠️ Received NO_SESSION_EXISTS error - session not ready or timed out');
+            openaiSessionReadyRef.current = false; // Reset session ready state
+            
+            // If we're recording, stop recording to prevent sending more audio
+            if (recording) {
+              stopRecording();
             }
+            
+            // Show error notification with throttling
+            showErrorNotification(
+              'Session Error',
+              'AI session initialization issue. Please wait a moment and try again.'
+            );
+            
+            // Don't change overall state, allow the system to recover
           } else if (data.code === 'OPENAI_CONNECTION_NOT_READY') {
-            console.warn('⏳ OpenAI connection not fully ready yet');
-            toast({
-              title: 'AI Initializing',
-              description: 'Please wait a moment for the AI to fully initialize',
-              variant: 'default',
-              duration: 2000
-            });
-          } else {
-            // Generic error handling for other cases
-            toast({
-              title: 'Connection Error',
-              description: data.message || 'An error occurred with the AI connection',
-              variant: 'destructive',
-              duration: 5000
-            });
-          }
-          break;
-          
-        // Handle server-side events  
-        case 'server_event':
-          console.log('📡 Server event received (details redacted for privacy)');
-          if (data.event === 'openai_session_created') {
-            console.log('🎉 OpenAI session created on server side at:', new Date().toISOString());
-            // Set the session as ready for audio using ref for immediate effect
-            openaiSessionReadyRef.current = true;
+            console.warn('⚠️ OpenAI connection not ready yet');
+            openaiSessionReadyRef.current = false; // Reset session ready state
             
-            // Update loading state if we're still in connecting mode
-            if (conversationState === 'connecting') {
-              setConversationState('connected');
-              setLoadingText('');
+            // Try again with a delay for non-critical errors
+            if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+              setTimeout(() => {
+                if (conversationState === 'connecting') {
+                  console.log('🔄 Retrying session creation after delay...');
+                  // Re-send the session creation request
+                  webSocketRef.current?.send(JSON.stringify({
+                    type: 'create_session',
+                    voice: 'alloy',
+                    instructions: `You are the Financial Sherpa, a friendly AI assistant for ${customerName || 'the customer'}.`,
+                    customerId: customerId || 0
+                  }));
+                }
+              }, 2000);
             }
             
-            // Force re-render status badge by toggling a state
-            setConnected(prev => {
-              setTimeout(() => setConnected(true), 0);
-              return false;
-            });
+            // Show error notification with throttling
+            showErrorNotification(
+              'Connection Initializing',
+              'AI connection still initializing. Please wait a moment and try again.'
+            );
+          } else {
+            // For other errors, reset the session and show notification
+            openaiSessionReadyRef.current = false;
             
-            toast({
-              title: 'AI Ready',
-              description: 'Financial Sherpa is ready for your voice questions',
-              variant: 'default',
-              duration: 3000
-            });
-          } else if (data.event === 'openai_connection_established') {
-            console.log('🔗 OpenAI connection established on server side');
+            // Show error notification with throttling
+            showErrorNotification(
+              'AI Assistant Error',
+              data.message || 'An error occurred with the AI assistant. Please try again.'
+            );
             
-            // Update the UI to show we're making progress
-            setLoadingText('AI connection established, finalizing setup...');
-          } else if (data.event === 'openai_error') {
-            console.error('⚠️ OpenAI error on server side at:', new Date().toISOString(), data.message);
-            openaiSessionReadyRef.current = false; // Reset session ready state on OpenAI errors
-            toast({
-              title: 'OpenAI Error',
-              description: data.message || 'Error with OpenAI service',
-              variant: 'destructive',
-              duration: 5000
-            });
+            // If this is a critical error, reset the conversation
+            if (data.critical) {
+              setConversationState('error');
+            }
           }
-          break;
-
-        case 'session_ended':
-          console.log('Session ended:', data);
-          setSessionId(null);
-          setConversationState('idle');
-          openaiSessionReadyRef.current = false;
-          console.log('🔄 Session ended, reset openaiSessionReady state');
-          break;
-
-        case 'session.authenticate':
-          console.log('🔐 Authentication message received');
-          break;
-          
-        case 'session.status':
-          console.log('📊 Session status update (details redacted for privacy)');
-          break;
-          
-        case 'transcription_session.created':
-          console.log('🎯 Transcription session created event received at:', new Date().toISOString());
-          // Set the session as ready for audio using ref for immediate effect
-          openaiSessionReadyRef.current = true;
-          
-          // If we're in 'connecting' state, change to 'connected'
-          if (conversationState === 'connecting') {
-            setConversationState('connected');
-            setLoadingText('');
-          }
-          
-          // Log the exact state of the system when transcription_session.created received
-          console.log('🔄 System State:', {
-            sessionId: sessionId,
-            connected: connected,
-            conversationState: conversationState,
-            recording: recording,
-            openaiSessionReady: openaiSessionReadyRef.current,
-            webSocketState: webSocketRef.current ? webSocketRef.current.readyState : 'no-websocket',
-            mediaRecorderExists: !!mediaRecorderRef.current,
-            timestamp: new Date().toISOString()
-          });
-          
-          toast({
-            title: 'AI Ready',
-            description: 'Financial Sherpa is ready for your voice questions',
-            variant: 'default',
-            duration: 3000
-          });
           break;
 
         default:
-          console.log('⚠️ Unknown message type:', data);
+          console.log(`📩 Unhandled message type: ${data.type}`);
       }
     } catch (error) {
-      console.error('Error processing WebSocket message:', error);
+      console.error('❌ Error handling WebSocket message:', error);
+      showErrorNotification(
+        'Message Processing Error',
+        'Error processing response from AI assistant.'
+      );
     }
   };
-
+  
   // Initialize WebSocket connection
   const initializeWebSocket = async (): Promise<void> => {
     try {
@@ -628,11 +668,17 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
         throw new Error(config.error || 'Failed to get configuration');
       }
       
-      console.log('✅ Received configuration (details redacted for privacy)');
+      console.log('✅ Received configuration:', config);
       
-      // Update customer name and financial data if available from the server
-      // We can't use setCustomerName or setFinancialData here as they are passed as props
-      // If needed, these values would be managed by parent component
+      // We'll log customer name and financial data if available from the server
+      // (But we don't need to set them as they're already provided via props)
+      if (config.customerName) {
+        console.log('Customer name from config:', config.customerName);
+      }
+      
+      if (config.financialData) {
+        console.log('Financial data available from config');
+      }
       
       setLoadingText('Connecting to AI...');
       
@@ -642,8 +688,11 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       
       console.log(`🔌 Connecting to WebSocket: ${wsUrl}`);
       
-      // Create WebSocket - add verbose logging to help debug
-      console.log(`🔌 Attempting to create WebSocket with URL: ${wsUrl}`);
+      // Reset session ready state when starting a new connection
+      openaiSessionReadyRef.current = false;
+      
+      // Create WebSocket
+      console.log(`🔌 Creating WebSocket with URL: ${wsUrl}`);
       const socket = new WebSocket(wsUrl);
       webSocketRef.current = socket;
       console.log(`🔌 WebSocket created, current readyState: ${socket.readyState} (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)`);
@@ -651,7 +700,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       // Set up connection timeout
       const connectionTimeoutId = setTimeout(() => {
         if (conversationState === 'connecting') {
-          console.error(`❌ WebSocket connection timed out at: ${new Date().toISOString()}. Current readyState: ${socket.readyState}`);
+          console.error(`⏱️ WebSocket connection timed out after 15 seconds. Current readyState: ${socket.readyState}`);
           
           // Close the socket if it's still open but not fully initialized
           if (socket && socket.readyState === WebSocket.OPEN) {
@@ -678,53 +727,15 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
         console.log(`🟢 Connection details: ${socket.url}, readyState=${socket.readyState}`);
         setConnected(true);
         
-        // Clear the connection timeout as the connection is established
-        clearTimeout(connectionTimeoutId);
-        
-        // Set a shorter timeout specifically for session creation
-        // If we don't receive create_session acknowledgment, we'll retry
-        const sessionInitTimeoutId = setTimeout(() => {
-          // If we're still in the connecting state after 5 seconds, try sending the create_session message again
-          if (conversationState === 'connecting' && socket && socket.readyState === WebSocket.OPEN) {
-            console.log('⚠️ Session creation taking too long, resending create_session message');
-            
-            // Display toast to inform user
-            toast({
-              title: 'Initializing',
-              description: 'Still connecting to AI assistant...',
-              duration: 3000
-            });
-            
-            // Resend the create session message
-            try {
-              const retryInstructions = `You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help ${config.customerName || customerName || 'the customer'} understand their financial data, provide insights on their contracts, and answer questions about financial products and services. Keep your responses friendly, concise, and professional. RETRY ATTEMPT.`;
-              
-              console.log('🔄 Resending create_session message');
-              socket.send(JSON.stringify({
-                type: 'create_session',
-                voice: 'alloy', // Or whatever voice is preferred
-                instructions: retryInstructions,
-                temperature: 0.7,
-                customerId: config.customerId || customerId || 0,
-                retry: true, // Flag to indicate this is a retry
-              }));
-            } catch (error) {
-              console.error('⚠️ Error resending create_session message:', error);
-            }
-          }
-        }, 8000); // 8 seconds timeout for session creation
-        
-        // Request a new session
-        const instructions = `You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help ${config.customerName || customerName || 'the customer'} understand their financial data, provide insights on their contracts, and answer questions about financial products and services. Keep your responses friendly, concise, and professional. ${
-          (config.financialData || financialData) ? 'Use the financial data available to provide personalized insights.' : 'Encourage connecting bank accounts to provide more personalized insights.'
-        }`;
-        
-        console.log('📝 Sending session creation with Financial Sherpa instructions');
-        console.log('📝 Customer authenticated: Yes');
-        console.log('📝 Data available for context:', (!!config.financialData || !!financialData) ? 'Yes' : 'No');
-        
-        // Add delay to ensure WebSocket is fully established before sending
+        // Wait for socket to be fully open before sending
         setTimeout(() => {
+          // Request a new session
+          const instructions = `You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help ${config.customerName || customerName || 'the customer'} understand their financial data, provide insights on their contracts, and answer questions about financial products and services. Keep your responses friendly, concise, and professional. ${
+            (config.financialData || financialData) ? 'Use the financial data available to provide personalized insights.' : 'Encourage connecting bank accounts to provide more personalized insights.'
+          }`;
+          
+          console.log('📝 Sending session creation with instructions');
+          
           // Send session creation request
           try {
             const createSessionPayload = {
@@ -734,7 +745,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
               customerId: customerId || 0
             };
             
-            console.log('📤 Sending session creation payload (personal data redacted)');
+            console.log('📤 Sending payload to create session');
             socket.send(JSON.stringify(createSessionPayload));
             
             console.log('✅ Session creation request sent successfully at:', new Date().toISOString());
@@ -775,9 +786,17 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       socket.onclose = () => {
         console.log('WebSocket connection closed at:', new Date().toISOString());
         clearTimeout(connectionTimeoutId);
+        
+        // Clear any session readiness timeout
+        if (sessionReadyTimeoutRef.current) {
+          clearTimeout(sessionReadyTimeoutRef.current);
+          sessionReadyTimeoutRef.current = null;
+        }
+        
         setConnected(false);
         setSessionId(null);
         openaiSessionReadyRef.current = false; // Reset this flag on connection close
+        
         if (conversationState !== 'error') {
           setConversationState('idle');
         }
@@ -796,32 +815,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
     }
   };
 
-  // End the conversation
-  const endConversation = () => {
-    if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
-      webSocketRef.current.send(JSON.stringify({
-        type: 'end_session'
-      }));
-    }
-    
-    if (mediaRecorderRef.current) {
-      if (mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-      // Release microphone
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      mediaRecorderRef.current = null;
-    }
-    
-    // Reset all session-related state
-    setRecording(false);
-    setConversationState('idle');
-    setSessionId(null);
-    openaiSessionReadyRef.current = false;
-    console.log('🔄 Session ended, reset openaiSessionReady state');
-  };
-
-  // Start a conversation
+  // Start a new conversation
   const startConversation = async () => {
     if (conversationState === 'idle') {
       // Clear previous conversation
@@ -831,6 +825,12 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       setLoadingText('Starting new conversation...');
       
       try {
+        // Clear any pending audio chunks
+        pendingAudioChunksRef.current = [];
+        
+        // Reset session ready state
+        openaiSessionReadyRef.current = false;
+        
         // Initialize WebSocket
         console.log('🔄 Initializing WebSocket connection...');
         await initializeWebSocket();
@@ -849,7 +849,41 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       console.log(`🔄 Not starting new conversation because current state is: ${conversationState}`);
     }
   };
-
+  
+  // End the conversation
+  const endConversation = () => {
+    if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+      webSocketRef.current.send(JSON.stringify({
+        type: 'end_session'
+      }));
+    }
+    
+    if (mediaRecorderRef.current) {
+      if (mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    }
+    
+    // Clear any session readiness timeout
+    if (sessionReadyTimeoutRef.current) {
+      clearTimeout(sessionReadyTimeoutRef.current);
+      sessionReadyTimeoutRef.current = null;
+    }
+    
+    // Reset session ready state
+    openaiSessionReadyRef.current = false;
+    
+    // Close WebSocket connection
+    if (webSocketRef.current) {
+      webSocketRef.current.close();
+      webSocketRef.current = null;
+    }
+    
+    setConnected(false);
+    setSessionId(null);
+    setConversationState('idle');
+  };
+  
   // Render loading state
   const renderLoadingState = () => {
     return (
@@ -887,27 +921,13 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       case 'connecting':
         return <Badge variant="outline" className="bg-yellow-100 text-yellow-800">Connecting...</Badge>;
       case 'connected':
-        return (
-          <div className="flex items-center gap-1">
-            <Badge variant="outline" className="bg-green-100 text-green-800">Ready</Badge>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span><CheckCircle className="h-4 w-4 text-green-600" /></span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  AI is ready to receive your voice input
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        );
+        return <Badge variant="outline" className="bg-green-100 text-green-800">Connected</Badge>;
       case 'recording':
-        return <Badge variant="outline" className="bg-red-100 text-red-800">Recording</Badge>;
+        return <Badge variant="outline" className="bg-red-100 text-red-800">Recording...</Badge>;
       case 'thinking':
-        return <Badge variant="outline" className="bg-blue-100 text-blue-800">Thinking...</Badge>;
+        return <Badge variant="outline" className="bg-blue-100 text-blue-800">Processing...</Badge>;
       case 'responding':
-        return <Badge variant="outline" className="bg-purple-100 text-purple-800">Responding</Badge>;
+        return <Badge variant="outline" className="bg-purple-100 text-purple-800">Responding...</Badge>;
       case 'error':
         return <Badge variant="outline" className="bg-red-100 text-red-800">Error</Badge>;
       default:
@@ -915,7 +935,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
     }
   };
 
-  // Effect for automatically scrolling to the bottom of the messages
+  // Auto-scroll to latest message
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -977,6 +997,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+                
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -997,93 +1018,106 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
               </div>
             </div>
             
-            {/* Messages area */}
-            <div className="mb-4 max-h-[400px] overflow-y-auto border rounded-md p-3 bg-card">
+            {/* Conversation area */}
+            <div className="h-[400px] overflow-y-auto border rounded-md p-4 mb-4 bg-background">
               {messages.length === 0 ? (
-                <div className="text-center text-muted-foreground p-4">
-                  {(conversationState === 'connected' && !openaiSessionReadyRef.current) ? 
-                    'Waiting for AI initialization...' : 
-                    'No messages yet. Start speaking to ask a question.'}
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <p>Your conversation will appear here. Begin by clicking and holding the microphone button to speak.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {messages.map((message) => (
-                    <div 
-                      key={message.id} 
-                      className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      {message.role !== 'user' && (
+                    <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`flex gap-2 max-w-[80%] ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src="/ShiFiMidesk.png" alt="Financial Sherpa" />
-                          <AvatarFallback>FS</AvatarFallback>
+                          {message.role === 'user' ? (
+                            <>
+                              <AvatarImage src="/avatars/user.png" alt="User" />
+                              <AvatarFallback>U</AvatarFallback>
+                            </>
+                          ) : message.role === 'assistant' ? (
+                            <>
+                              <AvatarImage src="/avatars/sherpa.png" alt="Financial Sherpa" />
+                              <AvatarFallback>AI</AvatarFallback>
+                            </>
+                          ) : (
+                            <>
+                              <AvatarImage src="/avatars/system.png" alt="System" />
+                              <AvatarFallback>S</AvatarFallback>
+                            </>
+                          )}
                         </Avatar>
-                      )}
-                      <div className={`rounded-lg p-3 max-w-[80%] ${
-                        message.role === 'user' 
-                          ? 'bg-primary text-primary-foreground ml-auto' 
-                          : message.role === 'system' 
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
-                            : 'bg-muted text-muted-foreground'
-                      }`}>
-                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        <div className={`rounded-lg p-3 ${
+                          message.role === 'user' 
+                            ? 'bg-primary text-primary-foreground' 
+                            : message.role === 'assistant'
+                              ? 'bg-muted' 
+                              : 'bg-muted border border-border'
+                        }`}>
+                          <p>{message.content}</p>
+                        </div>
                       </div>
-                      {message.role === 'user' && (
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback>U</AvatarFallback>
-                        </Avatar>
-                      )}
                     </div>
                   ))}
+                  
+                  {/* Transcription feedback */}
+                  {recording && transcription && (
+                    <div className="flex justify-end">
+                      <div className="rounded-lg p-3 bg-primary/10 text-primary max-w-[80%] italic">
+                        {transcription}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Auto-scroll anchor */}
                   <div ref={messagesEndRef} />
                 </div>
               )}
             </div>
             
-            {/* Microphone control */}
+            {/* Recording controls */}
             <div className="flex justify-center">
-              <div className="relative">
-                {/* Show pulsing animation when connecting */}
-                {(
-                  (conversationState === 'connected' && !openaiSessionReadyRef.current) ||
-                  conversationState === 'thinking'
-                ) && (
-                  <div className="absolute inset-0 rounded-full animate-ping bg-gray-200 opacity-40"></div>
+              <Button
+                size="lg"
+                variant={recording ? "destructive" : openaiSessionReadyRef.current ? "default" : "outline"}
+                className={`rounded-full w-16 h-16 p-0 ${!openaiSessionReadyRef.current ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={!openaiSessionReadyRef.current || conversationState === 'thinking' || conversationState === 'responding'}
+                onMouseDown={() => startRecording()}
+                onMouseUp={() => stopRecording()}
+                onTouchStart={() => startRecording()}
+                onTouchEnd={() => stopRecording()}
+              >
+                {recording ? (
+                  <MicOff className="h-8 w-8" />
+                ) : (
+                  <Mic className="h-8 w-8" />
                 )}
-                
-                <Button
-                  size="lg"
-                  className={`rounded-full h-16 w-16 flex items-center justify-center transition-all duration-200 ${
-                    recording 
-                      ? 'bg-red-500 hover:bg-red-600 text-white'
-                      : (conversationState === 'connected' && openaiSessionReadyRef.current)
-                        ? 'bg-green-100 hover:bg-green-200 text-green-800' 
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
-                  onMouseDown={startRecording}
-                  onMouseUp={stopRecording}
-                  onTouchStart={startRecording}
-                  onTouchEnd={stopRecording}
-                  disabled={
-                    conversationState !== 'connected' || 
-                    !openaiSessionReadyRef.current
-                  }
-                >
-                  {recording ? (
-                    <MicOff className="h-8 w-8" />
-                  ) : (
-                    <Mic className="h-8 w-8" />
-                  )}
-                </Button>
-              </div>
+              </Button>
             </div>
             
-            {/* Transcription display */}
-            {transcription && (
-              <div className="mt-4">
-                <Separator className="mb-2" />
-                <p className="text-sm text-muted-foreground">Heard: {transcription}</p>
-              </div>
-            )}
+            {/* Status text */}
+            <div className="text-center mt-2 text-sm text-muted-foreground">
+              {!openaiSessionReadyRef.current ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Financial Sherpa is initializing...</span>
+                </div>
+              ) : recording ? (
+                <span>Release to send your message</span>
+              ) : conversationState === 'thinking' ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Processing your request...</span>
+                </div>
+              ) : conversationState === 'responding' ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Financial Sherpa is responding...</span>
+                </div>
+              ) : (
+                <span>Click and hold the microphone button to speak</span>
+              )}
+            </div>
           </>
         )}
       </CardContent>

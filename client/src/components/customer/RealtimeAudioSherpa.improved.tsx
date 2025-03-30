@@ -670,14 +670,14 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       
       console.log('✅ Received configuration:', config);
       
-      // Update customer name and financial data if available from the server
-      // (But don't overwrite props)
-      if (config.customerName && !customerName) {
-        setCustomerName(config.customerName);
+      // We'll log customer name and financial data if available from the server
+      // (But we don't need to set them as they're already provided via props)
+      if (config.customerName) {
+        console.log('Customer name from config:', config.customerName);
       }
       
       if (config.financialData) {
-        setFinancialData(config.financialData);
+        console.log('Financial data available from config');
       }
       
       setLoadingText('Connecting to AI...');

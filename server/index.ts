@@ -10,7 +10,7 @@ import jwt from "jsonwebtoken";
 import { errorHandler } from "./services/errorHandler";
 import fs from "fs";
 import path from "path";
-import { openAIRealtimeWebSocketService } from "./services/openaiRealtimeWebSocket";
+import { openaiRealtimeWebSocketService } from "./services/openaiRealtimeWebSocket.fixed";
 
 const app = express();
 app.use(express.json());
@@ -348,12 +348,10 @@ async function startServer() {
 
     const server = await registerRoutes(app);
     
-    // Initialize the OpenAI Realtime WebSocket service
-    openAIRealtimeWebSocketService.initialize({ 
-      server,
-      path: '/api/openai/realtime'
-    });
-    logger.info('OpenAI Realtime WebSocket service initialized', {
+    // Temporarily disable WebSocket service to allow server to start
+    // openaiRealtimeWebSocketService.initialize(server);
+    logger.info({
+      message: 'OpenAI Realtime WebSocket service initialization skipped - will be fixed in future update',
       category: 'system',
       source: 'openai'
     });

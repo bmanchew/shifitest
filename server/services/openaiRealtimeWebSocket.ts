@@ -1,787 +1,1184 @@
 /**
- * OpenAI Realtime WebSocket service
+ * OpenAI Realtime WebSocket Service
  * 
- * This service creates a WebSocket server that acts as a bridge between
- * the browser client and OpenAI's Realtime API WebSocket server.
+ * This service creates a bridge between client browsers and OpenAI's Realtime API WebSocket endpoint.
+ * It handles client connections, manages OpenAI sessions, and routes messages between them.
  */
 
-import { WebSocketServer, WebSocket } from 'ws';
+import * as WebSocket from 'ws';
+import { Server as HttpServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from './logger';
 import { openAIRealtimeService } from './openaiRealtime';
 
-// WebSocket constants
+// WebSocket states
 const WS_CONNECTING = 0;
 const WS_OPEN = 1;
 const WS_CLOSING = 2;
 const WS_CLOSED = 3;
 
-interface RealtimeWebSocketOptions {
-  server: any; // Express server or HTTP/HTTPS server
-  path?: string;
+// Define the client connection type
+interface ClientConnection {
+  socket: WebSocket;
+  id: string;
+  customerId?: number;
+  customerName?: string;
+  sessionId?: string;
+  openaiSocket?: WebSocket;
+  openaiReadyState: boolean;
+  lastErrorTime?: number;
+  // Buffer for audio chunks received before OpenAI session is ready
+  pendingAudioChunks: Buffer[];
+  initializingSession: boolean;
 }
 
-class OpenAIRealtimeWebSocketService {
-  private wss: any = null;
-  private clients: Map<string, {
-    socket: any;
-    sessionId?: string;
-    userId?: number;
-    role?: string;
-    lastErrorNotification?: number;
-  }> = new Map();
-  private openaiConnections: Map<string, any> = new Map();
-  private connectionTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  private apiKey: string;
+export class OpenAIRealtimeWebSocketService {
+  private wss: WebSocket.Server | null = null;
+  private clients: Map<string, ClientConnection> = new Map();
+  private pingInterval: NodeJS.Timeout | null = null;
   
-  constructor() {
-    // Load OpenAI API key from environment
-    this.apiKey = process.env.OPENAI_API_KEY || '';
+  // Initialize the WebSocket server
+  initialize(server: HttpServer): void {
+    if (this.wss) {
+      this.close();
+    }
     
-    if (!this.apiKey) {
-      console.error('OpenAI API key is missing');
-    }
+    logger.info({
+      message: 'Initializing OpenAI Realtime WebSocket service',
+      category: 'realtime',
+      source: 'openai'
+    });
+    
+    // Create WebSocket server attached to HTTP server
+    this.wss = new WebSocket.Server({ server, path: '/api/openai/realtime' });
+    
+    // Set up event handlers
+    this.wss.on('connection', this.handleConnection.bind(this));
+    this.wss.on('error', this.handleServerError.bind(this));
+    
+    // Set up ping interval to keep connections alive
+    this.pingInterval = setInterval(this.pingClients.bind(this), 30000);
+    
+    logger.info({
+      message: 'OpenAI Realtime WebSocket service initialized',
+      category: 'realtime',
+      source: 'openai'
+    });
   }
-
-  /**
-   * Initialize the WebSocket server
-   */
-  public initialize(options: RealtimeWebSocketOptions): boolean {
-    try {
-      if (this.wss) {
-        console.warn('WebSocket server already initialized');
-        return true;
-      }
-
-      const { server, path = '/api/openai/realtime' } = options;
-
-      // Use more explicit configuration
-      this.wss = new WebSocketServer({ 
-        server,
-        path,
-        perMessageDeflate: false,
-        clientTracking: true,
-        verifyClient: (info, callback) => {
-          // Log the connection attempt
-          console.info('WebSocket connection attempt:', {
-            origin: info.origin,
-            secure: info.secure,
-            path: info.req.url
-          });
-          
-          // Always accept the connection for now
-          callback(true);
-        }
-      });
-
-      // Log when server is listening
-      this.wss.on('listening', () => {
-        console.info('WebSocket server is listening:', {
-          path,
-          clients: this.wss?.clients?.size || 0
-        });
-      });
-
-      // Handle errors at the server level
-      this.wss.on('error', (error: any) => {
-        console.error('WebSocket server error:', error, { path });
-      });
-
-      // Handle connections
-      this.wss.on('connection', this.handleConnection.bind(this));
-
-      console.info('OpenAI Realtime WebSocket server initialized:', { path });
-
-      return true;
-    } catch (error: any) {
-      console.error('Failed to initialize WebSocket server:', error);
-      return false;
+  
+  // Close the WebSocket server and all connections
+  close(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
     }
+    
+    // Close all client connections
+    for (const clientConnection of this.clients.values()) {
+      this.closeClientConnection(clientConnection.id);
+    }
+    
+    // Close the server
+    if (this.wss) {
+      this.wss.close();
+      this.wss = null;
+    }
+    
+    logger.info({
+      message: 'OpenAI Realtime WebSocket service closed',
+      category: 'realtime',
+      source: 'openai'
+    });
   }
-
-  /**
-   * Handle a new WebSocket connection from a client
-   */
-  private handleConnection(clientSocket: WebSocket, request: any): void {
+  
+  // Handle new WebSocket connections
+  private handleConnection(socket: WebSocket, request: any): void {
     const clientId = uuidv4();
     
-    // Store client information
-    this.clients.set(clientId, {
-      socket: clientSocket,
-      lastErrorNotification: 0
+    logger.info({
+      message: `New client connection: ${clientId}`,
+      category: 'realtime',
+      source: 'openai',
+      metadata: { clientId }
     });
-
-    // Parse URL parameters
-    const url = new URL(request.url, `http://${request.headers.host}`);
-    const userId = url.searchParams.get('userId');
-    const role = url.searchParams.get('role');
     
-    if (userId) {
-      this.clients.get(clientId)!.userId = parseInt(userId, 10);
-    }
+    // Create client connection object
+    const clientConnection: ClientConnection = {
+      socket,
+      id: clientId,
+      openaiReadyState: false,
+      pendingAudioChunks: [],
+      initializingSession: false
+    };
     
-    if (role) {
-      this.clients.get(clientId)!.role = role;
-    }
-
-    console.info('Client connected to OpenAI Realtime WebSocket:', {
-      clientId,
-      userId,
-      role
-    });
-
-    // Set up event handlers for the client socket
-    clientSocket.on('message', async (message) => {
-      try {
-        // Check if the message is binary (for audio data)
-        if (message instanceof Buffer || message instanceof ArrayBuffer) {
-          // Handle binary audio data
-          const client = this.clients.get(clientId);
-          
-          // Check if this client has an active session
-          if (client && client.sessionId) {
-            const openaiSocket = this.openaiConnections.get(client.sessionId);
-            if (openaiSocket && openaiSocket.readyState === 1) { // 1 = OPEN
-              // Forward binary audio data directly to OpenAI
-              // Log size information - handle both Buffer and ArrayBuffer types
-              const size = Buffer.isBuffer(message) 
-                ? message.length 
-                : (message as ArrayBuffer).byteLength;
-              
-              console.log(`Received binary audio data from client ${clientId}, size: ${size} bytes`);
-              openaiSocket.send(message);
-            } else {
-              // Connection exists but isn't ready
-              console.warn(`Received binary audio data from client ${clientId}, but OpenAI connection is not ready`);
-              
-              // Send a clear error message back to the client
-              client.socket.send(JSON.stringify({
-                type: 'error',
-                message: 'OpenAI connection is initializing. Please wait for the AI Ready notification before speaking.',
-                code: 'OPENAI_CONNECTION_NOT_READY',
-                timestamp: new Date().toISOString()
-              }));
-            }
-          } else {
-            // No session exists for this client
-            console.warn(`Received binary audio data from client ${clientId}, but no session exists`);
-            
-            // If we have a client socket, send an error message
-            if (client && client.socket && client.socket.readyState === WS_OPEN) {
-              // Get client status for detailed error reporting
-              const hasActiveConnection = !!client.sessionId;
-              const connectionTime = new Date().toISOString();
-              
-              // Add delay to avoid error message spamming
-              // We only want to send this once per second at most
-              const THROTTLE_PERIOD = 1000; // 1 second
-              const now = Date.now();
-              const lastErrorTime = client.lastErrorNotification || 0;
-              
-              if (now - lastErrorTime > THROTTLE_PERIOD) {
-                client.lastErrorNotification = now;
-                
-                client.socket.send(JSON.stringify({
-                  type: 'error',
-                  message: 'System is still initializing. Please wait for the AI Ready notification before speaking.',
-                  code: 'NO_SESSION_EXISTS',
-                  timestamp: connectionTime,
-                  details: {
-                    hasActiveConnection,
-                    connectionTime,
-                    status: 'initializing'
-                  }
-                }));
-              }
-            }
-          }
-        } else {
-          // Handle JSON message
-          const data = JSON.parse(message.toString());
-          await this.handleClientMessage(clientId, data);
-        }
-      } catch (error: any) {
-        console.error('Error handling client message:', error, { clientId });
-      }
-    });
-
-    clientSocket.on('close', () => {
-      this.handleClientDisconnect(clientId);
-    });
-
-    clientSocket.on('error', (error: any) => {
-      console.error('WebSocket error with client:', error, { clientId });
-    });
-
+    // Add to clients map
+    this.clients.set(clientId, clientConnection);
+    
+    // Set up event handlers for this connection
+    socket.on('message', (message) => this.handleClientMessage(clientId, message));
+    socket.on('close', () => this.handleClientDisconnect(clientId));
+    socket.on('error', (error) => this.handleClientError(clientId, error));
+    
     // Send welcome message
-    clientSocket.send(JSON.stringify({
+    socket.send(JSON.stringify({
       type: 'welcome',
+      message: 'Connected to OpenAI Realtime WebSocket service',
       clientId,
-      connected: true,
-      timestamp: Date.now()
+      timestamp: new Date().toISOString()
     }));
   }
-
-  /**
-   * Handle a message received from a client
-   */
-  private async handleClientMessage(clientId: string, data: any): Promise<void> {
+  
+  // Handle incoming messages from clients
+  private async handleClientMessage(clientId: string, message: WebSocket.Data): Promise<void> {
     const client = this.clients.get(clientId);
     
     if (!client) {
-      console.error(`Client not found for message: ${clientId}`);
+      logger.warn({
+        message: `Received message from unknown client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId }
+      });
       return;
     }
-
-    const { type } = data;
-
-    switch (type) {
-      case 'create_session':
-        // First force-send a message to the client indicating we're initializing a session
-        // This ensures the client UI shows a proper loading state
-        const initialClient = this.clients.get(clientId);
-        if (initialClient && initialClient.socket.readyState === 1) {
-          console.log(`✅ Sending immediate connection acknowledgment to client ${clientId}`);
-          initialClient.socket.send(JSON.stringify({
-            type: 'server_event',
-            event: 'openai_connection_established',
-            message: 'Connection to OpenAI being established',
-            timestamp: Date.now()
-          }));
+    
+    // Handle binary data (audio chunks)
+    if (message instanceof Buffer || message instanceof ArrayBuffer) {
+      await this.handleBinaryMessage(client, message);
+      return;
+    }
+    
+    // For text messages, parse the JSON
+    try {
+      const data = JSON.parse(message.toString());
+      await this.handleJsonMessage(client, data);
+    } catch (error) {
+      logger.error({
+        message: `Error parsing message from client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId,
+          error: error instanceof Error ? error.stack : String(error)
         }
+      });
+      
+      // Send error back to client
+      client.socket.send(JSON.stringify({
+        type: 'error',
+        message: 'Invalid message format',
+        timestamp: new Date().toISOString()
+      }));
+    }
+  }
+  
+  // Handle binary messages (audio data)
+  private async handleBinaryMessage(client: ClientConnection, message: WebSocket.Data): Promise<void> {
+    const { id: clientId, openaiSocket, openaiReadyState } = client;
+    
+    // Ensure message is a Buffer
+    const buffer = message instanceof Buffer 
+      ? message 
+      : Buffer.from(message as ArrayBuffer);
+    
+    const size = buffer.length;
+    
+    // Check if there's an active OpenAI connection for this client
+    if (openaiSocket && openaiReadyState) {
+      // Connection exists and is ready
+      if (openaiSocket.readyState === WS_OPEN) {
+        logger.debug({
+          message: `Forwarding audio data to OpenAI for client: ${clientId}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: { clientId, size }
+        });
         
-        // Now handle the actual session creation
-        await this.handleCreateSession(clientId, data);
+        // Forward the binary data to OpenAI
+        openaiSocket.send(message);
+      } else {
+        // Connection exists but isn't ready or is closing/closed
+        logger.warn({
+          message: `Cannot forward audio data - OpenAI socket not in OPEN state for client: ${clientId}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: { 
+            clientId, 
+            socketState: openaiSocket.readyState 
+          }
+        });
         
-        // We'll use a guaranteed callback approach to handle session initialization
-        // Rather than multiple force-send approaches that might cause conflicts
-        const initializationTimeout = setTimeout(() => {
-          const client = this.clients.get(clientId);
-          // Check we still have a client and socket is open
-          if (client && client.socket.readyState === 1) {
-            console.log(`🕐 Checking initialization status for client ${clientId} after timeout`);
+        // If connection is closing or closed, buffer the audio for reconnection
+        if (openaiSocket.readyState === WS_CLOSING || openaiSocket.readyState === WS_CLOSED) {
+          this.bufferAudioForClient(client, buffer);
+          
+          // Try to reconnect if the connection is closed
+          if (openaiSocket.readyState === WS_CLOSED) {
+            this.sendErrorWithThrottling(client, {
+              type: 'error',
+              message: 'OpenAI connection was closed. Attempting to reconnect...',
+              code: 'OPENAI_CONNECTION_CLOSED',
+              timestamp: new Date().toISOString()
+            });
             
-            // If the client has a session but might be stuck in initialization
+            // Attempt to reestablish the connection if we have a session ID
             if (client.sessionId) {
-              console.log(`⚠️ Client ${clientId} has session ${client.sessionId} but might be stuck in initialization`);
-              
-              // Send a server event to check status and potentially trigger UI updates
-              client.socket.send(JSON.stringify({
-                type: 'server_event',
-                event: 'openai_initialization_check',
-                message: 'Checking OpenAI initialization status',
-                timestamp: Date.now()
-              }));
-              
-              // Note: We'll rely on the regular initialization events in the WebSocket to complete initialization
-              // rather than forcing duplicate events here that might cause state conflicts
+              this.reconnectToOpenAI(client);
             }
           }
-        }, 5000); // 5 seconds wait to see if normal initialization completes
-        break;
+        }
+      }
+    } else if (openaiSocket && !openaiReadyState) {
+      // Connection exists but isn't ready
+      logger.warn({
+        message: `Received audio data before OpenAI connection is ready for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId, size }
+      });
       
+      // Buffer the audio data for when the session is ready
+      this.bufferAudioForClient(client, buffer);
+      
+      // Send a clear error message back to the client
+      this.sendErrorWithThrottling(client, {
+        type: 'error',
+        message: 'OpenAI connection is initializing. Please wait for the AI Ready notification before speaking.',
+        code: 'OPENAI_CONNECTION_NOT_READY',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      // No OpenAI socket exists for this client
+      logger.warn({
+        message: `Received audio data but no OpenAI connection exists for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId, size, initializingSession: client.initializingSession }
+      });
+      
+      // Buffer the audio data if the session is initializing
+      if (client.initializingSession) {
+        this.bufferAudioForClient(client, buffer);
+        this.sendErrorWithThrottling(client, {
+          type: 'error',
+          message: 'OpenAI session is being created. Please wait for the AI Ready notification before speaking.',
+          code: 'SESSION_INITIALIZING',
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        // If we have a client socket, send an error message
+        this.sendErrorWithThrottling(client, {
+          type: 'error',
+          message: 'No active session. Please initiate a new conversation.',
+          code: 'NO_SESSION_EXISTS',
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+  }
+  
+  // Buffer audio data for a client to send when the session is ready
+  private bufferAudioForClient(client: ClientConnection, buffer: Buffer): void {
+    // Add to the pending audio chunks
+    client.pendingAudioChunks.push(buffer);
+    
+    // Log if buffer is getting large
+    if (client.pendingAudioChunks.length === 1) {
+      logger.debug({
+        message: `Started buffering audio for client: ${client.id}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId: client.id }
+      });
+    } else if (client.pendingAudioChunks.length % 10 === 0) {
+      logger.warn({
+        message: `Large audio buffer accumulating for client: ${client.id}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId: client.id, 
+          bufferSize: client.pendingAudioChunks.length,
+          totalBytes: client.pendingAudioChunks.reduce((sum, chunk) => sum + chunk.length, 0)
+        }
+      });
+    }
+    
+    // Limit buffer size to prevent memory issues
+    if (client.pendingAudioChunks.length > 100) {
+      logger.warn({
+        message: `Audio buffer limit reached for client: ${client.id} - dropping oldest chunks`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId: client.id }
+      });
+      
+      // Remove oldest chunks to keep buffer size manageable
+      client.pendingAudioChunks = client.pendingAudioChunks.slice(-50);
+    }
+  }
+  
+  // Process buffered audio chunks for a client when session is ready
+  private async processBufferedAudio(client: ClientConnection): Promise<void> {
+    if (!client.openaiSocket || client.openaiSocket.readyState !== WS_OPEN || !client.openaiReadyState) {
+      logger.warn({
+        message: `Cannot process buffered audio - OpenAI session not ready for client: ${client.id}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId: client.id, 
+          hasSocket: !!client.openaiSocket,
+          socketReady: client.openaiSocket ? client.openaiSocket.readyState === WS_OPEN : false,
+          sessionReady: client.openaiReadyState,
+          bufferSize: client.pendingAudioChunks.length
+        }
+      });
+      return;
+    }
+    
+    const chunks = client.pendingAudioChunks;
+    if (chunks.length === 0) return;
+    
+    logger.info({
+      message: `Processing ${chunks.length} buffered audio chunks for client: ${client.id}`,
+      category: 'realtime',
+      source: 'openai',
+      metadata: { 
+        clientId: client.id, 
+        chunksCount: chunks.length,
+        totalBytes: chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+      }
+    });
+    
+    // Send each chunk with a small delay to avoid flooding the network
+    for (const chunk of chunks) {
+      if (client.openaiSocket.readyState === WS_OPEN) {
+        client.openaiSocket.send(chunk);
+        
+        // Small delay between chunks
+        await new Promise(resolve => setTimeout(resolve, 10));
+      } else {
+        break;
+      }
+    }
+    
+    // Clear the buffer after processing
+    client.pendingAudioChunks = [];
+    
+    // If we just processed audio, send an end of stream message to ensure proper transcription
+    if (client.openaiSocket.readyState === WS_OPEN) {
+      try {
+        const message = JSON.stringify({
+          type: 'input_audio_buffer.commit'
+        });
+        client.openaiSocket.send(message);
+        
+        logger.debug({
+          message: `Sent commit message after processing buffered audio for client: ${client.id}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: { clientId: client.id }
+        });
+      } catch (error) {
+        logger.error({
+          message: `Error sending commit message after buffered audio: ${error instanceof Error ? error.message : String(error)}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: { 
+            clientId: client.id,
+            error: error instanceof Error ? error.stack : String(error)
+          }
+        });
+      }
+    }
+  }
+  
+  // Send error messages with throttling to avoid flooding clients
+  private sendErrorWithThrottling(client: ClientConnection, errorData: any): void {
+    const now = Date.now();
+    
+    // Only send one error per second to avoid spamming the client
+    if (!client.lastErrorTime || now - client.lastErrorTime > 1000) {
+      client.lastErrorTime = now;
+      
+      if (client.socket && client.socket.readyState === WS_OPEN) {
+        client.socket.send(JSON.stringify(errorData));
+      }
+    } else {
+      logger.debug({
+        message: `Suppressed duplicate error message to client: ${client.id}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId: client.id, 
+          errorCode: errorData.code,
+          timeSinceLastError: now - (client.lastErrorTime || 0)
+        }
+      });
+    }
+  }
+  
+  // Handle JSON messages from clients
+  private async handleJsonMessage(client: ClientConnection, data: any): Promise<void> {
+    const { id: clientId } = client;
+    
+    // If client doesn't exist, log and ignore
+    if (!client) {
+      logger.warn({
+        message: `Received message from unknown client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+      });
+      return;
+    }
+    
+    switch (data.type) {
+      case 'create_session':
+        await this.handleCreateSession(client, data);
+        break;
+        
+      case 'end_session':
+        this.handleEndSession(client);
+        break;
+        
       case 'audio_data':
-        await this.handleAudioData(clientId, data);
+        await this.handleAudioData(client, data);
         break;
         
       case 'end_of_stream':
-        await this.handleEndOfStream(clientId);
+        await this.handleEndOfStream(client);
         break;
-      
-      case 'text_input':
-        await this.handleTextInput(clientId, data);
-        break;
-      
-      case 'end_session':
-        await this.handleEndSession(clientId);
-        break;
-      
+        
       default:
-        console.warn(`Unknown message type from client: ${type} (clientId: ${clientId})`);
-    }
-  }
-
-  /**
-   * Handle a client disconnecting
-   */
-  private handleClientDisconnect(clientId: string): void {
-    const client = this.clients.get(clientId);
-    
-    if (!client) {
-      return;
-    }
-
-    // Clean up OpenAI connection if it exists
-    if (client.sessionId && this.openaiConnections.has(client.sessionId)) {
-      const openaiSocket = this.openaiConnections.get(client.sessionId);
-      if (openaiSocket && openaiSocket.readyState === 1) { // 1 = OPEN
-        openaiSocket.close();
-      }
-      this.openaiConnections.delete(client.sessionId);
-      
-      // Clear any timeouts associated with this session
-      if (this.connectionTimeouts.has(client.sessionId)) {
-        clearTimeout(this.connectionTimeouts.get(client.sessionId)!);
-        this.connectionTimeouts.delete(client.sessionId);
-      }
-    }
-
-    // Remove client from our records
-    this.clients.delete(clientId);
-
-    console.info(`Client disconnected from WebSocket: ${clientId}`);
-  }
-
-  /**
-   * Handle a request to create a new OpenAI Realtime session
-   */
-  private async handleCreateSession(clientId: string, data: any): Promise<void> {
-    console.log(`🔄 Starting session creation for client ${clientId}`);
-    const client = this.clients.get(clientId);
-    
-    if (!client) {
-      console.error(`❌ Client ${clientId} not found for session creation`);
-      return;
-    }
-    
-    // Force remove any previous session to avoid conflicts
-    if (client.sessionId && this.openaiConnections.has(client.sessionId)) {
-      console.log(`⚠️ Removing previous session ${client.sessionId} for client ${clientId}`);
-      const oldSocket = this.openaiConnections.get(client.sessionId);
-      if (oldSocket && oldSocket.readyState !== 3) { // Not CLOSED
-        oldSocket.close();
-      }
-      this.openaiConnections.delete(client.sessionId);
-      
-      // Clear any existing timeouts
-      if (this.connectionTimeouts.has(client.sessionId)) {
-        clearTimeout(this.connectionTimeouts.get(client.sessionId)!);
-        this.connectionTimeouts.delete(client.sessionId);
-      }
-    }
-
-    try {
-      // Create a session with OpenAI
-      const sessionOptions = {
-        voice: data.voice || 'alloy',
-        instructions: data.instructions,
-        temperature: data.temperature || 0.7
-      };
-
-      console.info(`Creating OpenAI Realtime session with voice=${sessionOptions.voice}, temperature=${sessionOptions.temperature} for client ${clientId} (instructions redacted for privacy)`);
-      
-      const session = await openAIRealtimeService.createRealtimeSession(sessionOptions);
-      
-      console.info(`Successfully created OpenAI Realtime session: ID=${session.id}, model=${session.model}, voice=${session.voice} for client ${clientId}`);
-      
-      // Store the session ID with the client
-      client.sessionId = session.id;
-
-      // Make sure we don't have an old connection
-      if (this.openaiConnections.has(session.id)) {
-        try {
-          const oldConnection = this.openaiConnections.get(session.id);
-          if (oldConnection) {
-            oldConnection.close();
-          }
-          this.openaiConnections.delete(session.id);
-        } catch (closeError) {
-          console.error('Error closing existing WebSocket:', closeError);
-        }
-      }
-      
-      // Create a new WebSocket connection to OpenAI
-      try {
-        console.log(`Connecting to OpenAI's WebSocket with session ID: ${session.id}`);
-        
-        // OpenAI Realtime API requires authentication in URL, not just headers
-        // This is a critical fix for the WebSocket connection issues
-
-        // Include the API key in URL as required by OpenAI spec
-        const wsUrl = `wss://api.openai.com/v1/realtime?intent=transcription&authorization=Bearer%20${this.apiKey}`;
-        console.log(`Connecting to OpenAI Realtime API with URL: ${wsUrl} (with authentication in URL)`);
-        
-        // Create WebSocket without authentication headers since auth is in URL
-        const openaiSocket = new WebSocket(wsUrl);
-        
-        // Store the OpenAI WebSocket connection
-        this.openaiConnections.set(session.id, openaiSocket);
-        
-        // Set up a timeout to detect connection issues
-        const timeoutId = setTimeout(() => {
-          if (openaiSocket.readyState !== 1) { // 1 = OPEN
-            console.error(`OpenAI WebSocket connection timed out for session ${session.id}`);
-            
-            try {
-              openaiSocket.close();
-            } catch (err) {
-              console.error('Error closing timed-out OpenAI socket:', err);
-            }
-            
-            // Notify the client about the timeout
-            if (client.socket.readyState === 1) { // 1 = OPEN
-              client.socket.send(JSON.stringify({
-                type: 'error',
-                message: 'Connection to OpenAI timed out. Please try again later.',
-                details: 'The connection to the OpenAI server timed out after 15 seconds.'
-              }));
-            }
-            
-            // Clean up
-            this.openaiConnections.delete(session.id);
-          }
-        }, 15000);
-        
-        // Store the timeout ID for later cleanup
-        this.connectionTimeouts.set(session.id, timeoutId);
-        
-        // Handle successful connection
-        openaiSocket.on('open', () => {
-          console.log(`OpenAI WebSocket connection opened for session ${session.id}`);
-          
-          // Clear the connection timeout
-          if (this.connectionTimeouts.has(session.id)) {
-            clearTimeout(this.connectionTimeouts.get(session.id)!);
-            this.connectionTimeouts.delete(session.id);
-          }
-          
-          // Set a safety timeout to force-send transcription_session.created if not received from OpenAI
-          // This ensures the client UI doesn't get stuck in initializing state
-          // Using a shorter timeout to improve user experience
-          const SESSION_READY_TIMEOUT = 3000; // 3 seconds (reduced from 5s)
-          const readyTimeout = setTimeout(() => {
-            console.log(`⏱️ OpenAI session initialization timeout reached for ${session.id}, force-sending ready event`);
-            if (client.socket.readyState === 1) {
-              // First send server event
-              client.socket.send(JSON.stringify({
-                type: 'server_event',
-                event: 'openai_session_created',
-                message: 'OpenAI session is ready for audio (timeout)',
-                timestamp: Date.now()
-              }));
-              
-              // Then send the transcription_session.created event that client is waiting for
-              client.socket.send(JSON.stringify({
-                type: 'transcription_session.created', // Use the exact same event type expected by client
-                sessionId: session.id,
-                timestamp: Date.now(),
-                message: 'OpenAI transcription session is now ready for audio (timeout triggered)'
-              }));
-              
-              console.log(`✅ Force-sent session ready events to client for session ${session.id}`);
-            }
-          }, SESSION_READY_TIMEOUT);
-          
-          // Store the timeout so we can clear it if transcription_session.created is received normally
-          this.connectionTimeouts.set(session.id, readyTimeout);
-          
-          // Initialize a session with the correct 'create' event
-          // This is critical for the OpenAI Realtime API to work properly
-          // Based on OpenAI's documentation, we need to send 'transcription_session.create'
-          
-          // Use transcription_session.create to initialize the session (not update)
-          // Specify audio format explicitly as pcm16 (16-bit PCM at 24kHz sample rate)
-          const sessionCreatePayload = {
-            type: 'transcription_session.create', // FIXED: Changed from 'update' to 'create'
-            event_id: `event_${uuidv4()}`,
-            session: {
-              input_audio_format: 'pcm16',
-              turn_detection: {
-                type: 'server_vad',
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 500,
-                create_response: true
-              }
-            }
-          };
-          console.log(`Sending transcription_session.create payload to OpenAI for session ${session.id}`);
-          openaiSocket.send(JSON.stringify(sessionCreatePayload));
-
-          // Notify the client that the session is ready
-          client.socket.send(JSON.stringify({
-            type: 'session_created',
-            sessionId: session.id,
-            voice: session.voice,
-            message: 'Session created successfully'
-          }));
-        });
-
-        // Handle messages from OpenAI
-        openaiSocket.on('message', (message) => {
-          try {
-            const messageString = message.toString();
-            const parsedMessage = JSON.parse(messageString);
-            
-            // Log received messages for debugging (redact content for privacy)
-            console.log(`Received message from OpenAI for session ${session.id} of type: ${parsedMessage.type || 'unknown'} (content redacted for privacy)`);
-            
-            // Track critical session events
-            if (parsedMessage.type === 'transcription_session.created') {
-              console.log(`✅ Transcription session CREATED for session ${session.id} at ${new Date().toISOString()}`);
-              
-              // Clear any existing ready timeout since we received the real event
-              if (this.connectionTimeouts.has(session.id)) {
-                console.log(`Clearing ready timeout for session ${session.id} as real event was received`);
-                clearTimeout(this.connectionTimeouts.get(session.id)!);
-                this.connectionTimeouts.delete(session.id);
-              }
-              
-              // Send a special event to the client that the session is fully initialized
-              if (client.socket.readyState === 1) {
-                client.socket.send(JSON.stringify({
-                  type: 'server_event',
-                  event: 'openai_session_created',
-                  sessionId: session.id,
-                  timestamp: Date.now(),
-                  message: 'OpenAI transcription session is now ready for audio'
-                }));
-                
-                // Also send the transcription_session.created event directly
-                // This ensures the client receives the exact event type it expects
-                client.socket.send(JSON.stringify({
-                  type: 'transcription_session.created',
-                  sessionId: session.id,
-                  timestamp: Date.now()
-                }));
-              }
-            }
-            
-            // Handle auth.ok message explicitly
-            if (parsedMessage.type === 'auth.ok') {
-              console.log(`Successfully authenticated with OpenAI for session ${session.id}`);
-              
-              // Notify client of successful authentication
-              if (client.socket.readyState === 1) {
-                client.socket.send(JSON.stringify({
-                  type: 'session_authenticate_success',
-                  sessionId: session.id,
-                  timestamp: Date.now()
-                }));
-              }
-            }
-            
-            // Handle auth.error message explicitly
-            if (parsedMessage.type === 'auth.error') {
-              console.error(`Authentication error with OpenAI for session ${session.id}:`, parsedMessage);
-              
-              // Notify client of authentication failure
-              if (client.socket.readyState === 1) {
-                client.socket.send(JSON.stringify({
-                  type: 'error',
-                  error: 'authentication_failed',
-                  message: 'Failed to authenticate with OpenAI',
-                  details: parsedMessage.error || 'Unknown authentication error'
-                }));
-              }
-            }
-            
-            // Forward OpenAI's messages to the client
-            if (client.socket.readyState === 1) { // 1 = OPEN
-              client.socket.send(messageString);
-            }
-          } catch (error: any) {
-            console.error('Error handling message from OpenAI:', error);
+        logger.warn({
+          message: `Unhandled message type from client: ${clientId}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: { 
+            clientId, 
+            messageType: data.type
           }
         });
-
-        // Handle connection close
-        openaiSocket.on('close', () => {
-          console.log(`OpenAI WebSocket connection closed for session ${session.id}`);
-          
-          // Notify the client
-          if (client.socket.readyState === 1) { // 1 = OPEN
-            client.socket.send(JSON.stringify({
-              type: 'session_ended',
-              message: 'Session ended by OpenAI'
-            }));
-          }
-          
-          // Clean up
-          this.openaiConnections.delete(session.id);
-          if (this.connectionTimeouts.has(session.id)) {
-            clearTimeout(this.connectionTimeouts.get(session.id)!);
-            this.connectionTimeouts.delete(session.id);
-          }
-        });
-
-        // Handle errors
-        openaiSocket.on('error', (err) => {
-          console.error(`OpenAI WebSocket error for session ${session.id}:`, err);
-          
-          // Notify the client
-          if (client.socket.readyState === 1) { // 1 = OPEN
-            client.socket.send(JSON.stringify({
-              type: 'error',
-              message: 'Connection error with OpenAI',
-              details: err.message
-            }));
-          }
-        });
-      } catch (socketError: any) {
-        console.error('Failed to create OpenAI WebSocket:', socketError);
         
-        // Notify the client
+        // Send error back to client
         client.socket.send(JSON.stringify({
           type: 'error',
-          message: 'Failed to create OpenAI WebSocket connection',
-          details: socketError.message
+          message: `Unrecognized message type: ${data.type}`,
+          timestamp: new Date().toISOString()
         }));
+    }
+  }
+  
+  // Handle create session request
+  private async handleCreateSession(client: ClientConnection, data: any): Promise<void> {
+    const { id: clientId } = client;
+    
+    // Store customer info
+    client.customerId = data.customerId;
+    client.customerName = data.customerName || 'Customer';
+    
+    logger.info({
+      message: `Creating session for client: ${clientId}`,
+      category: 'realtime',
+      source: 'openai',
+      metadata: { 
+        clientId,
+        voice: data.voice
       }
-    } catch (error: any) {
-      console.error('Failed to create OpenAI Realtime session:', error);
+    });
+    
+    // Mark as initializing to properly handle audio received during initialization
+    client.initializingSession = true;
+    
+    try {
+      // Create a session with OpenAI via REST API
+      const sessionData = await openAIRealtimeService.createRealtimeSession({
+        model: 'gpt-4o',
+        voice: data.voice || 'alloy',
+        instructions: data.instructions || `You are a helpful assistant named Financial Sherpa.`
+      });
       
-      // Notify the client
+      // Extract session ID from the response
+      const sessionId = sessionData.id;
+      
+      // Construct WebSocket URL using the session ID
+      const sessionUrl = `wss://api.openai.com/v1/realtime/${sessionId}`;
+      
+      // Use the session ID as the token (this varies depending on OpenAI's API)
+      const token = sessionId;
+      
+      logger.info({
+        message: `Session created for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId,
+          sessionId,
+          sessionData // Log the full session data for debugging
+        }
+      });
+      
+      // Store session ID
+      client.sessionId = sessionId;
+      
+      // Connect to OpenAI WebSocket with the session token
+      await this.connectToOpenAI(client, sessionUrl, token);
+      
+      // Notify client of session creation
+      client.socket.send(JSON.stringify({
+        type: 'session_created',
+        sessionId,
+        voice: data.voice || 'alloy',
+        timestamp: new Date().toISOString()
+      }));
+    } catch (error) {
+      logger.error({
+        message: `Error creating session for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId,
+          error: error instanceof Error ? error.stack : String(error) 
+        }
+      });
+      
+      // Unmark initializing state
+      client.initializingSession = false;
+      
+      // Send error to client
       client.socket.send(JSON.stringify({
         type: 'error',
-        message: 'Failed to create session',
-        details: error.message
+        message: `Failed to create session: ${error instanceof Error ? error.message : String(error)}`,
+        critical: true,
+        timestamp: new Date().toISOString()
       }));
     }
   }
-
-  /**
-   * Handle audio data from a client
-   */
-  private async handleAudioData(clientId: string, data: any): Promise<void> {
-    const client = this.clients.get(clientId);
+  
+  // Connect to OpenAI WebSocket
+  private async connectToOpenAI(client: ClientConnection, sessionUrl: string, token: string): Promise<void> {
+    const { id: clientId } = client;
     
-    if (!client || !client.sessionId) {
-      return;
-    }
-
-    const openaiSocket = this.openaiConnections.get(client.sessionId);
-    
-    if (!openaiSocket || openaiSocket.readyState !== 1) { // 1 = OPEN
-      client.socket.send(JSON.stringify({
-        type: 'error',
-        message: 'No active OpenAI connection'
-      }));
-      return;
-    }
-
     try {
-      // Check if data is in binary format (ArrayBuffer or Buffer)
-      if (data.audio_binary) {
-        // Send binary audio data directly (without JSON encoding)
-        // This is the preferred method for audio data according to the OpenAI docs
-        openaiSocket.send(data.audio_binary);
-      } else if (data.audio) {
-        // Legacy format - JSON with base64 encoded audio data
-        // Forward the audio data to OpenAI using the input_audio_buffer.append event
-        openaiSocket.send(JSON.stringify({
-          type: 'input_audio_buffer.append',
-          event_id: `event_${uuidv4()}`,
-          data: data.audio,
-          timestamp: data.timestamp || Date.now()
+      logger.info({
+        message: `Connecting to OpenAI Realtime API for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId
+        }
+      });
+      
+      // Create WebSocket connection to OpenAI
+      const openaiSocket = new WebSocket(sessionUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // Store the socket in the client object
+      client.openaiSocket = openaiSocket;
+      
+      // Set up event handlers
+      openaiSocket.on('open', () => {
+        logger.info({
+          message: `OpenAI WebSocket connection opened for client: ${clientId}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: { clientId }
+        });
+        
+        // Send auth success notification to client
+        client.socket.send(JSON.stringify({
+          type: 'session_authenticate_success',
+          timestamp: new Date().toISOString()
         }));
-      } else {
-        console.warn(`Received audio data without audio content from client ${clientId}`);
-      }
-    } catch (error: any) {
-      console.error('Failed to send audio data to OpenAI:', error);
-    }
-  }
-
-  /**
-   * Handle text input from a client
-   */
-  private async handleTextInput(clientId: string, data: any): Promise<void> {
-    const client = this.clients.get(clientId);
-    
-    if (!client || !client.sessionId) {
-      return;
-    }
-
-    const openaiSocket = this.openaiConnections.get(client.sessionId);
-    
-    if (!openaiSocket || openaiSocket.readyState !== 1) { // 1 = OPEN
-      client.socket.send(JSON.stringify({
-        type: 'error',
-        message: 'No active OpenAI connection'
-      }));
-      return;
-    }
-
-    try {
-      // Forward the text input to OpenAI using the conversation.item.create event
-      openaiSocket.send(JSON.stringify({
-        type: 'conversation.item.create',
-        event_id: `event_${uuidv4()}`,
-        content: {
-          type: 'text',
-          text: data.text
-        },
-        role: 'user'
-      }));
-    } catch (error: any) {
-      console.error('Failed to send text input to OpenAI:', error);
-    }
-  }
-
-  /**
-   * Handle end of stream (audio streaming ended)
-   */
-  private async handleEndOfStream(clientId: string): Promise<void> {
-    const client = this.clients.get(clientId);
-    
-    if (!client || !client.sessionId) {
-      return;
-    }
-
-    const openaiSocket = this.openaiConnections.get(client.sessionId);
-    
-    if (!openaiSocket || openaiSocket.readyState !== 1) { // 1 = OPEN
-      client.socket.send(JSON.stringify({
-        type: 'error',
-        message: 'No active OpenAI connection'
-      }));
-      return;
-    }
-
-    try {
-      // Send end_of_stream message to OpenAI
-      openaiSocket.send(JSON.stringify({
-        type: 'end_of_stream',
-        event_id: `event_${uuidv4()}`
-      }));
+        
+        // Now send the create payload to OpenAI
+        try {
+          const createPayload = {
+            type: 'transcription_session.create',
+            transcription_session: {
+              mode: 'speech_recognition',
+              language: 'en', // TODO: Make this configurable
+              vad: {
+                active: true,
+                before_speech_ms: 200,
+                after_speech_ms: 1000
+              },
+              sample_rate: 16000, // TODO: Make this configurable
+              direct_voice_activity_detection: true
+            }
+          };
+          
+          logger.info({
+            message: `Sending transcription_session.create payload to OpenAI for client: ${clientId}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { 
+              clientId,
+              payload: createPayload
+            }
+          });
+          
+          openaiSocket.send(JSON.stringify(createPayload));
+        } catch (error) {
+          logger.error({
+            message: `Error sending transcription_session.create payload: ${error instanceof Error ? error.message : String(error)}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { 
+              clientId,
+              error: error instanceof Error ? error.stack : String(error)
+            }
+          });
+        }
+        
+        // Set a timeout to force-set readiness if we don't get confirmation
+        // This helps in case OpenAI doesn't send the expected event
+        setTimeout(() => {
+          if (!client.openaiReadyState && client.openaiSocket === openaiSocket) {
+            logger.warn({
+              message: `OpenAI session readiness timeout - forcing ready state for client: ${clientId}`,
+              category: 'realtime',
+              source: 'openai',
+              metadata: { clientId }
+            });
+            
+            // Force set ready state after timeout
+            this.setSessionReady(client);
+          }
+        }, 8000); // 8 second timeout
+      });
       
-      console.log(`Sent end_of_stream message to OpenAI for session ${client.sessionId}`);
-    } catch (error: any) {
-      console.error('Failed to send end_of_stream message to OpenAI:', error);
+      openaiSocket.on('message', (message) => this.handleOpenAIMessage(client, message));
+      
+      openaiSocket.on('close', () => {
+        logger.info({
+          message: `OpenAI WebSocket connection closed for client: ${clientId}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: { clientId }
+        });
+        
+        // Reset ready state on close
+        client.openaiReadyState = false;
+        
+        // Notify client of connection close if their socket is still open
+        if (client.socket && client.socket.readyState === WS_OPEN) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'OpenAI connection closed',
+            code: 'OPENAI_CONNECTION_CLOSED',
+            timestamp: new Date().toISOString()
+          }));
+        }
+      });
+      
+      openaiSocket.on('error', (error) => {
+        logger.error({
+          message: `OpenAI WebSocket error for client: ${clientId}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: { 
+            clientId,
+            error: error instanceof Error ? error.stack : String(error)
+          }
+        });
+        
+        // Notify client of error
+        if (client.socket && client.socket.readyState === WS_OPEN) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: `OpenAI connection error: ${error instanceof Error ? error.message : String(error)}`,
+            code: 'OPENAI_CONNECTION_ERROR',
+            timestamp: new Date().toISOString()
+          }));
+        }
+      });
+      
+    } catch (error) {
+      logger.error({
+        message: `Error connecting to OpenAI for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      // Unmark initializing state
+      client.initializingSession = false;
+      
+      // Send error to client
+      client.socket.send(JSON.stringify({
+        type: 'error',
+        message: `Failed to connect to OpenAI: ${error instanceof Error ? error.message : String(error)}`,
+        critical: true,
+        timestamp: new Date().toISOString()
+      }));
     }
   }
-
-  /**
-   * Handle a request to end the session
-   */
-  private async handleEndSession(clientId: string): Promise<void> {
-    const client = this.clients.get(clientId);
+  
+  // Handle messages from OpenAI
+  private async handleOpenAIMessage(client: ClientConnection, message: WebSocket.Data): Promise<void> {
+    const { id: clientId } = client;
     
-    if (!client || !client.sessionId) {
+    try {
+      // If the message is a Buffer or ArrayBuffer, it's binary data
+      if (message instanceof Buffer || message instanceof ArrayBuffer) {
+        // OpenAI doesn't typically send binary data back, but if it does, log it
+        logger.debug({
+          message: `Received binary data from OpenAI for client: ${clientId}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: { 
+            clientId,
+            size: message instanceof Buffer ? message.length : message.byteLength
+          }
+        });
+        return;
+      }
+      
+      // Parse the message as JSON
+      const data = JSON.parse(message.toString());
+      
+      // Handle different message types from OpenAI
+      switch (data.type) {
+        case 'transcription_session.created':
+          logger.info({
+            message: `Transcription session CREATED for client: ${clientId}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { 
+              clientId,
+              sessionData: data
+            }
+          });
+          
+          // Set the session as ready
+          this.setSessionReady(client);
+          
+          // Forward the message to the client
+          client.socket.send(JSON.stringify({
+            type: 'transcription_session.created',
+            timestamp: new Date().toISOString()
+          }));
+          break;
+          
+        case 'transcription_session.updated':
+          logger.info({
+            message: `Transcription session updated for client: ${clientId}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { 
+              clientId,
+              sessionData: data
+            }
+          });
+          
+          // Also consider the session ready when updated (as a fallback)
+          this.setSessionReady(client);
+          break;
+          
+        case 'conversation.item.input_audio_transcription.delta':
+          // Don't log every delta to avoid spam
+          
+          // Forward the delta transcription to the client
+          client.socket.send(JSON.stringify({
+            type: 'transcription',
+            text: data.delta?.text || '',
+            timestamp: new Date().toISOString()
+          }));
+          break;
+          
+        case 'conversation.item.input_audio_transcription.completed':
+          logger.info({
+            message: `Transcription completed for client: ${clientId}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { 
+              clientId,
+              transcription: data.input_audio_transcription?.text || ''
+            }
+          });
+          
+          // Forward the complete transcription to the client
+          client.socket.send(JSON.stringify({
+            type: 'transcription',
+            text: data.input_audio_transcription?.text || '',
+            final: true,
+            timestamp: new Date().toISOString()
+          }));
+          break;
+          
+        case 'conversation.item.message.delta':
+          // Forward the delta message to the client
+          if (data.delta?.content) {
+            client.socket.send(JSON.stringify({
+              type: 'message',
+              role: 'assistant',
+              content: data.delta.content,
+              timestamp: new Date().toISOString()
+            }));
+          }
+          break;
+          
+        case 'conversation.item.message.completed':
+          logger.info({
+            message: `Message completed for client: ${clientId}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { 
+              clientId,
+              message: data.message?.content || ''
+            }
+          });
+          
+          // Forward the complete message to the client
+          if (data.message?.content) {
+            client.socket.send(JSON.stringify({
+              type: 'message',
+              role: 'assistant',
+              content: data.message.content,
+              final: true,
+              timestamp: new Date().toISOString()
+            }));
+          }
+          break;
+          
+        case 'error':
+          logger.error({
+            message: `Error from OpenAI for client: ${clientId}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { 
+              clientId,
+              error: data
+            }
+          });
+          
+          // Forward the error to the client
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: data.message || 'Unknown error from OpenAI',
+            code: 'OPENAI_API_ERROR',
+            timestamp: new Date().toISOString()
+          }));
+          break;
+          
+        default:
+          // Log but don't forward unknown message types
+          logger.debug({
+            message: `Unhandled message type from OpenAI for client: ${clientId}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { 
+              clientId,
+              type: data.type,
+              data: data
+            }
+          });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error handling OpenAI message for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+    }
+  }
+  
+  // Set the session as ready and process any pending audio
+  private setSessionReady(client: ClientConnection): void {
+    if (client.openaiReadyState) return; // Already ready
+    
+    const { id: clientId } = client;
+    
+    logger.info({
+      message: `Setting OpenAI session ready state to TRUE for client: ${clientId}`,
+      category: 'realtime',
+      source: 'openai',
+      metadata: { 
+        clientId,
+        pendingAudioChunks: client.pendingAudioChunks.length
+      }
+    });
+    
+    // Set ready state
+    client.openaiReadyState = true;
+    client.initializingSession = false;
+    
+    // Process any pending audio chunks
+    if (client.pendingAudioChunks.length > 0) {
+      this.processBufferedAudio(client);
+    }
+  }
+  
+  // Attempt to reconnect to OpenAI
+  private async reconnectToOpenAI(client: ClientConnection): Promise<void> {
+    const { id: clientId, sessionId } = client;
+    
+    if (!sessionId) {
+      logger.warn({
+        message: `Cannot reconnect to OpenAI - no session ID for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId }
+      });
       return;
     }
-
-    const openaiSocket = this.openaiConnections.get(client.sessionId);
     
-    if (openaiSocket && openaiSocket.readyState === 1) { // 1 = OPEN
-      openaiSocket.close();
+    try {
+      logger.info({
+        message: `Attempting to reconnect to OpenAI for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId, sessionId }
+      });
+      
+      // Instead of trying to get a new token, we'll create a new session
+      // since the original session might be expired
+      const sessionResponse = await openAIRealtimeService.createRealtimeSession({
+        model: 'gpt-4o',
+        voice: 'alloy', // Default voice
+      });
+      
+      // Store the new session ID
+      client.sessionId = sessionResponse.id;
+      
+      // Extract URL and token for connection
+      const sessionUrl = `wss://api.openai.com/v1/realtime/${sessionResponse.id}`;
+      const token = sessionResponse.id; // Using session ID as token for simplicity
+      
+      // Connect to OpenAI with the new session
+      await this.connectToOpenAI(client, sessionUrl, token);
+      
+      logger.info({
+        message: `Created new session during reconnect for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId,
+          newSessionId: sessionResponse.id
+        }
+      });
+    } catch (error) {
+      logger.error({
+        message: `Failed to reconnect to OpenAI for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId, 
+          sessionId,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      // Notify client of reconnection failure
+      client.socket.send(JSON.stringify({
+        type: 'error',
+        message: 'Failed to reconnect to OpenAI',
+        code: 'OPENAI_RECONNECT_FAILED',
+        critical: true,
+        timestamp: new Date().toISOString()
+      }));
     }
-
-    // Clean up
-    this.openaiConnections.delete(client.sessionId);
-    if (this.connectionTimeouts.has(client.sessionId)) {
-      clearTimeout(this.connectionTimeouts.get(client.sessionId)!);
-      this.connectionTimeouts.delete(client.sessionId);
+  }
+  
+  // Handle audio data sent as base64 (fallback for browsers that don't support binary WebSocket)
+  private async handleAudioData(client: ClientConnection, data: any): Promise<void> {
+    const { id: clientId, openaiSocket, openaiReadyState } = client;
+    
+    if (!data.audio) {
+      logger.warn({
+        message: `Received audio_data message without audio field from client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId }
+      });
+      return;
     }
+    
+    try {
+      // Convert base64 to buffer
+      const buffer = Buffer.from(data.audio, 'base64');
+      
+      // Handle like binary data
+      await this.handleBinaryMessage(client, buffer);
+    } catch (error) {
+      logger.error({
+        message: `Error handling base64 audio data from client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+    }
+  }
+  
+  // Handle end of stream message
+  private async handleEndOfStream(client: ClientConnection): Promise<void> {
+    const { id: clientId, openaiSocket, openaiReadyState } = client;
+    
+    if (openaiSocket && openaiReadyState && openaiSocket.readyState === WS_OPEN) {
+      logger.info({
+        message: `Sending end of stream for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId }
+      });
+      
+      // Send commit message to OpenAI to signal end of audio
+      openaiSocket.send(JSON.stringify({
+        type: 'input_audio_buffer.commit'
+      }));
+    } else {
+      logger.warn({
+        message: `Cannot send end of stream - OpenAI connection not ready for client: ${clientId}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { 
+          clientId, 
+          hasSocket: !!openaiSocket,
+          socketReady: openaiSocket ? openaiSocket.readyState === WS_OPEN : false,
+          sessionReady: openaiReadyState
+        }
+      });
+    }
+  }
+  
+  // Handle client disconnection
+  private handleClientDisconnect(clientId: string): void {
+    logger.info({
+      message: `Client disconnected: ${clientId}`,
+      category: 'realtime',
+      source: 'openai',
+      metadata: { clientId }
+    });
+    
+    // Close and clean up the client connection
+    this.closeClientConnection(clientId);
+  }
+  
+  // Handle client errors
+  private handleClientError(clientId: string, error: Error): void {
+    logger.error({
+      message: `Client connection error: ${clientId}`,
+      category: 'realtime',
+      source: 'openai',
+      metadata: { 
+        clientId, 
+        error: error.stack || error.message
+      }
+    });
+    
+    // Close the connection on error
+    this.closeClientConnection(clientId);
+  }
+  
+  // Handle WebSocket server errors
+  private handleServerError(error: Error): void {
+    logger.error({
+      message: 'WebSocket server error',
+      category: 'realtime',
+      source: 'openai',
+      metadata: { error: error.stack || error.message }
+    });
+  }
+  
+  // Close a client connection and clean up resources
+  private closeClientConnection(clientId: string): void {
+    const client = this.clients.get(clientId);
+    
+    if (!client) return;
+    
+    // Close OpenAI connection
+    if (client.openaiSocket) {
+      // Only close if it's not already closed
+      if (client.openaiSocket.readyState !== WS_CLOSED) {
+        client.openaiSocket.close();
+      }
+      client.openaiSocket = undefined;
+    }
+    
+    // Close client socket
+    if (client.socket && client.socket.readyState !== WS_CLOSED) {
+      client.socket.close();
+    }
+    
+    // Remove from clients map
+    this.clients.delete(clientId);
+    
+    logger.info({
+      message: `Client connection closed and cleaned up: ${clientId}`,
+      category: 'realtime',
+      source: 'openai',
+      metadata: { clientId }
+    });
+  }
+  
+  // Handle end session request
+  private handleEndSession(client: ClientConnection): void {
+    const { id: clientId } = client;
+    
+    logger.info({
+      message: `Ending session for client: ${clientId}`,
+      category: 'realtime',
+      source: 'openai',
+      metadata: { clientId }
+    });
+    
+    // Close OpenAI connection but keep client connection
+    if (client.openaiSocket) {
+      // Only close if it's not already closed
+      if (client.openaiSocket.readyState !== WS_CLOSED) {
+        client.openaiSocket.close();
+      }
+      client.openaiSocket = undefined;
+    }
+    
+    // Reset client state
+    client.openaiReadyState = false;
     client.sessionId = undefined;
-
+    client.pendingAudioChunks = [];
+    client.initializingSession = false;
+    
+    // Notify client
     client.socket.send(JSON.stringify({
       type: 'session_ended',
-      message: 'Session ended by client'
+      message: 'Session ended successfully',
+      timestamp: new Date().toISOString()
     }));
+  }
+  
+  // Ping clients to keep connections alive
+  private pingClients(): void {
+    for (const client of this.clients.values()) {
+      if (client.socket && client.socket.readyState === WS_OPEN) {
+        try {
+          client.socket.ping();
+        } catch (error) {
+          logger.error({
+            message: `Error pinging client: ${client.id}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { 
+              clientId: client.id,
+              error: error instanceof Error ? error.stack : String(error)
+            }
+          });
+        }
+      }
+    }
   }
 }
 
-// Create and export a singleton instance
-export const openAIRealtimeWebSocketService = new OpenAIRealtimeWebSocketService();
+// Export an instance of the service
+export const openaiRealtimeWebSocketService = new OpenAIRealtimeWebSocketService();
