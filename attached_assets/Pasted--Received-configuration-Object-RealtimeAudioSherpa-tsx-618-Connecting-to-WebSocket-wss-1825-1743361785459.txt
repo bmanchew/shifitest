@@ -1,0 +1,28 @@
+✅ Received configuration: 
+Object
+RealtimeAudioSherpa.tsx:618 🔌 Connecting to WebSocket: wss://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/api/openai/realtime
+RealtimeAudioSherpa.tsx:621 🔌 Attempting to create WebSocket with URL: wss://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/api/openai/realtime
+RealtimeAudioSherpa.tsx:624 🔌 WebSocket created, current readyState: 0 (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)
+RealtimeAudioSherpa.tsx:648 ⏱ Connection timeout set for 15 seconds
+RealtimeAudioSherpa.tsx:812 ✅ WebSocket connection initialized
+RealtimeAudioSherpa.tsx:652 🟢 WebSocket connection established at: 2025-03-30T19:03:28.539Z
+RealtimeAudioSherpa.tsx:653 🟢 Connection details: wss://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/api/openai/realtime, readyState=1
+RealtimeAudioSherpa.tsx:697 📝 Sending session creation with instructions: You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help Shelby Leah Gower understand their financial data, provide insights on their contracts, and answer questions about financial products and services. Keep your responses friendly, concise, and professional. Use the financial data available to provide personalized insights.
+RealtimeAudioSherpa.tsx:698 📝 Customer name: Shelby Leah Gower
+RealtimeAudioSherpa.tsx:699 📝 Financial data available: true
+RealtimeAudioSherpa.tsx:346 📨 WebSocket message received: {"type":"welcome","clientId":"57d95987-2454-4dcc-a877-265b29454d7f","connected":true,"timestamp":174...
+RealtimeAudioSherpa.tsx:352 🔍 WebSocket message type: welcome 
+Object
+RealtimeAudioSherpa.tsx:369 🎉 Connected to WebSocket server: 
+Object
+RealtimeAudioSherpa.tsx:712 📤 Sending payload: {"type":"create_session","voice":"alloy","instructions":"You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help Shelby Leah Gower understand their financial data, provide insights on their contracts, and answer questions about financial products and services. Keep your responses friendly, concise, and professional. Use the financial data available to provide personalized insights.","customerId":45}
+RealtimeAudioSherpa.tsx:715 ✅ Session creation request sent successfully at: 2025-03-30T19:03:29.041Z
+RealtimeAudioSherpa.tsx:346 📨 WebSocket message received: {"type":"error","message":"System is still initializing. Please wait for the AI Ready notification b...
+RealtimeAudioSherpa.tsx:352 🔍 WebSocket message type: error 
+Object
+RealtimeAudioSherpa.tsx:360 🎯 Setting OpenAI session ready state to FALSE due to: error
+RealtimeAudioSherpa.tsx:441 ❌ Error from server at: 2025-03-30T19:03:29.123Z 
+Object
+RealtimeAudioSherpa.tsx:446 🛑 Received NO_SESSION_EXISTS error - waiting for session initialization
+﻿
+

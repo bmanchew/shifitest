@@ -356,7 +356,7 @@ class OpenAIRealtimeWebSocketService {
         temperature: data.temperature || 0.7
       };
 
-      console.info(`Creating OpenAI Realtime session with options: voice=${sessionOptions.voice}, temperature=${sessionOptions.temperature} for client ${clientId}`);
+      console.info(`Creating OpenAI Realtime session with voice=${sessionOptions.voice}, temperature=${sessionOptions.temperature} for client ${clientId} (instructions redacted for privacy)`);
       
       const session = await openAIRealtimeService.createRealtimeSession(sessionOptions);
       
@@ -501,8 +501,8 @@ class OpenAIRealtimeWebSocketService {
             const messageString = message.toString();
             const parsedMessage = JSON.parse(messageString);
             
-            // Log received messages for debugging
-            console.log(`Received message from OpenAI for session ${session.id}:`, parsedMessage);
+            // Log received messages for debugging (redact content for privacy)
+            console.log(`Received message from OpenAI for session ${session.id} of type: ${parsedMessage.type || 'unknown'} (content redacted for privacy)`);
             
             // Track critical session events
             if (parsedMessage.type === 'transcription_session.created') {

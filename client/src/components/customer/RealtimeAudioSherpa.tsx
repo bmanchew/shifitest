@@ -343,13 +343,13 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       }
       
       // For text data, try to parse as JSON
-      console.log('📨 WebSocket message received:', 
+      console.log('📨 WebSocket message received', 
         typeof event.data === 'string' 
-          ? event.data.substring(0, 100) + (event.data.length > 100 ? '...' : '') 
-          : 'Non-string data received');
+          ? '(data content redacted for privacy)' 
+          : '(binary data received)');
       
       const data = JSON.parse(event.data);
-      console.log('🔍 WebSocket message type:', data.type, data);
+      console.log('🔍 WebSocket message type:', data.type, '(message content redacted for privacy)');
       
       // Update session state instantly on specific event types
       // This is a critical fix for ensuring we properly track session state
@@ -390,7 +390,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
           
           // Add system welcome message
           const welcomeMessage = `Welcome to Financial Sherpa, ${customerName || 'there'}. You can now speak with me by pressing and holding the microphone button. How can I help you today?`;
-          console.log('💬 Adding welcome message:', welcomeMessage);
+          console.log('💬 Adding welcome message (content redacted for privacy)');
           
           addMessage({
             id: `system-${Date.now()}`,
@@ -405,13 +405,13 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
           break;
 
         case 'transcription':
-          console.log('📝 Transcription received:', data.text);
+          console.log('📝 Transcription received (content redacted for privacy)');
           setTranscription(data.text);
           break;
 
         case 'message':
           if (data.role === 'assistant') {
-            console.log('💬 Assistant message received:', data.content);
+            console.log('💬 Assistant message received (content redacted for privacy)');
             setConversationState('responding');
             
             // Add assistant message
@@ -471,7 +471,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
           
         // Handle server-side events  
         case 'server_event':
-          console.log('📡 Server event received:', data);
+          console.log('📡 Server event received (details redacted for privacy)');
           if (data.event === 'openai_session_created') {
             console.log('🎉 OpenAI session created on server side at:', new Date().toISOString());
             // Set the session as ready for audio using ref for immediate effect
@@ -525,7 +525,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
           break;
           
         case 'session.status':
-          console.log('📊 Session status update:', data);
+          console.log('📊 Session status update (details redacted for privacy)');
           break;
           
         case 'transcription_session.created':
@@ -603,7 +603,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
         throw new Error(config.error || 'Failed to get configuration');
       }
       
-      console.log('✅ Received configuration:', config);
+      console.log('✅ Received configuration (details redacted for privacy)');
       
       // Update customer name and financial data if available from the server
       // We can't use setCustomerName or setFinancialData here as they are passed as props
@@ -694,9 +694,9 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
           (config.financialData || financialData) ? 'Use the financial data available to provide personalized insights.' : 'Encourage connecting bank accounts to provide more personalized insights.'
         }`;
         
-        console.log('📝 Sending session creation with instructions:', instructions);
-        console.log('📝 Customer name:', config.customerName || customerName || 'unknown');
-        console.log('📝 Financial data available:', !!config.financialData || !!financialData);
+        console.log('📝 Sending session creation with Financial Sherpa instructions');
+        console.log('📝 Customer authenticated: Yes');
+        console.log('📝 Data available for context:', (!!config.financialData || !!financialData) ? 'Yes' : 'No');
         
         // Add delay to ensure WebSocket is fully established before sending
         setTimeout(() => {
@@ -709,7 +709,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
               customerId: customerId || 0
             };
             
-            console.log('📤 Sending payload:', JSON.stringify(createSessionPayload));
+            console.log('📤 Sending session creation payload (personal data redacted)');
             socket.send(JSON.stringify(createSessionPayload));
             
             console.log('✅ Session creation request sent successfully at:', new Date().toISOString());
