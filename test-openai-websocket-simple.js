@@ -65,39 +65,90 @@ req.end();
 
 // Function to connect to WebSocket after getting configuration
 function connectToWebSocket(config) {
-  const WS_URL = `ws://${API_HOST}:${API_PORT}/api/openai/realtime`;
+  // Use either the provided websocket endpoint or fallback to the default
+  const WS_PATH = config.wsEndpoint || '/api/openai/realtime';
+  const WS_URL = `ws://${API_HOST}:${API_PORT}${WS_PATH}`;
   
   console.log(`\nStep 2: Attempting to connect to WebSocket at ${WS_URL}`);
+  console.log('WebSocket configuration:', {
+    API_HOST,
+    API_PORT,
+    WS_PATH,
+    WS_URL,
+    customerId: config.customerId,
+    customerName: config.customerName
+  });
   
-  const ws = new WebSocket(WS_URL);
+  // Add query parameters to URL for identification
+  const wsUrlWithParams = `${WS_URL}?userId=${config.customerId}&role=customer`;
+  console.log(`Full WebSocket URL: ${wsUrlWithParams}`);
+  
+  // WebSocket client options (for debugging)
+  const wsOptions = {
+    handshakeTimeout: 10000,
+    perMessageDeflate: false,
+    maxPayload: 100 * 1024 * 1024, // 100 MB
+    followRedirects: true,
+    headers: {
+      'User-Agent': 'ShiFi-Test-Client/1.0',
+      'Origin': `http://${API_HOST}:${API_PORT}`
+    }
+  };
+  
+  console.log('Creating WebSocket with options:', wsOptions);
+  const ws = new WebSocket(wsUrlWithParams, [], wsOptions);
+  
+  // Track WebSocket client state
+  console.log('Initial WebSocket readyState:', getReadyStateName(ws.readyState));
+  
+  // Log WebSocket state changes
+  const originalOnOpen = ws._socket?.onopen;
+  if (ws._socket) {
+    ws._socket.onopen = function(...args) {
+      console.log('TCP socket connected (low level)');
+      if (originalOnOpen) return originalOnOpen.apply(this, args);
+    };
+  }
   
   // Set a timeout
   const timeout = setTimeout(() => {
     console.log('Connection timed out after 15 seconds');
+    console.log('Final WebSocket readyState:', getReadyStateName(ws.readyState));
     ws.close();
     process.exit(1);
   }, 15000);
   
   ws.on('open', () => {
     console.log('WebSocket connection established successfully!');
+    console.log('WebSocket readyState after open:', getReadyStateName(ws.readyState));
     
     // Send create_session message
     const message = {
       type: 'create_session',
       voice: 'alloy',
-      instructions: `You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help the customer understand their financial data.`
+      instructions: `You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help ${config.customerName || 'the customer'} understand their financial data.`
     };
     
     console.log('Sending message:', message);
-    ws.send(JSON.stringify(message));
+    try {
+      ws.send(JSON.stringify(message));
+      console.log('Message sent successfully');
+    } catch (e) {
+      console.error('Error sending message:', e);
+    }
   });
   
   ws.on('message', (data) => {
     try {
+      // First log the raw message for debugging
+      console.log('Raw message received:', data.toString().substring(0, 100) + (data.toString().length > 100 ? '...' : ''));
+      
       const message = JSON.parse(data.toString());
       console.log('Received WebSocket message:', message);
       
-      if (message.type === 'session_created') {
+      if (message.type === 'welcome') {
+        console.log('🎉 Welcome message received from WebSocket server');
+      } else if (message.type === 'session_created') {
         console.log('✅ Session created successfully with ID:', message.sessionId);
         clearTimeout(timeout);
         
@@ -114,11 +165,46 @@ function connectToWebSocket(config) {
       }
     } catch (error) {
       console.error('Error parsing WebSocket message:', error);
+      console.error('Raw data:', data.toString());
     }
+  });
+  
+  ws.on('upgrade', (response) => {
+    console.log('WebSocket upgrade response received:', {
+      statusCode: response.statusCode,
+      headers: response.headers
+    });
+  });
+  
+  ws.on('unexpected-response', (request, response) => {
+    console.error('WebSocket received unexpected response:', {
+      statusCode: response.statusCode,
+      statusMessage: response.statusMessage,
+      headers: response.headers
+    });
+    
+    // Read and log the response body for debugging
+    let responseBody = '';
+    response.on('data', (chunk) => {
+      responseBody += chunk.toString();
+    });
+    
+    response.on('end', () => {
+      console.error('Response body:', responseBody);
+      clearTimeout(timeout);
+      process.exit(1);
+    });
   });
   
   ws.on('error', (error) => {
     console.error('WebSocket error:', error);
+    console.error('WebSocket error details:', {
+      message: error.message,
+      code: error.code,
+      type: error.type,
+      target: error.target?.constructor.name,
+      readyState: ws.readyState !== undefined ? getReadyStateName(ws.readyState) : 'unknown'
+    });
     clearTimeout(timeout);
     process.exit(1);
   });
@@ -126,4 +212,10 @@ function connectToWebSocket(config) {
   ws.on('close', (code, reason) => {
     console.log(`WebSocket connection closed: code=${code}, reason=${reason}`);
   });
+}
+
+// Helper function to convert WebSocket readyState to readable name
+function getReadyStateName(state) {
+  const states = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
+  return states[state] || `UNKNOWN(${state})`;
 }

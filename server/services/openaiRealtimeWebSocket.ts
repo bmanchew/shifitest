@@ -5,10 +5,16 @@
  * the browser client and OpenAI's Realtime API WebSocket server.
  */
 
-import WebSocket from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from './logger';
 import { openAIRealtimeService } from './openaiRealtime';
+
+// WebSocket constants
+const WS_CONNECTING = 0;
+const WS_OPEN = 1;
+const WS_CLOSING = 2;
+const WS_CLOSED = 3;
 
 interface RealtimeWebSocketOptions {
   server: any; // Express server or HTTP/HTTPS server
@@ -16,14 +22,14 @@ interface RealtimeWebSocketOptions {
 }
 
 class OpenAIRealtimeWebSocketService {
-  private wss: WebSocket.Server | null = null;
+  private wss: any = null;
   private clients: Map<string, {
-    socket: WebSocket;
+    socket: any;
     sessionId?: string;
     userId?: number;
     role?: string;
   }> = new Map();
-  private openaiConnections: Map<string, WebSocket> = new Map();
+  private openaiConnections: Map<string, any> = new Map();
   private connectionTimeouts: Map<string, NodeJS.Timeout> = new Map();
   
   constructor() {}
@@ -34,35 +40,52 @@ class OpenAIRealtimeWebSocketService {
   public initialize(options: RealtimeWebSocketOptions): boolean {
     try {
       if (this.wss) {
-        logger.warn('WebSocket server already initialized', {
-          category: 'openai',
-          source: 'openai'
-        });
+        console.warn('WebSocket server already initialized');
         return true;
       }
 
       const { server, path = '/api/openai/realtime' } = options;
 
-      this.wss = new WebSocket.Server({ 
+      // Use more explicit configuration
+      this.wss = new WebSocketServer({ 
         server,
-        path 
+        path,
+        perMessageDeflate: false,
+        clientTracking: true,
+        verifyClient: (info, callback) => {
+          // Log the connection attempt
+          console.info('WebSocket connection attempt:', {
+            origin: info.origin,
+            secure: info.secure,
+            path: info.req.url
+          });
+          
+          // Always accept the connection for now
+          callback(true);
+        }
       });
 
+      // Log when server is listening
+      this.wss.on('listening', () => {
+        console.info('WebSocket server is listening:', {
+          path,
+          clients: this.wss?.clients?.size || 0
+        });
+      });
+
+      // Handle errors at the server level
+      this.wss.on('error', (error) => {
+        console.error('WebSocket server error:', error, { path });
+      });
+
+      // Handle connections
       this.wss.on('connection', this.handleConnection.bind(this));
 
-      logger.info('OpenAI Realtime WebSocket server initialized', {
-        path,
-        category: 'openai',
-        source: 'openai'
-      });
+      console.info('OpenAI Realtime WebSocket server initialized:', { path });
 
       return true;
     } catch (error) {
-      logger.error('Failed to initialize WebSocket server', {
-        error,
-        category: 'openai',
-        source: 'openai'
-      });
+      console.error('Failed to initialize WebSocket server:', error);
       return false;
     }
   }
@@ -91,12 +114,10 @@ class OpenAIRealtimeWebSocketService {
       this.clients.get(clientId)!.role = role;
     }
 
-    logger.info('Client connected to OpenAI Realtime WebSocket', {
+    console.info('Client connected to OpenAI Realtime WebSocket:', {
       clientId,
       userId,
-      role,
-      category: 'openai',
-      source: 'openai'
+      role
     });
 
     // Set up event handlers for the client socket
@@ -105,12 +126,7 @@ class OpenAIRealtimeWebSocketService {
         const data = JSON.parse(message.toString());
         await this.handleClientMessage(clientId, data);
       } catch (error) {
-        logger.error('Error handling client message', {
-          error,
-          clientId,
-          category: 'openai',
-          source: 'openai'
-        });
+        console.error('Error handling client message:', error, { clientId });
       }
     });
 
@@ -119,12 +135,7 @@ class OpenAIRealtimeWebSocketService {
     });
 
     clientSocket.on('error', (error) => {
-      logger.error('WebSocket error with client', {
-        error,
-        clientId,
-        category: 'openai',
-        source: 'openai'
-      });
+      console.error('WebSocket error with client:', error, { clientId });
     });
 
     // Send welcome message
@@ -143,11 +154,7 @@ class OpenAIRealtimeWebSocketService {
     const client = this.clients.get(clientId);
     
     if (!client) {
-      logger.error('Client not found for message', {
-        clientId,
-        category: 'openai',
-        source: 'openai'
-      });
+      console.error(`Client not found for message: ${clientId}`);
       return;
     }
 
@@ -171,12 +178,7 @@ class OpenAIRealtimeWebSocketService {
         break;
       
       default:
-        logger.warn('Unknown message type from client', {
-          type,
-          clientId,
-          category: 'openai',
-          source: 'openai'
-        });
+        console.warn(`Unknown message type from client: ${type} (clientId: ${clientId})`);
     }
   }
 
@@ -193,7 +195,7 @@ class OpenAIRealtimeWebSocketService {
     // Clean up OpenAI connection if it exists
     if (client.sessionId && this.openaiConnections.has(client.sessionId)) {
       const openaiSocket = this.openaiConnections.get(client.sessionId);
-      if (openaiSocket && openaiSocket.readyState === WebSocket.OPEN) {
+      if (openaiSocket && openaiSocket.readyState === 1) { // 1 = OPEN
         openaiSocket.close();
       }
       this.openaiConnections.delete(client.sessionId);
@@ -208,11 +210,7 @@ class OpenAIRealtimeWebSocketService {
     // Remove client from our records
     this.clients.delete(clientId);
 
-    logger.info('Client disconnected from WebSocket', {
-      clientId,
-      category: 'openai',
-      source: 'openai'
-    });
+    console.info(`Client disconnected from WebSocket: ${clientId}`);
   }
 
   /**
@@ -233,23 +231,11 @@ class OpenAIRealtimeWebSocketService {
         temperature: data.temperature || 0.7
       };
 
-      logger.info('Creating OpenAI Realtime session with options', {
-        options: sessionOptions,
-        clientId,
-        category: 'openai',
-        source: 'openai'
-      });
+      console.info(`Creating OpenAI Realtime session with options: voice=${sessionOptions.voice}, temperature=${sessionOptions.temperature} for client ${clientId}`);
       
       const session = await openAIRealtimeService.createRealtimeSession(sessionOptions);
       
-      logger.info('Successfully created OpenAI Realtime session', {
-        sessionId: session.id,
-        clientId,
-        model: session.model,
-        voice: session.voice,
-        category: 'openai',
-        source: 'openai'
-      });
+      console.info(`Successfully created OpenAI Realtime session: ID=${session.id}, model=${session.model}, voice=${session.voice} for client ${clientId}`);
       
       // Store the session ID with the client
       client.sessionId = session.id;
@@ -270,14 +256,21 @@ class OpenAIRealtimeWebSocketService {
       // Create a new WebSocket connection to OpenAI
       try {
         const apiKey = process.env.OPENAI_API_KEY || '';
-        const openaiSocket = new WebSocket('wss://api.openai.com/v1/realtime/ws');
+        console.log(`Connecting to OpenAI's WebSocket with session ID: ${session.id}`);
+        
+        // Add authorization headers to the WebSocket connection
+        const openaiSocket = new WebSocket('wss://api.openai.com/v1/realtime/ws', {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        });
         
         // Store the OpenAI WebSocket connection
         this.openaiConnections.set(session.id, openaiSocket);
         
         // Set up a timeout to detect connection issues
         const timeoutId = setTimeout(() => {
-          if (openaiSocket.readyState !== WebSocket.OPEN) {
+          if (openaiSocket.readyState !== 1) { // 1 = OPEN
             console.error(`OpenAI WebSocket connection timed out for session ${session.id}`);
             
             try {
@@ -287,7 +280,7 @@ class OpenAIRealtimeWebSocketService {
             }
             
             // Notify the client about the timeout
-            if (client.socket.readyState === WebSocket.OPEN) {
+            if (client.socket.readyState === 1) { // 1 = OPEN
               client.socket.send(JSON.stringify({
                 type: 'error',
                 message: 'Connection to OpenAI timed out. Please try again later.',
@@ -336,7 +329,7 @@ class OpenAIRealtimeWebSocketService {
             const parsedMessage = JSON.parse(messageString);
             
             // Forward OpenAI's messages to the client
-            if (client.socket.readyState === WebSocket.OPEN) {
+            if (client.socket.readyState === 1) { // 1 = OPEN
               client.socket.send(messageString);
             }
           } catch (error) {
@@ -349,7 +342,7 @@ class OpenAIRealtimeWebSocketService {
           console.log(`OpenAI WebSocket connection closed for session ${session.id}`);
           
           // Notify the client
-          if (client.socket.readyState === WebSocket.OPEN) {
+          if (client.socket.readyState === 1) { // 1 = OPEN
             client.socket.send(JSON.stringify({
               type: 'session_ended',
               message: 'Session ended by OpenAI'
@@ -369,7 +362,7 @@ class OpenAIRealtimeWebSocketService {
           console.error(`OpenAI WebSocket error for session ${session.id}:`, err);
           
           // Notify the client
-          if (client.socket.readyState === WebSocket.OPEN) {
+          if (client.socket.readyState === 1) { // 1 = OPEN
             client.socket.send(JSON.stringify({
               type: 'error',
               message: 'Connection error with OpenAI',
@@ -411,7 +404,7 @@ class OpenAIRealtimeWebSocketService {
 
     const openaiSocket = this.openaiConnections.get(client.sessionId);
     
-    if (!openaiSocket || openaiSocket.readyState !== WebSocket.OPEN) {
+    if (!openaiSocket || openaiSocket.readyState !== 1) { // 1 = OPEN
       client.socket.send(JSON.stringify({
         type: 'error',
         message: 'No active OpenAI connection'
@@ -443,7 +436,7 @@ class OpenAIRealtimeWebSocketService {
 
     const openaiSocket = this.openaiConnections.get(client.sessionId);
     
-    if (!openaiSocket || openaiSocket.readyState !== WebSocket.OPEN) {
+    if (!openaiSocket || openaiSocket.readyState !== 1) { // 1 = OPEN
       client.socket.send(JSON.stringify({
         type: 'error',
         message: 'No active OpenAI connection'
@@ -475,7 +468,7 @@ class OpenAIRealtimeWebSocketService {
 
     const openaiSocket = this.openaiConnections.get(client.sessionId);
     
-    if (openaiSocket && openaiSocket.readyState === WebSocket.OPEN) {
+    if (openaiSocket && openaiSocket.readyState === 1) { // 1 = OPEN
       openaiSocket.close();
     }
 
