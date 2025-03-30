@@ -139,15 +139,21 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           // Store for batch processing on stop
           audioChunksRef.current.push(event.data);
           
-          // If WebSocket is connected, stream audio chunk in real-time
-          if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+          // CRITICAL: Only send audio data if the OpenAI session is fully ready
+          // This prevents the "no session exists" errors
+          if (webSocketRef.current && 
+              webSocketRef.current.readyState === WebSocket.OPEN && 
+              openaiSessionReady) {
             try {
+              console.log(`📤 Sending audio chunk (${event.data.size} bytes) - OpenAI session ready: ${openaiSessionReady}`);
               // Send each chunk as binary data immediately for real-time processing
               webSocketRef.current.send(event.data);
             } catch (error) {
               console.warn('⚠️ Could not stream audio chunk in real-time:', error);
               // Just continue and we'll send the full audio on stop
             }
+          } else {
+            console.warn(`⚠️ Not sending audio chunk - WebSocket: ${webSocketRef.current?.readyState}, OpenAI ready: ${openaiSessionReady}`);
           }
         }
       };
@@ -160,10 +166,12 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           console.log(`🔊 Created audio blob of size: ${audioBlob.size} bytes`);
           audioChunksRef.current = [];
           
-          // Try to send binary audio directly if WebSocket is available
-          if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+          // Try to send binary audio directly if WebSocket is available AND OpenAI session is ready
+          if (webSocketRef.current && 
+              webSocketRef.current.readyState === WebSocket.OPEN && 
+              openaiSessionReady) {
             try {
-              console.log(`📤 Sending binary audio data to server - ${audioBlob.size} bytes`);
+              console.log(`📤 Sending binary audio data to server - ${audioBlob.size} bytes - OpenAI session ready: ${openaiSessionReady}`);
               
               // Send binary audio data directly for better performance
               // This bypasses the base64 encoding/decoding overhead
@@ -187,8 +195,11 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
               reader.onloadend = () => {
                 const base64Audio = reader.result?.toString().split(',')[1];
                 
-                if (base64Audio && webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
-                  console.log(`📤 Sending audio data to server - ${base64Audio.length} chars (base64)`);
+                if (base64Audio && 
+                    webSocketRef.current && 
+                    webSocketRef.current.readyState === WebSocket.OPEN && 
+                    openaiSessionReady) {
+                  console.log(`📤 Sending audio data to server - ${base64Audio.length} chars (base64) - OpenAI session ready: ${openaiSessionReady}`);
                   // Send audio data to server
                   webSocketRef.current.send(JSON.stringify({
                     type: 'audio_data',
@@ -200,7 +211,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
                     type: 'end_of_stream'
                   }));
                 } else {
-                  console.error('❌ Cannot send audio data - WebSocket not available or base64 conversion failed');
+                  console.error(`❌ Cannot send audio data - WebSocket: ${webSocketRef.current?.readyState}, OpenAI ready: ${openaiSessionReady}, base64 available: ${!!base64Audio}`);
                 }
               };
               reader.readAsDataURL(audioBlob);
@@ -501,6 +512,19 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           console.log('🎯 Transcription session created event received directly from OpenAI at:', new Date().toISOString());
           // Set the session as ready for audio
           setOpenaiSessionReady(true);
+          
+          // Log the exact state of the system when transcription_session.created received
+          console.log('🔄 System State:', {
+            sessionId: sessionId,
+            connected: connected,
+            conversationState: conversationState,
+            recording: recording,
+            openaiSessionReady: true, // Will be updated by the next render
+            webSocketState: webSocketRef.current ? webSocketRef.current.readyState : 'no-websocket',
+            mediaRecorderExists: !!mediaRecorderRef.current,
+            timestamp: new Date().toISOString()
+          });
+          
           toast({
             title: 'AI Ready',
             description: 'Financial Sherpa is ready for your voice questions',
@@ -793,25 +817,8 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
     if (conversationState === 'idle') {
       startConversation();
       
-      // Pre-initialize audio recording to prompt for microphone permission right away,
-      // but handle the permission denial more gracefully on initial mount
-      const requestPermission = async () => {
-        try {
-          // Just request permission without full initialization
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          
-          // If we got here, permission was granted; release the stream
-          stream.getTracks().forEach(track => track.stop());
-          
-          console.log('Microphone permission granted on component mount');
-        } catch (error) {
-          // Just log the error, but don't show a toast since the component is just mounting
-          console.log('Microphone permission will be requested again when recording starts');
-        }
-      };
-      
-      // Request permission but don't show error message on initial load
-      requestPermission();
+      // For now, remove early microphone permission request as it might be causing premature audio data collection
+      console.log('Deferring microphone permission request until recording starts');
     }
     
     // Cleanup function to end conversation when component unmounts
