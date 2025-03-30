@@ -262,13 +262,58 @@ class OpenAIRealtimeWebSocketService {
         source: 'openai'
       });
       
+      // Make sure we don't have an old connection
+      if (this.openaiConnections.has(session.id)) {
+        console.log(`Closing existing OpenAI WebSocket connection for session ${session.id}`);
+        try {
+          const oldConnection = this.openaiConnections.get(session.id);
+          if (oldConnection) {
+            oldConnection.close();
+          }
+        } catch (closeError) {
+          console.error('Error closing existing WebSocket:', closeError);
+        }
+        this.openaiConnections.delete(session.id);
+      }
+      
+      // Create a new WebSocket connection to OpenAI
+      console.log(`Creating new WebSocket connection to OpenAI for session ${session.id}`);
       const openaiSocket = new WebSocket('wss://api.openai.com/v1/realtime/ws');
       
       // Store the OpenAI WebSocket connection
       this.openaiConnections.set(session.id, openaiSocket);
+      
+      // Set up connection timeout for OpenAI WebSocket
+      const openaiConnectionTimeoutId = setTimeout(() => {
+        console.error(`OpenAI WebSocket connection timed out for session ${session.id}`);
+        
+        if (openaiSocket.readyState !== WebSocket.OPEN) {
+          // If OpenAI socket is not open yet, close it and notify the client
+          try {
+            openaiSocket.close();
+          } catch (error) {
+            console.error('Error closing timed-out OpenAI socket:', error);
+          }
+          
+          // Notify the client of the timeout
+          if (client.socket.readyState === WebSocket.OPEN) {
+            client.socket.send(JSON.stringify({
+              type: 'error',
+              message: 'Connection to OpenAI timed out. Please try again later.'
+            }));
+          }
+          
+          // Clean up the connection
+          this.openaiConnections.delete(session.id);
+        }
+      }, 10000); // 10 second timeout
 
       // Set up event handlers for the OpenAI WebSocket
       openaiSocket.on('open', () => {
+        // Clear connection timeout since we're connected
+        clearTimeout(openaiConnectionTimeoutId);
+        
+        console.log(`🟢 OpenAI WebSocket connection opened for session ${session.id}`);
         logger.info('OpenAI WebSocket connection opened, authenticating session', {
           sessionId: session.id,
           clientId,
