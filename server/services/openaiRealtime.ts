@@ -153,11 +153,14 @@ class OpenAIRealtimeService {
         throw new Error('OpenAI Realtime service is not initialized');
       }
 
-      logger.info('Creating OpenAI Realtime session with options', {
-        apiAvailable: !!this.apiKey,
-        apiKeyLength: this.apiKey ? this.apiKey.length : 0,
-        category: 'openai',
-        source: 'openai'
+      logger.info({
+        message: 'Creating OpenAI Realtime session with options',
+        category: 'realtime',
+        source: 'openai',
+        metadata: {
+          apiAvailable: !!this.apiKey,
+          apiKeyLength: this.apiKey ? this.apiKey.length : 0
+        }
       });
 
       const defaultOptions: RealtimeSessionOptions = {
@@ -182,12 +185,15 @@ class OpenAIRealtimeService {
 
       const requestOptions = { ...defaultOptions, ...options };
       
-      logger.info('Making API request to OpenAI Realtime API', {
-        url: `${this.baseUrl}/realtime/sessions`,
-        model: requestOptions.model,
-        voice: requestOptions.voice,
-        category: 'openai',
-        source: 'openai'
+      logger.info({
+        message: 'Making API request to OpenAI Realtime API',
+        category: 'realtime',
+        source: 'openai',
+        metadata: {
+          url: `${this.baseUrl}/realtime/sessions`,
+          model: requestOptions.model,
+          voice: requestOptions.voice
+        }
       });
 
       const response = await axios.post(
@@ -201,19 +207,44 @@ class OpenAIRealtimeService {
         }
       );
 
-      logger.info('Created OpenAI Realtime session', {
-        sessionId: response.data.id,
-        category: 'openai',
-        source: 'openai'
+      // Log successful response with more details
+      logger.info({
+        message: 'Created OpenAI Realtime session successfully',
+        category: 'realtime',
+        source: 'openai',
+        metadata: {
+          sessionId: response.data.id,
+          model: response.data.model,
+          voice: response.data.voice
+        }
       });
 
       return response.data;
     } catch (error) {
-      logger.error('Failed to create OpenAI Realtime session', {
-        error,
-        category: 'openai',
-        source: 'openai'
-      });
+      // Enhanced error logging
+      if (axios.isAxiosError(error)) {
+        logger.error({
+          message: `Failed to create OpenAI Realtime session: ${error.message}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            url: `${this.baseUrl}/realtime/sessions`,
+            model: options.model || this.defaultModel
+          }
+        });
+      } else {
+        logger.error({
+          message: `Failed to create OpenAI Realtime session: ${error instanceof Error ? error.message : String(error)}`,
+          category: 'realtime',
+          source: 'openai',
+          metadata: {
+            errorType: error instanceof Error ? error.name : typeof error
+          }
+        });
+      }
       throw error;
     }
   }

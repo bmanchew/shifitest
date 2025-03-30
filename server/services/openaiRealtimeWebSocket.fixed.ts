@@ -485,7 +485,19 @@ export class OpenAIRealtimeWebSocketService {
       source: 'openai',
       metadata: { 
         clientId,
-        voice: data.voice
+        voice: data.voice,
+        model: data.model || 'gpt-4o-realtime-preview'
+      }
+    });
+    
+    // Add logging for request data
+    logger.debug({
+      message: `Session creation request details`,
+      category: 'realtime',
+      source: 'openai',
+      metadata: { 
+        clientId: client.id,
+        data: JSON.stringify(data) // Log the entire request
       }
     });
     
@@ -493,12 +505,40 @@ export class OpenAIRealtimeWebSocketService {
     client.initializingSession = true;
     
     try {
-      // Create a session with OpenAI
-      const sessionData = await openAIRealtimeService.createRealtimeSession({
-        model: data.model || 'gpt-4o',
-        voice: data.voice || 'alloy',
-        instructions: data.instructions || `You are a helpful assistant named Financial Sherpa.`
-      });
+      // Add retry logic for session creation
+      let retries = 0;
+      const MAX_RETRIES = 2;
+      let sessionData;
+      
+      while (retries <= MAX_RETRIES) {
+        try {
+          // Create a session with OpenAI
+          sessionData = await openAIRealtimeService.createRealtimeSession({
+            model: data.model || 'gpt-4o-realtime-preview', // Updated model name
+            voice: data.voice || 'alloy',
+            instructions: data.instructions || `You are a helpful assistant named Financial Sherpa.`
+          });
+          break; // Success, exit retry loop
+        } catch (error) {
+          retries++;
+          logger.warn({
+            message: `Session creation attempt ${retries} failed: ${error instanceof Error ? error.message : String(error)}`,
+            category: 'realtime',
+            source: 'openai',
+            metadata: { clientId: client.id }
+          });
+          
+          // If we've reached max retries, throw the error
+          if (retries > MAX_RETRIES) throw error;
+          
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+        }
+      }
+      
+      if (!sessionData) {
+        throw new Error('Failed to create session after retries');
+      }
       
       // Extract session ID from the response
       const sessionId = sessionData.id;
@@ -548,10 +588,11 @@ export class OpenAIRealtimeWebSocketService {
         type: 'error',
         message: 'Failed to create session',
         details: error instanceof Error ? error.message : String(error),
+        code: 'SESSION_INITIALIZATION_FAILED',
         timestamp: new Date().toISOString()
       }));
-      
-      // Reset initialization flag
+    } finally {
+      // Always mark session as no longer initializing, regardless of success/failure
       client.initializingSession = false;
     }
   }
@@ -585,11 +626,10 @@ export class OpenAIRealtimeWebSocketService {
       });
       
       // Create a new WebSocket connection
-      const socket = new WebSocket.WebSocket(sessionUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      // WebSocket protocol doesn't support sending custom headers in the initial handshake
+      // For OpenAI, the token should be in the query string
+      const wsUrlWithToken = `${sessionUrl}?token=${encodeURIComponent(token)}`;
+      const socket = new WebSocket.WebSocket(wsUrlWithToken);
       
       // Store the socket
       client.openaiSocket = socket;
@@ -765,7 +805,7 @@ export class OpenAIRealtimeWebSocketService {
       // Instead of trying to get a new token, we'll create a new session
       // since the original session might be expired
       const sessionData = await openAIRealtimeService.createRealtimeSession({
-        model: 'gpt-4o',
+        model: 'gpt-4o-realtime-preview', // Updated model name
         voice: 'alloy', // Default voice
       });
       

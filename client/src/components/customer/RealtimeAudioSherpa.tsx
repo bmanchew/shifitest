@@ -740,6 +740,7 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
           try {
             const createSessionPayload = {
               type: 'create_session',
+              model: 'gpt-4o-realtime-preview', // Specify the correct model
               voice: 'alloy', // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse
               instructions: instructions,
               customerId: customerId || 0
