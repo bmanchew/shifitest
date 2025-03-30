@@ -24,6 +24,7 @@ class OpenAIRealtimeWebSocketService {
     role?: string;
   }> = new Map();
   private openaiConnections: Map<string, WebSocket> = new Map();
+  private connectionTimeouts: Map<string, NodeJS.Timeout> = new Map();
   
   constructor() {}
 
@@ -196,6 +197,12 @@ class OpenAIRealtimeWebSocketService {
         openaiSocket.close();
       }
       this.openaiConnections.delete(client.sessionId);
+      
+      // Clear any timeouts associated with this session
+      if (this.connectionTimeouts.has(client.sessionId)) {
+        clearTimeout(this.connectionTimeouts.get(client.sessionId)!);
+        this.connectionTimeouts.delete(client.sessionId);
+      }
     }
 
     // Remove client from our records
@@ -232,13 +239,6 @@ class OpenAIRealtimeWebSocketService {
         category: 'openai',
         source: 'openai'
       });
-
-      logger.info('Calling OpenAI Realtime service to create session', {
-        clientId,
-        sessionOptions,
-        category: 'openai',
-        source: 'openai'
-      });
       
       const session = await openAIRealtimeService.createRealtimeSession(sessionOptions);
       
@@ -254,187 +254,143 @@ class OpenAIRealtimeWebSocketService {
       // Store the session ID with the client
       client.sessionId = session.id;
 
-      // Connect to OpenAI's WebSocket server
-      logger.info('Connecting to OpenAI Realtime WebSocket server', {
-        sessionId: session.id,
-        clientId,
-        category: 'openai',
-        source: 'openai'
-      });
-      
       // Make sure we don't have an old connection
       if (this.openaiConnections.has(session.id)) {
-        console.log(`Closing existing OpenAI WebSocket connection for session ${session.id}`);
         try {
           const oldConnection = this.openaiConnections.get(session.id);
           if (oldConnection) {
             oldConnection.close();
           }
+          this.openaiConnections.delete(session.id);
         } catch (closeError) {
           console.error('Error closing existing WebSocket:', closeError);
         }
-        this.openaiConnections.delete(session.id);
       }
       
       // Create a new WebSocket connection to OpenAI
-      console.log(`Creating new WebSocket connection to OpenAI for session ${session.id}`);
-      const openaiSocket = new WebSocket('wss://api.openai.com/v1/realtime/ws');
-      
-      // Store the OpenAI WebSocket connection
-      this.openaiConnections.set(session.id, openaiSocket);
-      
-      // Set up connection timeout for OpenAI WebSocket
-      const openaiConnectionTimeoutId = setTimeout(() => {
-        console.error(`OpenAI WebSocket connection timed out for session ${session.id}`);
+      try {
+        const apiKey = process.env.OPENAI_API_KEY || '';
+        const openaiSocket = new WebSocket('wss://api.openai.com/v1/realtime/ws');
         
-        if (openaiSocket.readyState !== WebSocket.OPEN) {
-          // If OpenAI socket is not open yet, close it and notify the client
-          try {
-            openaiSocket.close();
-          } catch (error) {
-            console.error('Error closing timed-out OpenAI socket:', error);
+        // Store the OpenAI WebSocket connection
+        this.openaiConnections.set(session.id, openaiSocket);
+        
+        // Set up a timeout to detect connection issues
+        const timeoutId = setTimeout(() => {
+          if (openaiSocket.readyState !== WebSocket.OPEN) {
+            console.error(`OpenAI WebSocket connection timed out for session ${session.id}`);
+            
+            try {
+              openaiSocket.close();
+            } catch (err) {
+              console.error('Error closing timed-out OpenAI socket:', err);
+            }
+            
+            // Notify the client about the timeout
+            if (client.socket.readyState === WebSocket.OPEN) {
+              client.socket.send(JSON.stringify({
+                type: 'error',
+                message: 'Connection to OpenAI timed out. Please try again later.',
+                details: 'The connection to the OpenAI server timed out after 15 seconds.'
+              }));
+            }
+            
+            // Clean up
+            this.openaiConnections.delete(session.id);
+          }
+        }, 15000);
+        
+        // Store the timeout ID for later cleanup
+        this.connectionTimeouts.set(session.id, timeoutId);
+        
+        // Handle successful connection
+        openaiSocket.on('open', () => {
+          console.log(`OpenAI WebSocket connection opened for session ${session.id}`);
+          
+          // Clear the connection timeout
+          if (this.connectionTimeouts.has(session.id)) {
+            clearTimeout(this.connectionTimeouts.get(session.id)!);
+            this.connectionTimeouts.delete(session.id);
           }
           
-          // Notify the client of the timeout
+          // Send authentication message to OpenAI
+          const authPayload = {
+            type: 'session.authenticate',
+            session_token: session.client_secret.value
+          };
+          openaiSocket.send(JSON.stringify(authPayload));
+
+          // Notify the client that the session is ready
+          client.socket.send(JSON.stringify({
+            type: 'session_created',
+            sessionId: session.id,
+            voice: session.voice,
+            message: 'Session created successfully'
+          }));
+        });
+
+        // Handle messages from OpenAI
+        openaiSocket.on('message', (message) => {
+          try {
+            const messageString = message.toString();
+            const parsedMessage = JSON.parse(messageString);
+            
+            // Forward OpenAI's messages to the client
+            if (client.socket.readyState === WebSocket.OPEN) {
+              client.socket.send(messageString);
+            }
+          } catch (error) {
+            console.error('Error handling message from OpenAI:', error);
+          }
+        });
+
+        // Handle connection close
+        openaiSocket.on('close', () => {
+          console.log(`OpenAI WebSocket connection closed for session ${session.id}`);
+          
+          // Notify the client
           if (client.socket.readyState === WebSocket.OPEN) {
             client.socket.send(JSON.stringify({
-              type: 'error',
-              message: 'Connection to OpenAI timed out. Please try again later.'
+              type: 'session_ended',
+              message: 'Session ended by OpenAI'
             }));
           }
           
-          // Clean up the connection
+          // Clean up
           this.openaiConnections.delete(session.id);
-        }
-      }, 10000); // 10 second timeout
-
-      // Set up event handlers for the OpenAI WebSocket
-      openaiSocket.on('open', () => {
-        // Clear connection timeout since we're connected
-        clearTimeout(openaiConnectionTimeoutId);
-        
-        console.log(`🟢 OpenAI WebSocket connection opened for session ${session.id}`);
-        logger.info('OpenAI WebSocket connection opened, authenticating session', {
-          sessionId: session.id,
-          clientId,
-          category: 'openai',
-          source: 'openai'
-        });
-        
-        // Send authentication message to OpenAI
-        const authPayload = {
-          type: 'session.authenticate',
-          session_token: session.client_secret.value
-        };
-        console.log('🔑 Sending authentication to OpenAI:', JSON.stringify(authPayload));
-        openaiSocket.send(JSON.stringify(authPayload));
-
-        // Notify the client that the session is ready
-        const sessionCreatedMsg = {
-          type: 'session_created',
-          sessionId: session.id,
-          voice: session.voice,
-          message: 'Session created successfully'
-        };
-        console.log('📣 Notifying client session created:', JSON.stringify(sessionCreatedMsg));
-        client.socket.send(JSON.stringify(sessionCreatedMsg));
-
-        logger.info('Connected to OpenAI Realtime WebSocket', {
-          sessionId: session.id,
-          clientId,
-          category: 'openai',
-          source: 'openai'
-        });
-      });
-
-      openaiSocket.on('message', (message) => {
-        try {
-          // Log incoming messages from OpenAI (without logging full audio data which would be too large)
-          const messageString = message.toString();
-          const parsedMessage = JSON.parse(messageString);
-          
-          // Create a safe copy for logging that doesn't include potentially large audio data
-          const logMessage = { ...parsedMessage };
-          if (logMessage.type === 'audio') {
-            logMessage.audio = '[AUDIO_DATA]'; // Replace audio data with placeholder for logging
+          if (this.connectionTimeouts.has(session.id)) {
+            clearTimeout(this.connectionTimeouts.get(session.id)!);
+            this.connectionTimeouts.delete(session.id);
           }
+        });
+
+        // Handle errors
+        openaiSocket.on('error', (err) => {
+          console.error(`OpenAI WebSocket error for session ${session.id}:`, err);
           
-          logger.info('Received message from OpenAI', {
-            type: parsedMessage.type,
-            messageType: logMessage.type,
-            sessionId: session.id,
-            clientId,
-            category: 'openai',
-            source: 'openai'
-          });
-          
-          // Forward OpenAI's messages to the client
+          // Notify the client
           if (client.socket.readyState === WebSocket.OPEN) {
-            client.socket.send(messageString);
+            client.socket.send(JSON.stringify({
+              type: 'error',
+              message: 'Connection error with OpenAI',
+              details: err.message
+            }));
           }
-        } catch (error) {
-          logger.error('Error handling message from OpenAI', {
-            error,
-            sessionId: session.id,
-            clientId,
-            category: 'openai',
-            source: 'openai'
-          });
-        }
-      });
-
-      openaiSocket.on('close', () => {
-        logger.info('OpenAI WebSocket connection closed', {
-          sessionId: session.id,
-          clientId,
-          category: 'openai',
-          source: 'openai'
         });
-
+      } catch (socketError: any) {
+        console.error('Failed to create OpenAI WebSocket:', socketError);
+        
         // Notify the client
-        if (client.socket.readyState === WebSocket.OPEN) {
-          client.socket.send(JSON.stringify({
-            type: 'session_ended',
-            sessionId: session.id,
-            message: 'Session ended by OpenAI'
-          }));
-        }
-
-        // Clean up
-        this.openaiConnections.delete(session.id);
-        if (client.sessionId === session.id) {
-          client.sessionId = undefined;
-        }
-      });
-
-      openaiSocket.on('error', (error) => {
-        logger.error('Error with OpenAI WebSocket connection', {
-          error,
-          sessionId: session.id,
-          clientId,
-          category: 'openai',
-          source: 'openai'
-        });
-
-        // Notify the client
-        if (client.socket.readyState === WebSocket.OPEN) {
-          client.socket.send(JSON.stringify({
-            type: 'error',
-            message: 'Connection error with OpenAI',
-            details: error.message
-          }));
-        }
-      });
-
-    } catch (error) {
-      logger.error('Failed to create OpenAI Realtime session', {
-        error,
-        clientId,
-        category: 'openai',
-        source: 'openai'
-      });
-
-      // Notify the client of the error
+        client.socket.send(JSON.stringify({
+          type: 'error',
+          message: 'Failed to create OpenAI WebSocket connection',
+          details: socketError.message
+        }));
+      }
+    } catch (error: any) {
+      console.error('Failed to create OpenAI Realtime session:', error);
+      
+      // Notify the client
       client.socket.send(JSON.stringify({
         type: 'error',
         message: 'Failed to create session',
@@ -450,27 +406,12 @@ class OpenAIRealtimeWebSocketService {
     const client = this.clients.get(clientId);
     
     if (!client || !client.sessionId) {
-      logger.warn('Received audio data for client without active session', {
-        clientId,
-        hasClient: !!client,
-        category: 'openai',
-        source: 'openai'
-      });
       return;
     }
 
     const openaiSocket = this.openaiConnections.get(client.sessionId);
     
     if (!openaiSocket || openaiSocket.readyState !== WebSocket.OPEN) {
-      logger.warn('No active OpenAI connection for audio data', {
-        clientId,
-        sessionId: client.sessionId,
-        hasOpenAISocket: !!openaiSocket,
-        openAISocketState: openaiSocket ? openaiSocket.readyState : 'null',
-        category: 'openai',
-        source: 'openai'
-      });
-      
       client.socket.send(JSON.stringify({
         type: 'error',
         message: 'No active OpenAI connection'
@@ -479,16 +420,6 @@ class OpenAIRealtimeWebSocketService {
     }
 
     try {
-      // Log audio data receipt (without the actual audio data which is too large)
-      logger.info('Forwarding audio data to OpenAI', {
-        clientId,
-        sessionId: client.sessionId,
-        timestamp: data.timestamp || Date.now(),
-        audioDataSize: data.audio ? data.audio.length : 0,
-        category: 'openai',
-        source: 'openai'
-      });
-      
       // Forward the audio data to OpenAI
       openaiSocket.send(JSON.stringify({
         type: 'audio',
@@ -496,13 +427,7 @@ class OpenAIRealtimeWebSocketService {
         timestamp: data.timestamp || Date.now()
       }));
     } catch (error) {
-      logger.error('Failed to send audio data to OpenAI', {
-        error,
-        clientId,
-        sessionId: client.sessionId,
-        category: 'openai',
-        source: 'openai'
-      });
+      console.error('Failed to send audio data to OpenAI:', error);
     }
   }
 
@@ -534,13 +459,7 @@ class OpenAIRealtimeWebSocketService {
         role: 'user'
       }));
     } catch (error) {
-      logger.error('Failed to send text input to OpenAI', {
-        error,
-        clientId,
-        sessionId: client.sessionId,
-        category: 'openai',
-        source: 'openai'
-      });
+      console.error('Failed to send text input to OpenAI:', error);
     }
   }
 
@@ -560,19 +479,18 @@ class OpenAIRealtimeWebSocketService {
       openaiSocket.close();
     }
 
+    // Clean up
     this.openaiConnections.delete(client.sessionId);
+    if (this.connectionTimeouts.has(client.sessionId)) {
+      clearTimeout(this.connectionTimeouts.get(client.sessionId)!);
+      this.connectionTimeouts.delete(client.sessionId);
+    }
     client.sessionId = undefined;
 
     client.socket.send(JSON.stringify({
       type: 'session_ended',
       message: 'Session ended by client'
     }));
-
-    logger.info('Session ended by client', {
-      clientId,
-      category: 'openai',
-      source: 'openai'
-    });
   }
 }
 
