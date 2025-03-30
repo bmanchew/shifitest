@@ -9,11 +9,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Avatar } from '@/components/ui/avatar';
-import { Loader2, Mic, MicOff, Volume2, VolumeX, Info, MessageSquare } from 'lucide-react';
+import { Loader2, Mic, MicOff, Volume2, VolumeX, Info, MessageSquare, AlertCircle, CheckCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // The possible states of the conversation
 type ConversationState = 
@@ -803,7 +809,21 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
   const renderStatusBadge = () => {
     // Special case: connected but OpenAI session not fully ready
     if (conversationState === 'connected' && !openaiSessionReady) {
-      return <Badge variant="outline" className="bg-yellow-100 text-yellow-800">Initializing...</Badge>;
+      return (
+        <div className="flex items-center gap-1">
+          <Badge variant="outline" className="bg-yellow-100 text-yellow-800">Initializing...</Badge>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span><AlertCircle className="h-4 w-4 text-yellow-600" /></span>
+              </TooltipTrigger>
+              <TooltipContent>
+                Please wait a moment until AI initialization is complete before speaking
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      );
     }
     
     switch (conversationState) {
@@ -812,7 +832,21 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
       case 'connecting':
         return <Badge variant="outline" className="bg-yellow-100 text-yellow-800">Connecting...</Badge>;
       case 'connected':
-        return <Badge variant="outline" className="bg-green-100 text-green-800">Ready</Badge>;
+        return (
+          <div className="flex items-center gap-1">
+            <Badge variant="outline" className="bg-green-100 text-green-800">Ready</Badge>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span><CheckCircle className="h-4 w-4 text-green-600" /></span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  AI is ready to receive your voice input
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        );
       case 'recording':
         return <Badge variant="outline" className="bg-red-100 text-red-800">Recording</Badge>;
       case 'thinking':
