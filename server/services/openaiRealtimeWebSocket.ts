@@ -395,14 +395,49 @@ class OpenAIRealtimeWebSocketService {
             // Log received messages for debugging
             console.log(`Received message from OpenAI for session ${session.id}:`, parsedMessage);
             
+            // Track critical session events
+            if (parsedMessage.type === 'transcription_session.created') {
+              console.log(`✅ Transcription session CREATED for session ${session.id} at ${new Date().toISOString()}`);
+              
+              // Send a special event to the client that the session is fully initialized
+              if (client.socket.readyState === 1) {
+                client.socket.send(JSON.stringify({
+                  type: 'server_event',
+                  event: 'openai_session_created',
+                  sessionId: session.id,
+                  timestamp: Date.now(),
+                  message: 'OpenAI transcription session is now ready for audio'
+                }));
+              }
+            }
+            
             // Handle auth.ok message explicitly
             if (parsedMessage.type === 'auth.ok') {
               console.log(`Successfully authenticated with OpenAI for session ${session.id}`);
+              
+              // Notify client of successful authentication
+              if (client.socket.readyState === 1) {
+                client.socket.send(JSON.stringify({
+                  type: 'session_authenticate_success',
+                  sessionId: session.id,
+                  timestamp: Date.now()
+                }));
+              }
             }
             
             // Handle auth.error message explicitly
             if (parsedMessage.type === 'auth.error') {
               console.error(`Authentication error with OpenAI for session ${session.id}:`, parsedMessage);
+              
+              // Notify client of authentication failure
+              if (client.socket.readyState === 1) {
+                client.socket.send(JSON.stringify({
+                  type: 'error',
+                  error: 'authentication_failed',
+                  message: 'Failed to authenticate with OpenAI',
+                  details: parsedMessage.error || 'Unknown authentication error'
+                }));
+              }
             }
             
             // Forward OpenAI's messages to the client

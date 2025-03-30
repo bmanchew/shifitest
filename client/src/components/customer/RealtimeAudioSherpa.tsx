@@ -57,6 +57,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
   const [transcription, setTranscription] = useState<string>('');
   const [loadingText, setLoadingText] = useState<string>('Connecting...');
   const [connected, setConnected] = useState(false);
+  const [openaiSessionReady, setOpenaiSessionReady] = useState(false);
 
   // Refs
   const webSocketRef = useRef<WebSocket | null>(null);
@@ -276,6 +277,19 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
   // Start recording audio
   const startRecording = async () => {
     if (conversationState !== 'connected' || !webSocketRef.current || webSocketRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('Cannot start recording - connection not ready.');
+      return;
+    }
+    
+    // Check if OpenAI session is fully ready
+    if (!openaiSessionReady) {
+      console.warn('OpenAI session not fully ready yet - waiting for transcription_session.created event');
+      toast({
+        title: 'AI Initializing',
+        description: 'Please wait a moment for the AI to fully initialize',
+        variant: 'default',
+        duration: 2000
+      });
       return;
     }
 
@@ -287,6 +301,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
 
     // Start recording
     if (mediaRecorderRef.current) {
+      console.log('📢 Starting recording at:', new Date().toISOString());
       audioChunksRef.current = [];
       mediaRecorderRef.current.start(100); // Collect data every 100ms
       setRecording(true);
@@ -364,17 +379,26 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         case 'session_created':
           console.log('✅ Session created successfully:', {
             sessionId: data.sessionId,
-            voice: data.voice
+            voice: data.voice,
+            timestamp: new Date().toISOString()
           });
           setSessionId(data.sessionId);
           setConversationState('connected');
           setLoadingText('');
           
+          // Log events for debugging
+          if (data.events) {
+            console.log('📝 Session events:', data.events);
+          }
+          
           // Add system welcome message
+          const welcomeMessage = `Welcome to Financial Sherpa, ${customerName || 'there'}. You can now speak with me by pressing and holding the microphone button. How can I help you today?`;
+          console.log('💬 Adding welcome message:', welcomeMessage);
+          
           addMessage({
             id: `system-${Date.now()}`,
             role: 'system',
-            content: `Welcome to Financial Sherpa, ${customerName}. You can now speak with me by pressing and holding the microphone button. How can I help you today?`,
+            content: welcomeMessage,
             timestamp: Date.now()
           });
           break;
@@ -417,7 +441,8 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           break;
 
         case 'error':
-          console.error('❌ Error from server:', data);
+          console.error('❌ Error from server at:', new Date().toISOString(), data);
+          setOpenaiSessionReady(false); // Reset the session ready flag on any error
           toast({
             title: 'Connection Error',
             description: data.message || 'An error occurred with the AI connection',
@@ -425,11 +450,40 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
             duration: 5000
           });
           break;
+          
+        // Handle server-side events  
+        case 'server_event':
+          console.log('📡 Server event received:', data);
+          if (data.event === 'openai_session_created') {
+            console.log('🎉 OpenAI session created on server side at:', new Date().toISOString());
+            // Set the session as ready for audio
+            setOpenaiSessionReady(true);
+            toast({
+              title: 'AI Ready',
+              description: 'Financial Sherpa is ready for your voice questions',
+              variant: 'default',
+              duration: 3000
+            });
+          } else if (data.event === 'openai_connection_established') {
+            console.log('🔗 OpenAI connection established on server side');
+          } else if (data.event === 'openai_error') {
+            console.error('⚠️ OpenAI error on server side at:', new Date().toISOString(), data.message);
+            setOpenaiSessionReady(false); // Reset session ready state on OpenAI errors
+            toast({
+              title: 'OpenAI Error',
+              description: data.message || 'Error with OpenAI service',
+              variant: 'destructive',
+              duration: 5000
+            });
+          }
+          break;
 
         case 'session_ended':
           console.log('Session ended:', data);
           setSessionId(null);
           setConversationState('idle');
+          setOpenaiSessionReady(false);
+          console.log('🔄 Session ended, reset openaiSessionReady state');
           break;
 
         case 'session.authenticate':
@@ -503,20 +557,24 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
       
       console.log(`🔌 Connecting to WebSocket: ${wsUrl}`);
       
-      // Create WebSocket
+      // Create WebSocket - add verbose logging to help debug
+      console.log(`🔌 Attempting to create WebSocket with URL: ${wsUrl}`);
       const socket = new WebSocket(wsUrl);
       webSocketRef.current = socket;
+      console.log(`🔌 WebSocket created, current readyState: ${socket.readyState} (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)`);
 
       // Set up connection timeout
       const connectionTimeoutId = setTimeout(() => {
         if (conversationState === 'connecting') {
-          console.error('❌ WebSocket connection timed out');
+          console.error(`❌ WebSocket connection timed out at: ${new Date().toISOString()}. Current readyState: ${socket.readyState}`);
           
           // Close the socket if it's still open but not fully initialized
           if (socket && socket.readyState === WebSocket.OPEN) {
+            console.log('Closing timed out connection...');
             socket.close();
           }
           
+          setOpenaiSessionReady(false); // Reset session ready state on timeout
           setConversationState('error');
           toast({
             title: 'Connection Timeout',
@@ -526,10 +584,13 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           });
         }
       }, 15000); // 15 second timeout
+      
+      console.log('⏱ Connection timeout set for 15 seconds');
 
       // Set up event handlers
       socket.onopen = () => {
-        console.log('🟢 WebSocket connection established');
+        console.log('🟢 WebSocket connection established at:', new Date().toISOString());
+        console.log(`🟢 Connection details: ${socket.url}, readyState=${socket.readyState}`);
         setConnected(true);
         
         // Request a new session
@@ -538,26 +599,36 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         }`;
         
         console.log('📝 Sending session creation with instructions:', instructions);
+        console.log('📝 Customer name:', config.customerName || customerName || 'unknown');
+        console.log('📝 Financial data available:', !!config.financialData || !!financialData);
         
-        // Send session creation request
-        try {
-          socket.send(JSON.stringify({
-            type: 'create_session',
-            voice: 'alloy', // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse
-            instructions: instructions
-          }));
-          
-          console.log('✅ Session creation request sent successfully');
-        } catch (sendError) {
-          console.error('❌ Error sending session creation request:', sendError);
-          clearTimeout(connectionTimeoutId);
-          setConversationState('error');
-          toast({
-            title: 'Connection Error',
-            description: 'Failed to initialize AI session. Please try again later.',
-            variant: 'destructive'
-          });
-        }
+        // Add delay to ensure WebSocket is fully established before sending
+        setTimeout(() => {
+          // Send session creation request
+          try {
+            const createSessionPayload = {
+              type: 'create_session',
+              voice: 'alloy', // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse
+              instructions: instructions,
+              customerId: customerId || 0
+            };
+            
+            console.log('📤 Sending payload:', JSON.stringify(createSessionPayload));
+            socket.send(JSON.stringify(createSessionPayload));
+            
+            console.log('✅ Session creation request sent successfully at:', new Date().toISOString());
+          } catch (sendError) {
+            console.error('❌ Error sending session creation request at:', new Date().toISOString(), sendError);
+            clearTimeout(connectionTimeoutId);
+            setOpenaiSessionReady(false); // Reset this flag on session creation errors
+            setConversationState('error');
+            toast({
+              title: 'Connection Error',
+              description: 'Failed to initialize AI session. Please try again later.',
+              variant: 'destructive'
+            });
+          }
+        }, 500); // 500ms delay to ensure connection is stable
       };
 
       socket.onmessage = (event) => {
@@ -569,8 +640,9 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
       };
 
       socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('WebSocket error at:', new Date().toISOString(), error);
         clearTimeout(connectionTimeoutId);
+        setOpenaiSessionReady(false); // Ensure session is marked as not ready on error
         setConversationState('error');
         toast({
           title: 'Connection Error',
@@ -580,17 +652,19 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
       };
 
       socket.onclose = () => {
-        console.log('WebSocket connection closed');
+        console.log('WebSocket connection closed at:', new Date().toISOString());
         clearTimeout(connectionTimeoutId);
         setConnected(false);
         setSessionId(null);
+        setOpenaiSessionReady(false); // Reset this flag on connection close
         if (conversationState !== 'error') {
           setConversationState('idle');
         }
       };
       
     } catch (error) {
-      console.error('❌ WebSocket initialization error:', error);
+      console.error('❌ WebSocket initialization error at:', new Date().toISOString(), error);
+      setOpenaiSessionReady(false); // Reset this flag on initialization errors
       setConversationState('error');
       toast({
         title: 'Connection Error',
@@ -618,9 +692,12 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
       mediaRecorderRef.current = null;
     }
     
+    // Reset all session-related state
     setRecording(false);
     setConversationState('idle');
     setSessionId(null);
+    setOpenaiSessionReady(false);
+    console.log('🔄 Session ended, reset openaiSessionReady state');
   };
 
   // Start a conversation
@@ -629,11 +706,17 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
       // Clear previous conversation
       setMessages([]);
       
+      console.log('⏳ Starting new conversation...');
+      setLoadingText('Starting new conversation...');
+      
       try {
         // Initialize WebSocket
+        console.log('🔄 Initializing WebSocket connection...');
         await initializeWebSocket();
+        console.log('✅ WebSocket connection initialized');
       } catch (error) {
-        console.error('Failed to start conversation:', error);
+        console.error('❌ Failed to start conversation at:', new Date().toISOString(), error);
+        setOpenaiSessionReady(false); // Ensure this is reset on errors
         toast({
           title: 'Connection Error',
           description: 'Failed to initialize the AI conversation. Please try again later.',
@@ -641,6 +724,8 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         });
         setConversationState('error');
       }
+    } else {
+      console.log(`🔄 Not starting new conversation because current state is: ${conversationState}`);
     }
   };
 
