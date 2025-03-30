@@ -100,7 +100,8 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
         }
       };
       
-      recorder.onstop = async () => {
+      // Handle recording stop event
+      recorder.onstop = () => {
         console.log('🛑 MediaRecorder stopped');
         
         if (audioChunksRef.current.length === 0) {
@@ -113,60 +114,22 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
           console.log(`🔊 Created audio blob of size: ${audioBlob.size} bytes`);
           audioChunksRef.current = [];
           
-          // Try to send binary audio directly if WebSocket is available AND OpenAI session is ready
-          if (webSocketRef.current && 
-              webSocketRef.current.readyState === WebSocket.OPEN && 
-              openaiSessionReadyRef.current) {
-            try {
-              console.log(`📤 Sending binary audio data to server - ${audioBlob.size} bytes - OpenAI session ready: ${openaiSessionReadyRef.current}`);
-              
-              // Send binary audio data directly for better performance
-              // This bypasses the base64 encoding/decoding overhead
-              webSocketRef.current.send(audioBlob);
-              
-              // Also send end_of_stream message to signal the end of audio data
-              webSocketRef.current.send(JSON.stringify({
-                type: 'end_of_stream'
-              }));
-              
-              setConversationState('thinking');
-              setLoadingText('Transcribing...');
-            } catch (error) {
-              console.error('❌ Error sending binary audio data:', error);
-              
-              // Fallback to base64 encoding if binary send fails
-              console.log('⚠️ Falling back to base64 encoding for audio data');
-              
-              // Convert to base64 as fallback
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64Audio = reader.result?.toString().split(',')[1];
-                
-                if (base64Audio && 
-                    webSocketRef.current && 
-                    webSocketRef.current.readyState === WebSocket.OPEN && 
-                    openaiSessionReadyRef.current) {
-                  console.log(`📤 Sending audio data to server - ${base64Audio.length} chars (base64) - OpenAI session ready: ${openaiSessionReadyRef.current}`);
-                  // Send audio data to server
-                  webSocketRef.current.send(JSON.stringify({
-                    type: 'audio_data',
-                    audio: base64Audio
-                  }));
-                  
-                  // Also send end_of_stream message
-                  webSocketRef.current.send(JSON.stringify({
-                    type: 'end_of_stream'
-                  }));
-                } else {
-                  console.error(`❌ Cannot send audio data - WebSocket: ${webSocketRef.current?.readyState}, OpenAI ready: ${openaiSessionReadyRef.current}, base64 available: ${!!base64Audio}`);
-                }
-              };
-              reader.readAsDataURL(audioBlob);
-            }
-          } else {
-            console.error('❌ Cannot send audio data - WebSocket not available');
+          // Double-check session readiness before sending audio
+          // This is a critical check to ensure we don't send audio before OpenAI is fully ready
+          if (!openaiSessionReadyRef.current) {
+            console.warn('⚠️ OpenAI session not fully ready yet - cannot send audio');
+            toast({
+              title: 'AI Still Initializing',
+              description: 'Please wait a moment for the AI to fully initialize before speaking',
+              variant: 'default',
+              duration: 3000
+            });
+            return;
           }
-
+          
+          // Process the audio data if WebSocket and OpenAI session are both ready
+          processAudioData(audioBlob);
+          
           // Add user message when transcription is available
           if (transcription) {
             console.log(`💬 Adding user message with transcription: ${transcription}`);
@@ -178,6 +141,66 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
             });
             setTranscription('');
           }
+        } catch (error) {
+          console.error('❌ Error processing audio after recording:', error);
+        }
+      };
+      
+      // Helper function to process and send audio data
+      const processAudioData = (audioBlob: Blob) => {
+        // Try to send binary audio directly if WebSocket is available AND OpenAI session is ready
+        if (webSocketRef.current && 
+            webSocketRef.current.readyState === WebSocket.OPEN && 
+            openaiSessionReadyRef.current) {
+          try {
+            console.log(`📤 Sending binary audio data to server - ${audioBlob.size} bytes - OpenAI session ready: ${openaiSessionReadyRef.current}`);
+            
+            // Send binary audio data directly for better performance
+            // This bypasses the base64 encoding/decoding overhead
+            webSocketRef.current.send(audioBlob);
+            
+            // Also send end_of_stream message to signal the end of audio data
+            webSocketRef.current.send(JSON.stringify({
+              type: 'end_of_stream'
+            }));
+            
+            setConversationState('thinking');
+            setLoadingText('Transcribing...');
+          } catch (error) {
+            console.error('❌ Error sending binary audio data:', error);
+            
+            // Fallback to base64 encoding if binary send fails
+            console.log('⚠️ Falling back to base64 encoding for audio data');
+            
+            // Convert to base64 as fallback
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64Audio = reader.result?.toString().split(',')[1];
+              
+              if (base64Audio && 
+                  webSocketRef.current && 
+                  webSocketRef.current.readyState === WebSocket.OPEN && 
+                  openaiSessionReadyRef.current) {
+                console.log(`📤 Sending audio data to server - ${base64Audio.length} chars (base64) - OpenAI session ready: ${openaiSessionReadyRef.current}`);
+                // Send audio data to server
+                webSocketRef.current.send(JSON.stringify({
+                  type: 'audio_data',
+                  audio: base64Audio
+                }));
+                
+                // Also send end_of_stream message
+                webSocketRef.current.send(JSON.stringify({
+                  type: 'end_of_stream'
+                }));
+              } else {
+                console.error(`❌ Cannot send audio data - WebSocket: ${webSocketRef.current?.readyState}, OpenAI ready: ${openaiSessionReadyRef.current}, base64 available: ${!!base64Audio}`);
+              }
+            };
+            reader.readAsDataURL(audioBlob);
+          }
+        } else {
+          console.error('❌ Cannot send audio data - WebSocket not available or OpenAI session not ready');
+          console.log(`WebSocket ready: ${!!webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN}, OpenAI session ready: ${openaiSessionReadyRef.current}`);
         }
       };
       
@@ -327,6 +350,19 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       
       const data = JSON.parse(event.data);
       console.log('🔍 WebSocket message type:', data.type, data);
+      
+      // Update session state instantly on specific event types
+      // This is a critical fix for ensuring we properly track session state
+      if (data.type === 'transcription_session.created') {
+        console.log('🎯 Setting OpenAI session ready state to TRUE');
+        openaiSessionReadyRef.current = true;
+      } else if (data.type === 'error' || data.type === 'session_ended') {
+        console.log('🎯 Setting OpenAI session ready state to FALSE due to:', data.type);
+        openaiSessionReadyRef.current = false;
+      } else if (data.type === 'server_event' && data.event === 'openai_session_created') {
+        console.log('🎯 Setting OpenAI session ready state to TRUE via server_event');
+        openaiSessionReadyRef.current = true;
+      }
       
       switch (data.type) {
         case 'welcome':
