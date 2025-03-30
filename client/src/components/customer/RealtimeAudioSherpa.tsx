@@ -440,6 +440,19 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
             console.log('🎉 OpenAI session created on server side at:', new Date().toISOString());
             // Set the session as ready for audio using ref for immediate effect
             openaiSessionReadyRef.current = true;
+            
+            // Update loading state if we're still in connecting mode
+            if (conversationState === 'connecting') {
+              setConversationState('connected');
+              setLoadingText('');
+            }
+            
+            // Force re-render status badge by toggling a state
+            setConnected(prev => {
+              setTimeout(() => setConnected(true), 0);
+              return false;
+            });
+            
             toast({
               title: 'AI Ready',
               description: 'Financial Sherpa is ready for your voice questions',
@@ -448,6 +461,9 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
             });
           } else if (data.event === 'openai_connection_established') {
             console.log('🔗 OpenAI connection established on server side');
+            
+            // Update the UI to show we're making progress
+            setLoadingText('AI connection established, finalizing setup...');
           } else if (data.event === 'openai_error') {
             console.error('⚠️ OpenAI error on server side at:', new Date().toISOString(), data.message);
             openaiSessionReadyRef.current = false; // Reset session ready state on OpenAI errors
@@ -600,6 +616,42 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
         console.log('🟢 WebSocket connection established at:', new Date().toISOString());
         console.log(`🟢 Connection details: ${socket.url}, readyState=${socket.readyState}`);
         setConnected(true);
+        
+        // Clear the connection timeout as the connection is established
+        clearTimeout(connectionTimeoutId);
+        
+        // Set a shorter timeout specifically for session creation
+        // If we don't receive create_session acknowledgment, we'll retry
+        const sessionInitTimeoutId = setTimeout(() => {
+          // If we're still in the connecting state after 5 seconds, try sending the create_session message again
+          if (conversationState === 'connecting' && socket && socket.readyState === WebSocket.OPEN) {
+            console.log('⚠️ Session creation taking too long, resending create_session message');
+            
+            // Display toast to inform user
+            toast({
+              title: 'Initializing',
+              description: 'Still connecting to AI assistant...',
+              duration: 3000
+            });
+            
+            // Resend the create session message
+            try {
+              const retryInstructions = `You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help ${config.customerName || customerName || 'the customer'} understand their financial data, provide insights on their contracts, and answer questions about financial products and services. Keep your responses friendly, concise, and professional. RETRY ATTEMPT.`;
+              
+              console.log('🔄 Resending create_session message');
+              socket.send(JSON.stringify({
+                type: 'create_session',
+                voice: 'alloy', // Or whatever voice is preferred
+                instructions: retryInstructions,
+                temperature: 0.7,
+                customerId: config.customerId || customerId || 0,
+                retry: true, // Flag to indicate this is a retry
+              }));
+            } catch (error) {
+              console.error('⚠️ Error resending create_session message:', error);
+            }
+          }
+        }, 8000); // 8 seconds timeout for session creation
         
         // Request a new session
         const instructions = `You are the Financial Sherpa, a friendly and knowledgeable AI assistant for ShiFi Financial. Your role is to help ${config.customerName || customerName || 'the customer'} understand their financial data, provide insights on their contracts, and answer questions about financial products and services. Keep your responses friendly, concise, and professional. ${

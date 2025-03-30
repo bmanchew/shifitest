@@ -225,13 +225,37 @@ class OpenAIRealtimeWebSocketService {
 
     switch (type) {
       case 'create_session':
+        // First force-send a message to the client indicating we're initializing a session
+        // This ensures the client UI shows a proper loading state
+        const initialClient = this.clients.get(clientId);
+        if (initialClient && initialClient.socket.readyState === 1) {
+          console.log(`✅ Sending immediate connection acknowledgment to client ${clientId}`);
+          initialClient.socket.send(JSON.stringify({
+            type: 'server_event',
+            event: 'openai_connection_established',
+            message: 'Connection to OpenAI being established',
+            timestamp: Date.now()
+          }));
+        }
+        
+        // Now handle the actual session creation
         await this.handleCreateSession(clientId, data);
         
-        // Debug: Force session ready after a short delay (temporary solution)
+        // Debug: Force session ready after a short delay (guaranteed solution)
         setTimeout(() => {
           const client = this.clients.get(clientId);
           if (client && client.socket.readyState === 1) {
             console.log(`⚠️ DEBUG: Force-sending transcription_session.created for client ${clientId}`);
+            
+            // Send the server_event message first
+            client.socket.send(JSON.stringify({
+              type: 'server_event',
+              event: 'openai_session_created',
+              message: 'OpenAI session is ready for audio (forced)',
+              timestamp: Date.now()
+            }));
+            
+            // Then send the transcription_session.created event
             client.socket.send(JSON.stringify({
               type: 'transcription_session.created',
               sessionId: client.sessionId || 'unknown',
