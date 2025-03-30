@@ -61,6 +61,18 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
   
   // Initialize audio recording
   const initializeAudioRecording = async (): Promise<boolean> => {
+    // Double-check OpenAI session ready state before initializing
+    if (!openaiSessionReadyRef.current) {
+      console.warn('❌ Cannot initialize audio recording - OpenAI session not fully ready');
+      toast({
+        title: 'AI Still Initializing',
+        description: 'Please wait a moment before trying to record',
+        variant: 'default',
+        duration: 3000
+      });
+      return false;
+    }
+    
     try {
       console.log('🎤 Initializing audio recording...');
       
@@ -74,6 +86,19 @@ const RealtimeAudioSherpa: FC<RealtimeAudioSherpaProps> = ({
       });
       
       console.log('✅ Microphone access granted');
+      
+      // Check session ready state again after microphone permission granted
+      if (!openaiSessionReadyRef.current) {
+        console.warn('⚠️ OpenAI session is no longer ready after microphone setup');
+        stream.getTracks().forEach(track => track.stop()); // Release microphone
+        toast({
+          title: 'Session Status Changed',
+          description: 'The AI session needs to reinitialize',
+          variant: 'destructive',
+          duration: 3000
+        });
+        return false;
+      }
       
       // Create MediaRecorder instance
       const recorder = new MediaRecorder(stream, {

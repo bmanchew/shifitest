@@ -28,6 +28,7 @@ class OpenAIRealtimeWebSocketService {
     sessionId?: string;
     userId?: number;
     role?: string;
+    lastErrorNotification?: number;
   }> = new Map();
   private openaiConnections: Map<string, any> = new Map();
   private connectionTimeouts: Map<string, NodeJS.Timeout> = new Map();
@@ -106,7 +107,8 @@ class OpenAIRealtimeWebSocketService {
     
     // Store client information
     this.clients.set(clientId, {
-      socket: clientSocket
+      socket: clientSocket,
+      lastErrorNotification: 0
     });
 
     // Parse URL parameters
@@ -170,17 +172,27 @@ class OpenAIRealtimeWebSocketService {
               const hasActiveConnection = !!client.sessionId;
               const connectionTime = new Date().toISOString();
               
-              client.socket.send(JSON.stringify({
-                type: 'error',
-                message: 'System is still initializing. Please wait for the AI Ready notification before speaking.',
-                code: 'NO_SESSION_EXISTS',
-                timestamp: connectionTime,
-                details: {
-                  hasActiveConnection,
-                  connectionTime,
-                  status: 'initializing'
-                }
-              }));
+              // Add delay to avoid error message spamming
+              // We only want to send this once per second at most
+              const THROTTLE_PERIOD = 1000; // 1 second
+              const now = Date.now();
+              const lastErrorTime = client.lastErrorNotification || 0;
+              
+              if (now - lastErrorTime > THROTTLE_PERIOD) {
+                client.lastErrorNotification = now;
+                
+                client.socket.send(JSON.stringify({
+                  type: 'error',
+                  message: 'System is still initializing. Please wait for the AI Ready notification before speaking.',
+                  code: 'NO_SESSION_EXISTS',
+                  timestamp: connectionTime,
+                  details: {
+                    hasActiveConnection,
+                    connectionTime,
+                    status: 'initializing'
+                  }
+                }));
+              }
             }
           }
         } else {
