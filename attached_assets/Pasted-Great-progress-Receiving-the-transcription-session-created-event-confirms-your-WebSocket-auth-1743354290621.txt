@@ -1,0 +1,160 @@
+Great progress! Receiving the **`transcription_session.created`** event confirms your WebSocket authentication and initial connection are successful. The new server error when using the session typically relates to:
+
+- **Audio data format or encoding**
+- **Incorrect message structure**
+- **Session state or protocol handling issues**
+
+Here’s exactly how you should proceed to quickly diagnose and resolve this error:
+
+---
+
+## ✅ **Step 1: Verify Audio Format and Codec (Most Common Issue)**
+
+The Realtime Whisper API expects audio streams formatted specifically as:
+
+- **WebM audio (Opus codec)**  
+  **or**  
+- **PCM (Linear16)** at specific sample rates (commonly 16kHz mono)
+
+**Recommended format (most compatible):**
+- **WebM (Opus)**, 16kHz or 48kHz mono.
+
+**Check your audio stream encoding:**
+
+- Browser audio (JavaScript):  
+```javascript
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
+```
+
+- Server audio (Python/ffmpeg validation):
+```bash
+ffprobe your_audio.webm
+```
+
+Make sure it shows:
+- Format: `WebM`
+- Codec: `Opus`
+- Channels: `mono` (1-channel ideally)
+- Sample rate: `16000` or `48000`
+
+---
+
+## ✅ **Step 2: Ensure Proper WebSocket Message Structure**
+
+When streaming audio, the WebSocket message must follow OpenAI’s expected format:
+
+**Sending Audio Chunks (binary frame):**  
+- Send raw binary audio chunks directly via WebSocket binary frames.
+
+**Ending the Stream (JSON message):**
+```json
+{"type": "end_of_stream"}
+```
+
+Example Python WebSocket client sending audio correctly:
+
+```python
+def on_open(ws):
+    print("WebSocket connection opened.")
+
+    # Open audio file (test with static WebM first)
+    with open('your_audio.webm', 'rb') as audio:
+        while chunk := audio.read(1024):
+            ws.send(chunk, websocket.ABNF.OPCODE_BINARY)
+    
+    # Correctly signal end of stream
+    ws.send(json.dumps({"type": "end_of_stream"}))
+```
+
+**Common Pitfall:**  
+- Sending text or JSON messages incorrectly formatted instead of pure binary audio.
+
+---
+
+## ✅ **Step 3: Check Session State and Timing**
+
+The Whisper real-time session has specific requirements:
+
+- Immediately after receiving `transcription_session.created`, start sending audio data.
+- Delay in sending audio or sending empty audio can cause server errors.
+- Confirm your code immediately follows the correct sequence:  
+  ```
+  transcription_session.created → immediately send binary audio chunks → send end_of_stream event
+  ```
+
+---
+
+## ✅ **Step 4: Detailed Logging (Critical for Diagnosis)**
+
+Enable detailed logging to identify exact server error messages:
+
+```python
+import websocket
+import json
+
+def on_message(ws, message):
+    data = json.loads(message)
+    print("🔵 Message:", data)
+
+def on_error(ws, error):
+    print("🔴 Error:", error)
+
+def on_close(ws, status_code, close_msg):
+    print("🟡 Closed:", status_code, close_msg)
+
+websocket.enableTrace(True)  # CRITICAL for detailed debugging logs
+```
+
+Check for specific messages like:
+
+- `Unsupported audio format`
+- `Invalid audio data`
+- `Protocol violation`
+
+---
+
+## 🧪 **Step 5: Run a Simplified "Known Good" Test (Isolation)**
+
+Use a verified simple WebM audio file (Opus encoded, mono) to ensure the error isn’t related to streaming or encoding.
+
+- **Convert a known good test audio (ffmpeg)**:
+```bash
+ffmpeg -i input.mp3 -c:a libopus -b:a 16k -ac 1 -ar 16000 test_audio.webm
+```
+
+- **Test streaming this file directly**:
+```python
+def on_open(ws):
+    with open('test_audio.webm', 'rb') as audio:
+        while chunk := audio.read(1024):
+            ws.send(chunk, websocket.ABNF.OPCODE_BINARY)
+    ws.send(json.dumps({"type": "end_of_stream"}))
+```
+
+If this works, your issue is related to your live stream or microphone setup.
+
+---
+
+## 🚨 **Common Server Errors & Quick Fixes**
+
+| Server Error                      | Likely Issue & Quick Fix                                      |
+|-----------------------------------|---------------------------------------------------------------|
+| `Unsupported audio format`        | Check WebM (Opus), mono channel, correct sample rate          |
+| `Invalid message format`          | Ensure binary audio chunks and correct JSON `end_of_stream`   |
+| `Timeout error`                   | Start audio stream immediately after session creation         |
+| `Internal server error (500)`     | Typically OpenAI-side; retry or reduce chunk size             |
+
+---
+
+## 🔑 **Recommended Immediate Actions (Next Steps):**
+
+1. **Confirm audio format and codec (Step 1).**
+2. **Enable detailed logging and review errors (Step 4).**
+3. **Test isolated "known good" audio file (Step 5).**
+
+These steps will quickly pinpoint the exact issue.
+
+---
+
+Please share the detailed logs from these tests, and I'll assist further!

@@ -31,8 +31,16 @@ class OpenAIRealtimeWebSocketService {
   }> = new Map();
   private openaiConnections: Map<string, any> = new Map();
   private connectionTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private apiKey: string;
   
-  constructor() {}
+  constructor() {
+    // Load OpenAI API key from environment
+    this.apiKey = process.env.OPENAI_API_KEY || '';
+    
+    if (!this.apiKey) {
+      console.error('OpenAI API key is missing');
+    }
+  }
 
   /**
    * Initialize the WebSocket server
@@ -74,7 +82,7 @@ class OpenAIRealtimeWebSocketService {
       });
 
       // Handle errors at the server level
-      this.wss.on('error', (error) => {
+      this.wss.on('error', (error: any) => {
         console.error('WebSocket server error:', error, { path });
       });
 
@@ -84,7 +92,7 @@ class OpenAIRealtimeWebSocketService {
       console.info('OpenAI Realtime WebSocket server initialized:', { path });
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to initialize WebSocket server:', error);
       return false;
     }
@@ -123,9 +131,37 @@ class OpenAIRealtimeWebSocketService {
     // Set up event handlers for the client socket
     clientSocket.on('message', async (message) => {
       try {
-        const data = JSON.parse(message.toString());
-        await this.handleClientMessage(clientId, data);
-      } catch (error) {
+        // Check if the message is binary (for audio data)
+        if (message instanceof Buffer || message instanceof ArrayBuffer) {
+          // Handle binary audio data
+          const client = this.clients.get(clientId);
+          if (client && client.sessionId) {
+            const openaiSocket = this.openaiConnections.get(client.sessionId);
+            if (openaiSocket && openaiSocket.readyState === 1) { // 1 = OPEN
+              // Forward binary audio data directly to OpenAI
+              // Log size information - handle both Buffer and ArrayBuffer types
+              const size = Buffer.isBuffer(message) 
+                ? message.length 
+                : (message as ArrayBuffer).byteLength;
+              
+              console.log(`Received binary audio data from client ${clientId}, size: ${size} bytes`);
+              openaiSocket.send(message);
+            } else {
+              console.warn(`Received binary audio data from client ${clientId}, but OpenAI connection is not ready`);
+              client.socket.send(JSON.stringify({
+                type: 'error',
+                message: 'No active OpenAI connection for audio data'
+              }));
+            }
+          } else {
+            console.warn(`Received binary audio data from client ${clientId}, but no session exists`);
+          }
+        } else {
+          // Handle JSON message
+          const data = JSON.parse(message.toString());
+          await this.handleClientMessage(clientId, data);
+        }
+      } catch (error: any) {
         console.error('Error handling client message:', error, { clientId });
       }
     });
@@ -134,7 +170,7 @@ class OpenAIRealtimeWebSocketService {
       this.handleClientDisconnect(clientId);
     });
 
-    clientSocket.on('error', (error) => {
+    clientSocket.on('error', (error: any) => {
       console.error('WebSocket error with client:', error, { clientId });
     });
 
@@ -167,6 +203,10 @@ class OpenAIRealtimeWebSocketService {
       
       case 'audio_data':
         await this.handleAudioData(clientId, data);
+        break;
+        
+      case 'end_of_stream':
+        await this.handleEndOfStream(clientId);
         break;
       
       case 'text_input':
@@ -257,9 +297,20 @@ class OpenAIRealtimeWebSocketService {
       try {
         console.log(`Connecting to OpenAI's WebSocket with session ID: ${session.id}`);
         
-        // Create WebSocket connection without credentials in the headers
-        // We'll authenticate using the session token in the next step
-        const openaiSocket = new WebSocket('wss://api.openai.com/v1/realtime/ws');
+        // Use both URL parameters and headers for authentication
+        // to ensure compatibility with different versions of the API
+        
+        // Include the API key in URL and also in Authorization header
+        const wsUrl = `wss://api.openai.com/v1/realtime?intent=transcription`;
+        console.log(`Connecting to OpenAI Realtime API with URL: ${wsUrl} (with Authentication header)`);
+        
+        const openaiSocket = new WebSocket(wsUrl, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'OpenAI-Beta': 'realtime=v1',
+            'User-Agent': 'ShiFi Financial/1.0.0 Node.js WebSocket Client'
+          }
+        });
         
         // Store the OpenAI WebSocket connection
         this.openaiConnections.set(session.id, openaiSocket);
@@ -302,14 +353,29 @@ class OpenAIRealtimeWebSocketService {
             this.connectionTimeouts.delete(session.id);
           }
           
-          // Send authentication message to OpenAI
-          // Use the client_secret from the session as the authentication token
-          const authPayload = {
-            type: 'auth',
-            token: session.client_secret.value
+          // Initialize a session update with authentication
+          // Use the client_secret from the session as the authentication token in the URL
+          // No need to send an explicit auth message as authentication is already
+          // done via the Authorization header when connecting
+          
+          // Use transcription_session.update for transcription intent
+          // Specify audio format explicitly as pcm16 (16-bit PCM at 24kHz sample rate)
+          const sessionUpdatePayload = {
+            type: 'transcription_session.update',
+            event_id: `event_${uuidv4()}`,
+            session: {
+              input_audio_format: 'pcm16',
+              turn_detection: {
+                type: 'server_vad',
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 500,
+                create_response: true
+              }
+            }
           };
-          console.log(`Sending authentication payload to OpenAI for session ${session.id}`);
-          openaiSocket.send(JSON.stringify(authPayload));
+          console.log(`Sending transcription_session.update payload to OpenAI for session ${session.id}`);
+          openaiSocket.send(JSON.stringify(sessionUpdatePayload));
 
           // Notify the client that the session is ready
           client.socket.send(JSON.stringify({
@@ -343,7 +409,7 @@ class OpenAIRealtimeWebSocketService {
             if (client.socket.readyState === 1) { // 1 = OPEN
               client.socket.send(messageString);
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error('Error handling message from OpenAI:', error);
           }
         });
@@ -424,13 +490,24 @@ class OpenAIRealtimeWebSocketService {
     }
 
     try {
-      // Forward the audio data to OpenAI
-      openaiSocket.send(JSON.stringify({
-        type: 'audio',
-        audio: data.audio,
-        timestamp: data.timestamp || Date.now()
-      }));
-    } catch (error) {
+      // Check if data is in binary format (ArrayBuffer or Buffer)
+      if (data.audio_binary) {
+        // Send binary audio data directly (without JSON encoding)
+        // This is the preferred method for audio data according to the OpenAI docs
+        openaiSocket.send(data.audio_binary);
+      } else if (data.audio) {
+        // Legacy format - JSON with base64 encoded audio data
+        // Forward the audio data to OpenAI using the input_audio_buffer.append event
+        openaiSocket.send(JSON.stringify({
+          type: 'input_audio_buffer.append',
+          event_id: `event_${uuidv4()}`,
+          data: data.audio,
+          timestamp: data.timestamp || Date.now()
+        }));
+      } else {
+        console.warn(`Received audio data without audio content from client ${clientId}`);
+      }
+    } catch (error: any) {
       console.error('Failed to send audio data to OpenAI:', error);
     }
   }
@@ -456,14 +533,51 @@ class OpenAIRealtimeWebSocketService {
     }
 
     try {
-      // Forward the text input to OpenAI
+      // Forward the text input to OpenAI using the conversation.item.create event
       openaiSocket.send(JSON.stringify({
-        type: 'message',
-        content: data.text,
+        type: 'conversation.item.create',
+        event_id: `event_${uuidv4()}`,
+        content: {
+          type: 'text',
+          text: data.text
+        },
         role: 'user'
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send text input to OpenAI:', error);
+    }
+  }
+
+  /**
+   * Handle end of stream (audio streaming ended)
+   */
+  private async handleEndOfStream(clientId: string): Promise<void> {
+    const client = this.clients.get(clientId);
+    
+    if (!client || !client.sessionId) {
+      return;
+    }
+
+    const openaiSocket = this.openaiConnections.get(client.sessionId);
+    
+    if (!openaiSocket || openaiSocket.readyState !== 1) { // 1 = OPEN
+      client.socket.send(JSON.stringify({
+        type: 'error',
+        message: 'No active OpenAI connection'
+      }));
+      return;
+    }
+
+    try {
+      // Send end_of_stream message to OpenAI
+      openaiSocket.send(JSON.stringify({
+        type: 'end_of_stream',
+        event_id: `event_${uuidv4()}`
+      }));
+      
+      console.log(`Sent end_of_stream message to OpenAI for session ${client.sessionId}`);
+    } catch (error: any) {
+      console.error('Failed to send end_of_stream message to OpenAI:', error);
     }
   }
 

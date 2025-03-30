@@ -111,16 +111,43 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         readyState: track.readyState
       })));
       
-      // Create MediaRecorder
+      // Create MediaRecorder with PCM 16-bit mono at 16kHz format
+      // We're using PCM for direct streaming to OpenAI's Whisper API
       console.log('🔄 Creating MediaRecorder instance');
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      // Attempt to use audio/webm;codecs=pcm format if supported
+      let mimeType = 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=pcm')) {
+        console.log('✅ Using PCM codec in WebM container (preferred format)');
+        mimeType = 'audio/webm;codecs=pcm';
+      } else {
+        console.log('⚠️ PCM codec not supported, falling back to default WebM codec');
+      }
+      
+      const recorder = new MediaRecorder(stream, { 
+        mimeType,
+        audioBitsPerSecond: 16000 // Match OpenAI's preferred 16kHz sample rate
+      });
       mediaRecorderRef.current = recorder;
       
-      // Set up event handlers
+      // Set up event handlers for real-time audio streaming
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           console.log(`📦 Audio data available: ${event.data.size} bytes`);
+          
+          // Store for batch processing on stop
           audioChunksRef.current.push(event.data);
+          
+          // If WebSocket is connected, stream audio chunk in real-time
+          if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+            try {
+              // Send each chunk as binary data immediately for real-time processing
+              webSocketRef.current.send(event.data);
+            } catch (error) {
+              console.warn('⚠️ Could not stream audio chunk in real-time:', error);
+              // Just continue and we'll send the full audio on stop
+            }
+          }
         }
       };
       
@@ -132,26 +159,54 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           console.log(`🔊 Created audio blob of size: ${audioBlob.size} bytes`);
           audioChunksRef.current = [];
           
-          // Convert to base64
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64Audio = reader.result?.toString().split(',')[1];
-            
-            if (base64Audio && webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
-              console.log(`📤 Sending audio data to server - ${base64Audio.length} chars (base64)`);
-              // Send audio data to server
+          // Try to send binary audio directly if WebSocket is available
+          if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+            try {
+              console.log(`📤 Sending binary audio data to server - ${audioBlob.size} bytes`);
+              
+              // Send binary audio data directly for better performance
+              // This bypasses the base64 encoding/decoding overhead
+              webSocketRef.current.send(audioBlob);
+              
+              // Also send end_of_stream message to signal the end of audio data
               webSocketRef.current.send(JSON.stringify({
-                type: 'audio_data',
-                audio: base64Audio
+                type: 'end_of_stream'
               }));
               
               setConversationState('thinking');
               setLoadingText('Transcribing...');
-            } else {
-              console.error('❌ Cannot send audio data - WebSocket not available or base64 conversion failed');
+            } catch (error) {
+              console.error('❌ Error sending binary audio data:', error);
+              
+              // Fallback to base64 encoding if binary send fails
+              console.log('⚠️ Falling back to base64 encoding for audio data');
+              
+              // Convert to base64 as fallback
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64Audio = reader.result?.toString().split(',')[1];
+                
+                if (base64Audio && webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN) {
+                  console.log(`📤 Sending audio data to server - ${base64Audio.length} chars (base64)`);
+                  // Send audio data to server
+                  webSocketRef.current.send(JSON.stringify({
+                    type: 'audio_data',
+                    audio: base64Audio
+                  }));
+                  
+                  // Also send end_of_stream message
+                  webSocketRef.current.send(JSON.stringify({
+                    type: 'end_of_stream'
+                  }));
+                } else {
+                  console.error('❌ Cannot send audio data - WebSocket not available or base64 conversion failed');
+                }
+              };
+              reader.readAsDataURL(audioBlob);
             }
-          };
-          reader.readAsDataURL(audioBlob);
+          } else {
+            console.error('❌ Cannot send audio data - WebSocket not available');
+          }
 
           // Add user message when transcription is available
           if (transcription) {
@@ -282,9 +337,22 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
   // Handle incoming WebSocket messages
   const handleWebSocketMessage = (event: MessageEvent) => {
     try {
-      console.log('📨 WebSocket message received:', event.data.substring(0, 100) + (event.data.length > 100 ? '...' : ''));
-      const data = JSON.parse(event.data);
+      // Check if the data is binary (e.g., audio data)
+      if (event.data instanceof Blob || event.data instanceof ArrayBuffer) {
+        console.log('📨 Binary WebSocket message received (likely audio data)');
+        // Process binary data if needed
+        // In this case, we don't need to do anything with binary responses as they're
+        // not expected from our server. OpenAI would send audio as base64 in JSON.
+        return;
+      }
       
+      // For text data, try to parse as JSON
+      console.log('📨 WebSocket message received:', 
+        typeof event.data === 'string' 
+          ? event.data.substring(0, 100) + (event.data.length > 100 ? '...' : '') 
+          : 'Non-string data received');
+      
+      const data = JSON.parse(event.data);
       console.log('🔍 WebSocket message type:', data.type, data);
       
       switch (data.type) {
