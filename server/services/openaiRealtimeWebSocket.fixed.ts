@@ -5,14 +5,11 @@
  * It handles client connections, manages OpenAI sessions, and routes messages between them.
  */
 
-import ws from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 import { Server as HttpServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from './logger';
 import { openAIRealtimeService } from './openaiRealtime';
-
-// Extract WebSocketServer and WebSocket from ws
-const { WebSocketServer, WebSocket } = ws;
 
 // WebSocket states
 const WS_CONNECTING = 0;
@@ -22,12 +19,12 @@ const WS_CLOSED = 3;
 
 // Define the client connection type
 interface ClientConnection {
-  socket: WebSocket;
+  socket: WebSocket.WebSocket;
   id: string;
   customerId?: number;
   customerName?: string;
   sessionId?: string;
-  openaiSocket?: WebSocket;
+  openaiSocket?: WebSocket.WebSocket;
   openaiReadyState: boolean;
   lastErrorTime?: number;
   // Buffer for audio chunks received before OpenAI session is ready
@@ -98,7 +95,7 @@ export class OpenAIRealtimeWebSocketService {
   }
   
   // Handle new WebSocket connections
-  private handleConnection(socket: WebSocket, request: any): void {
+  private handleConnection(socket: WebSocket.WebSocket, request: any): void {
     const clientId = uuidv4();
     
     logger.info({
@@ -588,7 +585,7 @@ export class OpenAIRealtimeWebSocketService {
       });
       
       // Create a new WebSocket connection
-      const socket = new WebSocket(sessionUrl, {
+      const socket = new WebSocket.WebSocket(sessionUrl, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -993,7 +990,8 @@ export class OpenAIRealtimeWebSocketService {
     for (const client of this.clients.values()) {
       if (client.socket.readyState === WS_OPEN) {
         try {
-          client.socket.ping();
+          // Use a simple ping message instead of the ping() method
+          client.socket.send(JSON.stringify({ type: 'ping' }));
         } catch (error) {
           // Ignore ping errors, they might disconnect naturally
         }

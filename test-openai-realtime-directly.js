@@ -8,168 +8,90 @@
  * 3. That our agent configuration is valid
  */
 
-import axios from 'axios';
-import * as dotenv from 'dotenv';
+import fetch from 'node-fetch';
+import dotenv from 'dotenv';
+
+// Load environment variables
 dotenv.config();
 
-// Check if OPENAI_API_KEY is available
-if (!process.env.OPENAI_API_KEY) {
-  console.error('❌ Error: OPENAI_API_KEY environment variable is not set.');
-  console.log('Please make sure the OPENAI_API_KEY is properly set in your .env file.');
-  process.exit(1);
-}
-
-// Simplified agent configuration for testing
-const AGENT_CONFIG = {
-  name: "financial_sherpa",
-  model: "gpt-4o",
-  description: "Financial assistant for contract information",
-  tools: [
-    {
-      type: "function",
-      function: {
-        name: "lookupContract",
-        description: "Look up contract information for a customer",
-        parameters: {
-          type: "object",
-          properties: {
-            contractId: {
-              type: "string",
-              description: "The contract ID to look up"
-            }
-          },
-          required: ["contractId"]
-        }
-      }
-    }
-  ],
-  instructions: `You are a helpful financial assistant for ShiFi Financial. Your job is to help customers understand their contracts and financial options.`
-};
+// Configuration
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_URL = 'https://api.openai.com/v1/realtime/sessions';
 
 /**
  * Test the OpenAI Realtime API
  * This function verifies that we can create a realtime thread
  */
 async function testOpenAIRealtimeAPI() {
+  // Verify that we have an API key
+  if (!OPENAI_API_KEY) {
+    console.error('❌ OPENAI_API_KEY is not set in the environment variables');
+    process.exit(1);
+  }
+
+  console.log('👉 Testing OpenAI Realtime API with key:', 
+    OPENAI_API_KEY.substring(0, 3) + '...' + OPENAI_API_KEY.substring(OPENAI_API_KEY.length - 4)
+  );
+  
   try {
-    console.log('Testing OpenAI Realtime API...');
-    console.log('Using API key:', `${process.env.OPENAI_API_KEY.substring(0, 5)}...${process.env.OPENAI_API_KEY.substring(process.env.OPENAI_API_KEY.length - 4)}`);
+    // Test session creation
+    console.log('👉 Creating a test Realtime session...');
     
-    // Make a request to create a thread
-    const response = await axios.post(
-      'https://api.openai.com/v1/threads',
-      {},
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'OpenAI-Beta': 'assistants=v2'
-        }
-      }
-    );
-    
-    if (response.status !== 200) {
-      throw new Error(`Failed to create thread: ${response.statusText}`);
-    }
-    
-    const threadId = response.data.id;
-    console.log(`Thread created successfully with ID: ${threadId}`);
-    
-    // Now test creating a run with our agent configuration
-    console.log('Testing agent configuration with OpenAI...');
-    
-    // First, create a temporary assistant for our test
-    console.log('Creating a temporary assistant...');
-    const assistantResponse = await axios.post(
-      'https://api.openai.com/v1/assistants',
-      {
-        name: "Financial Sherpa Test",
-        model: AGENT_CONFIG.model,
-        instructions: AGENT_CONFIG.instructions,
-        tools: AGENT_CONFIG.tools,
-        metadata: {
-          type: "realtime_test"
-        }
+    const requestBody = {
+      model: 'gpt-4o-realtime-preview',
+      modalities: ['audio', 'text'],
+      instructions: 'You are a helpful assistant for testing purposes.',
+      voice: 'alloy',
+      input_audio_format: 'pcm16',
+      output_audio_format: 'pcm16',
+      input_audio_transcription: {
+        model: 'whisper-1'
       },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'OpenAI-Beta': 'assistants=v2'
-        }
-      }
-    );
-    
-    if (assistantResponse.status !== 200) {
-      throw new Error(`Failed to create assistant: ${assistantResponse.statusText}`);
-    }
-    
-    const assistantId = assistantResponse.data.id;
-    console.log(`Assistant created successfully with ID: ${assistantId}`);
-    
-    // Now create a run with our assistant
-    const runResponse = await axios.post(
-      `https://api.openai.com/v1/threads/${threadId}/runs`,
-      {
-        assistant_id: assistantId,
-        metadata: {
-          type: "realtime_test"
-        }
+      turn_detection: {
+        type: 'server_vad',
+        threshold: 0.5,
+        prefix_padding_ms: 300,
+        silence_duration_ms: 200
       },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'OpenAI-Beta': 'assistants=v2'
-        }
-      }
-    );
-    
-    if (runResponse.status !== 200) {
-      throw new Error(`Failed to create run: ${runResponse.statusText}`);
-    }
-    
-    const runId = runResponse.data.id;
-    console.log(`Run created successfully with ID: ${runId}`);
-    
-    // Since we've successfully created an assistant and a run,
-    // we'll consider this a success without testing the realtime beta endpoint.
-    // The fact that we got this far means that the API key is valid and has access
-    // to the necessary features for our Financial Sherpa.
-    console.log('Successfully tested OpenAI API with valid assistant and run creation.');
-    console.log('This confirms that our API key is valid and has the necessary permissions.');
-    
-    console.log('\n🎉 All OpenAI API tests passed successfully!');
-    console.log('The OpenAI API key is valid and has access to the required features.');
-    
-    return {
-      success: true,
-      threadId,
-      runId
+      temperature: 0.7,
+      max_response_output_tokens: 'inf'
     };
+    
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`API request failed: ${response.status} - ${errorData}`);
+    }
+    
+    const data = await response.json();
+    console.log('✅ Successfully created Realtime session:', data.id);
+    console.log('✅ Session details:', {
+      model: data.model,
+      voice: data.voice,
+      client_secret_expires_at: new Date(data.client_secret.expires_at * 1000).toISOString()
+    });
+    
+    console.log('👉 OpenAI Realtime API test completed successfully');
+    return true;
   } catch (error) {
-    console.error('\n❌ OpenAI API tests failed:', error.message);
-    
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-      
-      // Check for specific error types
-      if (error.response.status === 401) {
-        console.error('\nYour API key is invalid or has expired. Please check your OPENAI_API_KEY environment variable.');
-      } else if (error.response.status === 403) {
-        console.error('\nYour API key does not have permission to use the requested resource.');
-        console.error('Make sure your OpenAI account has access to the required models and features.');
-      } else if (error.response.status === 404) {
-        console.error('\nThe requested resource was not found. This may indicate that the realtime API feature is not available.');
-        console.error('Make sure you have access to the OpenAI beta "realtime" feature.');
-      }
+    console.error('❌ OpenAI Realtime API test failed:', error.message);
+    if (error.message.includes('429')) {
+      console.error('   This might be due to rate limiting. Try again later.');
+    } else if (error.message.includes('401')) {
+      console.error('   Authentication failed. Check if your API key is valid and has access to the Realtime API.');
+    } else if (error.message.includes('404')) {
+      console.error('   Endpoint not found. The Realtime API may not be available for your account yet.');
     }
     
-    return {
-      success: false,
-      error: error.message
-    };
+    return false;
   }
 }
 
@@ -177,21 +99,16 @@ async function testOpenAIRealtimeAPI() {
  * Main function
  */
 async function main() {
-  try {
-    console.log('Starting OpenAI Realtime API test...');
-    
-    const result = await testOpenAIRealtimeAPI();
-    
-    if (result.success) {
-      process.exit(0);
-    } else {
-      process.exit(1);
-    }
-  } catch (error) {
-    console.error('Error in main function:', error);
+  const success = await testOpenAIRealtimeAPI();
+  
+  if (success) {
+    console.log('✅ All tests passed! The OpenAI Realtime API is working properly.');
+    process.exit(0);
+  } else {
+    console.error('❌ Tests failed. See above for details.');
     process.exit(1);
   }
 }
 
-// Run the main function
+// Run the tests
 main();

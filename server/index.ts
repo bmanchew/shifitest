@@ -348,13 +348,25 @@ async function startServer() {
 
     const server = await registerRoutes(app);
     
-    // Temporarily disable WebSocket service to allow server to start
-    // openaiRealtimeWebSocketService.initialize(server);
-    logger.info({
-      message: 'OpenAI Realtime WebSocket service initialization skipped - will be fixed in future update',
-      category: 'system',
-      source: 'openai'
-    });
+    // Initialize WebSocket service with our fixed implementation
+    try {
+      openaiRealtimeWebSocketService.initialize(server);
+      logger.info({
+        message: 'OpenAI Realtime WebSocket service initialized successfully',
+        category: 'system',
+        source: 'openai'
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error initializing OpenAI Realtime WebSocket service: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'system',
+        source: 'openai',
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+    }
     
     // Check if Plaid credentials are available
     const hasPlaidCredentials = process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET;
