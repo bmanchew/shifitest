@@ -241,28 +241,31 @@ class OpenAIRealtimeWebSocketService {
         // Now handle the actual session creation
         await this.handleCreateSession(clientId, data);
         
-        // Debug: Force session ready after a short delay (guaranteed solution)
-        setTimeout(() => {
+        // We'll use a guaranteed callback approach to handle session initialization
+        // Rather than multiple force-send approaches that might cause conflicts
+        const initializationTimeout = setTimeout(() => {
           const client = this.clients.get(clientId);
+          // Check we still have a client and socket is open
           if (client && client.socket.readyState === 1) {
-            console.log(`⚠️ DEBUG: Force-sending transcription_session.created for client ${clientId}`);
+            console.log(`🕐 Checking initialization status for client ${clientId} after timeout`);
             
-            // Send the server_event message first
-            client.socket.send(JSON.stringify({
-              type: 'server_event',
-              event: 'openai_session_created',
-              message: 'OpenAI session is ready for audio (forced)',
-              timestamp: Date.now()
-            }));
-            
-            // Then send the transcription_session.created event
-            client.socket.send(JSON.stringify({
-              type: 'transcription_session.created',
-              sessionId: client.sessionId || 'unknown',
-              timestamp: Date.now()
-            }));
+            // If the client has a session but might be stuck in initialization
+            if (client.sessionId) {
+              console.log(`⚠️ Client ${clientId} has session ${client.sessionId} but might be stuck in initialization`);
+              
+              // Send a server event to check status and potentially trigger UI updates
+              client.socket.send(JSON.stringify({
+                type: 'server_event',
+                event: 'openai_initialization_check',
+                message: 'Checking OpenAI initialization status',
+                timestamp: Date.now()
+              }));
+              
+              // Note: We'll rely on the regular initialization events in the WebSocket to complete initialization
+              // rather than forcing duplicate events here that might cause state conflicts
+            }
           }
-        }, 3000); // 3 seconds should be enough for UI testing
+        }, 5000); // 5 seconds wait to see if normal initialization completes
         break;
       
       case 'audio_data':
@@ -432,16 +435,28 @@ class OpenAIRealtimeWebSocketService {
           
           // Set a safety timeout to force-send transcription_session.created if not received from OpenAI
           // This ensures the client UI doesn't get stuck in initializing state
-          const SESSION_READY_TIMEOUT = 5000; // 5 seconds
+          // Using a shorter timeout to improve user experience
+          const SESSION_READY_TIMEOUT = 3000; // 3 seconds (reduced from 5s)
           const readyTimeout = setTimeout(() => {
             console.log(`⏱️ OpenAI session initialization timeout reached for ${session.id}, force-sending ready event`);
             if (client.socket.readyState === 1) {
+              // First send server event
+              client.socket.send(JSON.stringify({
+                type: 'server_event',
+                event: 'openai_session_created',
+                message: 'OpenAI session is ready for audio (timeout)',
+                timestamp: Date.now()
+              }));
+              
+              // Then send the transcription_session.created event that client is waiting for
               client.socket.send(JSON.stringify({
                 type: 'transcription_session.created', // Use the exact same event type expected by client
                 sessionId: session.id,
                 timestamp: Date.now(),
                 message: 'OpenAI transcription session is now ready for audio (timeout triggered)'
               }));
+              
+              console.log(`✅ Force-sent session ready events to client for session ${session.id}`);
             }
           }, SESSION_READY_TIMEOUT);
           
