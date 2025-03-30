@@ -255,15 +255,11 @@ class OpenAIRealtimeWebSocketService {
       
       // Create a new WebSocket connection to OpenAI
       try {
-        const apiKey = process.env.OPENAI_API_KEY || '';
         console.log(`Connecting to OpenAI's WebSocket with session ID: ${session.id}`);
         
-        // Add authorization headers to the WebSocket connection
-        const openaiSocket = new WebSocket('wss://api.openai.com/v1/realtime/ws', {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`
-          }
-        });
+        // Create WebSocket connection without credentials in the headers
+        // We'll authenticate using the session token in the next step
+        const openaiSocket = new WebSocket('wss://api.openai.com/v1/realtime/ws');
         
         // Store the OpenAI WebSocket connection
         this.openaiConnections.set(session.id, openaiSocket);
@@ -307,10 +303,12 @@ class OpenAIRealtimeWebSocketService {
           }
           
           // Send authentication message to OpenAI
+          // Use the client_secret from the session as the authentication token
           const authPayload = {
-            type: 'session.authenticate',
-            session_token: session.client_secret.value
+            type: 'auth',
+            token: session.client_secret.value
           };
+          console.log(`Sending authentication payload to OpenAI for session ${session.id}`);
           openaiSocket.send(JSON.stringify(authPayload));
 
           // Notify the client that the session is ready
@@ -327,6 +325,19 @@ class OpenAIRealtimeWebSocketService {
           try {
             const messageString = message.toString();
             const parsedMessage = JSON.parse(messageString);
+            
+            // Log received messages for debugging
+            console.log(`Received message from OpenAI for session ${session.id}:`, parsedMessage);
+            
+            // Handle auth.ok message explicitly
+            if (parsedMessage.type === 'auth.ok') {
+              console.log(`Successfully authenticated with OpenAI for session ${session.id}`);
+            }
+            
+            // Handle auth.error message explicitly
+            if (parsedMessage.type === 'auth.error') {
+              console.error(`Authentication error with OpenAI for session ${session.id}:`, parsedMessage);
+            }
             
             // Forward OpenAI's messages to the client
             if (client.socket.readyState === 1) { // 1 = OPEN
