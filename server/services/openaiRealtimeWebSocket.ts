@@ -297,10 +297,28 @@ class OpenAIRealtimeWebSocketService {
    * Handle a request to create a new OpenAI Realtime session
    */
   private async handleCreateSession(clientId: string, data: any): Promise<void> {
+    console.log(`🔄 Starting session creation for client ${clientId}`);
     const client = this.clients.get(clientId);
     
     if (!client) {
+      console.error(`❌ Client ${clientId} not found for session creation`);
       return;
+    }
+    
+    // Force remove any previous session to avoid conflicts
+    if (client.sessionId && this.openaiConnections.has(client.sessionId)) {
+      console.log(`⚠️ Removing previous session ${client.sessionId} for client ${clientId}`);
+      const oldSocket = this.openaiConnections.get(client.sessionId);
+      if (oldSocket && oldSocket.readyState !== 3) { // Not CLOSED
+        oldSocket.close();
+      }
+      this.openaiConnections.delete(client.sessionId);
+      
+      // Clear any existing timeouts
+      if (this.connectionTimeouts.has(client.sessionId)) {
+        clearTimeout(this.connectionTimeouts.get(client.sessionId)!);
+        this.connectionTimeouts.delete(client.sessionId);
+      }
     }
 
     try {
