@@ -443,7 +443,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         
         socket.send(JSON.stringify({
           type: 'create_session',
-          voice: 'nova', // Use 'nova' voice for Financial Sherpa
+          voice: 'alloy', // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse
           instructions: instructions
         }));
       };

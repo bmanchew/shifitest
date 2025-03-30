@@ -87,7 +87,7 @@ class OpenAIRealtimeService {
   private baseUrl: string = 'https://api.openai.com/v1';
   private isInitialized: boolean = false;
   private audioDir: string = path.join(process.cwd(), 'public', 'audio');
-  private defaultVoice: string = 'alloy'; // alloy, echo, fable, onyx, nova, shimmer
+  private defaultVoice: string = 'alloy'; // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse
   private defaultModel: string = 'gpt-4o-realtime-preview';
 
   constructor() {
