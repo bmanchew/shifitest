@@ -128,17 +128,10 @@ class OpenAIRealtimeService {
       }
 
       this.isInitialized = true;
-      logger.info('OpenAI Realtime service initialized successfully', {
-        category: 'openai',
-        source: 'openai'
-      });
+      logger.info('OpenAI Realtime service initialized successfully');
       return true;
     } catch (error) {
-      logger.error('Failed to initialize OpenAI Realtime service', {
-        error,
-        category: 'openai',
-        source: 'openai'
-      });
+      logger.error('Failed to initialize OpenAI Realtime service', { error });
       this.isInitialized = false;
       return false;
     }

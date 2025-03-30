@@ -277,18 +277,22 @@ class OpenAIRealtimeWebSocketService {
         });
         
         // Send authentication message to OpenAI
-        openaiSocket.send(JSON.stringify({
+        const authPayload = {
           type: 'session.authenticate',
           session_token: session.client_secret.value
-        }));
+        };
+        console.log('🔑 Sending authentication to OpenAI:', JSON.stringify(authPayload));
+        openaiSocket.send(JSON.stringify(authPayload));
 
         // Notify the client that the session is ready
-        client.socket.send(JSON.stringify({
+        const sessionCreatedMsg = {
           type: 'session_created',
           sessionId: session.id,
           voice: session.voice,
           message: 'Session created successfully'
-        }));
+        };
+        console.log('📣 Notifying client session created:', JSON.stringify(sessionCreatedMsg));
+        client.socket.send(JSON.stringify(sessionCreatedMsg));
 
         logger.info('Connected to OpenAI Realtime WebSocket', {
           sessionId: session.id,

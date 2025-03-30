@@ -282,11 +282,15 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
   // Handle incoming WebSocket messages
   const handleWebSocketMessage = (event: MessageEvent) => {
     try {
+      console.log('📨 WebSocket message received:', event.data.substring(0, 100) + (event.data.length > 100 ? '...' : ''));
       const data = JSON.parse(event.data);
+      
+      console.log('🔍 WebSocket message type:', data.type, data);
       
       switch (data.type) {
         case 'welcome':
-          console.log('Connected to WebSocket server:', data);
+          console.log('🎉 Connected to WebSocket server:', data);
+          // We don't change state here, we wait for session_created
           break;
         
         case 'session_created':
@@ -296,6 +300,7 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
           });
           setSessionId(data.sessionId);
           setConversationState('connected');
+          setLoadingText('');
           
           // Add system welcome message
           addMessage({
@@ -304,6 +309,10 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
             content: `Welcome to Financial Sherpa, ${customerName}. You can now speak with me by pressing and holding the microphone button. How can I help you today?`,
             timestamp: Date.now()
           });
+          break;
+          
+        case 'session_authenticate_success':
+          console.log('🔐 OpenAI Session authenticated successfully');
           break;
 
         case 'transcription':
@@ -342,9 +351,10 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         case 'error':
           console.error('❌ Error from server:', data);
           toast({
-            title: 'Error',
-            description: data.message || 'An error occurred',
-            variant: 'destructive'
+            title: 'Connection Error',
+            description: data.message || 'An error occurred with the AI connection',
+            variant: 'destructive',
+            duration: 5000
           });
           break;
 
