@@ -166,11 +166,20 @@ class OpenAIRealtimeWebSocketService {
             
             // If we have a client socket, send an error message
             if (client && client.socket && client.socket.readyState === WS_OPEN) {
+              // Get client status for detailed error reporting
+              const hasActiveConnection = !!client.sessionId;
+              const connectionTime = new Date().toISOString();
+              
               client.socket.send(JSON.stringify({
                 type: 'error',
-                message: 'No active session. The AI is still initializing or has not been started.',
+                message: 'System is still initializing. Please wait for the AI Ready notification before speaking.',
                 code: 'NO_SESSION_EXISTS',
-                timestamp: new Date().toISOString()
+                timestamp: connectionTime,
+                details: {
+                  hasActiveConnection,
+                  connectionTime,
+                  status: 'initializing'
+                }
               }));
             }
           }

@@ -457,12 +457,33 @@ const RealtimeAudioSherpa: React.FC<RealtimeAudioSherpaProps> = ({
         case 'error':
           console.error('❌ Error from server at:', new Date().toISOString(), data);
           setOpenaiSessionReady(false); // Reset the session ready flag on any error
-          toast({
-            title: 'Connection Error',
-            description: data.message || 'An error occurred with the AI connection',
-            variant: 'destructive',
-            duration: 5000
-          });
+          
+          // Handle specific error codes differently
+          if (data.code === 'NO_SESSION_EXISTS') {
+            console.warn('🛑 Received NO_SESSION_EXISTS error - waiting for session initialization');
+            // Don't show a toast for this, as it's a normal part of initialization
+            // Instead, force the conversationState to 'connecting' to prevent early audio recording
+            if (conversationState !== 'connecting') {
+              setConversationState('connecting');
+              setLoadingText('Waiting for AI initialization...');
+            }
+          } else if (data.code === 'OPENAI_CONNECTION_NOT_READY') {
+            console.warn('⏳ OpenAI connection not fully ready yet');
+            toast({
+              title: 'AI Initializing',
+              description: 'Please wait a moment for the AI to fully initialize',
+              variant: 'default',
+              duration: 2000
+            });
+          } else {
+            // Generic error handling for other cases
+            toast({
+              title: 'Connection Error',
+              description: data.message || 'An error occurred with the AI connection',
+              variant: 'destructive',
+              duration: 5000
+            });
+          }
           break;
           
         // Handle server-side events  
