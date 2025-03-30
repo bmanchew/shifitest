@@ -23,7 +23,12 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
   const shouldExclude = excludedPaths.some(path => req.path.startsWith(path));
   
   // Check for test bypass header - allow multiple test bypass values for different test scripts
-  const bypassValues = ['test-merchant-setup', 'test-middesk-integration', 'test-contract-setup'];
+  const bypassValues = [
+    'test-merchant-setup', 
+    'test-middesk-integration', 
+    'test-contract-setup',
+    'test-financial-sherpa' // Add our new test script
+  ];
   const hasBypassHeader = bypassValues.includes(req.headers['x-csrf-bypass'] as string);
 
   // Add debugging
