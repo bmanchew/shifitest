@@ -226,6 +226,19 @@ class OpenAIRealtimeWebSocketService {
     switch (type) {
       case 'create_session':
         await this.handleCreateSession(clientId, data);
+        
+        // Debug: Force session ready after a short delay (temporary solution)
+        setTimeout(() => {
+          const client = this.clients.get(clientId);
+          if (client && client.socket.readyState === 1) {
+            console.log(`⚠️ DEBUG: Force-sending transcription_session.created for client ${clientId}`);
+            client.socket.send(JSON.stringify({
+              type: 'transcription_session.created',
+              sessionId: client.sessionId || 'unknown',
+              timestamp: Date.now()
+            }));
+          }
+        }, 3000); // 3 seconds should be enough for UI testing
         break;
       
       case 'audio_data':
