@@ -1,528 +1,771 @@
-import { useState } from "react";
-import { Link, useLocation } from "wouter";
-import {
-  ArrowRight,
-  BarChart3,
-  ChevronRight,
-  CircleDollarSign,
-  FileCheck,
-  LineChart,
-  LockKeyhole,
-  Shield,
-  Zap,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import React, { useState } from 'react';
+import { useLocation } from 'wouter';
 import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
-} from "@/components/ui/tabs";
+  ChevronRight, 
+  Shield, 
+  TrendingUp, 
+  DollarSign, 
+  CalendarClock, 
+  BarChart3,
+  CheckCircle2,
+  Wallet,
+  Info,
+  Lock,
+  FileCheck,
+  BadgeCheck,
+  Calendar,
+  ArrowUpRight
+} from 'lucide-react';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+
+// Schema for contact form
+const contactFormSchema = z.object({
+  name: z.string().min(2, { message: 'Name must be at least 2 characters' }),
+  email: z.string().email({ message: 'Please enter a valid email address' }),
+  phone: z.string().min(10, { message: 'Please enter a valid phone number' }),
+  investmentAmount: z.string().min(1, { message: 'Please enter an investment amount' }),
+  investmentGoals: z.string().optional(),
+  isAccredited: z.boolean().default(false),
+  agreeToTerms: z.boolean().refine(val => val === true, {
+    message: 'You must agree to the terms',
+  }),
+});
+
+type ContactFormValues = z.infer<typeof contactFormSchema>;
 
 export default function InvestorLanding() {
-  const [_, navigate] = useLocation();
-  const [selectedTab, setSelectedTab] = useState("15_percent");
-
-  const handleLoginClick = () => {
-    navigate("/login");
-  };
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState('15-percent');
   
-  const handleApplyClick = () => {
-    navigate("/investor/signup");
-  };
-
-  const investmentOptions = {
-    "15_percent": {
-      title: "15% APY - 2 Year Term",
-      description: "Lower risk option with 15% annual returns over a 2-year term",
-      minInvestment: "$50,000",
-      term: "24 months",
-      returnRate: "15% APY",
-      liquidity: "Medium",
-      riskLevel: "Low-Medium",
-      features: [
-        "Quarterly distributions",
-        "Tokenized contract ownership",
-        "Early redemption options after 12 months (fees apply)",
-        "Backed by diversified merchant financing contracts"
-      ]
+  // Initialize form
+  const form = useForm<ContactFormValues>({
+    resolver: zodResolver(contactFormSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      investmentAmount: '',
+      investmentGoals: '',
+      isAccredited: false,
+      agreeToTerms: false,
     },
-    "18_percent": {
-      title: "18% APY - 4 Year Term",
-      description: "Higher yield option with 18% annual returns over a 4-year term",
-      minInvestment: "$100,000",
-      term: "48 months",
-      returnRate: "18% APY",
-      liquidity: "Low",
-      riskLevel: "Medium",
-      features: [
-        "Quarterly distributions",
-        "Tokenized contract ownership",
-        "Priority access to future offerings",
-        "Enhanced portfolio diversification",
-        "Backed by prime merchant financing contracts"
-      ]
+  });
+  
+  // Form submission handler
+  const onSubmit = async (data: ContactFormValues) => {
+    try {
+      // Submit form data
+      // Placeholder for API call
+      
+      toast({
+        title: "Application received",
+        description: "Thank you for your interest. We'll contact you shortly.",
+      });
+      
+      // Redirect to confirmation page or clear form
+      form.reset();
+    } catch (error) {
+      toast({
+        title: "Error submitting application",
+        description: "Please try again or contact us directly.",
+        variant: "destructive",
+      });
     }
   };
-
-  const selectedOption = investmentOptions[selectedTab as keyof typeof investmentOptions];
-
+  
   return (
-    <div className="flex min-h-screen flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Link href="/">
-              <a className="flex items-center gap-2">
-                <span className="text-xl font-bold text-primary">ShiFi</span>
-                <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-                  Investor Portal
-                </span>
-              </a>
-            </Link>
-          </div>
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="#overview" className="text-sm font-medium hover:text-primary">
-              Overview
-            </a>
-            <a href="#offerings" className="text-sm font-medium hover:text-primary">
-              Investment Offerings
-            </a>
-            <a href="#benefits" className="text-sm font-medium hover:text-primary">
-              Benefits
-            </a>
-            <a href="#process" className="text-sm font-medium hover:text-primary">
-              Process
-            </a>
-          </nav>
-          <div className="flex items-center gap-2">
-            <Button onClick={handleLoginClick}>
-              Investor Login
-            </Button>
-          </div>
-        </div>
-      </header>
-
+    <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
-      <section className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-b from-background to-muted/30">
-        <div className="container grid items-center gap-6 px-4 md:px-6 lg:grid-cols-2 lg:gap-10">
-          <div className="space-y-4">
-            <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
-              Invest in Merchant Financing<br />
-              <span className="text-primary">Earn 15-18% APY</span>
+      <section className="relative overflow-hidden bg-gradient-to-b from-primary/10 to-primary/5 py-20 lg:py-32">
+        <div className="absolute inset-0 bg-grid-pattern opacity-10" />
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="max-w-3xl mx-auto text-center mb-16">
+            <Badge variant="outline" className="mb-4 px-3 py-1 border-primary/30 bg-primary/10">
+              For Accredited Investors Only | Regulation D 506(c)
+            </Badge>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6">
+              Earn <span className="text-primary">15-18% APY</span> With ShiFi's Private Credit Fund
             </h1>
-            <p className="max-w-[600px] text-muted-foreground md:text-xl">
-              Diversify your portfolio with high-yielding, tokenized financial contracts backed by established businesses.
+            <p className="text-xl text-muted-foreground mb-8">
+              Access stable, high-yield returns backed by consumer debt contracts with predictable quarterly payouts and robust risk protections.
             </p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button size="lg" onClick={handleLoginClick}>
-                Access Portal
-                <ArrowRight className="ml-2 h-4 w-4" />
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button size="lg" onClick={() => document.getElementById('get-started')?.scrollIntoView({ behavior: 'smooth' })}>
+                Get Started <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
-              <Button size="lg" variant="outline" asChild>
-                <a href="#offerings">
-                  View Offerings
-                </a>
+              <Button variant="outline" size="lg" onClick={() => window.open('https://calendly.com/shififund/30min', '_blank')}>
+                Schedule a Call <Calendar className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
-          <div className="flex items-center justify-center">
-            <img 
-              src="/investor-portal.jpg" 
-              alt="ShiFi Investment Platform" 
-              className="rounded-lg shadow-xl"
-              onError={(e) => {
-                const img = e.currentTarget;
-                img.src = "/ShiFiMidesk.png";
-              }}
-              width={550}
-              height={400}
-            />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="bg-card/70 backdrop-blur">
+              <CardHeader className="pb-2">
+                <TrendingUp className="h-6 w-6 text-primary mb-2" />
+                <CardTitle className="text-xl">High Yield</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Earn 15-18% APY with consistent quarterly payouts over 2-3 year terms.</p>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-card/70 backdrop-blur">
+              <CardHeader className="pb-2">
+                <Shield className="h-6 w-6 text-primary mb-2" />
+                <CardTitle className="text-xl">Risk Protected</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Multiple security layers including personal guarantees and insurance coverage.</p>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-card/70 backdrop-blur">
+              <CardHeader className="pb-2">
+                <BarChart3 className="h-6 w-6 text-primary mb-2" />
+                <CardTitle className="text-xl">Low Volatility</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Stable returns from consumer debt contracts, independent of market fluctuations.</p>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-card/70 backdrop-blur">
+              <CardHeader className="pb-2">
+                <CalendarClock className="h-6 w-6 text-primary mb-2" />
+                <CardTitle className="text-xl">Shorter Terms</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">Shorter 2-3 year investment cycles with quarterly distributions.</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
-
-      {/* Stats Section */}
-      <section className="w-full py-12 md:py-18 bg-muted/30">
-        <div className="container px-4 md:px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="flex flex-col items-center text-center">
-              <h3 className="text-3xl font-bold text-primary mb-2">15-18%</h3>
-              <p className="text-sm text-muted-foreground">Annual Yield</p>
-            </div>
-            <div className="flex flex-col items-center text-center">
-              <h3 className="text-3xl font-bold text-primary mb-2">$50K+</h3>
-              <p className="text-sm text-muted-foreground">Minimum Investment</p>
-            </div>
-            <div className="flex flex-col items-center text-center">
-              <h3 className="text-3xl font-bold text-primary mb-2">2-4</h3>
-              <p className="text-sm text-muted-foreground">Year Terms</p>
-            </div>
-            <div className="flex flex-col items-center text-center">
-              <h3 className="text-3xl font-bold text-primary mb-2">Quarterly</h3>
-              <p className="text-sm text-muted-foreground">Distributions</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Overview Section */}
-      <section id="overview" className="w-full py-12 md:py-24">
-        <div className="container px-4 md:px-6">
-          <div className="flex flex-col items-center justify-center gap-4 text-center">
-            <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
-              <span className="text-primary">Why</span> Invest with ShiFi?
-            </h2>
-            <p className="max-w-[700px] text-muted-foreground md:text-xl">
-              ShiFi provides accredited investors access to high-yielding financial contracts typically reserved for institutional investors.
+      
+      {/* Investment Options Section */}
+      <section className="py-20 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto text-center mb-16">
+            <h2 className="text-3xl font-bold mb-4">Premium Investment Options</h2>
+            <p className="text-xl text-muted-foreground">
+              Choose the investment plan that aligns with your financial goals
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-8 mt-12 md:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <CircleDollarSign className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <CardTitle>Competitive Returns</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Our merchant financing contracts provide annual returns of 15-18%, outperforming traditional investment vehicles while maintaining controlled risk exposure.
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <Shield className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <CardTitle>Secure Investment Structure</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  All investments are secured through tokenized contracts, backed by established businesses with proven revenue streams and verified through our comprehensive underwriting process.
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <BarChart3 className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <CardTitle>Transparent Performance</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Track your investment performance in real-time through our intuitive investor dashboard with detailed analytics and regular reporting.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Investment Offerings Section */}
-      <section id="offerings" className="w-full py-12 md:py-24 bg-muted/30">
-        <div className="container px-4 md:px-6">
-          <div className="flex flex-col items-center justify-center gap-4 text-center mb-10">
-            <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl">
-              Investment <span className="text-primary">Offerings</span>
-            </h2>
-            <p className="max-w-[700px] text-muted-foreground md:text-xl">
-              Choose the investment option that aligns with your financial goals.
-            </p>
-          </div>
-
-          <Tabs defaultValue="15_percent" className="w-full" onValueChange={setSelectedTab}>
-            <div className="flex justify-center mb-8">
-              <TabsList className="grid w-full max-w-md grid-cols-2">
-                <TabsTrigger value="15_percent">15% APY</TabsTrigger>
-                <TabsTrigger value="18_percent">18% APY</TabsTrigger>
+          
+          <div className="max-w-4xl mx-auto">
+            <Tabs defaultValue="15-percent" value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-8">
+                <TabsTrigger value="15-percent">15% APY (2 Year)</TabsTrigger>
+                <TabsTrigger value="18-percent">18% APY (3 Year)</TabsTrigger>
               </TabsList>
-            </div>
-
-            <div className="flex justify-center">
-              <Card className="max-w-3xl w-full">
-                <CardHeader>
-                  <CardTitle className="text-2xl">{selectedOption.title}</CardTitle>
-                  <CardDescription>{selectedOption.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="font-semibold mb-4">Investment Details</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Minimum Investment:</span>
-                          <span className="font-medium">{selectedOption.minInvestment}</span>
-                        </div>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Term Length:</span>
-                          <span className="font-medium">{selectedOption.term}</span>
-                        </div>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Return Rate:</span>
-                          <span className="font-medium">{selectedOption.returnRate}</span>
-                        </div>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Liquidity:</span>
-                          <span className="font-medium">{selectedOption.liquidity}</span>
-                        </div>
-                        <Separator />
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Risk Level:</span>
-                          <span className="font-medium">{selectedOption.riskLevel}</span>
-                        </div>
+              
+              <TabsContent value="15-percent" className="space-y-4">
+                <Card className="border-primary/30">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-3xl font-bold flex items-center">
+                      15% APY
+                      <Badge className="ml-3 bg-primary/20 text-primary">2 Year Term</Badge>
+                    </CardTitle>
+                    <CardDescription className="text-lg pt-2">
+                      Ideal for investors seeking consistent quarterly returns with moderate time commitment
+                    </CardDescription>
+                  </CardHeader>
+                  
+                  <CardContent className="space-y-6">
+                    <div className="flex justify-between p-4 bg-muted rounded-lg">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Minimum Investment</p>
+                        <p className="text-2xl font-bold">$100,000</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Payout Frequency</p>
+                        <p className="text-2xl font-bold">Quarterly</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total ROI</p>
+                        <p className="text-2xl font-bold">30%</p>
                       </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold mb-4">Key Features</h3>
-                      <ul className="space-y-2">
-                        {selectedOption.features.map((feature, index) => (
-                          <li key={index} className="flex items-start gap-2">
-                            <ChevronRight className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                            <span>{feature}</span>
-                          </li>
-                        ))}
+                    
+                    <div className="space-y-2">
+                      <h4 className="font-medium">Example Returns ($1,000,000 Investment):</h4>
+                      <ul className="space-y-3">
+                        <li className="flex items-start">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                          <span>Quarterly payouts of $162,500</span>
+                        </li>
+                        <li className="flex items-start">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                          <span>Net payout: $1,300,000 (30% ROI, 20% IRR)</span>
+                        </li>
+                        <li className="flex items-start">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                          <span>Fully collateralized and protected investment</span>
+                        </li>
                       </ul>
                     </div>
-                  </div>
-                  <div className="mt-8 flex justify-center">
-                    <Button size="lg" onClick={handleApplyClick}>
-                      Invest Now
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                  </CardContent>
+                  
+                  <CardFooter>
+                    <Button className="w-full" size="lg" onClick={() => document.getElementById('get-started')?.scrollIntoView({ behavior: 'smooth' })}>
+                      Invest at 15% APY <ArrowUpRight className="ml-2 h-4 w-4" />
                     </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </Tabs>
-        </div>
-      </section>
-
-      {/* Benefits Section */}
-      <section id="benefits" className="w-full py-12 md:py-24">
-        <div className="container px-4 md:px-6">
-          <div className="flex flex-col items-center justify-center gap-4 text-center mb-10">
-            <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl">
-              Investor <span className="text-primary">Benefits</span>
-            </h2>
-            <p className="max-w-[700px] text-muted-foreground md:text-xl">
-              Enjoy these exclusive advantages when you invest with ShiFi
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-2">
-                  <LineChart className="h-5 w-5 text-primary" />
-                </div>
-                <CardTitle>Predictable Income</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Fixed returns of 15-18% APY with quarterly distributions provide reliable income you can count on.
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-2">
-                  <FileCheck className="h-5 w-5 text-primary" />
-                </div>
-                <CardTitle>Thorough Due Diligence</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Each business in our portfolio undergoes comprehensive verification and financial analysis before being approved.
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-2">
-                  <LockKeyhole className="h-5 w-5 text-primary" />
-                </div>
-                <CardTitle>Contract Tokenization</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Smart contract technology secures your investment and provides transparent ownership verification.
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-2">
-                  <Zap className="h-5 w-5 text-primary" />
-                </div>
-                <CardTitle>Diversification</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Expand your investment portfolio with an alternative asset class that's uncorrelated with traditional markets.
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                </div>
-                <CardTitle>Performance Dashboard</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Track your investments in real-time with our comprehensive investor dashboard and detailed reporting.
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mb-2">
-                  <CircleDollarSign className="h-5 w-5 text-primary" />
-                </div>
-                <CardTitle>Inflation Protection</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  High fixed-rate returns help protect your capital against inflation and market volatility.
-                </p>
-              </CardContent>
-            </Card>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="18-percent" className="space-y-4">
+                <Card className="border-primary/30">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-3xl font-bold flex items-center">
+                      18% APY
+                      <Badge className="ml-3 bg-primary/20 text-primary">3 Year Term</Badge>
+                    </CardTitle>
+                    <CardDescription className="text-lg pt-2">
+                      Premium option for investors seeking higher returns with compounded interest growth
+                    </CardDescription>
+                  </CardHeader>
+                  
+                  <CardContent className="space-y-6">
+                    <div className="flex justify-between p-4 bg-muted rounded-lg">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Minimum Investment</p>
+                        <p className="text-2xl font-bold">$250,000</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Payout Frequency</p>
+                        <p className="text-2xl font-bold">Quarterly</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total ROI</p>
+                        <p className="text-2xl font-bold">54%</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h4 className="font-medium">Example Returns ($1,000,000 Investment):</h4>
+                      <ul className="space-y-3">
+                        <li className="flex items-start">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                          <span>Final year quarterly payouts of $385,000</span>
+                        </li>
+                        <li className="flex items-start">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                          <span>Net payout: $1,540,000 (54% ROI, 16% IRR)</span>
+                        </li>
+                        <li className="flex items-start">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                          <span>Compounded interest for accelerated growth</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </CardContent>
+                  
+                  <CardFooter>
+                    <Button className="w-full" size="lg" onClick={() => document.getElementById('get-started')?.scrollIntoView({ behavior: 'smooth' })}>
+                      Invest at 18% APY <ArrowUpRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </section>
-
-      {/* Investment Process Section */}
-      <section id="process" className="w-full py-12 md:py-24 bg-muted/30">
-        <div className="container px-4 md:px-6">
-          <div className="flex flex-col items-center justify-center gap-4 text-center mb-10">
-            <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl">
-              Investment <span className="text-primary">Process</span>
-            </h2>
-            <p className="max-w-[700px] text-muted-foreground md:text-xl">
-              A simple and transparent process to start your investment journey
+      
+      {/* How It Works Section */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto text-center mb-16">
+            <h2 className="text-3xl font-bold mb-4">How ShiFi Generates Returns</h2>
+            <p className="text-xl text-muted-foreground">
+              Our model creates value for investors through strategic acquisition of consumer debt at discounted rates
             </p>
           </div>
-
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary mb-4">
-                <span className="text-lg font-bold text-primary-foreground">1</span>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+            <Card>
+              <CardHeader>
+                <div className="w-12 h-12 flex items-center justify-center bg-primary/10 text-primary rounded-full mb-4">
+                  <DollarSign className="h-6 w-6" />
+                </div>
+                <CardTitle>Strategic Acquisition</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  ShiFi purchases consumer debt contracts at significant discounts (e.g., a $10,000 contract for $7,000) while collecting 100% of repayments.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <div className="w-12 h-12 flex items-center justify-center bg-primary/10 text-primary rounded-full mb-4">
+                  <BadgeCheck className="h-6 w-6" />
+                </div>
+                <CardTitle>Robust Underwriting</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Our thorough vetting process ensures only high-quality professional development businesses and borrowers are selected, maintaining a low-default portfolio.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <div className="w-12 h-12 flex items-center justify-center bg-primary/10 text-primary rounded-full mb-4">
+                  <Wallet className="h-6 w-6" />
+                </div>
+                <CardTitle>Contractual Returns</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Retail Installment Contracts (RICs) provide legally binding repayment schedules, creating predictable cash flows independent of market conditions.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="bg-muted/30 rounded-lg p-8 max-w-3xl mx-auto">
+            <div className="flex items-start">
+              <Info className="h-6 w-6 text-primary mr-3 mt-1 flex-shrink-0" />
+              <div>
+                <h3 className="text-xl font-medium mb-2">Proven Track Record</h3>
+                <p className="mb-4">
+                  Our strategic partnership pilot has already demonstrated exceptional results:
+                </p>
+                <ul className="space-y-2">
+                  <li className="flex items-center">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
+                    <span>Over $2.6 million in contracts funded in under 6 months</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
+                    <span>Extremely low 1% default rate</span>
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
+                    <span>Consistent on-time payments from borrowers</span>
+                  </li>
+                </ul>
               </div>
-              <h3 className="text-xl font-bold mb-2">Register</h3>
-              <p className="text-muted-foreground">
-                Create your investor account and complete the initial verification process.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary mb-4">
-                <span className="text-lg font-bold text-primary-foreground">2</span>
-              </div>
-              <h3 className="text-xl font-bold mb-2">KYC Verification</h3>
-              <p className="text-muted-foreground">
-                Complete the identity verification and accredited investor qualification.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary mb-4">
-                <span className="text-lg font-bold text-primary-foreground">3</span>
-              </div>
-              <h3 className="text-xl font-bold mb-2">Select Offering</h3>
-              <p className="text-muted-foreground">
-                Review available investment offerings and choose the option that meets your goals.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary mb-4">
-                <span className="text-lg font-bold text-primary-foreground">4</span>
-              </div>
-              <h3 className="text-xl font-bold mb-2">Invest & Monitor</h3>
-              <p className="text-muted-foreground">
-                Complete your investment and track performance through your investor dashboard.
-              </p>
             </div>
           </div>
-
-          <div className="mt-12 flex justify-center">
-            <Button size="lg" onClick={handleApplyClick}>
-              Begin Investing
-              <ArrowRight className="ml-2 h-4 w-4" />
+        </div>
+      </section>
+      
+      {/* Risk Mitigation Section */}
+      <section className="py-20 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto text-center mb-16">
+            <h2 className="text-3xl font-bold mb-4">Multi-Layered Risk Protection</h2>
+            <p className="text-xl text-muted-foreground">
+              ShiFi employs comprehensive safeguards to protect your investment capital
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center">
+                  <Lock className="h-5 w-5 text-primary mr-2" />
+                  Personal Guaranty
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Business owners are held personally accountable for debt repayment, adding an additional layer of security.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center">
+                  <BarChart3 className="h-5 w-5 text-primary mr-2" />
+                  Diversification
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Origination caps ensure capital is deployed across multiple businesses and industries to reduce concentration risk.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center">
+                  <BadgeCheck className="h-5 w-5 text-primary mr-2" />
+                  Identity Verification
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Real-time KYC checks with driver's license and facial recognition technology prevent fraud at the source.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center">
+                  <DollarSign className="h-5 w-5 text-primary mr-2" />
+                  Financial Verification
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Advanced credit and income verification using Plaid for bank data and Pinwheel for payroll verification.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center">
+                  <Shield className="h-5 w-5 text-primary mr-2" />
+                  Insurance Coverage
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Each contract is bonded with Chubb Insurance for capital protection against business closures.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center">
+                  <FileCheck className="h-5 w-5 text-primary mr-2" />
+                  Recourse Provisions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  First payment and client satisfaction recourse provisions ensure immediate action on defaults or service failures.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="text-center">
+            <Button variant="outline" onClick={() => window.open('https://calendly.com/shififund/30min', '_blank')}>
+              Schedule a Call to Learn More <Calendar className="ml-2 h-4 w-4" />
             </Button>
           </div>
         </div>
       </section>
-
-      {/* CTA Section */}
-      <section className="w-full py-12 md:py-24">
-        <div className="container px-4 md:px-6">
-          <div className="flex flex-col items-center justify-center gap-4 text-center">
-            <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl">
-              Ready to <span className="text-primary">Start Investing</span>?
-            </h2>
-            <p className="max-w-[700px] text-muted-foreground md:text-xl">
-              Join our growing community of investors earning consistent returns through merchant contract financing.
+      
+      {/* Process Section */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto text-center mb-16">
+            <h2 className="text-3xl font-bold mb-4">Simple Investment Process</h2>
+            <p className="text-xl text-muted-foreground">
+              Our streamlined investor experience makes it easy to get started
             </p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button size="lg" onClick={handleApplyClick}>
-                Apply for Investor Access
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+          </div>
+          
+          <div className="max-w-4xl mx-auto">
+            <div className="relative">
+              <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-muted" aria-hidden="true" />
+              
+              <div className="space-y-12">
+                <div className="relative flex items-start">
+                  <div className="flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 text-primary text-lg font-semibold z-10">
+                    1
+                  </div>
+                  <div className="ml-6 mt-1">
+                    <h3 className="text-xl font-medium mb-2">Register and Verify</h3>
+                    <p className="text-muted-foreground mb-3">
+                      Sign an NDA and complete our seamless KYC verification process to access the investor portal.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="relative flex items-start">
+                  <div className="flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 text-primary text-lg font-semibold z-10">
+                    2
+                  </div>
+                  <div className="ml-6 mt-1">
+                    <h3 className="text-xl font-medium mb-2">Review and Select</h3>
+                    <p className="text-muted-foreground mb-3">
+                      Access the data room for key documents including financials, PPM, and portfolio performance, then choose your investment option.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="relative flex items-start">
+                  <div className="flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 text-primary text-lg font-semibold z-10">
+                    3
+                  </div>
+                  <div className="ml-6 mt-1">
+                    <h3 className="text-xl font-medium mb-2">Sign Digitally</h3>
+                    <p className="text-muted-foreground mb-3">
+                      Promissory notes are automatically generated and signed digitally through our secure platform.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="relative flex items-start">
+                  <div className="flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 text-primary text-lg font-semibold z-10">
+                    4
+                  </div>
+                  <div className="ml-6 mt-1">
+                    <h3 className="text-xl font-medium mb-2">Fund Seamlessly</h3>
+                    <p className="text-muted-foreground mb-3">
+                      Transfer your investment easily through direct ACH using our secure Plaid integration.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="relative flex items-start">
+                  <div className="flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 text-primary text-lg font-semibold z-10">
+                    5
+                  </div>
+                  <div className="ml-6 mt-1">
+                    <h3 className="text-xl font-medium mb-2">Track and Manage</h3>
+                    <p className="text-muted-foreground mb-3">
+                      Access your dashboard to track investment status, view signed documents, and monitor quarterly returns.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
-
+      
+      {/* Get Started Section */}
+      <section id="get-started" className="py-20 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              <div>
+                <h2 className="text-3xl font-bold mb-6">Ready to Get Started?</h2>
+                <p className="text-lg mb-6">
+                  Complete this form to begin your investment journey with ShiFi. Our team will contact you promptly to guide you through the next steps.
+                </p>
+                
+                <div className="mb-8">
+                  <h3 className="text-xl font-medium mb-3">Why Invest with ShiFi?</h3>
+                  <ul className="space-y-3">
+                    <li className="flex items-start">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Access to a rapidly expanding $607 billion professional development market</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Early mover advantage with low competition in the space</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Team with proven track record in scaling professional development businesses</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                      <span>Lower-risk profile with shorter-term notes and multiple protections</span>
+                    </li>
+                  </ul>
+                </div>
+                
+                <div className="p-4 border rounded-lg bg-background">
+                  <div className="flex items-start">
+                    <Info className="h-5 w-5 text-primary mr-2 mt-1 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-medium">Regulatory Notice</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Investments offered under Regulation D Rule 506(c). Available to accredited investors only. Past performance does not guarantee future results.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Investor Application</CardTitle>
+                    <CardDescription>
+                      Complete this form to begin your investment journey
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Full Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="John Smith" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email Address</FormLabel>
+                              <FormControl>
+                                <Input type="email" placeholder="john@example.com" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="phone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Phone Number</FormLabel>
+                              <FormControl>
+                                <Input placeholder="(555) 123-4567" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="investmentAmount"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Estimated Investment Amount ($)</FormLabel>
+                              <FormControl>
+                                <Input placeholder="100000" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="investmentGoals"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Investment Goals (Optional)</FormLabel>
+                              <FormControl>
+                                <Input placeholder="What are your investment objectives?" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="isAccredited"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                              <div className="space-y-0.5">
+                                <FormLabel>Accredited Investor Status</FormLabel>
+                                <p className="text-sm text-muted-foreground">
+                                  I certify that I meet the requirements of an accredited investor
+                                </p>
+                              </div>
+                              <FormControl>
+                                <Switch
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="agreeToTerms"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                              <FormControl>
+                                <Switch
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel>
+                                  I agree to the terms and conditions and understand this is for preliminary qualification only
+                                </FormLabel>
+                                <FormMessage />
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+                      
+                        <Button type="submit" className="w-full">Submit Application</Button>
+                      </form>
+                    </Form>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      {/* Contact Section */}
+      <section className="py-12 bg-primary/5 border-t">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-2xl font-medium mb-4">Ready to discuss your investment options?</h2>
+          <p className="mb-6 text-muted-foreground">
+            Contact us directly or schedule a call with our investment team
+          </p>
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <Button variant="outline" onClick={() => window.location.href = 'mailto:paul@shilohfinance.com'}>
+              Email: paul@shilohfinance.com
+            </Button>
+            <Button onClick={() => window.open('https://calendly.com/shififund/30min', '_blank')}>
+              Schedule a Call <Calendar className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </section>
+      
       {/* Footer */}
-      <footer className="w-full py-6 md:py-8 border-t">
-        <div className="container flex flex-col items-center justify-center gap-4 px-4 md:px-6 text-center">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold">ShiFi</span>
-            <span className="text-sm text-muted-foreground">
-              Investor Portal
-            </span>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            © 2025 ShiFi Financial Technologies. All rights reserved.
-          </div>
-          <div className="flex gap-4 text-muted-foreground text-sm">
-            <a href="#" className="hover:text-foreground">
-              Terms & Conditions
-            </a>
-            <a href="#" className="hover:text-foreground">
-              Privacy Policy
-            </a>
-            <a href="#" className="hover:text-foreground">
-              Contact Us
-            </a>
+      <footer className="py-8 border-t">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="mb-4 md:mb-0">
+              <p className="text-sm text-muted-foreground">
+                &copy; {new Date().getFullYear()} ShiFi. All rights reserved.
+              </p>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <p>
+                Investment opportunities offered under Regulation D Rule 506(c). Available to accredited investors only.
+                Past performance does not guarantee future results. Please read all offering documents carefully.
+              </p>
+            </div>
           </div>
         </div>
       </footer>

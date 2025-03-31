@@ -69,7 +69,7 @@ function App() {
         {/* Public routes - don't use conditional rendering for login route to prevent routing issues */}
         
         {/* Investor landing page and signup - accessible to everyone */}
-        <Route path="/investor" component={lazy(() => import("@/pages/InvestorLanding"))} />
+        <Route path="/investor/landing" component={lazy(() => import("@/pages/InvestorLanding"))} />
         <Route path="/investor/signup" component={InvestorSignup} />
         <Route path="/investor/verify/kyc" component={KYCVerification} />
         <Route path="/investor/verify/bank" component={BankConnection} />
@@ -95,7 +95,12 @@ function App() {
         <Route path="/dashboard/:contractId" component={CustomerDashboard} />
         
         {/* The root path should be processed last to avoid hijacking other routes */}
-        <Route path="/" component={user ? (user.role === 'admin' ? AdminDashboard : MerchantDashboard) : Login} />
+        <Route path="/" component={user ? 
+          (user.role === 'admin' ? AdminDashboard : 
+           user.role === 'merchant' ? MerchantDashboard : 
+           user.role === 'investor' ? InvestorDashboard : Login) : 
+          Login
+        } />
 
         {/* Admin routes */}
         {user && user.role === "admin" && (
@@ -134,9 +139,13 @@ function App() {
         )}
         
         {/* Investor routes */}
+        <Route 
+          path="/investor" 
+          component={user && user.role === "investor" ? InvestorDashboard : lazy(() => import("@/pages/InvestorLanding"))} 
+        />
+        
         {user && user.role === "investor" && (
           <>
-            <Route path="/investor" component={InvestorDashboard} />
             <Route path="/investor/dashboard" component={InvestorDashboard} />
             <Route path="/investor/offerings" component={InvestorOfferings} />
             <Route path="/investor/offerings/:id" component={OfferingDetail} />

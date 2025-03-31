@@ -27,7 +27,7 @@ export default function BankConnection() {
   const getLinkToken = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await apiRequest<{success: boolean; linkToken: string}>('GET', '/api/investor/plaid/create-link-token');
+      const response = await apiRequest<{success: boolean; linkToken: string; expiration: string}>('POST', '/api/investor/plaid/create-link-token');
       
       if (response.linkToken) {
         setLinkToken(response.linkToken);
@@ -50,9 +50,16 @@ export default function BankConnection() {
   const onSuccess = useCallback(async (publicToken: string, metadata: any) => {
     setIsLinking(true);
     try {
+      // Extract the required account data from metadata
+      const account = metadata.accounts[0];
+      const institution = metadata.institution;
+      
       const response = await apiRequest('POST', '/api/investor/plaid/exchange-token', {
         publicToken,
-        metadata,
+        accountId: account.id,
+        accountName: account.name,
+        accountType: account.type,
+        institution: institution.name
       });
       
       setAccountLinked(true);
@@ -170,10 +177,13 @@ export default function BankConnection() {
                 <div className="mt-6 space-y-4">
                   <Button 
                     onClick={() => {
-                      // In a production app, we'd use the real Plaid Link
-                      // if (ready && linkToken) open();
-                      // For demo purposes:
-                      handleDemoConnect();
+                      // Use the real Plaid Link if available
+                      if (ready && linkToken) {
+                        open();
+                      } else {
+                        // Fallback to demo mode if Plaid isn't configured
+                        handleDemoConnect();
+                      }
                     }}
                     disabled={(!ready && !linkToken) || isLinking || accountLinked}
                     className="w-full md:w-auto"

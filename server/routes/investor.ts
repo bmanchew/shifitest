@@ -36,6 +36,7 @@ import { storage } from "../storage";
 import { logger } from "../services/logger";
 import { authenticateToken, isInvestor, isAdmin } from "../middleware/auth";
 import { blockchainService } from "../services/blockchain";
+import { plaidService } from "../services/plaidService";
 import crypto from "crypto";
 
 const router = express.Router();
@@ -733,6 +734,157 @@ router.get("/investments/:id", isInvestor, async (req: Request, res: Response) =
     res.status(500).json({
       success: false,
       message: "Failed to fetch investment"
+    });
+  }
+});
+
+/**
+ * @route POST /api/investor/plaid/create-link-token
+ * @desc Create a Plaid link token for bank account connection
+ * @access Private - Investor only
+ */
+router.post("/plaid/create-link-token", isInvestor, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+    }
+
+    // Get investor profile
+    const investorProfile = await storage.getInvestorProfileByUserId(userId);
+
+    if (!investorProfile) {
+      return res.status(404).json({
+        success: false,
+        message: "Investor profile not found"
+      });
+    }
+
+    // Create a Plaid link token
+    const linkTokenResponse = await plaidService.createLinkToken(userId);
+
+    logger.info({
+      message: `Created Plaid link token for investor ${investorProfile.id}`,
+      category: "plaid",
+      action: "create_link_token",
+      metadata: { userId }
+    });
+
+    return res.json({
+      success: true,
+      linkToken: linkTokenResponse.link_token,
+      expiration: linkTokenResponse.expiration
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error creating Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
+      category: "plaid",
+      action: "create_link_token_error",
+      metadata: { userId: req.user?.id }
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create Plaid link token"
+    });
+  }
+});
+
+/**
+ * @route POST /api/investor/plaid/exchange-token
+ * @desc Exchange a Plaid public token for an access token and store it
+ * @access Private - Investor only
+ */
+router.post("/plaid/exchange-token", isInvestor, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+    }
+
+    // Validate request body
+    const exchangeSchema = z.object({
+      publicToken: z.string(),
+      accountId: z.string(),
+      accountName: z.string(),
+      accountType: z.string(),
+      institution: z.string()
+    });
+
+    const { publicToken, accountId, accountName, accountType, institution } = exchangeSchema.parse(req.body);
+
+    // Get investor profile
+    const investorProfile = await storage.getInvestorProfileByUserId(userId);
+
+    if (!investorProfile) {
+      return res.status(404).json({
+        success: false,
+        message: "Investor profile not found"
+      });
+    }
+
+    // Exchange the public token for an access token
+    const { accessToken, itemId } = await plaidService.exchangePublicToken(publicToken);
+
+    // Get account information to verify the account
+    const accountInfo = await plaidService.getAccountInfo(accessToken);
+
+    // Format linked account data
+    const linkedAccount = {
+      plaidItemId: itemId,
+      plaidAccessToken: accessToken,
+      accountId,
+      accountName,
+      accountType,
+      institution,
+      lastVerified: new Date()
+    };
+
+    // Update investor profile with linked account
+    const updatedProfile = await storage.updateInvestorProfile(investorProfile.id, {
+      linkedAccounts: [...(investorProfile.linkedAccounts || []), linkedAccount]
+    });
+
+    logger.info({
+      message: `Bank account successfully linked for investor ${investorProfile.id}`,
+      category: "plaid",
+      action: "link_account_success",
+      metadata: { userId }
+    });
+
+    return res.json({
+      success: true,
+      message: "Bank account successfully linked",
+      linkedAccounts: updatedProfile.linkedAccounts
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      const validationError = fromZodError(error);
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: validationError.details
+      });
+    }
+
+    logger.error({
+      message: `Error exchanging Plaid token: ${error instanceof Error ? error.message : String(error)}`,
+      category: "plaid",
+      action: "exchange_token_error",
+      metadata: { userId: req.user?.id }
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to link bank account"
     });
   }
 });

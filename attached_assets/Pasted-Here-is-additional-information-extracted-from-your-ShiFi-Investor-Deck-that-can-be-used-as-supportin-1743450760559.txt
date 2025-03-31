@@ -1,0 +1,125 @@
+Here is additional information extracted from your ShiFi Investor Deck that can be used as supporting documentation or added context to your Product Requirements Document (PRD), particularly for creating a compelling landing page and marketing material for the investor portal:
+
+---
+
+# ShiFi Investor Portal - Additional Documentation for Landing Page & Marketing
+
+## **Investment Objective and Overview**
+
+ShiFi's fund strategy revolves around driving investor portfolio growth with **high-yield** and **low volatility** returns.
+
+- **Returns:** 15% or 18% APY
+- **Investment Terms:** 24 months (2 years) or 36 months (3 years)
+- **Payout Frequency:** Quarterly
+- **Minimum Investments:**
+  - **15% APY (24 months):** $100,000 minimum
+  - **18% APY (36 months, compounded interest):** $250,000 minimum
+
+**Key Advantages of Investing in Private Credit:**
+
+- Lower volatility compared to traditional market-driven investments.
+- Shorter investment cycles (2-3 years).
+- Predictable returns backed by contractually obligated repayments.
+- Strong capital preservation with liquidity and current income.
+
+---
+
+## **How ShiFi Generates Returns**
+
+ShiFi acquires **consumer debt** from thoroughly vetted professional development businesses at significant discounts with borrower-friendly terms, ensuring substantial returns.
+
+- ShiFi purchases contracts at discounted rates (e.g., a $10,000 contract purchased for $7,000), yet receives 100% of the repayment.
+- The model leverages **Retail Installment Contracts (RICs)** from professional development industries (coaching programs and high-ticket services).
+- ShiFi's underwriting process ensures a robust, low-default portfolio.
+
+**Example Investment Performance (Based on $1,000,000 Investment):**
+
+- **15% APY (24-month term)**:
+  - Quarterly payout: $162,500
+  - Net Investor payout: $1,300,000 (ROI: 30%, IRR: 20%)
+
+- **18% APY (36-month term)**:
+  - Quarterly payout (final year): $385,000
+  - Net Investor payout: $1,540,000 (ROI: 54%, IRR: 16%)
+
+---
+
+## **Risk Mitigation Strategies**
+
+ShiFi employs multiple layers of safeguards to protect investor capital, ensuring low default rates:
+
+- **Personal Guaranty**: Holding business owners personally accountable.
+- **Origination Cap**: Ensuring diversified capital deployment across multiple businesses.
+- **Risk-Determined Tiering**: Capital deployment varies by borrower risk profile.
+- **Instant Identity Verification**: Real-time KYC checks (driver’s license and facial recognition).
+- **Credit & Income Verification**: Using advanced tools like Plaid for bank data and Pinwheel for payroll verification.
+- **First Payment Recourse**: Immediate action if a borrower defaults within the first three payments.
+- **Client Satisfaction Recourse**: Protects against non-delivery of promised services.
+- **Chubb Insurance**: Each contract bonded for capital protection against business closures.
+
+---
+
+## **Why Invest with ShiFi? (Key Selling Points)**
+
+- Access to a rapidly expanding $607 billion market (professional development).
+- Early mover advantage with low competition.
+- High margin, low overhead industry (service-based).
+- Team with a proven track record in scaling professional development businesses to 7-figures.
+- Lower-risk profile with shorter-term notes (24 months).
+- Zero-interest consumer contracts at point-of-sale attract high-quality borrowers.
+
+---
+
+## **ShiFi’s Proven Track Record (Pilot Results)**
+
+ShiFi has demonstrated strong early results with a strategic partnership pilot:
+
+- **Total Contracts Funded:** $2.6M+ in under 6 months.
+- **Defaults:** Extremely low default rate (only 1% default rate in the pilot).
+- Proven underwriting process and merchant selection criteria.
+
+---
+
+## **Investor Experience & Process**
+
+ShiFi Investor Portal provides a streamlined, secure investment experience:
+
+1. **Register and Verify:** Investors sign an NDA and undergo seamless KYC verification.
+2. **Review and Select:** Investors access the data room for key documents (financials, PPM, portfolio performance) and choose from clearly defined investment options.
+3. **Sign Digitally:** Automated promissory note generation and digital signing using the Thanks Roger API.
+4. **Fund Seamlessly:** Direct ACH investment transfers through Plaid integration, with Dwolla as a secondary option.
+5. **Track and Manage:** Investors have ongoing access to their investment status, signed documents, and transaction histories.
+
+---
+
+## **Landing Page Content Recommendations**
+
+The investor portal landing page should clearly communicate these core aspects:
+
+- Prominent display of APY (15%-18%), terms, and payout structure.
+- Highlight ShiFi’s robust risk management strategies and safeguards.
+- Showcase ShiFi’s pilot program success metrics (low default rates, high returns).
+- Clearly describe the investor onboarding process (KYC, NDA, signing, funding).
+- Include testimonials or case studies from previous pilot investments to build credibility.
+- Provide direct calls-to-action such as "Book a Call" or "Get Started" linking directly to Calendly or email contacts.
+
+---
+
+## **Legal & Compliance Disclosures**
+
+Explicitly mention the regulatory compliance:
+
+- Investments offered under Regulation D Rule 506(c).
+- Only accredited investors eligible.
+- Include clear disclaimers regarding investment risks and past performance.
+
+---
+
+## **Contacts and Calls to Action**
+
+- Include clear contact information (e.g., email: paul@shilohfinance.com).
+- Offer easy scheduling of investor calls through a direct link (https://calendly.com/shififund/30min).
+
+---
+
+By incorporating this additional information, the landing page and accompanying marketing material will comprehensively communicate the ShiFi investment opportunity, value proposition, and credibility, enhancing investor trust and conversion.
