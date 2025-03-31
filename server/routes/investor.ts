@@ -93,7 +93,7 @@ router.post("/applications", async (req: Request, res: Response) => {
       email: application.email,
       firstName,
       lastName,
-      name: application.name, // Keep the full name for backward compatibility
+      name: application.name || firstName + ' ' + lastName, // Ensure name is never empty as it's NOT NULL in the database
       role: 'investor',
       password: crypto.randomBytes(8).toString('hex'), // Generate a temporary password
       phone: application.phone
