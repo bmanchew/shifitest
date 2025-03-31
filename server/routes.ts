@@ -18,6 +18,7 @@ import {
   logSourceEnum
 } from "@shared/schema";
 import { authRateLimiter, userCreationRateLimiter } from "./middleware/authRateLimiter";
+import { csrfProtectionWithExclusions as csrfProtection } from "./middleware/csrfMiddleware";
 import { sortByDateDesc } from "./utils/dateHelpers";
 import { twilioService } from "./services/twilio";
 import { diditService } from "./services/didit";
@@ -7987,6 +7988,96 @@ apiRouter.patch("/merchants/:id", async (req: Request, res: Response) => {
     }
   });
 
+  // Test endpoint for contract signed email (for testing purposes only)
+  // This endpoint bypasses CSRF protection for testing purposes
+  apiRouter.post("/test-email", async (req: Request, res: Response) => {
+    try {
+      const { contractId, customerEmail, customerName, merchantName, contractNumber } = req.body;
+      
+      if (!customerEmail || !customerName) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Customer email and name are required" 
+        });
+      }
+      
+      logger.info({
+        message: `Test email request received for ${customerEmail}`,
+        category: "test",
+        source: "internal",
+        metadata: { contractId, customerEmail }
+      });
+      
+      // Create a sample contract document as a placeholder
+      const sampleDocumentPath = path.resolve(__dirname, '../asset_reports/contract_179_asset_report_ac7037cb-7aff-4e80-82d8-2fee1682bcc1.pdf');
+      let documentContent = '';
+      
+      // Try to read a sample contract file, or generate a placeholder
+      try {
+        if (fs.existsSync(sampleDocumentPath)) {
+          const document = fs.readFileSync(sampleDocumentPath);
+          documentContent = document.toString('base64');
+        } else {
+          // Create a simple placeholder base64 content (represents a small PDF)
+          documentContent = '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b2JqCjE0IDAgb2JqCjI0ODYKZW5kb2JqCjggMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1RydWVUeXBlIC9CYXNlRm9udCAvRkZTRUZZK1RpbWVzTmV3Um9tYW5QU01UIC9Gb250RGVzY3JpcHRvcgoxMiAwIFIgL0VuY29kaW5nIC9NYWNSb21hbkVuY29kaW5nIC9GaXJzdENoYXIgMzIgL0xhc3RDaGFyIDIwNCAvV2lkdGhzIFsgMjUwCjAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMAowIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAKMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAKMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwCjAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDUwMCBdID4+CmVuZG9iagoxNSAwIG9iago8PCAvVGl0bGUgKFVudGl0bGVkKSAvQXV0aG9yICh3aWxsYnVyZGppIHVzZXJuYW1lKSAvQ3JlYXRvciAoUmVhZGRsZSkgL0NyZWF0aW9uRGF0ZQooRDoyMDA4MTEwMzE3NTAyOVopIC9Qcm9kdWNlciAoUmVhZGRsZSBQREZPcHRpbWl6ZXIgKEludGVybmV0KSkgL01vZERhdGUKKEQ6MjAwODExMDYxNzUzMzRaKSA+PgplbmRvYmoKeHJlZgowIDE2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxOSAwMDAwMCBuIAowMDAwMDAwMjI0IDAwMDAwIG4gCjAwMDAwMDA5MjIgMDAwMDAgbiAKMDAwMDAwMDAzOSAwMDAwMCBuIAowMDAwMDAwMjQ1IDAwMDAwIG4gCjAwMDAwMDAzMjUgMDAwMDAgbiAKMDAwMDAwMDg4OCAwMDAwMCBuIAowMDAwMDAxMDA3IDAwMDAwIG4gCjAwMDAwMDA0MTQgMDAwMDAgbiAKMDAwMDAwMDg2OCAwMDAwMCBuIAowMDAwMDAxMDAzIDAwMDAwIG4gCjAwMDAwMDE5MjAgMDAwMDAgbiAKMDAwMDAwMjE5MyAwMDAwMCBuIAowMDAwMDA0NzcxIDAwMDAwIG4gCjAwMDAwMDQ3OTIgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSAxNiAvUm9vdCAxMSAwIFIgL0luZm8gMTUgMCBSIC9JRCBbIDw2MjNiZjhjOWVkMzY2MTBlZWYwNWM0MTUwNGVkMmM1NT4KPGQzYzk0OWFmYzNkZmM1ZDczMDdlNWViODA2MDI5MzZhPiBdID4+CnN0YXJ0eHJlZgo1MDA0CiUlRU9GCg==';
+        } 
+      } catch (error) {
+        logger.warn({
+          message: `Error reading sample contract document: ${error.message}`,
+          category: "test",
+          source: "internal"
+        });
+      }
+      
+      // Send the test email
+      const sent = await emailService.sendContractSigned(
+        customerEmail,
+        customerName,
+        merchantName || 'Test Merchant',
+        contractId || 179,
+        contractNumber || `TEST-${Date.now()}`,
+        `/api/contracts/${contractId || 179}/document`,
+        documentContent
+      );
+      
+      if (sent) {
+        logger.info({
+          message: `Test contract signed email sent successfully to ${customerEmail}`,
+          category: "test",
+          source: "internal"
+        });
+        
+        return res.status(200).json({
+          success: true,
+          message: `Test contract signed email sent to ${customerEmail}`
+        });
+      } else {
+        logger.error({
+          message: `Failed to send test contract signed email to ${customerEmail}`,
+          category: "test",
+          source: "internal"
+        });
+        
+        return res.status(500).json({
+          success: false,
+          message: "Failed to send test email"
+        });
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error sending test email: ${error instanceof Error ? error.message : String(error)}`,
+        category: "test",
+        source: "internal",
+        error: error instanceof Error ? error.stack : String(error)
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: `Error sending test email: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  });
+  
   // Add a 404 handler for API routes that don't match any defined endpoint
   apiRouter.use((req: Request, res: Response) => {
     logger.warn({
