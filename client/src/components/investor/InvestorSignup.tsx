@@ -68,11 +68,22 @@ export default function InvestorSignup() {
     setIsSubmitting(true);
     try {
       // Send the application data to the backend and create an investor account
-      const response = await apiRequest<{success: boolean; userId: number; token: string}>(
+      const response = await apiRequest<{success: boolean; userId?: number; token?: string; existingUser?: boolean}>(
         "POST", 
         "/api/investor/applications", 
         data
       );
+      
+      // Check if the user already exists
+      if (response.existingUser) {
+        toast({
+          title: "Email already exists",
+          description: "This email is already registered. Please login or use a different email.",
+          variant: "destructive"
+        });
+        setIsSubmitting(false);
+        return;
+      }
       
       // Show success message
       toast({

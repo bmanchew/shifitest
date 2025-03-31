@@ -72,8 +72,16 @@ router.post("/applications", async (req: Request, res: Response) => {
       }
     });
     
-    // In a real implementation, we would check if the email already exists
-    // and validate the application more thoroughly
+    // Check if the email already exists
+    const existingUser = await storage.getUserByEmail(application.email);
+    
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already exists. Please login or use a different email address.",
+        existingUser: true
+      });
+    }
     
     // Split name into first and last name
     const nameParts = application.name.split(' ');
