@@ -67,20 +67,51 @@ export default function InvestorLanding() {
   // Form submission handler
   const onSubmit = async (data: ContactFormValues) => {
     try {
-      // Submit form data
-      // Placeholder for API call
-      
-      toast({
-        title: "Application received",
-        description: "Thank you for your interest. We'll contact you shortly.",
+      // Submit form data to the backend
+      const response = await fetch('/api/investor/applications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          investmentAmount: data.investmentAmount,
+          investmentGoals: data.investmentGoals || 'Not specified',
+          isAccredited: data.isAccredited,
+          agreeToTerms: data.agreeToTerms
+        }),
       });
       
-      // Redirect to confirmation page or clear form
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to submit application');
+      }
+      
+      toast({
+        title: "Application submitted successfully",
+        description: "Thank you for your interest. Our team will contact you shortly.",
+      });
+      
+      // Redirect to the next step or clear form
+      if (result.userId && result.token) {
+        // If this were a real flow, we'd set the token in localStorage and redirect
+        // to the next step in the verification process
+        setTimeout(() => {
+          // For demonstration purposes, we'll just navigate to the login page
+          setLocation('/investor/signup');
+        }, 1500);
+      }
+      
+      // Clear form
       form.reset();
     } catch (error) {
+      console.error('Application submission error:', error);
       toast({
         title: "Error submitting application",
-        description: "Please try again or contact us directly.",
+        description: error instanceof Error ? error.message : "Please try again or contact us directly.",
         variant: "destructive",
       });
     }
