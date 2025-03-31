@@ -40,6 +40,16 @@ const DEFAULT_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL as string || 'noreply
 
 /**
  * EmailService - Handles all email communications
+ * 
+ * This service provides a centralized way to manage email sending throughout the application.
+ * It supports various email templates for different business scenarios such as welcome emails,
+ * password resets, payment reminders, and application status notifications.
+ * 
+ * The service uses SendGrid for email delivery and includes methods to:
+ * - Generate consistent email templates with proper branding
+ * - Format both HTML and plain text versions of emails for compatibility
+ * - Dynamically determine the application's base URL for proper link generation
+ * - Handle different types of notification emails based on business events
  */
 export class EmailService {
   /**
@@ -99,8 +109,32 @@ export class EmailService {
   }
 
   /**
-   * Get the application base URL
-   * This method uses environment variables to determine the correct app URL
+   * Determines the application's base URL from environment variables
+   * 
+   * This method provides a consistent approach to generate absolute URLs for emails
+   * by checking various environment variables. It intelligently prioritizes environment
+   * variables and provides a reliable fallback mechanism for different hosting environments.
+   * 
+   * The priority order is:
+   * 1. PUBLIC_URL (if not an API webhook URL)
+   * 2. REPLIT_DOMAINS (first domain in the comma-separated list)
+   * 3. REPLIT_DEV_DOMAIN
+   * 4. REPL_ID (constructs https://{REPL_ID}.replit.dev)
+   * 5. Default URL (https://shifi.ai) as final fallback
+   * 
+   * @returns A fully qualified base URL with https protocol (no trailing slash)
+   * 
+   * @example
+   * // With PUBLIC_URL=https://myapp.com
+   * getAppBaseUrl() // Returns "https://myapp.com"
+   * 
+   * // With REPLIT_DOMAINS=myapp-abc123.replit.app,myapp-abc123.repl.co
+   * getAppBaseUrl() // Returns "https://myapp-abc123.replit.app"
+   * 
+   * // With no environment variables set
+   * getAppBaseUrl() // Returns "https://shifi.ai"
+   * 
+   * @private Used internally by email template methods
    */
   private getAppBaseUrl(): string {
     // Check for PUBLIC_URL, but verify it doesn't look like an API webhook URL
