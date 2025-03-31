@@ -25,6 +25,7 @@ export enum EmailTemplateType {
   PAYMENT_RECEIVED = 'payment_received',
   CONTRACT_SIGNED = 'contract_signed',
   CUSTOMER_MAGIC_LINK = 'customer_magic_link',
+  INVESTOR_WELCOME = 'investor_welcome',
 }
 
 // Basic email interface
@@ -85,12 +86,12 @@ export class EmailService {
         message: `Email sent successfully to ${email.to}`,
         category: 'system',
         source: 'internal',
-        requestId,
         metadata: { 
           emailType: email.subject,
           to: email.to,
           template: email.subject,
-          service: 'sendgrid'
+          service: 'sendgrid',
+          requestId
         }
       });
 
@@ -101,12 +102,12 @@ export class EmailService {
         message: `Failed to send email to ${emailData.to}`,
         category: 'system',
         source: 'internal',
-        requestId,
         metadata: { 
           emailType: emailData.subject,
           to: emailData.to,
           errorDetails: error instanceof Error ? error.message : String(error),
-          service: 'sendgrid'
+          service: 'sendgrid',
+          requestId
         }
       });
 
@@ -437,6 +438,67 @@ export class EmailService {
 
     return this.sendEmail({
       to: customerEmail,
+      subject,
+      html,
+      text
+    });
+  }
+
+  /**
+   * Send welcome email with login credentials to investor
+   */
+  async sendInvestorWelcome(investorEmail: string, investorName: string, temporaryPassword: string): Promise<boolean> {
+    const subject = 'Welcome to ShiFi - Your Investor Account is Ready';
+    const baseUrl = this.getAppBaseUrl();
+    const loginLink = `${baseUrl}/investor/login`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #333;">Welcome to ShiFi Investor Portal!</h1>
+
+        <p>Hello ${investorName},</p>
+
+        <p>Your investor account application has been approved! You can now log in to the ShiFi Investor Portal to view investment opportunities and manage your portfolio.</p>
+
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <p><strong>Your login credentials:</strong></p>
+          <p>Email: ${investorEmail}</p>
+          <p>Temporary Password: ${temporaryPassword}</p>
+        </div>
+
+        <p><strong>Important:</strong> For security reasons, you'll be asked to change your password on your first login.</p>
+
+        <a href="${loginLink}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px;">Log In Now</a>
+
+        <p style="margin-top: 30px;">If you have any questions, please contact our investor relations team at investors@shifi.ai.</p>
+
+        <p>Best regards,<br>The ShiFi Investment Team</p>
+      </div>
+    `;
+
+    const text = `
+      Welcome to ShiFi Investor Portal!
+
+      Hello ${investorName},
+
+      Your investor account application has been approved! You can now log in to the ShiFi Investor Portal to view investment opportunities and manage your portfolio.
+
+      Your login credentials:
+      Email: ${investorEmail}
+      Temporary Password: ${temporaryPassword}
+
+      Important: For security reasons, you'll be asked to change your password on your first login.
+
+      Log in at: ${loginLink}
+
+      If you have any questions, please contact our investor relations team at investors@shifi.ai.
+
+      Best regards,
+      The ShiFi Investment Team
+    `;
+
+    return this.sendEmail({
+      to: investorEmail,
       subject,
       html,
       text

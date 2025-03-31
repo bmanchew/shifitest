@@ -38,7 +38,9 @@ import { authenticateToken, isInvestor, isAdmin } from "../middleware/auth";
 import { blockchainService } from "../services/blockchain";
 import { plaidService } from "../services/plaidService";
 import { diditService } from "../services/didit";
+import emailService from "../services/email";
 import crypto from "crypto";
+import bcrypt from "bcrypt";
 
 const router = express.Router();
 
@@ -89,6 +91,13 @@ router.post("/applications", async (req: Request, res: Response) => {
     const firstName = nameParts[0] || '';
     const lastName = nameParts.slice(1).join(' ') || '';
     
+    // Generate a temporary password
+    const temporaryPassword = crypto.randomBytes(8).toString('hex');
+    
+    // Hash the password before storing
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(temporaryPassword, salt);
+    
     // Create user account for the investor
     const user = await storage.createUser({
       email: application.email,
@@ -96,8 +105,26 @@ router.post("/applications", async (req: Request, res: Response) => {
       lastName,
       name: application.name || firstName + ' ' + lastName, // Ensure name is never empty as it's NOT NULL in the database
       role: 'investor',
-      password: crypto.randomBytes(8).toString('hex'), // Generate a temporary password
+      password: hashedPassword,
       phone: application.phone
+    });
+    
+    // Send welcome email with temporary password
+    const emailSent = await emailService.sendInvestorWelcome(
+      application.email,
+      application.name,
+      temporaryPassword
+    );
+    
+    // Log email status
+    logger.info({
+      message: `Investor welcome email ${emailSent ? 'sent' : 'failed'} for ${application.email}`,
+      category: "system",
+      source: "internal",
+      metadata: {
+        investorEmail: application.email,
+        emailSent
+      }
     });
     
     // Create investor profile with the schema that matches the database
@@ -579,10 +606,10 @@ router.post("/investments", isInvestor, async (req: Request, res: Response) => {
       }
 
       // Verify minimum investment amount
-      if (validatedData.amount < offering.minInvestment) {
+      if (validatedData.amount < offering.minimumInvestment) {
         return res.status(400).json({
           success: false,
-          message: `Investment amount must be at least ${offering.minInvestment}`
+          message: `Investment amount must be at least ${offering.minimumInvestment}`
         });
       }
 
