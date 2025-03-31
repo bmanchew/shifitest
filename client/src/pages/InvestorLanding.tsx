@@ -69,21 +69,29 @@ export default function InvestorLanding() {
     try {
       console.log('Form submitted with data:', data);
       
-      // Get CSRF token from cookies
-      const csrfToken = document.cookie.split('; ')
-        .find(row => row.startsWith('_csrf='))
-        ?.split('=')[1];
+      // First get the CSRF token
+      const csrfResponse = await fetch('/api/csrf-token', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
       
-      if (!csrfToken) {
-        throw new Error('CSRF token not found. Please refresh the page and try again.');
+      const csrfData = await csrfResponse.json();
+      
+      if (!csrfData.success || !csrfData.csrfToken) {
+        throw new Error('Failed to get CSRF token');
       }
       
-      // Submit form data to the backend with CSRF token
+      // Submit form data to the backend with the CSRF token
       const response = await fetch('/api/investor/applications', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken,
+          'X-CSRF-Token': csrfData.csrfToken
         },
         body: JSON.stringify({
           name: data.name,
@@ -93,7 +101,7 @@ export default function InvestorLanding() {
           investmentGoals: data.investmentGoals || 'Not specified',
           isAccredited: data.isAccredited,
           agreeToTerms: data.agreeToTerms
-        }),
+        })
       });
       
       const result = await response.json();
