@@ -34,6 +34,12 @@ interface EmailData {
   html: string;
   from?: string;
   text?: string;
+  attachments?: Array<{
+    content: string;  // Base64 encoded content
+    filename: string;
+    type?: string;    // MIME type
+    disposition?: string;
+  }>;
 }
 
 const DEFAULT_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL as string || 'noreply@example.com';
@@ -485,6 +491,100 @@ export class EmailService {
       subject,
       html,
       text
+    });
+  }
+
+  /**
+   * Send contract signed confirmation email with attached document to customer
+   * 
+   * This email is sent automatically when a customer completes the contract signing process.
+   * It includes a direct link to view the contract online and attaches the signed contract 
+   * document as a PDF for customer records.
+   * 
+   * @param customerEmail Customer's email address
+   * @param customerName Customer's full name
+   * @param merchantName Name of the merchant providing the financing
+   * @param contractId Contract identifier 
+   * @param contractNumber Customer-friendly contract reference number
+   * @param documentUrl URL to the signed contract document (PDF)
+   * @param documentContent Base64 encoded content of the signed contract PDF
+   * @returns Promise resolving to boolean indicating success/failure
+   */
+  async sendContractSigned(
+    customerEmail: string, 
+    customerName: string, 
+    merchantName: string,
+    contractId: number,
+    contractNumber: string,
+    documentUrl: string,
+    documentContent: string
+  ): Promise<boolean> {
+    const subject = 'Welcome to ShiFi - Your Signed Contract';
+    const baseUrl = this.getAppBaseUrl();
+    const contractLink = `${baseUrl}/customer/dashboard?contract=${contractId}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #333;">Your Contract Is Complete!</h1>
+
+        <p>Hello ${customerName},</p>
+
+        <p>Thank you for choosing financing through ${merchantName}. Your contract has been successfully signed and processed.</p>
+
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <p><strong>Contract details:</strong></p>
+          <p>Contract Number: ${contractNumber}</p>
+          <p>Merchant: ${merchantName}</p>
+        </div>
+
+        <p>Your signed contract document is attached to this email for your records. You can also view your contract and manage your payments through your ShiFi dashboard anytime.</p>
+
+        <a href="${contractLink}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin-top: 20px;">View Your Dashboard</a>
+
+        <p style="margin-top: 30px;">If you have any questions about your financing, please contact our customer support team at support@shifi.ai.</p>
+
+        <p>We look forward to serving you!</p>
+
+        <p>Best regards,<br>The ShiFi Team</p>
+      </div>
+    `;
+
+    const text = `
+      Your Contract Is Complete!
+
+      Hello ${customerName},
+
+      Thank you for choosing financing through ${merchantName}. Your contract has been successfully signed and processed.
+
+      Contract details:
+      Contract Number: ${contractNumber}
+      Merchant: ${merchantName}
+
+      Your signed contract document is attached to this email for your records. You can also view your contract and manage your payments through your ShiFi dashboard anytime.
+
+      View your dashboard at: ${contractLink}
+
+      If you have any questions about your financing, please contact our customer support team at support@shifi.ai.
+
+      We look forward to serving you!
+
+      Best regards,
+      The ShiFi Team
+    `;
+
+    return this.sendEmail({
+      to: customerEmail,
+      subject,
+      html,
+      text,
+      attachments: [
+        {
+          content: documentContent,
+          filename: `ShiFi_Contract_${contractNumber}.pdf`,
+          type: 'application/pdf', 
+          disposition: 'attachment'
+        }
+      ]
     });
   }
 }

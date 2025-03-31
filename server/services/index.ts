@@ -11,6 +11,7 @@ export * from './merchantAnalytics';
 export * from './salesRepAnalytics';
 export * from './sesameai';
 export * from './middesk';
+export * from './email';
 
 import { NotificationService } from './notification';
 import { NLPearlService } from './nlpearl';
@@ -27,3 +28,4 @@ export { salesRepAnalyticsService } from './salesRepAnalytics';
 export { blockchainService } from './blockchain';
 export { sesameAIService } from './sesameai';
 export { middeskService } from './middesk';
+export { default as emailService } from './email';

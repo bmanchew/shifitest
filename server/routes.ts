@@ -28,9 +28,59 @@ import { middeskService } from "./services/middesk";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
 import { logger } from "./services/logger";
-import { nlpearlService, notificationService, merchantAnalyticsService, sesameAIService } from './services';
+import { nlpearlService, notificationService, merchantAnalyticsService, sesameAIService, emailService } from './services';
 import crypto from "crypto";
 import { adminReportsRouter } from "./routes/adminReports";
+
+/**
+ * Fetches a document from a URL and converts it to base64 for email attachments
+ * 
+ * @param documentUrl URL of the document to fetch
+ * @returns Promise resolving to base64 string or null if fetch fails
+ */
+async function fetchDocumentAsBase64(documentUrl: string): Promise<string | null> {
+  try {
+    // Use fetch (or node-fetch in Node.js) to get the document
+    const response = await fetch(documentUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/pdf,application/octet-stream,*/*'
+      }
+    });
+    
+    if (!response.ok) {
+      logger.warn({
+        message: `Failed to fetch document for email attachment: ${response.status} ${response.statusText}`,
+        category: 'email',
+        source: 'internal',
+        metadata: { documentUrl, status: response.status }
+      });
+      return null;
+    }
+    
+    // Get the document as an array buffer
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Convert array buffer to Buffer (Node.js)
+    const buffer = Buffer.from(arrayBuffer);
+    
+    // Convert buffer to base64
+    const base64String = buffer.toString('base64');
+    
+    return base64String;
+  } catch (error) {
+    logger.error({
+      message: `Error fetching document for email attachment: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'email',
+      source: 'internal',
+      metadata: { 
+        documentUrl,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    return null;
+  }
+}
 import { reportsRouter } from "./routes/admin/reports";
 import adminRouter from "./routes/admin";
 import contractsRouter from "./routes/contracts";
@@ -2344,6 +2394,72 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           // Continue despite the status update error - we've already got the signature
         }
 
+        // Send contract signed email with document attachment
+        try {
+          // Get the customer details
+          const customer = await storage.getUser(contract.customerId);
+          
+          // Get the merchant name
+          const merchant = await storage.getMerchant(contract.merchantId);
+          
+          if (customer && customer.email && merchant) {
+            // Get document content as base64
+            const documentContent = await fetchDocumentAsBase64(signResult.documentUrl);
+            
+            if (documentContent) {
+              // Send welcome email with attached contract
+              await emailService.sendContractSigned(
+                customer.email,
+                customer.firstName && customer.lastName 
+                  ? `${customer.firstName} ${customer.lastName}` 
+                  : customer.name || customerName,
+                merchant.name,
+                Number(contractId),
+                contract.contractNumber,
+                signResult.documentUrl,
+                documentContent
+              );
+              
+              logger.info({
+                message: `Contract signed email sent to customer ${customer.id} for contract ${contractId}`,
+                category: "email",
+                source: "internal",
+                metadata: { contractId, customerEmail: customer.email }
+              });
+            } else {
+              logger.warn({
+                message: `Could not fetch contract document content for email attachment`,
+                category: "email",
+                source: "internal",
+                metadata: { contractId, documentUrl: signResult.documentUrl }
+              });
+            }
+          } else {
+            logger.warn({
+              message: `Could not send contract signed email - missing customer email or merchant info`,
+              category: "email",
+              source: "internal",
+              metadata: { 
+                contractId, 
+                hasCustomer: !!customer,
+                hasEmail: !!(customer && customer.email),
+                hasMerchant: !!merchant
+              }
+            });
+          }
+        } catch (emailError) {
+          // Just log the error but don't fail the contract signing process
+          logger.error({
+            message: `Error sending contract signed email: ${emailError instanceof Error ? emailError.message : String(emailError)}`,
+            category: "email",
+            source: "internal",
+            metadata: { 
+              contractId,
+              error: emailError instanceof Error ? emailError.stack : String(emailError) 
+            }
+          });
+        }
+
         // Return success response
         return res.json({
           success: true,
@@ -2409,6 +2525,76 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         // Update contract status
         await storage.updateContractStep(Number(contractId), "completed");
         await storage.updateContractStatus(Number(contractId), "active");
+        
+        // Send contract signed email with document attachment for fallback mode
+        try {
+          // Get the customer details
+          const customer = await storage.getUser(contract.customerId);
+          
+          // Get the merchant name
+          const merchant = await storage.getMerchant(contract.merchantId);
+          
+          if (customer && customer.email && merchant) {
+            // In fallback mode, we don't have a document URL from the API
+            // We'll create a local document URL for the contract
+            const localDocumentUrl = `/api/contracts/${contractId}/document`;
+            
+            // For fallback mode, we need to generate a document on the fly or use a template
+            const documentContent = await fetchDocumentAsBase64(localDocumentUrl);
+            
+            if (documentContent) {
+              // Send welcome email with attached contract
+              await emailService.sendContractSigned(
+                customer.email,
+                customer.firstName && customer.lastName 
+                  ? `${customer.firstName} ${customer.lastName}` 
+                  : customer.name || customerName,
+                merchant.name,
+                Number(contractId),
+                contract.contractNumber,
+                localDocumentUrl,
+                documentContent
+              );
+              
+              logger.info({
+                message: `Contract signed email sent to customer ${customer.id} for contract ${contractId} (fallback mode)`,
+                category: "email",
+                source: "internal",
+                metadata: { contractId, customerEmail: customer.email }
+              });
+            } else {
+              logger.warn({
+                message: `Could not fetch contract document content for email attachment (fallback mode)`,
+                category: "email",
+                source: "internal",
+                metadata: { contractId, documentUrl: localDocumentUrl }
+              });
+            }
+          } else {
+            logger.warn({
+              message: `Could not send contract signed email - missing customer email or merchant info (fallback mode)`,
+              category: "email",
+              source: "internal",
+              metadata: { 
+                contractId, 
+                hasCustomer: !!customer,
+                hasEmail: !!(customer && customer.email),
+                hasMerchant: !!merchant
+              }
+            });
+          }
+        } catch (emailError) {
+          // Just log the error but don't fail the contract signing process
+          logger.error({
+            message: `Error sending contract signed email in fallback mode: ${emailError instanceof Error ? emailError.message : String(emailError)}`,
+            category: "email",
+            source: "internal",
+            metadata: { 
+              contractId,
+              error: emailError instanceof Error ? emailError.stack : String(emailError) 
+            }
+          });
+        }
 
         // Return success with fallback notice
         return res.json({
