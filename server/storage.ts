@@ -3347,6 +3347,338 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
   }
+
+  // Investor Profile Operations
+  async getInvestorProfile(id: number): Promise<InvestorProfile | undefined> {
+    try {
+      const result = await db.select()
+        .from(investorProfiles)
+        .where(eq(investorProfiles.id, id))
+        .limit(1);
+
+      return result[0];
+    } catch (error) {
+      console.error(`Error getting investor profile with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getInvestorProfileByUserId(userId: number): Promise<InvestorProfile | undefined> {
+    try {
+      const result = await db.select()
+        .from(investorProfiles)
+        .where(eq(investorProfiles.userId, userId))
+        .limit(1);
+
+      return result[0];
+    } catch (error) {
+      console.error(`Error getting investor profile by user id ${userId}:`, error);
+      return undefined;
+    }
+  }
+
+  async createInvestorProfile(profile: InsertInvestorProfile): Promise<InvestorProfile> {
+    try {
+      const [result] = await db.insert(investorProfiles)
+        .values({
+          ...profile,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error("Error creating investor profile:", error);
+      throw error;
+    }
+  }
+
+  async updateInvestorProfile(id: number, data: Partial<InvestorProfile>): Promise<InvestorProfile | undefined> {
+    try {
+      const [result] = await db.update(investorProfiles)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(investorProfiles.id, id))
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error(`Error updating investor profile ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getAllInvestorProfiles(): Promise<InvestorProfile[]> {
+    try {
+      return await db.select().from(investorProfiles);
+    } catch (error) {
+      console.error("Error getting all investor profiles:", error);
+      return [];
+    }
+  }
+
+  async getInvestorProfilesByVerificationStatus(status: string): Promise<InvestorProfile[]> {
+    try {
+      return await db.select()
+        .from(investorProfiles)
+        .where(eq(investorProfiles.kycStatus, status as any));
+    } catch (error) {
+      console.error(`Error getting investor profiles by verification status ${status}:`, error);
+      return [];
+    }
+  }
+
+  // Investment Offering Operations
+  async getInvestmentOffering(id: number): Promise<InvestmentOffering | undefined> {
+    try {
+      const result = await db.select()
+        .from(investmentOfferings)
+        .where(eq(investmentOfferings.id, id))
+        .limit(1);
+
+      return result[0];
+    } catch (error) {
+      console.error(`Error getting investment offering with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getInvestmentOfferingByContractId(contractId: number): Promise<InvestmentOffering | undefined> {
+    try {
+      const result = await db.select()
+        .from(investmentOfferings)
+        .where(eq(investmentOfferings.contractId, contractId))
+        .limit(1);
+
+      return result[0];
+    } catch (error) {
+      console.error(`Error getting investment offering by contract id ${contractId}:`, error);
+      return undefined;
+    }
+  }
+
+  async createInvestmentOffering(offering: InsertInvestmentOffering): Promise<InvestmentOffering> {
+    try {
+      const [result] = await db.insert(investmentOfferings)
+        .values({
+          ...offering,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error("Error creating investment offering:", error);
+      throw error;
+    }
+  }
+
+  async updateInvestmentOffering(id: number, data: Partial<InvestmentOffering>): Promise<InvestmentOffering | undefined> {
+    try {
+      const [result] = await db.update(investmentOfferings)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(investmentOfferings.id, id))
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error(`Error updating investment offering ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getInvestmentOfferings(): Promise<InvestmentOffering[]> {
+    try {
+      return await db.select().from(investmentOfferings).where(eq(investmentOfferings.isActive, true));
+    } catch (error) {
+      console.error("Error getting all investment offerings:", error);
+      return [];
+    }
+  }
+
+  async getInvestmentOfferingsByStatus(status: string): Promise<InvestmentOffering[]> {
+    try {
+      return await db.select()
+        .from(investmentOfferings)
+        .where(eq(investmentOfferings.status, status as any));
+    } catch (error) {
+      console.error(`Error getting investment offerings by status ${status}:`, error);
+      return [];
+    }
+  }
+
+  // Investment Operations
+  async getInvestment(id: number): Promise<Investment | undefined> {
+    try {
+      const result = await db.select()
+        .from(investments)
+        .where(eq(investments.id, id))
+        .limit(1);
+
+      return result[0];
+    } catch (error) {
+      console.error(`Error getting investment with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getInvestmentsByInvestorId(investorId: number): Promise<Investment[]> {
+    try {
+      return await db.select()
+        .from(investments)
+        .where(eq(investments.investorId, investorId));
+    } catch (error) {
+      console.error(`Error getting investments by investor id ${investorId}:`, error);
+      return [];
+    }
+  }
+
+  async getInvestmentsByOfferingId(offeringId: number): Promise<Investment[]> {
+    try {
+      return await db.select()
+        .from(investments)
+        .where(eq(investments.offeringId, offeringId));
+    } catch (error) {
+      console.error(`Error getting investments by offering id ${offeringId}:`, error);
+      return [];
+    }
+  }
+
+  async createInvestment(investment: InsertInvestment): Promise<Investment> {
+    try {
+      const [result] = await db.insert(investments)
+        .values({
+          ...investment,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error("Error creating investment:", error);
+      throw error;
+    }
+  }
+
+  async updateInvestment(id: number, data: Partial<Investment>): Promise<Investment | undefined> {
+    try {
+      const [result] = await db.update(investments)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(investments.id, id))
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error(`Error updating investment ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async updateInvestmentStatus(id: number, status: string): Promise<Investment | undefined> {
+    try {
+      const [result] = await db.update(investments)
+        .set({
+          status: status as any,
+          updatedAt: new Date(),
+        })
+        .where(eq(investments.id, id))
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error(`Error updating investment status ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getAllInvestments(): Promise<Investment[]> {
+    try {
+      return await db.select().from(investments);
+    } catch (error) {
+      console.error("Error getting all investments:", error);
+      return [];
+    }
+  }
+
+  // Document Library Operations
+  async getDocumentLibraryItem(id: number): Promise<DocumentLibrary | undefined> {
+    try {
+      const result = await db.select()
+        .from(documentLibrary)
+        .where(eq(documentLibrary.id, id))
+        .limit(1);
+
+      return result[0];
+    } catch (error) {
+      console.error(`Error getting document library item with id ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getDocumentLibrary(): Promise<DocumentLibrary[]> {
+    try {
+      return await db.select().from(documentLibrary);
+    } catch (error) {
+      console.error("Error getting all document library items:", error);
+      return [];
+    }
+  }
+
+  async getDocumentLibraryByCategory(category: string): Promise<DocumentLibrary[]> {
+    try {
+      return await db.select()
+        .from(documentLibrary)
+        .where(eq(documentLibrary.category, category));
+    } catch (error) {
+      console.error(`Error getting document library items by category ${category}:`, error);
+      return [];
+    }
+  }
+
+  async createDocumentLibraryItem(document: InsertDocumentLibrary): Promise<DocumentLibrary> {
+    try {
+      const [result] = await db.insert(documentLibrary)
+        .values({
+          ...document,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error("Error creating document library item:", error);
+      throw error;
+    }
+  }
+
+  async updateDocumentLibraryItem(id: number, data: Partial<DocumentLibrary>): Promise<DocumentLibrary | undefined> {
+    try {
+      const [result] = await db.update(documentLibrary)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(documentLibrary.id, id))
+        .returning();
+
+      return result;
+    } catch (error) {
+      console.error(`Error updating document library item ${id}:`, error);
+      return undefined;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();
