@@ -9,12 +9,7 @@ import {
 } from "./merchant-performance";
 import merchantsRouter from "./merchants";
 import { logger } from "../../services/logger";
-import { 
-  getPendingCancellationRequests,
-  approveCancellationRequest,
-  rejectCancellationRequest,
-  setRequestUnderReview
-} from "./contract-cancellations";
+import contractCancellationsRouter from "./contract-cancellations";
 
 const router = express.Router();
 
@@ -39,17 +34,12 @@ router.use((req, res, next) => {
 
 // Register sub-routes
 router.use("/merchants", merchantsRouter);
+router.use("/cancellation-requests", contractCancellationsRouter);
 
 // Merchant Performance routes
 router.get("/merchant-performances", getAllMerchantPerformances);
 router.get("/merchant-performance/:id", getMerchantPerformanceDetails);
 router.post("/merchant-performance/:id/update", updateMerchantPerformance);
 router.post("/update-all-merchant-performances", updateAllMerchantPerformances);
-
-// Contract Cancellation routes
-router.get("/cancellation-requests/pending", getPendingCancellationRequests);
-router.post("/cancellation-requests/:requestId/approve", approveCancellationRequest);
-router.post("/cancellation-requests/:requestId/reject", rejectCancellationRequest);
-router.post("/cancellation-requests/:requestId/review", setRequestUnderReview);
 
 export default router;
