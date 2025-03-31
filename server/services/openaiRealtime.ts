@@ -202,7 +202,8 @@ class OpenAIRealtimeService {
         {
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`
+            'Authorization': `Bearer ${this.apiKey}`,
+            'OpenAI-Beta': 'realtime=v1' // Required beta header
           }
         }
       );

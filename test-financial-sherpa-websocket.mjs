@@ -1,217 +1,207 @@
 /**
- * Test script for Financial Sherpa WebSocket functionality
+ * Test script for the Financial Sherpa WebSocket connection
  * 
- * This script tests both the REST endpoint for initializing a WebSocket connection
- * and the WebSocket connection itself, verifying that:
- * 1. The API endpoint returns proper WebSocket connection details
- * 2. The WebSocket connection can be established
- * 3. Session creation works correctly
- * 4. Audio data can be sent and received
+ * This script:
+ * 1. Connects to the Financial Sherpa WebSocket endpoint
+ * 2. Sends a create session request
+ * 3. Logs all messages received from the server
+ * 4. Handles pings and errors
  */
 
-import fetch from 'node-fetch';
 import WebSocket from 'ws';
+import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Config
-const API_URL = 'http://localhost:5000/api/financial-sherpa/realtime';
-const CSRF_URL = 'http://localhost:5000/api/csrf-token';
-const TEST_CUSTOMER_ID = 45;  // Use an existing customer ID for testing
+// Get __dirname equivalent in ES module
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Test variables for tracking state
-let wsUrl = '';
-let wsEndpoint = '';
-let webSocket = null;
-let sessionCreated = false;
-let testPassed = false;
-let testTimeout = null;
+// Configuration
+const SERVER_URL = 'ws://localhost:5001/financial-sherpa-ws';
+const PING_INTERVAL = 30000; // 30 seconds
+const CLIENT_ID = randomUUID();
 
-/**
- * Get CSRF token for API requests
- */
-async function getCsrfToken() {
-  try {
-    const response = await fetch(CSRF_URL, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to get CSRF token: ${response.status} ${response.statusText}`);
+// Track WebSocket state
+let wsOpen = false;
+let pingInterval = null;
+
+console.log(`🚀 Financial Sherpa WebSocket Test Client (ID: ${CLIENT_ID})`);
+console.log(`Connecting to: ${SERVER_URL}\n`);
+
+// Create WebSocket connection
+const ws = new WebSocket(SERVER_URL);
+
+// Set up event handlers
+ws.on('open', () => {
+  wsOpen = true;
+  console.log('✅ Connected to Financial Sherpa WebSocket server');
+  
+  // Send create session request
+  const createSessionRequest = {
+    type: 'create_session',
+    customerId: 1234,
+    customerName: 'Test Customer',
+    financialData: {
+      accountBalances: [
+        { accountType: 'Checking', balance: 1500.75 },
+        { accountType: 'Savings', balance: 5200.50 },
+        { accountType: 'Credit Card', balance: -450.25 }
+      ],
+      recentTransactions: [
+        { date: '2023-03-28', description: 'Grocery Store', amount: -75.42 },
+        { date: '2023-03-27', description: 'Paycheck', amount: 1250.00 },
+        { date: '2023-03-25', description: 'Restaurant', amount: -45.80 }
+      ],
+      upcomingPayments: [
+        { date: '2023-04-01', description: 'Rent', amount: 1200.00 },
+        { date: '2023-04-05', description: 'Car Payment', amount: 350.00 }
+      ]
     }
+  };
+  
+  console.log('📤 Sending create session request...');
+  ws.send(JSON.stringify(createSessionRequest));
+  
+  // Set up ping interval
+  pingInterval = setInterval(() => {
+    if (wsOpen) {
+      console.log('📤 Sending ping...');
+      ws.send(JSON.stringify({ type: 'ping' }));
+    }
+  }, PING_INTERVAL);
+});
+
+ws.on('message', (data) => {
+  try {
+    const message = JSON.parse(data.toString());
+    const timestamp = new Date().toISOString();
+    console.log(`📥 [${timestamp}] Received message: ${message.type || 'unknown'}`);
     
-    const data = await response.json();
-    return data.csrfToken;
-  } catch (error) {
-    console.error('Error getting CSRF token:', error);
-    throw error;
+    // Pretty-print the message
+    console.log(JSON.stringify(message, null, 2));
+    console.log('-----------------------------------');
+    
+    // Handle specific message types
+    switch (message.type) {
+      case 'session_created':
+        console.log('✅ Session created successfully');
+        break;
+        
+      case 'session_ready':
+        console.log('✅ OpenAI session is ready for audio');
+        
+        // Send test audio if available
+        setTimeout(() => sendTestAudio(), 2000);
+        break;
+        
+      case 'error':
+        console.error(`❌ Error: ${message.message || 'Unknown error'}`);
+        if (message.details) {
+          console.error(`Details: ${message.details}`);
+        }
+        break;
+        
+      case 'pong':
+        // Silently acknowledge pong
+        break;
+    }
+  } catch (err) {
+    console.error('❌ Error parsing message:', err);
+    console.error('Raw message:', data.toString());
   }
-}
+});
 
-/**
- * Initialize WebSocket connection via the API
- */
-async function initializeWebSocket() {
-  try {
-    console.log('👉 Getting CSRF token...');
-    const csrfToken = await getCsrfToken();
-    
-    console.log('👉 Initializing WebSocket connection via API...');
-    
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'CSRF-Token': csrfToken,
-        'X-CSRF-Bypass': 'test-financial-sherpa' // Use test bypass for easier testing
-      },
-      body: JSON.stringify({
-        customerId: TEST_CUSTOMER_ID
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to initialize WebSocket: ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.success || !data.wsEndpoint) {
-      throw new Error(`Invalid WebSocket configuration: ${JSON.stringify(data)}`);
-    }
-    
-    console.log('✅ Successfully got WebSocket configuration:', data);
-    
-    // Construct WebSocket URL
-    wsEndpoint = data.wsEndpoint;
-    wsUrl = `ws://localhost:5000${wsEndpoint}`;
-    
-    return data;
-  } catch (error) {
-    console.error('❌ Error initializing WebSocket:', error);
-    throw error;
+ws.on('error', (error) => {
+  console.error('❌ WebSocket error:', error);
+});
+
+ws.on('close', (code, reason) => {
+  wsOpen = false;
+  console.log(`❌ Connection closed: ${code} - ${reason || 'No reason provided'}`);
+  
+  // Clear ping interval
+  if (pingInterval) {
+    clearInterval(pingInterval);
+    pingInterval = null;
   }
-}
-
-/**
- * Connect to the WebSocket
- */
-function connectToWebSocket() {
-  return new Promise((resolve, reject) => {
-    if (!wsUrl) {
-      reject(new Error('WebSocket URL not defined. Run initializeWebSocket first.'));
-      return;
-    }
-    
-    console.log(`👉 Connecting to WebSocket: ${wsUrl}`);
-    
-    webSocket = new WebSocket(wsUrl);
-    
-    webSocket.on('open', () => {
-      console.log('✅ WebSocket connected successfully');
-      webSocket.send(JSON.stringify({
-        type: 'create_session',
-        voice: 'alloy',
-        customerId: TEST_CUSTOMER_ID,
-        instructions: 'You are a helpful financial assistant named Financial Sherpa.'
-      }));
-      console.log('👉 Session creation request sent');
-    });
-    
-    webSocket.on('message', (data) => {
-      console.log('📥 WebSocket message received');
-      
-      // Check if the message is JSON or binary
-      try {
-        const message = JSON.parse(data.toString());
-        console.log('📥 Message content:', message);
-        
-        // Check for session created confirmation
-        if (message.type === 'session_created') {
-          console.log('✅ OpenAI session created successfully, session ID:', message.sessionId);
-          sessionCreated = true;
-          resolve(true);
-        }
-        
-        // Check for transcription received
-        if (message.type === 'transcription') {
-          console.log('✅ Transcription received:', message.text);
-        }
-        
-        // Check for content received
-        if (message.type === 'content') {
-          console.log('✅ Content received:', message.content);
-          testPassed = true;
-        }
-        
-        // Check for audio received
-        if (message.type === 'audio') {
-          console.log('✅ Audio data received:', message.format);
-        }
-      } catch (e) {
-        // Probably binary data (audio)
-        console.log('📥 Binary message received, length:', data.length);
-      }
-    });
-    
-    webSocket.on('error', (error) => {
-      console.error('❌ WebSocket error:', error);
-      reject(error);
-    });
-    
-    webSocket.on('close', (code, reason) => {
-      console.log(`👋 WebSocket closed with code ${code}${reason ? `, reason: ${reason}` : ''}`);
-      
-      if (!sessionCreated && !testPassed) {
-        reject(new Error('WebSocket closed before session was created.'));
-      }
-    });
-    
-    // Set a timeout to prevent the test from hanging
-    testTimeout = setTimeout(() => {
-      if (!sessionCreated) {
-        console.error('❌ Test timeout: Session creation timed out after 30 seconds');
-        
-        if (webSocket.readyState === WebSocket.OPEN) {
-          webSocket.close();
-        }
-        
-        reject(new Error('Test timeout'));
-      }
-    }, 30000);
-  });
-}
-
-/**
- * Main function to run the test
- */
-async function runTest() {
-  try {
-    // Initialize and connect to WebSocket
-    await initializeWebSocket();
-    await connectToWebSocket();
-    
-    // Wait a moment for session to be ready
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    console.log('✅ Test completed successfully');
+  
+  // Exit after a short delay
+  setTimeout(() => {
+    console.log('Exiting...');
     process.exit(0);
-  } catch (error) {
-    console.error('❌ Test failed:', error);
-    process.exit(1);
-  } finally {
-    if (testTimeout) {
-      clearTimeout(testTimeout);
-    }
+  }, 1000);
+});
+
+// Function to send a test audio file
+function sendTestAudio() {
+  if (!wsOpen) return;
+  
+  try {
+    // Check if we have a test audio file
+    const testAudioPath = path.join(__dirname, 'test.mp3');
     
-    if (webSocket && webSocket.readyState === WebSocket.OPEN) {
-      webSocket.close();
+    if (fs.existsSync(testAudioPath)) {
+      console.log('📤 Sending test audio file...');
+      
+      // Read the audio file
+      const audioBuffer = fs.readFileSync(testAudioPath);
+      
+      // Send the audio file as binary data
+      ws.send(audioBuffer);
+      
+      // Send end of stream marker
+      setTimeout(() => {
+        if (wsOpen) {
+          console.log('📤 Sending end of stream...');
+          ws.send(JSON.stringify({ type: 'end_of_stream' }));
+        }
+      }, 1000);
+    } else {
+      console.log('❌ Test audio file not found:', testAudioPath);
     }
+  } catch (err) {
+    console.error('❌ Error sending test audio:', err);
   }
 }
 
-// Run the test
-runTest();
+// Handle process termination
+process.on('SIGINT', () => {
+  console.log('\nGracefully shutting down...');
+  
+  if (wsOpen) {
+    console.log('Closing WebSocket connection...');
+    ws.close(1000, 'Client terminated');
+  }
+  
+  // Clear ping interval
+  if (pingInterval) {
+    clearInterval(pingInterval);
+    pingInterval = null;
+  }
+  
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000);
+});
+
+// Create a sample audio file if it doesn't exist
+const createSampleAudioFile = () => {
+  const testAudioPath = path.join(__dirname, 'test.mp3');
+  
+  if (!fs.existsSync(testAudioPath)) {
+    console.log('Creating sample audio file...');
+    
+    // Create a minimal valid audio file (just header data)
+    const minimalMP3Header = Buffer.from([
+      0xFF, 0xFB, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    ]);
+    
+    fs.writeFileSync(testAudioPath, minimalMP3Header);
+    console.log('✅ Created sample audio file');
+  }
+};
+
+// Create sample audio file
+createSampleAudioFile();

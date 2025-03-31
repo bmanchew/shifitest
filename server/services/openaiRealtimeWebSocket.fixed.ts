@@ -549,8 +549,9 @@ export class OpenAIRealtimeWebSocketService {
       // Construct WebSocket URL using the session ID
       const sessionUrl = `wss://api.openai.com/v1/realtime/${sessionId}`;
       
-      // Use the session ID as the token
-      const token = sessionId;
+      // Use the client_secret.value as the token (ephemeral session token)
+      // This is the correct auth token to use, not the session ID
+      const token = sessionData.client_secret.value;
       
       // Connect to OpenAI WebSocket
       await this.connectToOpenAI(client, sessionUrl, token);
@@ -626,10 +627,25 @@ export class OpenAIRealtimeWebSocketService {
       });
       
       // Create a new WebSocket connection
-      // WebSocket protocol doesn't support sending custom headers in the initial handshake
-      // For OpenAI, the token should be in the query string
-      const wsUrlWithToken = `${sessionUrl}?token=${encodeURIComponent(token)}`;
-      const socket = new WebSocket.WebSocket(wsUrlWithToken);
+      // OpenAI Realtime API expects the token as the authorization parameter in the query string
+      // Format: wss://api.openai.com/v1/realtime?intent=transcription&authorization=Bearer%20TOKEN
+      const wsUrlWithToken = `${sessionUrl}?authorization=Bearer%20${encodeURIComponent(token)}`;
+      
+      // WebSocket headers for beta features
+      const wsOptions = {
+        headers: {
+          'OpenAI-Beta': 'realtime=v1'
+        }
+      };
+      
+      logger.info({
+        message: `Connecting to OpenAI with URL: ${wsUrlWithToken}`,
+        category: 'realtime',
+        source: 'openai',
+        metadata: { clientId }
+      });
+      
+      const socket = new WebSocket.WebSocket(wsUrlWithToken, wsOptions);
       
       // Store the socket
       client.openaiSocket = socket;
@@ -812,9 +828,9 @@ export class OpenAIRealtimeWebSocketService {
       // Store the new session ID
       client.sessionId = sessionData.id;
       
-      // Extract URL and token for connection
+      // Extract URL and token (client_secret.value) for connection
       const sessionUrl = `wss://api.openai.com/v1/realtime/${sessionData.id}`;
-      const token = sessionData.id; // Using session ID as token for simplicity
+      const token = sessionData.client_secret.value; // Use ephemeral token from client_secret
       
       // Connect to OpenAI WebSocket
       await this.connectToOpenAI(client, sessionUrl, token);
