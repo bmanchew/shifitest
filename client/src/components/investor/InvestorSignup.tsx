@@ -67,8 +67,8 @@ export default function InvestorSignup() {
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
     try {
-      // This is a placeholder - in a real implementation, you would send this data to your API
-      // await apiRequest("POST", "/api/investor/signup", data);
+      // Send the application data to the backend
+      await apiRequest("POST", "/api/investor/applications", data);
       
       toast({
         title: "Application Submitted",

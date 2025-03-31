@@ -40,7 +40,63 @@ import crypto from "crypto";
 
 const router = express.Router();
 
-// Apply authentication to all routes
+/**
+ * @route POST /api/investor/applications
+ * @desc Submit a new investor application
+ * @access Public - No authentication required
+ */
+router.post("/applications", async (req: Request, res: Response) => {
+  try {
+    const applicationSchema = z.object({
+      name: z.string().min(2),
+      email: z.string().email(),
+      phone: z.string().min(10),
+      company: z.string().optional(),
+      investmentAmount: z.string().min(1),
+      investmentGoals: z.string().min(1),
+      isAccredited: z.boolean(),
+      agreeToTerms: z.boolean(),
+    });
+    
+    const application = applicationSchema.parse(req.body);
+    
+    // Log the application for now, in a real system this would be stored
+    logger.info(`New investor application received from ${application.name} (${application.email})`, {
+      category: "investor",
+      action: "application_submitted"
+    });
+    
+    // In a production system, we would store this and notify admins
+    // await storage.storeInvestorApplication(application);
+    
+    return res.status(201).json({
+      success: true,
+      message: "Application submitted successfully"
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      const validationError = fromZodError(error);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid application data",
+        errors: validationError.details
+      });
+    }
+    
+    logger.error("Error processing investor application", {
+      error: error instanceof Error ? error.message : String(error),
+      category: "investor",
+      action: "application_error"
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: "Failed to process application"
+    });
+  }
+});
+
+// Apply authentication to all subsequent routes
 router.use(authenticateToken);
 
 /**
