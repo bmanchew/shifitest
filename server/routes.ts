@@ -5171,6 +5171,547 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
     }
   });
 
+  // Contract Cancellation Request routes
+  apiRouter.post("/contracts/cancellation-requests", async (req: Request, res: Response) => {
+    try {
+      const { contractId, reason, notes } = req.body;
+      
+      // Check if user is authenticated
+      if (!req.user) {
+        return res.status(401).json({ 
+          success: false,
+          message: "Authentication required" 
+        });
+      }
+      
+      const userId = req.user.id;
+      
+      // Validate required data
+      if (!contractId || !reason) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Contract ID and reason are required" 
+        });
+      }
+      
+      // Get the contract to verify it exists and belongs to the merchant
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return res.status(404).json({ 
+          success: false,
+          message: "Contract not found" 
+        });
+      }
+      
+      // Get merchant by userId to verify ownership
+      const merchant = await storage.getMerchantByUserId(userId);
+      if (!merchant || merchant.id !== contract.merchantId) {
+        return res.status(403).json({ 
+          success: false,
+          message: "Not authorized to request cancellation for this contract" 
+        });
+      }
+      
+      // Check if there's already a pending or under review request
+      const existingRequests = await storage.getContractCancellationRequestsByContractId(contractId);
+      const hasPendingRequest = existingRequests.some(req => 
+        req.status === 'pending' || req.status === 'under_review'
+      );
+      
+      if (hasPendingRequest) {
+        return res.status(409).json({ 
+          success: false,
+          message: "There is already a pending cancellation request for this contract" 
+        });
+      }
+      
+      // Create the cancellation request
+      const request = await storage.createContractCancellationRequest({
+        contractId,
+        merchantId: merchant.id,
+        requestedBy: userId,
+        reason,
+        notes: notes || null,
+        status: 'pending',
+      });
+      
+      // Update the contract status to indicate cancellation requested
+      await storage.updateContractStatus(contractId, 'cancellation_requested');
+      
+      // Create a notification for admins
+      const notification = await storage.createNotification({
+        type: 'contract_cancellation_request',
+        title: `Contract cancellation requested (#${contract.contractNumber})`,
+        message: `Merchant ${merchant.businessName} has requested cancellation for contract #${contract.contractNumber}: ${reason}`,
+        recipientType: 'admin',
+        recipientId: null, // Send to all admins
+        priority: 'high',
+        status: 'unread',
+        metadata: JSON.stringify({
+          contractId,
+          merchantId: merchant.id,
+          requestId: request.id,
+          contractNumber: contract.contractNumber,
+          reason
+        }),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      
+      // Create in-app notification for admins
+      await storage.createInAppNotification({
+        notificationId: notification,
+        userId: null, // For all admins
+        userType: 'admin',
+        read: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: JSON.stringify({
+          contractId,
+          requestId: request.id,
+          merchantId: merchant.id, 
+          action: 'review_cancellation_request'
+        })
+      });
+
+      logger.info({
+        message: `Contract cancellation requested for contract #${contract.contractNumber}`,
+        category: "contract",
+        source: "internal",
+        metadata: {
+          contractId,
+          merchantId: merchant.id,
+          requestId: request.id,
+          reason
+        }
+      });
+      
+      return res.status(201).json({
+        success: true,
+        message: "Cancellation request submitted successfully",
+        request
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error creating contract cancellation request: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          contractId: req.body.contractId,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create cancellation request",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  apiRouter.get("/contracts/:contractId/cancellation-requests", async (req: Request, res: Response) => {
+    try {
+      const contractId = parseInt(req.params.contractId);
+      
+      // Check if user is authenticated
+      if (!req.user) {
+        return res.status(401).json({ 
+          success: false,
+          message: "Authentication required" 
+        });
+      }
+      
+      const userId = req.user.id;
+      
+      // Get the contract to verify it exists
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return res.status(404).json({ 
+          success: false,
+          message: "Contract not found" 
+        });
+      }
+      
+      // Check if user is authorized to view requests (merchant owner or admin)
+      const merchant = await storage.getMerchantByUserId(userId);
+      const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+      
+      if (!isAdmin && (!merchant || merchant.id !== contract.merchantId)) {
+        return res.status(403).json({ 
+          success: false,
+          message: "Not authorized to view cancellation requests for this contract" 
+        });
+      }
+      
+      const requests = await storage.getContractCancellationRequestsByContractId(contractId);
+      
+      return res.json({
+        success: true,
+        data: requests
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error fetching contract cancellation requests: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          contractId: req.params.contractId,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to retrieve cancellation requests",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  apiRouter.get("/merchants/:merchantId/cancellation-requests", async (req: Request, res: Response) => {
+    try {
+      const merchantId = parseInt(req.params.merchantId);
+      
+      // Check if user is authenticated
+      if (!req.user) {
+        return res.status(401).json({ 
+          success: false,
+          message: "Authentication required" 
+        });
+      }
+      
+      const userId = req.user.id;
+      
+      // Check if user is authorized to view requests (merchant owner or admin)
+      const merchant = await storage.getMerchantByUserId(userId);
+      const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+      
+      if (!isAdmin && (!merchant || merchant.id !== merchantId)) {
+        return res.status(403).json({ 
+          success: false,
+          message: "Not authorized to view cancellation requests for this merchant" 
+        });
+      }
+      
+      const requests = await storage.getContractCancellationRequestsByMerchantId(merchantId);
+      
+      return res.json({
+        success: true,
+        data: requests
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error fetching merchant cancellation requests: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          merchantId: req.params.merchantId,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to retrieve merchant cancellation requests",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  apiRouter.get("/cancellation-requests/pending", async (req: Request, res: Response) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user) {
+        return res.status(401).json({ 
+          success: false,
+          message: "Authentication required" 
+        });
+      }
+      
+      // Check if user is admin
+      const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+      if (!isAdmin) {
+        return res.status(403).json({ 
+          success: false,
+          message: "Admin access required" 
+        });
+      }
+      
+      const requests = await storage.getPendingContractCancellationRequests();
+      
+      return res.json({
+        success: true,
+        data: requests
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error fetching pending cancellation requests: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to retrieve pending cancellation requests",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  apiRouter.get("/cancellation-requests/:id", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Check if user is authenticated
+      if (!req.user) {
+        return res.status(401).json({ 
+          success: false,
+          message: "Authentication required" 
+        });
+      }
+      
+      const userId = req.user.id;
+      
+      const request = await storage.getContractCancellationRequest(id);
+      if (!request) {
+        return res.status(404).json({ 
+          success: false,
+          message: "Cancellation request not found" 
+        });
+      }
+      
+      // Check authorization (merchant owner or admin)
+      const merchant = await storage.getMerchantByUserId(userId);
+      const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+      
+      if (!isAdmin && (!merchant || merchant.id !== request.merchantId)) {
+        return res.status(403).json({ 
+          success: false,
+          message: "Not authorized to view this cancellation request" 
+        });
+      }
+      
+      return res.json({
+        success: true,
+        data: request
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error fetching cancellation request: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          requestId: req.params.id,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to retrieve cancellation request",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  apiRouter.put("/cancellation-requests/:id/status", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status, notes } = req.body;
+      
+      // Check if user is authenticated
+      if (!req.user) {
+        return res.status(401).json({ 
+          success: false,
+          message: "Authentication required" 
+        });
+      }
+      
+      // Check if user is admin
+      const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+      if (!isAdmin) {
+        return res.status(403).json({ 
+          success: false,
+          message: "Admin access required" 
+        });
+      }
+      
+      const adminId = req.user.id;
+      
+      // Validate status
+      const validStatuses = ['under_review', 'approved', 'denied'];
+      if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid status provided" 
+        });
+      }
+      
+      // Get the request to ensure it exists
+      const request = await storage.getContractCancellationRequest(id);
+      if (!request) {
+        return res.status(404).json({ 
+          success: false,
+          message: "Cancellation request not found" 
+        });
+      }
+      
+      // Update the request status
+      const updatedRequest = await storage.updateContractCancellationRequestStatus(id, status, adminId);
+      
+      // Update notes if provided
+      if (notes) {
+        await storage.updateContractCancellationRequest(id, { 
+          adminNotes: notes,
+          updatedAt: new Date()
+        });
+      }
+      
+      // If approved, update the contract status to cancelled
+      if (status === 'approved') {
+        const contract = await storage.getContract(request.contractId);
+        if (contract) {
+          await storage.updateContractStatus(contract.id, 'cancelled');
+          
+          // Create a notification for the merchant
+          const merchant = await storage.getMerchant(request.merchantId);
+          if (merchant) {
+            const notification = await storage.createNotification({
+              type: 'contract_cancellation_approved',
+              title: `Contract cancellation approved (#${contract.contractNumber})`,
+              message: `Your request to cancel contract #${contract.contractNumber} has been approved.`,
+              recipientType: 'merchant',
+              recipientId: merchant.id,
+              priority: 'high',
+              status: 'unread',
+              metadata: JSON.stringify({
+                contractId: contract.id,
+                requestId: request.id,
+                contractNumber: contract.contractNumber
+              }),
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+            
+            // Create in-app notification for merchant
+            const merchantUser = await storage.getUser(merchant.userId);
+            if (merchantUser) {
+              await storage.createInAppNotification({
+                notificationId: notification,
+                userId: merchantUser.id,
+                userType: 'merchant',
+                read: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                metadata: JSON.stringify({
+                  contractId: contract.id,
+                  requestId: request.id,
+                  action: 'view_cancelled_contract'
+                })
+              });
+            }
+          }
+
+          logger.info({
+            message: `Contract cancellation approved for contract #${contract.contractNumber}`,
+            category: "contract",
+            source: "internal",
+            metadata: {
+              contractId: contract.id,
+              merchantId: request.merchantId,
+              requestId: request.id,
+              adminId
+            }
+          });
+        }
+      } else if (status === 'denied') {
+        // If denied, revert contract status back to its previous state
+        const contract = await storage.getContract(request.contractId);
+        if (contract && contract.status === 'cancellation_requested') {
+          await storage.updateContractStatus(contract.id, 'active');
+          
+          // Create a notification for the merchant
+          const merchant = await storage.getMerchant(request.merchantId);
+          if (merchant) {
+            const notification = await storage.createNotification({
+              type: 'contract_cancellation_denied',
+              title: `Contract cancellation denied (#${contract.contractNumber})`,
+              message: `Your request to cancel contract #${contract.contractNumber} has been denied.`,
+              recipientType: 'merchant',
+              recipientId: merchant.id,
+              priority: 'medium',
+              status: 'unread',
+              metadata: JSON.stringify({
+                contractId: contract.id,
+                requestId: request.id,
+                contractNumber: contract.contractNumber
+              }),
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+            
+            // Create in-app notification for merchant
+            const merchantUser = await storage.getUser(merchant.userId);
+            if (merchantUser) {
+              await storage.createInAppNotification({
+                notificationId: notification,
+                userId: merchantUser.id,
+                userType: 'merchant',
+                read: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                metadata: JSON.stringify({
+                  contractId: contract.id,
+                  requestId: request.id,
+                  action: 'view_cancellation_denied'
+                })
+              });
+            }
+          }
+
+          logger.info({
+            message: `Contract cancellation denied for contract #${contract.contractNumber}`,
+            category: "contract",
+            source: "internal",
+            metadata: {
+              contractId: contract.id,
+              merchantId: request.merchantId,
+              requestId: request.id,
+              adminId
+            }
+          });
+        }
+      }
+      
+      return res.json({
+        success: true,
+        message: `Cancellation request status updated to ${status}`,
+        data: updatedRequest
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error updating cancellation request status: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          requestId: req.params.id,
+          status: req.body.status,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update cancellation request status",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Plaid Platform Payments Routes
   // Get active merchants that can use Plaid for transfers
   apiRouter.get("/plaid/active-merchants", async (req: Request, res: Response) => {

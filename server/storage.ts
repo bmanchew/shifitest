@@ -28,7 +28,8 @@ import {
   ticketActivityLog, TicketActivityLog, InsertTicketActivityLog,
   emailVerificationTokens, EmailVerificationToken, InsertEmailVerificationToken,
   passwordResetTokens, PasswordResetToken, InsertPasswordResetToken,
-  oneTimePasswords, OneTimePassword, InsertOneTimePassword
+  oneTimePasswords, OneTimePassword, InsertOneTimePassword,
+  contractCancellationRequests, ContractCancellationRequest, InsertContractCancellationRequest
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt, not } from "drizzle-orm";
@@ -69,6 +70,15 @@ export interface IStorage {
 
   // Add to the IStorage interface
   updateAssetReport(id: number, data: Partial<AssetReport>): Promise<AssetReport | undefined>;
+  
+  // Contract Cancellation operations
+  createContractCancellationRequest(request: InsertContractCancellationRequest): Promise<ContractCancellationRequest>;
+  getContractCancellationRequest(id: number): Promise<ContractCancellationRequest | undefined>;
+  getContractCancellationRequestsByContractId(contractId: number): Promise<ContractCancellationRequest[]>;
+  getContractCancellationRequestsByMerchantId(merchantId: number): Promise<ContractCancellationRequest[]>;
+  getPendingContractCancellationRequests(): Promise<ContractCancellationRequest[]>;
+  updateContractCancellationRequest(id: number, data: Partial<ContractCancellationRequest>): Promise<ContractCancellationRequest | undefined>;
+  updateContractCancellationRequestStatus(id: number, status: string, adminId?: number): Promise<ContractCancellationRequest | undefined>;
   
   // Conversation operations
   createConversation(conversation: InsertConversation): Promise<Conversation>;
@@ -3171,6 +3181,131 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error getting activity logs for ticket ${ticketId}:`, error);
       return [];
+    }
+  }
+
+  // Contract Cancellation Request operations
+  async createContractCancellationRequest(request: InsertContractCancellationRequest): Promise<ContractCancellationRequest> {
+    try {
+      const [newRequest] = await db
+        .insert(contractCancellationRequests)
+        .values({
+          ...request,
+          requestedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      
+      return newRequest;
+    } catch (error) {
+      console.error("Error creating contract cancellation request:", error);
+      throw new Error("Failed to create contract cancellation request");
+    }
+  }
+
+  async getContractCancellationRequest(id: number): Promise<ContractCancellationRequest | undefined> {
+    try {
+      const [request] = await db
+        .select()
+        .from(contractCancellationRequests)
+        .where(eq(contractCancellationRequests.id, id));
+      
+      return request;
+    } catch (error) {
+      console.error(`Error getting contract cancellation request ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getContractCancellationRequestsByContractId(contractId: number): Promise<ContractCancellationRequest[]> {
+    try {
+      return await db
+        .select()
+        .from(contractCancellationRequests)
+        .where(eq(contractCancellationRequests.contractId, contractId))
+        .orderBy(desc(contractCancellationRequests.createdAt));
+    } catch (error) {
+      console.error(`Error getting cancellation requests for contract ${contractId}:`, error);
+      return [];
+    }
+  }
+
+  async getContractCancellationRequestsByMerchantId(merchantId: number): Promise<ContractCancellationRequest[]> {
+    try {
+      return await db
+        .select()
+        .from(contractCancellationRequests)
+        .where(eq(contractCancellationRequests.merchantId, merchantId))
+        .orderBy(desc(contractCancellationRequests.createdAt));
+    } catch (error) {
+      console.error(`Error getting cancellation requests for merchant ${merchantId}:`, error);
+      return [];
+    }
+  }
+
+  async getPendingContractCancellationRequests(): Promise<ContractCancellationRequest[]> {
+    try {
+      return await db
+        .select()
+        .from(contractCancellationRequests)
+        .where(eq(contractCancellationRequests.status, "pending"))
+        .orderBy(contractCancellationRequests.requestedAt);
+    } catch (error) {
+      console.error(`Error getting pending contract cancellation requests:`, error);
+      return [];
+    }
+  }
+
+  async updateContractCancellationRequest(id: number, data: Partial<ContractCancellationRequest>): Promise<ContractCancellationRequest | undefined> {
+    try {
+      const updateData = {
+        ...data,
+        updatedAt: new Date()
+      };
+
+      const [updatedRequest] = await db
+        .update(contractCancellationRequests)
+        .set(updateData)
+        .where(eq(contractCancellationRequests.id, id))
+        .returning();
+
+      return updatedRequest;
+    } catch (error) {
+      console.error(`Error updating contract cancellation request ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async updateContractCancellationRequestStatus(id: number, status: string, adminId?: number): Promise<ContractCancellationRequest | undefined> {
+    try {
+      const updateData: any = {
+        status: status as any,
+        updatedAt: new Date()
+      };
+
+      // Add admin-specific fields based on the status
+      if (status === "under_review" && adminId) {
+        updateData.reviewedBy = adminId;
+        updateData.reviewedAt = new Date();
+      } else if (status === "approved" && adminId) {
+        updateData.approvedBy = adminId;
+        updateData.approvedAt = new Date();
+      } else if (status === "denied" && adminId) {
+        updateData.deniedBy = adminId;
+        updateData.deniedAt = new Date();
+      }
+
+      const [updatedRequest] = await db
+        .update(contractCancellationRequests)
+        .set(updateData)
+        .where(eq(contractCancellationRequests.id, id))
+        .returning();
+
+      return updatedRequest;
+    } catch (error) {
+      console.error(`Error updating contract cancellation request status ${id}:`, error);
+      return undefined;
     }
   }
 }

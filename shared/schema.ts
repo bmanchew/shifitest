@@ -63,6 +63,7 @@ export const contractStatusEnum = pgEnum("contract_status", [
   "completed",
   "declined",
   "cancelled",
+  "cancellation_requested",
 ]);
 export const tokenizationStatusEnum = pgEnum("tokenization_status", [
   "pending",
@@ -196,6 +197,19 @@ export const contracts = pgTable("contracts", {
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
   phoneNumber: text("phone_number"), // Store customer phone number directly in contract
+  
+  // Cancellation fields
+  cancellationRequestedAt: timestamp("cancellation_requested_at"), // When the merchant requested cancellation
+  cancellationReason: text("cancellation_reason"), // Reason provided by merchant
+  cancellationNotes: text("cancellation_notes"), // Additional notes for the cancellation
+  cancellationApprovedAt: timestamp("cancellation_approved_at"), // When admin approved the cancellation
+  cancellationApprovedBy: integer("cancellation_approved_by").references(() => users.id), // Admin user who approved
+  cancellationDeniedAt: timestamp("cancellation_denied_at"), // When admin denied the cancellation
+  cancellationDeniedBy: integer("cancellation_denied_by").references(() => users.id), // Admin user who denied
+  cancellationDenialReason: text("cancellation_denial_reason"), // Reason for denial
+  refundAmount: doublePrecision("refund_amount"), // Amount to be refunded
+  refundProcessedAt: timestamp("refund_processed_at"), // When refund was processed
+  fundingCycleAdjustment: doublePrecision("funding_cycle_adjustment"), // Amount to adjust from next funding cycle
   
   // Blockchain and tokenization fields
   tokenizationStatus: tokenizationStatusEnum("tokenization_status").default("pending"),
@@ -589,6 +603,15 @@ export const notificationRecipientTypeEnum = pgEnum(
   ["merchant", "customer", "admin"],
 );
 
+// Contract Cancellation Status Enum
+export const cancellationStatusEnum = pgEnum("cancellation_status", [
+  "pending",  // Initial state when merchant requests cancellation
+  "under_review", // Admin is reviewing the request
+  "approved", // Cancellation approved by admin
+  "denied",   // Cancellation denied by admin
+  "processed", // Cancellation has been fully processed (including refunds/adjustments)
+]);
+
 // Smart Contract Template Types
 export const smartContractTypeEnum = pgEnum("smart_contract_type", [
   "standard_financing",
@@ -952,6 +975,50 @@ export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
 // Support ticket insert schemas
+// Contract Cancellation Requests
+export const contractCancellationRequests = pgTable("contract_cancellation_requests", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id").references(() => contracts.id).notNull(),
+  requestedBy: integer("requested_by").references(() => users.id).notNull(),
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  requestReason: text("request_reason").notNull(),
+  additionalNotes: text("additional_notes"),
+  status: cancellationStatusEnum("status").notNull().default("pending"),
+  requestedAt: timestamp("requested_at").defaultNow(),
+  reviewedBy: integer("reviewed_by").references(() => users.id), // Admin who reviewed the request
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  deniedBy: integer("denied_by").references(() => users.id),
+  deniedAt: timestamp("denied_at"),
+  denialReason: text("denial_reason"),
+  refundAmount: doublePrecision("refund_amount"),
+  refundProcessedAt: timestamp("refund_processed_at"),
+  fundingCycleAdjustment: doublePrecision("funding_cycle_adjustment"),
+  adjustmentProcessedAt: timestamp("adjustment_processed_at"),
+  metadata: text("metadata"), // JSON stringified additional data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertContractCancellationRequestSchema = createInsertSchema(
+  contractCancellationRequests
+).omit({
+  id: true,
+  requestedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  reviewedAt: true,
+  approvedAt: true,
+  deniedAt: true,
+  refundProcessedAt: true,
+  adjustmentProcessedAt: true,
+});
+
+export type ContractCancellationRequest = typeof contractCancellationRequests.$inferSelect;
+export type InsertContractCancellationRequest = z.infer<typeof insertContractCancellationRequestSchema>;
+
 export const insertSupportTicketSchema = createInsertSchema(supportTickets).omit({
   id: true,
   createdAt: true,
