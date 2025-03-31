@@ -517,25 +517,7 @@ export default function CustomerDashboard(): React.ReactNode {
           </Card>
         </div>
         
-        {/* AI Financial Sherpa - Voice-enabled Financial Insights */}
-        <div className="mb-8">
-          <h2 className="text-xl font-bold mb-4 flex items-center">
-            <div className="rounded-full w-7 h-7 bg-gradient-to-br from-indigo-400 to-purple-500 shadow flex items-center justify-center mr-2">
-              <Brain className="h-5 w-5 text-white" strokeWidth={1.25} />
-            </div>
-            Financial Sherpa
-          </h2>
-          <AIFinancialSherpa
-            customerId={contract?.customerId || 0}
-            customerName={userData?.firstName ? `${userData.firstName} ${userData.lastName || ''}` : userData?.name || 'Customer'}
-            contract={contract}
-            financialData={financialData}
-            isLoading={isLoadingFinancialData}
-            hasBankConnection={!!bankConnectionDetails}
-            onConnectBank={() => handleViewBankConnection(contract.id)}
-            onRefreshData={refetchFinancialData}
-          />
-        </div>
+        {/* Financial Sherpa component temporarily hidden */}
 
         {/* Cash Management Tools and Financial Data Section */}
         <div className="mb-8">
