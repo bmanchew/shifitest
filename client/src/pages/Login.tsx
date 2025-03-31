@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import {
   Card,
   CardContent,
@@ -27,7 +27,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Briefcase, Building, User } from "lucide-react";
+import { Briefcase, Building, CircleDollarSign, User } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -142,225 +142,266 @@ export default function Login() {
   const [userType, setUserType] = useState<"business" | "investor">("business");
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-6 items-center">
-        <Card className="w-full lg:w-1/2 max-w-md">
-          <CardHeader className="space-y-1">
-            <div className="flex items-center justify-center mb-2">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="w-full border-b bg-white">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center">
               <img 
                 src="/logo3.png"
                 alt="ShiFi Logo"
                 className="h-8 w-8 object-contain"
                 onError={(e) => {
-                  console.error("Logo failed to load, trying public path");
                   const img = e.currentTarget;
-                  img.src = "/public/logo3.png";
+                  img.src = "/ShiFiMidesk.png";
                 }}
               />
-              <span className="ml-2 text-2xl font-bold">ShiFi</span>
+              <span className="ml-2 text-xl font-bold">ShiFi</span>
             </div>
-            <CardTitle className="text-2xl font-semibold text-center">
-              Log in to your account
-            </CardTitle>
-            <CardDescription className="text-center">
-              Enter your email and password to access your account
-            </CardDescription>
-          </CardHeader>
-          
-          <Tabs defaultValue="business" className="w-full" onValueChange={(value) => setUserType(value as "business" | "investor")}>
-            <TabsList className="grid grid-cols-2 w-full mb-4">
-              <TabsTrigger value="business" className="flex items-center justify-center">
-                <Building className="h-4 w-4 mr-2" />
-                <span>Business</span>
-              </TabsTrigger>
-              <TabsTrigger value="investor" className="flex items-center justify-center">
-                <Briefcase className="h-4 w-4 mr-2" />
-                <span>Investor</span>
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="business">
-              <form onSubmit={handleSubmit}>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="your.email@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="password">Password</Label>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="px-0 h-auto text-xs font-normal"
-                        onClick={() => {
-                          setForgotPasswordEmail(email);
-                          setIsForgotPasswordOpen(true);
-                        }}
-                        type="button"
-                      >
-                        Forgot password?
-                      </Button>
-                    </div>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Logging in..." : "Log in"}
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
-            
-            <TabsContent value="investor">
-              <form onSubmit={handleSubmit}>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="investor-email">Email</Label>
-                    <Input
-                      id="investor-email"
-                      type="email"
-                      placeholder="investor@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="investor-password">Password</Label>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="px-0 h-auto text-xs font-normal"
-                        onClick={() => {
-                          setForgotPasswordEmail(email);
-                          setIsForgotPasswordOpen(true);
-                        }}
-                        type="button"
-                      >
-                        Forgot password?
-                      </Button>
-                    </div>
-                    <Input
-                      id="investor-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    <p className="mb-2">As an investor, you'll have access to:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                      <li>Exclusive contract investment opportunities</li>
-                      <li>Data room with detailed financial documentation</li>
-                      <li>Portfolio management and performance tracking</li>
-                    </ul>
-                  </div>
-                </CardContent>
-                <CardFooter className="flex-col space-y-3">
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Logging in..." : "Log in"}
-                  </Button>
-                  <div className="text-center text-sm">
-                    <span className="text-muted-foreground">New investor? </span>
-                    <Button 
-                      variant="link" 
-                      className="p-0 h-auto"
-                      onClick={() => {
-                        toast({
-                          title: "Registration Coming Soon",
-                          description: "Investor registration will be available soon. Please contact ShiFi for more information.",
-                        });
-                      }}
-                    >
-                      Apply for access
-                    </Button>
-                  </div>
-                </CardFooter>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </Card>
-        
-        <div className="lg:w-1/2 flex items-center justify-center p-8">
-          <img 
-            src={userType === "investor" ? "/investor-portal.jpg" : "/ShiFiMidesk.png"}
-            alt={userType === "investor" ? "ShiFi Investor Portal" : "Unlock More Revenue With ShiFi Financing"}
-            className="h-auto max-w-full w-4/5 rounded-lg shadow-lg" 
-            onError={(e) => {
-              console.error("Image failed to load:", e);
-              const imgElement = e.currentTarget;
-              // If investor image fails, fall back to the default
-              if (userType === "investor") {
-                imgElement.src = "/ShiFiMidesk.png";
-              } else if (imgElement.src.endsWith('/ShiFiMidesk.png')) {
-                const baseUrl = window.location.origin;
-                imgElement.src = `${baseUrl}/ShiFiMidesk.png`;
-              }
-            }}
-          />
+          </div>
+          <nav className="flex items-center gap-6">
+            <Button 
+              variant="ghost" 
+              className="flex items-center gap-2"
+              onClick={() => setLocation("/investor")}
+            >
+              <CircleDollarSign className="h-4 w-4" />
+              Investor Portal
+            </Button>
+          </nav>
         </div>
-      </div>
+      </header>
       
-      {/* Forgot Password Dialog */}
-      <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Reset your password</DialogTitle>
-            <DialogDescription>
-              Enter your email address and we'll send you instructions to reset your password.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <form onSubmit={handleForgotPassword} className="space-y-4 py-3">
-            <div className="space-y-2">
-              <Label htmlFor="reset-email">Email</Label>
-              <Input
-                id="reset-email"
-                type="email"
-                placeholder="your.email@example.com"
-                value={forgotPasswordEmail}
-                onChange={(e) => setForgotPasswordEmail(e.target.value)}
-                required
-                className="w-full"
-              />
-            </div>
+      <div className="flex items-center justify-center p-4 min-h-[calc(100vh-4rem)]">
+        <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-6 items-center">
+          <Card className="w-full lg:w-1/2 max-w-md">
+            <CardHeader className="space-y-1">
+              <div className="flex items-center justify-center mb-2">
+                <img 
+                  src="/logo3.png"
+                  alt="ShiFi Logo"
+                  className="h-8 w-8 object-contain"
+                  onError={(e) => {
+                    console.error("Logo failed to load, trying public path");
+                    const img = e.currentTarget;
+                    img.src = "/public/logo3.png";
+                  }}
+                />
+                <span className="ml-2 text-2xl font-bold">ShiFi</span>
+              </div>
+              <CardTitle className="text-2xl font-semibold text-center">
+                Log in to your account
+              </CardTitle>
+              <CardDescription className="text-center">
+                Enter your email and password to access your account
+              </CardDescription>
+            </CardHeader>
             
-            <DialogFooter className="pt-4">
-              <Button 
-                variant="outline" 
-                type="button" 
-                onClick={() => setIsForgotPasswordOpen(false)}
-                disabled={isResettingPassword}
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={isResettingPassword}
-              >
-                {isResettingPassword ? "Sending..." : "Send Instructions"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <Tabs defaultValue="business" className="w-full" onValueChange={(value) => setUserType(value as "business" | "investor")}>
+              <TabsList className="grid grid-cols-2 w-full mb-4">
+                <TabsTrigger value="business" className="flex items-center justify-center">
+                  <Building className="h-4 w-4 mr-2" />
+                  <span>Business</span>
+                </TabsTrigger>
+                <TabsTrigger value="investor" className="flex items-center justify-center">
+                  <Briefcase className="h-4 w-4 mr-2" />
+                  <span>Investor</span>
+                </TabsTrigger>
+              </TabsList>
+            
+              <TabsContent value="business">
+                <form onSubmit={handleSubmit}>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="your.email@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="password">Password</Label>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="px-0 h-auto text-xs font-normal"
+                          onClick={() => {
+                            setForgotPasswordEmail(email);
+                            setIsForgotPasswordOpen(true);
+                          }}
+                          type="button"
+                        >
+                          Forgot password?
+                        </Button>
+                      </div>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? "Logging in..." : "Log in"}
+                    </Button>
+                  </CardFooter>
+                </form>
+              </TabsContent>
+            
+              <TabsContent value="investor">
+                <form onSubmit={handleSubmit}>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="investor-email">Email</Label>
+                      <Input
+                        id="investor-email"
+                        type="email"
+                        placeholder="investor@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="investor-password">Password</Label>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="px-0 h-auto text-xs font-normal"
+                          onClick={() => {
+                            setForgotPasswordEmail(email);
+                            setIsForgotPasswordOpen(true);
+                          }}
+                          type="button"
+                        >
+                          Forgot password?
+                        </Button>
+                      </div>
+                      <Input
+                        id="investor-password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <p className="mb-2">As an investor, you'll have access to:</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>Exclusive contract investment opportunities</li>
+                        <li>Data room with detailed financial documentation</li>
+                        <li>Portfolio management and performance tracking</li>
+                      </ul>
+                      <div className="mt-3">
+                        <Button 
+                          variant="link" 
+                          className="p-0 h-auto text-xs"
+                          onClick={() => setLocation("/investor")}
+                        >
+                          Learn more about investor opportunities
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="flex-col space-y-3">
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? "Logging in..." : "Log in"}
+                    </Button>
+                    <div className="text-center text-sm">
+                      <span className="text-muted-foreground">New investor? </span>
+                      <Button 
+                        variant="link" 
+                        className="p-0 h-auto"
+                        onClick={() => {
+                          toast({
+                            title: "Registration Coming Soon",
+                            description: "Investor registration will be available soon. Please contact ShiFi for more information.",
+                          });
+                        }}
+                      >
+                        Apply for access
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </Card>
+          
+          <div className="lg:w-1/2 flex items-center justify-center p-8">
+            <img 
+              src={userType === "investor" ? "/investor-portal.jpg" : "/ShiFiMidesk.png"}
+              alt={userType === "investor" ? "ShiFi Investor Portal" : "Unlock More Revenue With ShiFi Financing"}
+              className="h-auto max-w-full w-4/5 rounded-lg shadow-lg" 
+              onError={(e) => {
+                console.error("Image failed to load:", e);
+                const imgElement = e.currentTarget;
+                // If investor image fails, fall back to the default
+                if (userType === "investor") {
+                  imgElement.src = "/ShiFiMidesk.png";
+                } else if (imgElement.src.endsWith('/ShiFiMidesk.png')) {
+                  const baseUrl = window.location.origin;
+                  imgElement.src = `${baseUrl}/ShiFiMidesk.png`;
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Forgot Password Dialog */}
+        <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reset your password</DialogTitle>
+              <DialogDescription>
+                Enter your email address and we'll send you instructions to reset your password.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <form onSubmit={handleForgotPassword} className="space-y-4 py-3">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  placeholder="your.email@example.com"
+                  value={forgotPasswordEmail}
+                  onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                  required
+                  className="w-full"
+                />
+              </div>
+              
+              <DialogFooter className="pt-4">
+                <Button 
+                  variant="outline" 
+                  type="button" 
+                  onClick={() => setIsForgotPasswordOpen(false)}
+                  disabled={isResettingPassword}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isResettingPassword}
+                >
+                  {isResettingPassword ? "Sending..." : "Send Instructions"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }

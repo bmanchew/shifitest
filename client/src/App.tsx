@@ -68,6 +68,9 @@ function App() {
         <Route path="/login" component={Login} />
         {!user && <Route path="/merchant/signup" component={lazy(() => import("@/components/merchant/Signup"))} />}
         
+        {/* Investor landing page - accessible to everyone */}
+        <Route path="/investor" component={lazy(() => import("@/pages/InvestorLanding"))} />
+        
         {/* Test route that everyone can access */}
         <Route path="/test-page" component={lazy(() => import("@/pages/TestPage"))} />
 
