@@ -141,6 +141,15 @@ export const investorVerificationStatusEnum = pgEnum("investor_verification_stat
   "pending",
   "verified",
   "rejected",
+  "under_review",
+  "incomplete",
+]);
+
+export const accreditationMethodEnum = pgEnum("accreditation_method", [
+  "income",
+  "net_worth",
+  "professional_certification",
+  "entity",
 ]);
 
 export const investmentOfferingTypeEnum = pgEnum("investment_offering_type", [
@@ -1140,6 +1149,7 @@ export const investorProfiles = pgTable("investor_profiles", {
     .unique(),
   accreditationStatus: boolean("accreditation_status"),
   verificationStatus: investorVerificationStatusEnum("verification_status").notNull().default("pending"),
+  accreditationMethod: accreditationMethodEnum("accreditation_method"),
   annualIncome: doublePrecision("annual_income"),
   netWorth: doublePrecision("net_worth"),
   documentVerificationCompleted: boolean("document_verification_completed").default(false),
@@ -1147,11 +1157,43 @@ export const investorProfiles = pgTable("investor_profiles", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
   kycCompleted: boolean("kyc_completed").default(false),
+  kycPassed: boolean("kyc_passed").default(false),
   investmentExperience: text("investment_experience"),
   riskTolerance: text("risk_tolerance"),
   investmentGoals: text("investment_goals"),
   taxIdNumber: text("tax_id_number"),
   verificationSessionId: text("verification_session_id"),
+  
+  // Identity verification fields
+  dateOfBirth: timestamp("date_of_birth"),
+  maritalStatus: text("marital_status"),
+  citizenshipStatus: text("citizenship_status"),
+  primaryResidenceValue: doublePrecision("primary_residence_value"),
+  
+  // Professional certification data
+  professionalLicenseType: text("professional_license_type"), // e.g., "Series 7", "Series 65", "Series 82"
+  professionalLicenseNumber: text("professional_license_number"),
+  professionalLicenseVerified: boolean("professional_license_verified").default(false),
+  
+  // Income verification
+  incomeVerified: boolean("income_verified").default(false),
+  incomeVerificationMethod: text("income_verification_method"), // "tax_documents", "cpa_letter", etc.
+  jointIncome: boolean("joint_income").default(false), // Whether income includes spouse
+  currentYearIncomeExpectation: doublePrecision("current_year_income_expectation"),
+  
+  // Net worth verification
+  netWorthVerified: boolean("net_worth_verified").default(false),
+  netWorthVerificationMethod: text("net_worth_verification_method"), // "asset_documents", "cpa_letter", etc.
+  
+  // Review information
+  reviewedBy: integer("reviewed_by").references(() => users.id), // Admin who reviewed the verification
+  reviewedAt: timestamp("reviewed_at"),
+  adminNotes: text("admin_notes"), // Notes from the admin reviewer
+  rejectionReason: text("rejection_reason"),
+  
+  // Verification expiration
+  verificationExpiresAt: timestamp("verification_expires_at"), // When verification expires
+  lastReverificationRequestDate: timestamp("last_reverification_request_date"), // When reverification was requested
 });
 
 export const insertInvestorProfileSchema = createInsertSchema(
@@ -1262,3 +1304,147 @@ export type InsertInvestment = z.infer<typeof insertInvestmentSchema>;
 
 export type DocumentLibrary = typeof documentLibrary.$inferSelect;
 export type InsertDocumentLibrary = z.infer<typeof insertDocumentLibrarySchema>;
+
+// Document type enum for investor verification
+export const investorDocumentTypeEnum = pgEnum("investor_document_type", [
+  "tax_w2",
+  "tax_1040",
+  "tax_1099",
+  "bank_statement",
+  "investment_statement",
+  "cpa_letter",
+  "attorney_letter",
+  "government_id",
+  "professional_license",
+  "financial_statement",
+  "proof_of_address",
+  "other"
+]);
+
+// Investor verification documents
+export const investorVerificationDocuments = pgTable("investor_verification_documents", {
+  id: serial("id").primaryKey(),
+  investorId: integer("investor_id")
+    .references(() => investorProfiles.id)
+    .notNull(),
+  documentType: investorDocumentTypeEnum("document_type").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(), // pdf, jpg, png, etc.
+  fileSize: integer("file_size").notNull(),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  verificationPurpose: text("verification_purpose").notNull(), // "income", "net_worth", "identity", etc.
+  year: integer("year"), // For tax documents
+  verified: boolean("verified").default(false),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: integer("verified_by").references(() => users.id),
+  rejectionReason: text("rejection_reason"),
+  adminNotes: text("admin_notes"),
+  expiresAt: timestamp("expires_at"), // When document expires
+  metadata: text("metadata"), // JSON stringified metadata
+  ocrData: text("ocr_data"), // JSON stringified data extracted via OCR
+});
+
+export const insertInvestorVerificationDocumentSchema = createInsertSchema(
+  investorVerificationDocuments
+).omit({
+  id: true,
+  uploadedAt: true,
+  verifiedAt: true,
+});
+
+export type InvestorVerificationDocument = typeof investorVerificationDocuments.$inferSelect;
+export type InsertInvestorVerificationDocument = z.infer<typeof insertInvestorVerificationDocumentSchema>;
+
+// Verification progress steps enum
+export const verificationStepEnum = pgEnum("verification_step", [
+  "identity",
+  "income",
+  "net_worth",
+  "professional_certification",
+  "questionnaire",
+  "agreement",
+  "review",
+]);
+
+// Investor verification progress
+export const investorVerificationProgress = pgTable("investor_verification_progress", {
+  id: serial("id").primaryKey(),
+  investorId: integer("investor_id")
+    .references(() => investorProfiles.id)
+    .notNull(),
+  step: verificationStepEnum("step").notNull(),
+  completed: boolean("completed").default(false),
+  startedAt: timestamp("started_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  data: text("data"), // JSON stringified data specific to the step
+  adminReviewRequired: boolean("admin_review_required").default(false),
+  adminReviewed: boolean("admin_reviewed").default(false),
+  adminReviewedAt: timestamp("admin_reviewed_at"),
+  adminReviewedBy: integer("admin_reviewed_by").references(() => users.id),
+  adminNotes: text("admin_notes"),
+});
+
+export const insertInvestorVerificationProgressSchema = createInsertSchema(
+  investorVerificationProgress
+).omit({
+  id: true,
+  startedAt: true,
+  completedAt: true,
+  adminReviewedAt: true,
+});
+
+export type InvestorVerificationProgress = typeof investorVerificationProgress.$inferSelect;
+export type InsertInvestorVerificationProgress = z.infer<typeof insertInvestorVerificationProgressSchema>;
+
+// Third-party verification status enum
+export const thirdPartyVerificationStatusEnum = pgEnum("third_party_verification_status", [
+  "pending",
+  "sent",
+  "viewed",
+  "completed",
+  "rejected",
+  "expired",
+]);
+
+// Third-party verification requests (for CPA/attorney verification)
+export const thirdPartyVerificationRequests = pgTable("third_party_verification_requests", {
+  id: serial("id").primaryKey(),
+  investorId: integer("investor_id")
+    .references(() => investorProfiles.id)
+    .notNull(),
+  verifierEmail: text("verifier_email").notNull(),
+  verifierName: text("verifier_name"),
+  verifierType: text("verifier_type").notNull(), // "cpa", "attorney", etc.
+  verificationPurpose: text("verification_purpose").notNull(), // "income", "net_worth", etc.
+  status: thirdPartyVerificationStatusEnum("status").notNull().default("pending"),
+  requestToken: text("request_token").notNull().unique(), // Unique token for accessing verification form
+  message: text("message"), // Message to verifier
+  requestedAt: timestamp("requested_at").defaultNow(),
+  sentAt: timestamp("sent_at"),
+  viewedAt: timestamp("viewed_at"),
+  completedAt: timestamp("completed_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  expiresAt: timestamp("expires_at"), // When the verification request expires
+  verifierResponse: text("verifier_response"), // Response from verifier
+  verifierNotes: text("verifier_notes"), // Additional notes from verifier
+  documentUrl: text("document_url"), // URL to document provided by verifier
+  adminReviewed: boolean("admin_reviewed").default(false),
+  adminReviewedAt: timestamp("admin_reviewed_at"),
+  adminReviewedBy: integer("admin_reviewed_by").references(() => users.id),
+  adminNotes: text("admin_notes"),
+});
+
+export const insertThirdPartyVerificationRequestSchema = createInsertSchema(
+  thirdPartyVerificationRequests
+).omit({
+  id: true,
+  requestedAt: true,
+  sentAt: true,
+  viewedAt: true,
+  completedAt: true,
+  adminReviewedAt: true,
+});
+
+export type ThirdPartyVerificationRequest = typeof thirdPartyVerificationRequests.$inferSelect;
+export type InsertThirdPartyVerificationRequest = z.infer<typeof insertThirdPartyVerificationRequestSchema>;

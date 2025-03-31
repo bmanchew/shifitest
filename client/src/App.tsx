@@ -82,6 +82,7 @@ function App() {
         
         {/* Test route that everyone can access */}
         <Route path="/test-page" component={lazy(() => import("@/pages/TestPage"))} />
+        <Route path="/accreditation-demo" component={lazy(() => import("@/pages/AccreditationDemo"))} />
 
         {/* Customer public routes */}
         <Route path="/offer/:contractId" component={CustomerContractOffer} />

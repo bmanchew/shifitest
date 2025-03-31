@@ -1482,4 +1482,8 @@ router.post("/kyc/verify", isAdmin, async (req: Request, res: Response) => {
   }
 });
 
+// Import accreditation module and setup routes
+import { setupInvestorRoutes } from "./investor/index";
+setupInvestorRoutes(router, storage);
+
 export default router;
