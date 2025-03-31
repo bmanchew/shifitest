@@ -365,6 +365,95 @@ export default function InvestorLanding() {
         </div>
       </section>
       
+      {/* Demo Application Section */}
+      <section className="py-20 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto text-center mb-16">
+            <h2 className="text-3xl font-bold mb-4">Try Our Customer Experience</h2>
+            <p className="text-xl text-muted-foreground">
+              Experience the application process that our merchants go through when applying for financing
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+            <div className="space-y-6">
+              <div className="bg-muted/30 p-6 rounded-lg border border-muted">
+                <h3 className="text-xl font-semibold mb-3 flex items-center">
+                  <FileCheck className="h-5 w-5 text-primary mr-2" />
+                  Interactive Demo Application
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Try a simulated version of our merchant application process to see how businesses apply for ShiFi financing.
+                </p>
+                <div className="space-y-3">
+                  <div className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <span>Complete a mock business information form</span>
+                  </div>
+                  <div className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <span>Experience our simulated bank connection with Plaid</span>
+                  </div>
+                  <div className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mr-2 mt-0.5 flex-shrink-0" />
+                    <span>Go through our mock identity verification process</span>
+                  </div>
+                </div>
+                <Button 
+                  className="mt-6" 
+                  onClick={() => setLocation('/demo-application')}
+                >
+                  Try Demo Application
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="bg-muted/10 p-6 rounded-lg border border-primary/20">
+              <h3 className="text-xl font-semibold mb-4">How Our Process Works</h3>
+              <ol className="space-y-6">
+                <li className="flex items-start">
+                  <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold mr-3">
+                    1
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Business Information</h4>
+                    <p className="text-muted-foreground">Merchants provide basic information about their business and financing needs</p>
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold mr-3">
+                    2
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Bank Connection</h4>
+                    <p className="text-muted-foreground">Secure bank account connection with Plaid to verify financial information</p>
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold mr-3">
+                    3
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Identity Verification</h4>
+                    <p className="text-muted-foreground">Easy but thorough KYC verification process to prevent fraud</p>
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold mr-3">
+                    4
+                  </div>
+                  <div>
+                    <h4 className="font-medium">Funding</h4>
+                    <p className="text-muted-foreground">Quick approval process with funds typically available in 2-3 business days</p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+      
       {/* How It Works Section */}
       <section className="py-20">
         <div className="container mx-auto px-4">
@@ -625,6 +714,83 @@ export default function InvestorLanding() {
                     </p>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      {/* Demo Application Section */}
+      <section className="py-20 bg-gradient-to-b from-background to-muted/40">
+        <div className="container mx-auto px-4">
+          <div className="max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+              <div>
+                <h2 className="text-3xl font-bold mb-6">Experience the Customer Journey</h2>
+                <p className="text-lg text-muted-foreground mb-6">
+                  Want to understand how businesses apply for funding through ShiFi? Try our interactive demo 
+                  to experience the entire application process, from business information to bank verification and 
+                  identity checks.
+                </p>
+                <div className="space-y-4">
+                  <div className="flex items-start">
+                    <CheckCircle2 className="h-6 w-6 text-primary mr-3 mt-0.5" />
+                    <div>
+                      <h3 className="font-medium">Simulated Application Flow</h3>
+                      <p className="text-muted-foreground">Experience the same streamlined application process that businesses use</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start">
+                    <CheckCircle2 className="h-6 w-6 text-primary mr-3 mt-0.5" />
+                    <div>
+                      <h3 className="font-medium">Mock KYC Verification</h3>
+                      <p className="text-muted-foreground">See how our identity verification process protects your investments</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start">
+                    <CheckCircle2 className="h-6 w-6 text-primary mr-3 mt-0.5" />
+                    <div>
+                      <h3 className="font-medium">Bank Connection Simulation</h3>
+                      <p className="text-muted-foreground">Understand how we verify business finances securely using Plaid</p>
+                    </div>
+                  </div>
+                </div>
+                <Button 
+                  size="lg" 
+                  className="mt-8"
+                  onClick={() => window.location.href = '/demo-customer-application'}
+                >
+                  Try the Demo
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-primary/20 to-primary/10 -rotate-1 transform scale-[1.02]"></div>
+                <Card className="rounded-xl overflow-hidden relative shadow-lg">
+                  <CardHeader className="bg-card border-b pb-3">
+                    <div className="flex items-center">
+                      <div className="flex space-x-2">
+                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      </div>
+                      <div className="ml-4 text-xs text-center flex-1 mr-4">
+                        ShiFi Application - Business Funding
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <img 
+                      src="/demo-application-preview.png" 
+                      alt="Demo Application Preview" 
+                      className="w-full h-[340px] object-cover object-top"
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        img.src = "https://placehold.co/600x400/e9ecef/495057?text=Application+Demo+Preview";
+                      }}
+                    />
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </div>
