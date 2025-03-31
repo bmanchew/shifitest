@@ -99,19 +99,14 @@ router.post("/applications", async (req: Request, res: Response) => {
       phone: application.phone
     });
     
-    // Create investor profile
+    // Create investor profile with the schema that matches the database
     await storage.createInvestorProfile({
       userId: user.id,
-      legalName: application.name,
-      phone: application.phone,
-      isAccredited: application.isAccredited,
-      address: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: '',
-      kycStatus: 'pending', // Using correct kycStatus field from the schema
-      notes: application.investmentGoals
+      accreditationStatus: application.isAccredited,
+      verificationStatus: 'pending',
+      investmentGoals: application.investmentGoals,
+      kyc_completed: false,
+      document_verification_completed: false
     });
     
     // Generate authentication token
