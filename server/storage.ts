@@ -29,7 +29,11 @@ import {
   emailVerificationTokens, EmailVerificationToken, InsertEmailVerificationToken,
   passwordResetTokens, PasswordResetToken, InsertPasswordResetToken,
   oneTimePasswords, OneTimePassword, InsertOneTimePassword,
-  contractCancellationRequests, ContractCancellationRequest, InsertContractCancellationRequest
+  contractCancellationRequests, ContractCancellationRequest, InsertContractCancellationRequest,
+  investorProfiles, InvestorProfile, InsertInvestorProfile,
+  investmentOfferings, InvestmentOffering, InsertInvestmentOffering,
+  investments, Investment, InsertInvestment,
+  documentLibrary, DocumentLibrary, InsertDocumentLibrary
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt, not } from "drizzle-orm";
@@ -239,6 +243,41 @@ export interface IStorage {
   
   // Sales Rep Analytics operations
   getSalesRepAnalytics(id: number): Promise<SalesRepAnalytics | undefined>;
+  getSalesRepAnalyticsBySalesRepId(salesRepId: number): Promise<SalesRepAnalytics | undefined>;
+  
+  // Investor Profile operations
+  getInvestorProfile(id: number): Promise<InvestorProfile | undefined>;
+  getInvestorProfileByUserId(userId: number): Promise<InvestorProfile | undefined>;
+  createInvestorProfile(profile: InsertInvestorProfile): Promise<InvestorProfile>;
+  updateInvestorProfile(id: number, data: Partial<InvestorProfile>): Promise<InvestorProfile | undefined>;
+  getAllInvestorProfiles(): Promise<InvestorProfile[]>;
+  getInvestorProfilesByVerificationStatus(status: string): Promise<InvestorProfile[]>;
+  
+  // Investment Offering operations
+  getInvestmentOffering(id: number): Promise<InvestmentOffering | undefined>;
+  getInvestmentOfferingByContractId(contractId: number): Promise<InvestmentOffering | undefined>;
+  createInvestmentOffering(offering: InsertInvestmentOffering): Promise<InvestmentOffering>;
+  updateInvestmentOffering(id: number, data: Partial<InvestmentOffering>): Promise<InvestmentOffering | undefined>;
+  getInvestmentOfferings(): Promise<InvestmentOffering[]>;
+  getInvestmentOfferingsByStatus(status: string): Promise<InvestmentOffering[]>;
+  
+  // Investment operations
+  getInvestment(id: number): Promise<Investment | undefined>;
+  getInvestmentsByInvestorId(investorId: number): Promise<Investment[]>;
+  getInvestmentsByOfferingId(offeringId: number): Promise<Investment[]>;
+  createInvestment(investment: InsertInvestment): Promise<Investment>;
+  updateInvestment(id: number, data: Partial<Investment>): Promise<Investment | undefined>;
+  updateInvestmentStatus(id: number, status: string): Promise<Investment | undefined>;
+  getAllInvestments(): Promise<Investment[]>;
+  
+  // Document Library operations
+  getDocumentLibraryItem(id: number): Promise<DocumentLibrary | undefined>;
+  getDocumentLibrary(): Promise<DocumentLibrary[]>;
+  getDocumentLibraryByCategory(category: string): Promise<DocumentLibrary[]>;
+  createDocumentLibraryItem(document: InsertDocumentLibrary): Promise<DocumentLibrary>;
+  updateDocumentLibraryItem(id: number, data: Partial<DocumentLibrary>): Promise<DocumentLibrary | undefined>;
+  
+  // Sales Rep Analytics extended operations  
   getSalesRepAnalyticsBySalesRepId(salesRepId: number): Promise<SalesRepAnalytics[]>;
   getSalesRepAnalyticsByPeriod(salesRepId: number, period: string): Promise<SalesRepAnalytics | undefined>;
   createSalesRepAnalytics(analytics: InsertSalesRepAnalytics): Promise<SalesRepAnalytics>;

@@ -100,6 +100,7 @@ import indexRoutes from "./routes/index"; // Import routes from index.ts
 import registerSesameAIRoutes from "./routes/sesameAI"; // Import SesameAI routes
 import registerFinancialSherpaRoutes from "./routes/financialSherpa"; // Import Financial Sherpa routes
 import authRouter from "./routes/auth.routes"; // Import auth routes
+import investorRouter from "./routes/investor"; // Import investor portal routes
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available
@@ -5284,6 +5285,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   apiRouter.use("/blockchain", blockchainRouter);
   apiRouter.use("/sales-reps", salesRepRouter);
   apiRouter.use("/communications", communicationsRouter);
+  apiRouter.use("/investor", investorRouter);
   // Also mount the conversations endpoint at /conversations for backward compatibility
   apiRouter.use("/conversations", communicationsRouter);
   // Also mount the support-tickets endpoint for backward compatibility

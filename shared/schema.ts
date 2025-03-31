@@ -18,6 +18,7 @@ export const userRoleEnum = pgEnum("user_role", [
   "merchant",
   "customer",
   "sales_rep",
+  "investor",
 ]);
 
 export const conversationStatusEnum = pgEnum("conversation_status", [
@@ -133,6 +134,27 @@ export const onboardingStatusEnum = pgEnum("onboarding_status", [
   "in_progress",
   "completed",
   "rejected",
+]);
+
+export const investorVerificationStatusEnum = pgEnum("investor_verification_status", [
+  "not_started",
+  "pending",
+  "verified",
+  "rejected",
+]);
+
+export const investmentOfferingTypeEnum = pgEnum("investment_offering_type", [
+  "fixed_term_15_2yr",
+  "fixed_term_18_4yr",
+]);
+
+export const investmentStatusEnum = pgEnum("investment_status", [
+  "pending",
+  "processing",
+  "funded",
+  "active",
+  "completed",
+  "cancelled",
 ]);
 
 // Users
@@ -1108,3 +1130,143 @@ export const insertOneTimePasswordSchema = createInsertSchema(oneTimePasswords).
 
 export type OneTimePassword = typeof oneTimePasswords.$inferSelect;
 export type InsertOneTimePassword = z.infer<typeof insertOneTimePasswordSchema>;
+
+// Investor Profiles
+export const investorProfiles = pgTable("investor_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .references(() => users.id)
+    .notNull()
+    .unique(),
+  legalName: text("legal_name").notNull(),
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  zipCode: text("zip_code").notNull(),
+  country: text("country").notNull().default("US"),
+  phone: text("phone").notNull(),
+  isAccredited: boolean("is_accredited").default(false),
+  accreditationVerifiedAt: timestamp("accreditation_verified_at"),
+  kycStatus: investorVerificationStatusEnum("kyc_status").default("not_started"),
+  kycVerifiedAt: timestamp("kyc_verified_at"),
+  ndaSigned: boolean("nda_signed").default(false),
+  ndaSignedAt: timestamp("nda_signed_at"),
+  plaidItemId: text("plaid_item_id"),
+  plaidAccessToken: text("plaid_access_token"),
+  plaidAccountId: text("plaid_account_id"),
+  bankAccountName: text("bank_account_name"),
+  bankAccountMask: text("bank_account_mask"),
+  bankAccountType: text("bank_account_type"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertInvestorProfileSchema = createInsertSchema(
+  investorProfiles
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Investment Offerings
+export const investmentOfferings = pgTable("investment_offerings", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  type: investmentOfferingTypeEnum("type").notNull(),
+  interestRate: doublePrecision("interest_rate").notNull(),
+  termMonths: integer("term_months").notNull(),
+  minimumInvestment: doublePrecision("minimum_investment").notNull().default(10000),
+  deferredInterestMonths: integer("deferred_interest_months"),
+  isActive: boolean("is_active").default(true),
+  totalRaised: doublePrecision("total_raised").default(0),
+  totalTarget: doublePrecision("total_target"),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertInvestmentOfferingSchema = createInsertSchema(
+  investmentOfferings
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Investments (when an investor purchases an offering)
+export const investments = pgTable("investments", {
+  id: serial("id").primaryKey(),
+  investorId: integer("investor_id")
+    .references(() => investorProfiles.id)
+    .notNull(),
+  offeringId: integer("offering_id")
+    .references(() => investmentOfferings.id)
+    .notNull(),
+  amount: doublePrecision("amount").notNull(),
+  status: investmentStatusEnum("status").notNull().default("pending"),
+  agreementNumber: text("agreement_number").notNull().unique(),
+  agreementDocumentUrl: text("agreement_document_url"),
+  signedAgreementUrl: text("signed_agreement_url"),
+  signedAt: timestamp("signed_at"),
+  fundedAt: timestamp("funded_at"),
+  fundingSource: text("funding_source"),
+  plaidTransferId: text("plaid_transfer_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  cancelReason: text("cancel_reason"),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertInvestmentSchema = createInsertSchema(
+  investments
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  cancelledAt: true,
+});
+
+// Document Library (for investor data room)
+export const documentLibrary = pgTable("document_library", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // financial, legal, marketing, etc.
+  fileUrl: text("file_url").notNull(),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(), // pdf, docx, etc.
+  fileSize: integer("file_size").notNull(),
+  requiresNda: boolean("requires_nda").default(true),
+  isPublic: boolean("is_public").default(false),
+  uploadedBy: integer("uploaded_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertDocumentLibrarySchema = createInsertSchema(
+  documentLibrary
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Export types for investor portal
+export type InvestorProfile = typeof investorProfiles.$inferSelect;
+export type InsertInvestorProfile = z.infer<typeof insertInvestorProfileSchema>;
+
+export type InvestmentOffering = typeof investmentOfferings.$inferSelect;
+export type InsertInvestmentOffering = z.infer<typeof insertInvestmentOfferingSchema>;
+
+export type Investment = typeof investments.$inferSelect;
+export type InsertInvestment = z.infer<typeof insertInvestmentSchema>;
+
+export type DocumentLibrary = typeof documentLibrary.$inferSelect;
+export type InsertDocumentLibrary = z.infer<typeof insertDocumentLibrarySchema>;
