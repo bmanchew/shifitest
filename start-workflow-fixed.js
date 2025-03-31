@@ -8,16 +8,17 @@
  * while the actual server runs on port 5001.
  */
 
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
+import { createServer } from 'net';
+import { createServer as createHttpServer } from 'http';
 import { setTimeout as sleep } from 'timers/promises';
-import net from 'net';
 
-console.log("Starting application with port forwarding...");
+console.log("Starting server with port conflict resolution...");
 
 // Check if a port is available
 function checkPort(port) {
   return new Promise((resolve) => {
-    const tester = net.createServer()
+    const tester = createServer()
       .once('error', () => {
         resolve(false);
       })
@@ -29,60 +30,69 @@ function checkPort(port) {
   });
 }
 
-// Start the main application server
+// Start the actual server on port 5001
 function startServer() {
-  console.log("Starting main server...");
+  console.log("Starting main server on port 5001...");
   
-  // Environment variables for the server
+  // Use environment variable to ensure the server uses port 5001
   const env = {
     ...process.env,
     PORT: "5001",
-    FORCE_PORT: "true"
+    FORCE_PORT: "true" // Custom flag to indicate port should be forced
   };
   
-  // Start the server with PORT=5001
-  const server = spawn('tsx', ['server/index.ts'], {
+  // Start the server using npm run dev
+  const server = spawn('npm', ['run', 'dev'], {
     stdio: 'inherit',
     env,
     shell: true
   });
   
-  // Handle server events
+  // Handle server process events
   server.on('error', (err) => {
     console.error('Failed to start server:', err);
+    process.exit(1);
   });
   
+  // Forward exit code when the server exits
   server.on('close', (code) => {
-    console.log(`Server exited with code ${code}`);
-    
-    // If the server exits, stop the port forwarder too
-    if (portForwarderProcess) {
-      portForwarderProcess.kill();
-    }
-    
+    console.log(`Server process exited with code ${code}`);
     process.exit(code);
   });
   
   return server;
 }
 
-// Start the port forwarder
+// Start the port forwarder on port 5000
 function startPortForwarder() {
-  console.log("Starting port forwarder...");
+  console.log("Starting port forwarder on port 5000 -> 5001...");
   
-  // Start the port forwarder script
-  const forwarder = spawn('node', ['restart-port-forwarding.js'], {
-    stdio: 'inherit',
-    shell: true
+  const forwarder = createHttpServer((req, res) => {
+    // Simple HTML page with auto-redirect
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta http-equiv="refresh" content="0;url=http://${req.headers.host.replace('5000', '5001')}${req.url}">
+          <title>Redirecting...</title>
+        </head>
+        <body>
+          <h1>Redirecting to active server port...</h1>
+          <p>If you are not redirected, <a href="http://${req.headers.host.replace('5000', '5001')}${req.url}">click here</a>.</p>
+        </body>
+      </html>
+    `);
   });
   
-  // Handle forwarder events
+  // Error handler for the forwarder
   forwarder.on('error', (err) => {
-    console.error('Failed to start port forwarder:', err);
+    console.error(`Port forwarder error: ${err.message}`);
   });
   
-  forwarder.on('close', (code) => {
-    console.log(`Port forwarder exited with code ${code}`);
+  // Start listening on port 5000
+  forwarder.listen(5000, () => {
+    console.log("Port forwarder is listening on port 5000");
   });
   
   return forwarder;
@@ -91,70 +101,76 @@ function startPortForwarder() {
 // Main function
 async function main() {
   try {
-    // First, check if ports are available
-    const port5000Available = await checkPort(5000);
-    const port5001Available = await checkPort(5001);
+    // Kill any existing Node.js processes except this one
+    const currentPid = process.pid;
     
-    if (!port5000Available) {
-      console.log("Port 5000 is not available. Attempting to free it...");
+    try {
+      // List all running processes
+      const processes = execSync('ps -e').toString().split('\n');
       
-      // Try to kill any processes that might be using port 5000
-      try {
-        const { execSync } = await import('child_process');
-        execSync('npx kill-port 5000', { stdio: 'inherit' });
-        await sleep(1000);
-      } catch (err) {
-        console.log("Failed to kill processes on port 5000:", err.message);
+      // Find Node.js related processes
+      for (const proc of processes) {
+        if (proc.includes('node') || proc.includes('tsx') || proc.includes('npm')) {
+          const parts = proc.trim().split(/\s+/);
+          if (parts.length > 0) {
+            const pid = parseInt(parts[0], 10);
+            
+            // Skip current process
+            if (pid && !isNaN(pid) && pid !== currentPid) {
+              try {
+                console.log(`Terminating existing process ${pid}...`);
+                execSync(`kill -9 ${pid}`);
+              } catch (e) {
+                console.log(`Failed to terminate process ${pid}: ${e.message}`);
+              }
+            }
+          }
+        }
       }
+    } catch (e) {
+      console.log(`Error listing processes: ${e.message}`);
     }
     
-    if (!port5001Available) {
-      console.log("Port 5001 is not available. Attempting to free it...");
-      
-      // Try to kill any processes that might be using port 5001
-      try {
-        const { execSync } = await import('child_process');
-        execSync('npx kill-port 5001', { stdio: 'inherit' });
-        await sleep(1000);
-      } catch (err) {
-        console.log("Failed to kill processes on port 5001:", err.message);
-      }
-    }
-    
-    // Start the server first
-    console.log("Starting server on port 5001...");
-    const serverProcess = startServer();
-    
-    // Wait a bit for the server to start
+    // Wait a bit for processes to terminate
     await sleep(2000);
     
-    // Then start the port forwarder
-    console.log("Starting port forwarder on port 5000...");
-    const portForwarderProcess = startPortForwarder();
+    // Check port 5000 availability
+    const port5000Available = await checkPort(5000);
+    if (!port5000Available) {
+      console.log("WARNING: Port 5000 is still in use. Attempting to proceed anyway.");
+    }
     
-    // Handle process termination
+    // Check port 5001 availability
+    const port5001Available = await checkPort(5001);
+    if (!port5001Available) {
+      console.log("WARNING: Port 5001 is in use. The server may fail to start.");
+    }
+    
+    // Start both the main server and port forwarder
+    const server = startServer();
+    const forwarder = startPortForwarder();
+    
+    // Handle termination signals
     process.on('SIGINT', () => {
       console.log('Received SIGINT, shutting down...');
-      if (serverProcess) serverProcess.kill('SIGINT');
-      if (portForwarderProcess) portForwarderProcess.kill('SIGINT');
+      server.kill('SIGINT');
+      process.exit(0);
     });
     
     process.on('SIGTERM', () => {
       console.log('Received SIGTERM, shutting down...');
-      if (serverProcess) serverProcess.kill('SIGTERM');
-      if (portForwarderProcess) portForwarderProcess.kill('SIGTERM');
+      server.kill('SIGTERM');
+      process.exit(0);
     });
     
-    // Keep the process running
-    console.log("Application started successfully!");
   } catch (error) {
-    console.error("Error starting application:", error);
+    console.error("Error starting server:", error.message);
     process.exit(1);
   }
 }
 
 // Run the main function
 main().catch(error => {
-  console.error('Error in startup script:', error);
+  console.error('Fatal error:', error);
   process.exit(1);
 });

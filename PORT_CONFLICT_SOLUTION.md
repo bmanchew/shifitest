@@ -1,100 +1,137 @@
-# Port Conflict Resolution Solution
+# Port Conflict Resolution Documentation
 
-This document explains the solution for handling port conflicts in the ShiFi application.
+This document explains the port conflict resolution strategy implemented in the ShiFi application.
 
 ## Problem
 
-The application was experiencing startup failures due to port conflicts, where port 5000 was sometimes already in use when trying to start the server. This would cause the workflow to fail and prevent the application from running.
+The application was experiencing port conflicts when trying to start on port 5000, which is a commonly used port that might be occupied by other services. This caused the server to fail to start in some environments.
 
-## Solution
+## Solution Overview
 
-We implemented a comprehensive solution to handle port conflicts:
+We've implemented a multi-faceted port conflict resolution strategy:
 
-1. **Port Availability Checking**: Created a mechanism to check if the default port (5000) is available before starting the server.
-
-2. **Port Fallback Logic**: Implemented fallback logic to use an alternate port (5001) when the default port is unavailable.
-
-3. **Process Management**: Added functionality to safely terminate any conflicting processes that might be using the required ports.
-
-4. **Safe Startup Scripts**: Created the following scripts to ensure reliable application startup:
-
-   - `start-server.js`: An enhanced server startup script that includes port conflict detection and alternate port selection.
-   - `free-port.js`: A utility script that attempts to free up port 5000 by terminating any processes using it.
-   - `start-alt-port.sh`: A shell script that explicitly sets an alternate port (5001) for the server.
-   - `restart-safe.js`: A utility script that restarts the application with the safe port handling.
-
-## How to Use
-
-### Option 1: Use the restart-safe.js script
-
-This is the recommended method for ensuring the server starts reliably:
-
-```bash
-node restart-safe.js
-```
-
-This script will:
-1. Stop any running server processes
-2. Start the server using the `start-server.js` script, which includes port conflict handling
-
-### Option 2: Direct use of start-server.js
-
-You can also directly use the start-server.js script:
-
-```bash
-node start-server.js
-```
-
-This script will:
-1. Check if port 5000 is available
-2. Use port 5000 if available
-3. Fall back to port 5001 if port 5000 is unavailable
-
-### Option 3: Explicitly use an alternate port
-
-If you know port 5000 is unavailable, you can explicitly use the alternate port:
-
-```bash
-./start-alt-port.sh
-```
+1. **Process Termination**: Automatically terminate any existing Node.js processes that might be using the ports 
+2. **Port Forwarding**: When port 5000 is unavailable, use port 5001 for the actual server and set up a port forwarder on port 5000
+3. **Port Checking**: Validate port availability before starting the services
+4. **Graceful Fallback**: Allow the server to automatically try alternative ports
 
 ## Implementation Details
 
-### Server Configuration
+### Key Scripts
 
-The server's port configuration in `server/index.ts` has been verified to respect the PORT environment variable:
+1. **start-workflow-fixed.js**
+   - Main script for starting the server with port forwarding
+   - Runs the actual server on port 5001
+   - Creates a HTTP proxy on port 5000 that redirects to port 5001
+   - Kills any existing Node.js processes that might conflict
 
-```typescript
-// Production deployment must use port 5000 consistently for Cloud Run
-const isProd = process.env.NODE_ENV === 'production';
-const basePort = isProd ? 5000 : (process.env.PORT ? parseInt(process.env.PORT, 10) : 5000);
-```
+2. **free-port.js**
+   - Standalone script to free up port 5000
+   - Identifies and terminates processes using the port
+   - Compatible with Linux, Mac, and Windows environments
 
-This allows our scripts to override the port by setting the PORT environment variable.
+3. **restart-workflow.js**
+   - Safely restarts the workflow
+   - Terminates existing processes
+   - Starts the server with our port forwarding solution
 
-### Port Checking Logic
+4. **restart-port-forwarding.js**
+   - Standalone port forwarding utility
+   - Can be run independently to forward requests from port 5000 to 5001
+   - Includes health checking of the destination server
+   - Useful when the server is already running on port 5001 but needs to be accessible on port 5000
 
-The `isPortAvailable` function in `start-server.js` uses Node.js's net module to test if a port is available:
+5. **start-with-port-forward.js**
+   - Enhanced version that intelligently adapts to current port status
+   - Checks if servers are already running on ports 5000 or 5001
+   - Can start just the port forwarder if server is already running
+   - Implements multiple fallback strategies based on port availability
 
+### How Port Forwarding Works
+
+The port forwarding mechanism works by:
+
+1. The main Express application runs on port 5001
+2. A simple HTTP server runs on port 5000 
+3. When requests come to port 5000, they are redirected to port 5001
+4. This allows external services that expect the server on port 5000 to work properly
+
+Example (from start-workflow-fixed.js):
 ```javascript
-function isPortAvailable(port) {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    
-    server.once('error', () => {
-      resolve(false);
-    });
-    
-    server.once('listening', () => {
-      server.close();
-      resolve(true);
-    });
-    
-    server.listen(port);
-  });
-}
+const forwarder = createHttpServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  res.end(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta http-equiv="refresh" content="0;url=http://${req.headers.host.replace('5000', '5001')}${req.url}">
+        <title>Redirecting...</title>
+      </head>
+      <body>
+        <h1>Redirecting to active server port...</h1>
+        <p>If you are not redirected, <a href="http://${req.headers.host.replace('5000', '5001')}${req.url}">click here</a>.</p>
+      </body>
+    </html>
+  `);
+});
 ```
+
+## Usage
+
+### Starting the Server
+
+To start the server with port conflict resolution:
+
+```bash
+node start-workflow-fixed.js
+```
+
+For the most intelligent port conflict handling:
+
+```bash
+node start-with-port-forward.js
+```
+
+### Restarting the Workflow
+
+To restart the workflow safely:
+
+```bash
+node restart-workflow.js
+```
+
+### Manually Freeing Up Port 5000
+
+If you need to manually free up port 5000:
+
+```bash
+node free-port.js
+```
+
+### Running Just the Port Forwarder
+
+If the server is already running on port 5001 but you need to make it accessible on port 5000:
+
+```bash
+node restart-port-forwarding.js
+```
+
+## Troubleshooting
+
+If you're still experiencing port conflicts:
+
+1. Check if any other services are using port 5000:
+   ```bash
+   lsof -i :5000
+   ```
+
+2. Ensure that all Node.js processes are properly terminated:
+   ```bash
+   ps -e | grep node
+   ```
+
+3. Try increasing the wait time between process termination and server startup in start-workflow-fixed.js.
 
 ## Conclusion
 
-This solution ensures that the application can start reliably even when port conflicts occur, improving the stability and reliability of the development environment.
+This port conflict resolution strategy ensures that the ShiFi application can start reliably, even in environments where port 5000 might be in use. By implementing process termination and port forwarding, we've created a robust solution that adapts to the environment.

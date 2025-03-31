@@ -5,8 +5,8 @@
 
 import { execSync, spawn } from 'child_process';
 import { setTimeout as sleep } from 'timers/promises';
-import net from 'net';
-import http from 'http';
+import { createServer } from 'net';
+import { createServer as createHttpServer } from 'http';
 
 console.log("Starting workflow preparation...");
 
@@ -106,7 +106,7 @@ async function freePort() {
 // Check if a port is available
 function checkPort(port) {
   return new Promise((resolve) => {
-    const tester = net.createServer()
+    const tester = createServer()
       .once('error', () => {
         resolve(false);
       })
@@ -146,7 +146,7 @@ async function setupPortForward() {
   try {
     // Create a basic HTTP server for port 5000 that immediately shows a message
     // This will satisfy the workflow's waitForPort=5000 condition
-    const statusServer = http.createServer((req, res) => {
+    const statusServer = createHttpServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`
         <!DOCTYPE html>

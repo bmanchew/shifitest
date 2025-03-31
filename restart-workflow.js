@@ -42,9 +42,9 @@ try {
   // Wait a bit
   await sleep(2000);
   
-  // Start our workflow script
-  console.log("Starting workflow-start.js...");
-  const server = spawn('node', ['workflow-start.js'], {
+  // Start our workflow script with port forwarding
+  console.log("Starting start-workflow-fixed.js...");
+  const server = spawn('node', ['start-workflow-fixed.js'], {
     stdio: 'inherit',
     detached: true
   });
