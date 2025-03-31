@@ -65,13 +65,13 @@ function App() {
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
         {/* Public routes - don't use conditional rendering for login route to prevent routing issues */}
-        <Route path="/" component={user ? (user.role === 'admin' ? AdminDashboard : MerchantDashboard) : Login} />
-        <Route path="/login" component={Login} />
-        {!user && <Route path="/merchant/signup" component={lazy(() => import("@/components/merchant/Signup"))} />}
         
         {/* Investor landing page and signup - accessible to everyone */}
         <Route path="/investor" component={lazy(() => import("@/pages/InvestorLanding"))} />
         <Route path="/investor/signup" component={InvestorSignup} />
+        
+        <Route path="/login" component={Login} />
+        {!user && <Route path="/merchant/signup" component={lazy(() => import("@/components/merchant/Signup"))} />}
         
         {/* Test route that everyone can access */}
         <Route path="/test-page" component={lazy(() => import("@/pages/TestPage"))} />
@@ -89,6 +89,9 @@ function App() {
           component={lazy(() => import("@/pages/customer/ContractLookup"))}
         />
         <Route path="/dashboard/:contractId" component={CustomerDashboard} />
+        
+        {/* The root path should be processed last to avoid hijacking other routes */}
+        <Route path="/" component={user ? (user.role === 'admin' ? AdminDashboard : MerchantDashboard) : Login} />
 
         {/* Admin routes */}
         {user && user.role === "admin" && (
