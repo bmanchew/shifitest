@@ -11,6 +11,9 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createHash } from 'crypto';
+
+// Import the merchant functions
 import { 
   loginAsMerchant, 
   getActiveContracts, 
@@ -44,14 +47,34 @@ function saveCookies(cookies, admin = false) {
   }
 }
 
-// Get CSRF token
+// Get CSRF token with nonce validation
 async function getCsrfToken(admin = false) {
   try {
-    const response = await axios.get(`${API_BASE_URL}/csrf-token`, {
+    // Generate a nonce value
+    // Using crypto module imported at the top
+    const nonce = createHash('sha256')
+      .update(Date.now().toString() + Math.random().toString())
+      .digest('hex');
+      
+    // Cache-busting parameter
+    const cacheBuster = Date.now();
+    
+    const response = await axios.get(`${API_BASE_URL}/csrf-token?nonce=${nonce}&_=${cacheBuster}`, {
       headers: {
-        Cookie: loadCookies(admin)
-      }
+        Cookie: loadCookies(admin),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'http://localhost:5000',
+        'Referer': 'http://localhost:5000/',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      withCredentials: true
     });
+    
+    // Save any cookies returned with the CSRF token
+    if (response.headers['set-cookie']) {
+      saveCookies(response.headers['set-cookie'], admin);
+    }
     
     return response.data.csrfToken;
   } catch (error) {
@@ -72,15 +95,24 @@ async function loginAsAdmin() {
     }, {
       headers: {
         'X-CSRF-Token': csrfToken,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'http://localhost:5000',
+        'Referer': 'http://localhost:5000/'
       },
       withCredentials: true
     });
+    
+    // Add a small delay to ensure session is properly established
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // Save cookies for future requests
     if (response.headers['set-cookie']) {
       saveCookies(response.headers['set-cookie'], true);
       console.log('Admin login successful, cookies saved.');
+    } else {
+      console.warn('Admin login successful but no cookies received.');
     }
     
     return response.data;
@@ -94,10 +126,18 @@ async function loginAsAdmin() {
 async function getPendingCancellationRequests() {
   try {
     const csrfToken = await getCsrfToken(true);
-    const response = await axios.get(`${API_BASE_URL}/admin/cancellation-requests/pending`, {
+    
+    // Add a delay before making the request
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const response = await axios.get(`${API_BASE_URL}/admin/contract-cancellations/pending`, {
       headers: {
         'X-CSRF-Token': csrfToken,
-        Cookie: loadCookies(true)
+        'Cookie': loadCookies(true),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'http://localhost:5000',
+        'Referer': 'http://localhost:5000/'
       }
     });
     
@@ -115,11 +155,18 @@ async function setRequestUnderReview(requestId) {
     const csrfToken = await getCsrfToken(true);
     console.log(`Setting request ${requestId} to under review`);
     
-    const response = await axios.post(`${API_BASE_URL}/admin/cancellation-requests/${requestId}/review`, {}, {
+    // Add a delay before making the request
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const response = await axios.post(`${API_BASE_URL}/admin/contract-cancellations/${requestId}/review`, {}, {
       headers: {
         'X-CSRF-Token': csrfToken,
         'Content-Type': 'application/json',
-        Cookie: loadCookies(true)
+        'Cookie': loadCookies(true),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'http://localhost:5000',
+        'Referer': 'http://localhost:5000/'
       }
     });
     
@@ -137,7 +184,10 @@ async function approveCancellationRequest(requestId) {
     const csrfToken = await getCsrfToken(true);
     console.log(`Approving cancellation request ${requestId}`);
     
-    const response = await axios.post(`${API_BASE_URL}/admin/cancellation-requests/${requestId}/approve`, {
+    // Add a delay before making the request
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const response = await axios.post(`${API_BASE_URL}/admin/contract-cancellations/${requestId}/approve`, {
       notes: 'Approved after financial review',
       refundAmount: 150.00,
       fundingCycleAdjustment: -1
@@ -145,7 +195,11 @@ async function approveCancellationRequest(requestId) {
       headers: {
         'X-CSRF-Token': csrfToken,
         'Content-Type': 'application/json',
-        Cookie: loadCookies(true)
+        'Cookie': loadCookies(true),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'http://localhost:5000',
+        'Referer': 'http://localhost:5000/'
       }
     });
     
@@ -163,14 +217,21 @@ async function rejectCancellationRequest(requestId) {
     const csrfToken = await getCsrfToken(true);
     console.log(`Rejecting cancellation request ${requestId}`);
     
-    const response = await axios.post(`${API_BASE_URL}/admin/cancellation-requests/${requestId}/reject`, {
+    // Add a delay before making the request
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const response = await axios.post(`${API_BASE_URL}/admin/contract-cancellations/${requestId}/reject`, {
       denialReason: 'Contract terms do not allow for early cancellation',
       notes: 'Customer should review contract terms section 4.2'
     }, {
       headers: {
         'X-CSRF-Token': csrfToken,
         'Content-Type': 'application/json',
-        Cookie: loadCookies(true)
+        'Cookie': loadCookies(true),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'http://localhost:5000',
+        'Referer': 'http://localhost:5000/'
       }
     });
     
@@ -186,10 +247,18 @@ async function rejectCancellationRequest(requestId) {
 async function getContractDetails(contractId) {
   try {
     const csrfToken = await getCsrfToken();
+    
+    // Add a delay before making the request
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     const response = await axios.get(`${API_BASE_URL}/contracts/${contractId}`, {
       headers: {
         'X-CSRF-Token': csrfToken,
-        Cookie: loadCookies()
+        'Cookie': loadCookies(),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'http://localhost:5000',
+        'Referer': 'http://localhost:5000/'
       }
     });
     
@@ -205,10 +274,18 @@ async function getContractDetails(contractId) {
 async function getMerchantNotifications() {
   try {
     const csrfToken = await getCsrfToken();
+    
+    // Add a delay before making the request
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     const response = await axios.get(`${API_BASE_URL}/notifications/unread`, {
       headers: {
         'X-CSRF-Token': csrfToken,
-        Cookie: loadCookies()
+        'Cookie': loadCookies(),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'http://localhost:5000',
+        'Referer': 'http://localhost:5000/'
       }
     });
     
