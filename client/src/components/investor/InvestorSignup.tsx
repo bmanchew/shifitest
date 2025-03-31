@@ -34,7 +34,7 @@ const formSchema = z.object({
   phone: z.string().min(10, { message: "Please enter a valid phone number." }),
   company: z.string().optional(),
   investmentAmount: z.string().min(1, { message: "Please indicate your investment amount." }),
-  investmentGoals: z.string().min(1, { message: "Please describe your investment goals." }),
+  investmentGoals: z.string().min(1, { message: "Please select your investment goals." }),
   isAccredited: z.boolean().refine(val => val === true, {
     message: "You must be an accredited investor to register.",
   }),
@@ -230,11 +230,15 @@ export default function InvestorSignup() {
                     <FormItem>
                       <FormLabel>Investment Goals</FormLabel>
                       <FormControl>
-                        <textarea
-                          className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                          placeholder="Please describe your investment goals and what interests you about ShiFi's investment opportunities..."
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                           {...field}
-                        />
+                        >
+                          <option value="">Select your investment goal</option>
+                          <option value="change_world">Change the World for Good</option>
+                          <option value="multiple_wealth">Multiple Wealth</option>
+                          <option value="both">Both</option>
+                        </select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
