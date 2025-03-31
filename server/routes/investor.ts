@@ -62,10 +62,14 @@ router.post("/applications", async (req: Request, res: Response) => {
     const application = applicationSchema.parse(req.body);
     
     // Log the application
-    logger.info(`New investor application received from ${application.name} (${application.email})`, {
-      category: "api",
-      source: "investor",
-      action: "application_submitted"
+    logger.info({
+      message: `New investor application received from ${application.name} (${application.email})`,
+      category: "system",
+      source: "internal",
+      metadata: {
+        email: application.email,
+        name: application.name
+      }
     });
     
     // In a real implementation, we would check if the email already exists
@@ -97,12 +101,7 @@ router.post("/applications", async (req: Request, res: Response) => {
       state: '',
       zipCode: '',
       country: '',
-      dateOfBirth: null,
-      ssn: '',
-      taxId: '',
-      linkedAccounts: [],
-      verificationStatus: 'pending',
-      verificationDocuments: [],
+      kycStatus: 'pending', // Using correct kycStatus field from the schema
       notes: application.investmentGoals
     });
     
@@ -128,10 +127,13 @@ router.post("/applications", async (req: Request, res: Response) => {
       });
     }
     
-    logger.error("Error processing investor application", {
-      error: error instanceof Error ? error.message : String(error),
-      category: "investor",
-      action: "application_error"
+    logger.error({
+      message: `Error processing investor application: ${error instanceof Error ? error.message : String(error)}`,
+      category: "system",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
     });
     
     return res.status(500).json({
