@@ -86,6 +86,15 @@ export default function InvestorLanding() {
       
       const result = await response.json();
       
+      // Debug the API response
+      console.log('API Response:', {
+        ok: response.ok,
+        status: response.status,
+        result,
+        hasUserId: !!result.userId,
+        hasToken: !!result.token
+      });
+      
       if (!response.ok) {
         throw new Error(result.message || 'Failed to submit application');
       }
@@ -101,9 +110,18 @@ export default function InvestorLanding() {
           description: "Setting up your account and redirecting to the investor portal...",
         });
         
-        // Redirect to the investor signup/onboarding page with minimal delay
+        // Redirect to the investor signup/onboarding page with forced navigation
+        console.log('Redirecting to /investor/signup...');
+        
+        // Try both methods to ensure the redirect happens
         setTimeout(() => {
+          // Method 1: Use setLocation from wouter
           setLocation('/investor/signup');
+          
+          // Method 2: Direct navigation as fallback
+          setTimeout(() => {
+            window.location.href = '/investor/signup';
+          }, 300);
         }, 800);
       } else {
         // Only clear the form if we're not redirecting

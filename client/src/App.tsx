@@ -74,6 +74,9 @@ function App() {
         <Route path="/investor/verify/kyc" component={KYCVerification} />
         <Route path="/investor/verify/bank" component={BankConnection} />
         
+        {/* Auto-redirect to application process */}
+        <Route path="/apply-investor" component={lazy(() => import("@/pages/InvestorLanding"))} />
+        
         <Route path="/login" component={Login} />
         {!user && <Route path="/merchant/signup" component={lazy(() => import("@/components/merchant/Signup"))} />}
         
