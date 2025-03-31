@@ -90,23 +90,25 @@ export default function InvestorLanding() {
         throw new Error(result.message || 'Failed to submit application');
       }
       
-      toast({
-        title: "Application submitted successfully",
-        description: "Thank you for your interest. Our team will contact you shortly.",
-      });
-      
       // Redirect to the next step or clear form
       if (result.userId && result.token) {
-        // If this were a real flow, we'd set the token in localStorage and redirect
-        // to the next step in the verification process
+        // Store the authentication token in localStorage
+        localStorage.setItem('investorToken', result.token);
+        localStorage.setItem('investorUserId', result.userId.toString());
+        
+        toast({
+          title: "Application approved!",
+          description: "Setting up your account and redirecting to the investor portal...",
+        });
+        
+        // Redirect to the investor signup/onboarding page with minimal delay
         setTimeout(() => {
-          // For demonstration purposes, we'll just navigate to the login page
           setLocation('/investor/signup');
-        }, 1500);
+        }, 800);
+      } else {
+        // Only clear the form if we're not redirecting
+        form.reset();
       }
-      
-      // Clear form
-      form.reset();
     } catch (error) {
       console.error('Application submission error:', error);
       toast({
