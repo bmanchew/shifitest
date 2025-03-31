@@ -461,6 +461,74 @@ export const isCustomer = async (req: Request, res: Response, next: NextFunction
 };
 
 /**
+ * Middleware to check if the user is an investor
+ * @param req Express Request
+ * @param res Express Response
+ * @param next Express NextFunction
+ */
+export const isInvestor = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Check if user is already attached to request (by JWT middleware)
+    if (!req.user) {
+      logger.warn({
+        message: 'Investor authorization required but no user found on request',
+        category: 'security',
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+        }
+      });
+      
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    // Check if user is an investor
+    if (req.user.role !== 'investor') {
+      logger.warn({
+        message: `User ${req.user.email} (${req.user.id}) attempted to access investor resource with role ${req.user.role}`,
+        category: 'security',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+          userRole: req.user.role
+        }
+      });
+      
+      return res.status(403).json({
+        success: false,
+        message: 'Investor access required'
+      });
+    }
+    
+    next();
+  } catch (error) {
+    logger.error({
+      message: `Investor authorization error: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'security',
+      userId: req.user?.id,
+      source: 'internal',
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred during authorization'
+    });
+  }
+};
+
+/**
  * Middleware to check if the user is a sales representative
  * @param req Express Request
  * @param res Express Response

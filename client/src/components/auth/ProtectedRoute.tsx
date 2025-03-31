@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 
 interface ProtectedRouteProps {
-  role: "merchant" | "admin";
+  role: "merchant" | "admin" | "investor";
   component: React.ComponentType<any>;
 }
 

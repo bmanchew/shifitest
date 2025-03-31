@@ -95,6 +95,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setLocation("/admin/dashboard");
       } else if (user.role === "merchant") {
         setLocation("/merchant/dashboard");
+      } else if (user.role === "investor") {
+        // Redirect investors to the investor dashboard
+        setLocation("/investor/dashboard");
       } else if (user.role === "customer") {
         // For customers, we need to fetch their active contract ID
         try {

@@ -24,6 +24,13 @@ const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
 const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
 const MerchantSupportTicketsList = lazy(() => import("@/pages/merchant/SupportTicketsList"));
 const MerchantCreateSupportTicket = lazy(() => import("@/pages/merchant/CreateSupportTicket"));
+
+// Investor pages
+const InvestorDashboard = lazy(() => import("@/components/investor/InvestorDashboard"));
+const InvestorOfferings = lazy(() => import("@/components/investor/InvestorOfferings"));
+const OfferingDetail = lazy(() => import("@/components/investor/OfferingDetail"));
+const InvestmentDetail = lazy(() => import("@/components/investor/InvestmentDetail"));
+const DocumentLibrary = lazy(() => import("@/components/investor/DocumentLibrary"));
 const MerchantSupportTicket = lazy(() => import("@/pages/merchant/SupportTicket"));
 const MerchantMessages = lazy(() => import("@/pages/merchant/Messages"));
 const MerchantMessageDetail = lazy(() => import("@/pages/merchant/MessageDetail"));
@@ -111,6 +118,19 @@ function App() {
             <Route path="/merchant/support-tickets/:id" component={MerchantSupportTicket} />
             <Route path="/merchant/messages" component={MerchantMessages} />
             <Route path="/merchant/messages/:id" component={MerchantMessageDetail} />
+          </>
+        )}
+        
+        {/* Investor routes */}
+        {user && user.role === "investor" && (
+          <>
+            <Route path="/investor" component={InvestorDashboard} />
+            <Route path="/investor/dashboard" component={InvestorDashboard} />
+            <Route path="/investor/offerings" component={InvestorOfferings} />
+            <Route path="/investor/offerings/:id" component={OfferingDetail} />
+            <Route path="/investor/investments/:id" component={InvestmentDetail} />
+            <Route path="/investor/documents" component={DocumentLibrary} />
+            <Route path="/investor/profile" component={lazy(() => import("@/components/investor/InvestorProfile"))} />
           </>
         )}
 
