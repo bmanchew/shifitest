@@ -100,13 +100,24 @@ export default function InvestorSignup() {
       setTimeout(() => {
         navigate("/investor/verify/kyc");
       }, 1000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Signup error:", error);
-      toast({
-        title: "Submission Failed",
-        description: "There was an error submitting your application. Please try again later.",
-        variant: "destructive",
-      });
+      
+      // Check if this is the existing email error
+      if (error.response && error.response.status === 400 && error.message && error.message.includes("Email already exists")) {
+        toast({
+          title: "Email already exists",
+          description: "This email is already registered. Please login or use a different email.",
+          variant: "destructive"
+        });
+      } else {
+        // Generic error message for other errors
+        toast({
+          title: "Submission Failed",
+          description: "There was an error submitting your application. Please try again later.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
