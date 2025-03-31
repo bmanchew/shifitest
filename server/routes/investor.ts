@@ -105,8 +105,8 @@ router.post("/applications", async (req: Request, res: Response) => {
       accreditationStatus: application.isAccredited,
       verificationStatus: 'pending',
       investmentGoals: application.investmentGoals,
-      kyc_completed: false,
-      document_verification_completed: false
+      kycCompleted: false,
+      documentVerificationCompleted: false
     });
     
     // Generate authentication token

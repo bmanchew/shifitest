@@ -69,11 +69,21 @@ export default function InvestorLanding() {
     try {
       console.log('Form submitted with data:', data);
       
-      // Submit form data to the backend
+      // Get CSRF token from cookies
+      const csrfToken = document.cookie.split('; ')
+        .find(row => row.startsWith('_csrf='))
+        ?.split('=')[1];
+      
+      if (!csrfToken) {
+        throw new Error('CSRF token not found. Please refresh the page and try again.');
+      }
+      
+      // Submit form data to the backend with CSRF token
       const response = await fetch('/api/investor/applications', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
         },
         body: JSON.stringify({
           name: data.name,
