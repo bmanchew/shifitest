@@ -32,6 +32,8 @@ const OfferingDetail = lazy(() => import("@/components/investor/OfferingDetail")
 const InvestmentDetail = lazy(() => import("@/components/investor/InvestmentDetail"));
 const DocumentLibrary = lazy(() => import("@/components/investor/DocumentLibrary"));
 const InvestorSignup = lazy(() => import("@/components/investor/InvestorSignup"));
+const KYCVerification = lazy(() => import("@/components/investor/KYCVerification"));
+const BankConnection = lazy(() => import("@/components/investor/BankConnection"));
 const MerchantSupportTicket = lazy(() => import("@/pages/merchant/SupportTicket"));
 const MerchantMessages = lazy(() => import("@/pages/merchant/Messages"));
 const MerchantMessageDetail = lazy(() => import("@/pages/merchant/MessageDetail"));
@@ -69,6 +71,8 @@ function App() {
         {/* Investor landing page and signup - accessible to everyone */}
         <Route path="/investor" component={lazy(() => import("@/pages/InvestorLanding"))} />
         <Route path="/investor/signup" component={InvestorSignup} />
+        <Route path="/investor/verify/kyc" component={KYCVerification} />
+        <Route path="/investor/verify/bank" component={BankConnection} />
         
         <Route path="/login" component={Login} />
         {!user && <Route path="/merchant/signup" component={lazy(() => import("@/components/merchant/Signup"))} />}

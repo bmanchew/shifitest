@@ -60,18 +60,62 @@ router.post("/applications", async (req: Request, res: Response) => {
     
     const application = applicationSchema.parse(req.body);
     
-    // Log the application for now, in a real system this would be stored
+    // Log the application
     logger.info(`New investor application received from ${application.name} (${application.email})`, {
-      category: "investor",
+      category: "api",
+      source: "investor",
       action: "application_submitted"
     });
     
-    // In a production system, we would store this and notify admins
-    // await storage.storeInvestorApplication(application);
+    // In a real implementation, we would check if the email already exists
+    // and validate the application more thoroughly
+    
+    // Split name into first and last name
+    const nameParts = application.name.split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    
+    // Create user account for the investor
+    const user = await storage.createUser({
+      email: application.email,
+      firstName,
+      lastName,
+      role: 'investor',
+      password: crypto.randomBytes(8).toString('hex'), // Generate a temporary password
+      phone: application.phone
+    });
+    
+    // Create investor profile
+    await storage.createInvestorProfile({
+      userId: user.id,
+      legalName: application.name,
+      phone: application.phone,
+      isAccredited: application.isAccredited,
+      address: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: '',
+      dateOfBirth: null,
+      ssn: '',
+      taxId: '',
+      linkedAccounts: [],
+      verificationStatus: 'pending',
+      verificationDocuments: [],
+      notes: application.investmentGoals
+    });
+    
+    // Generate authentication token
+    const token = crypto.randomBytes(32).toString('hex');
+    
+    // In a real implementation, we would store this token securely
+    // and associate it with the user account
     
     return res.status(201).json({
       success: true,
-      message: "Application submitted successfully"
+      message: "Application approved! Continue to verification.",
+      userId: user.id,
+      token
     });
   } catch (error) {
     if (error instanceof ZodError) {

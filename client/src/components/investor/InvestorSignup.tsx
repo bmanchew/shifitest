@@ -67,18 +67,28 @@ export default function InvestorSignup() {
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
     try {
-      // Send the application data to the backend
-      await apiRequest("POST", "/api/investor/applications", data);
+      // Send the application data to the backend and create an investor account
+      const response = await apiRequest<{success: boolean; userId: number; token: string}>(
+        "POST", 
+        "/api/investor/applications", 
+        data
+      );
       
+      // Show success message
       toast({
-        title: "Application Submitted",
-        description: "Thank you for your interest. Our team will review your application and contact you shortly.",
+        title: "Application Approved",
+        description: "Your investor application has been pre-approved. Please complete the verification process.",
       });
       
-      // Redirect to investor landing page after successful submission
+      // Store auth token
+      if (response.token) {
+        localStorage.setItem('authToken', response.token);
+      }
+      
+      // Redirect to KYC verification page
       setTimeout(() => {
-        navigate("/investor");
-      }, 2000);
+        navigate("/investor/verify/kyc");
+      }, 1000);
     } catch (error) {
       console.error("Signup error:", error);
       toast({
