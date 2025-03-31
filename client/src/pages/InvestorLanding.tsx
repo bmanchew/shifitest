@@ -34,6 +34,10 @@ export default function InvestorLanding() {
   const handleLoginClick = () => {
     navigate("/login");
   };
+  
+  const handleApplyClick = () => {
+    navigate("/investor/signup");
+  };
 
   const investmentOptions = {
     "15_percent": {
@@ -302,7 +306,7 @@ export default function InvestorLanding() {
                     </div>
                   </div>
                   <div className="mt-8 flex justify-center">
-                    <Button size="lg" onClick={handleLoginClick}>
+                    <Button size="lg" onClick={handleApplyClick}>
                       Invest Now
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
@@ -469,7 +473,7 @@ export default function InvestorLanding() {
           </div>
 
           <div className="mt-12 flex justify-center">
-            <Button size="lg" onClick={handleLoginClick}>
+            <Button size="lg" onClick={handleApplyClick}>
               Begin Investing
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -488,8 +492,8 @@ export default function InvestorLanding() {
               Join our growing community of investors earning consistent returns through merchant contract financing.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button size="lg" onClick={handleLoginClick}>
-                Access Investor Portal
+              <Button size="lg" onClick={handleApplyClick}>
+                Apply for Investor Access
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>

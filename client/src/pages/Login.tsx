@@ -322,12 +322,7 @@ export default function Login() {
                       <Button 
                         variant="link" 
                         className="p-0 h-auto"
-                        onClick={() => {
-                          toast({
-                            title: "Registration Coming Soon",
-                            description: "Investor registration will be available soon. Please contact ShiFi for more information.",
-                          });
-                        }}
+                        onClick={() => setLocation("/investor/signup")}
                       >
                         Apply for access
                       </Button>
