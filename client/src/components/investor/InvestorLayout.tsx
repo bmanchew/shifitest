@@ -54,6 +54,11 @@ export function InvestorLayout({ children }: InvestorLayoutProps) {
       path: "/investor/profile",
       icon: <User className="h-5 w-5" />,
     },
+    {
+      name: "Verification",
+      path: "/investor/verify/kyc",
+      icon: <User className="h-5 w-5" />,
+    },
   ];
 
   const initials = user?.name

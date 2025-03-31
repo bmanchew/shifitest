@@ -248,6 +248,7 @@ export interface IStorage {
   // Investor Profile operations
   getInvestorProfile(id: number): Promise<InvestorProfile | undefined>;
   getInvestorProfileByUserId(userId: number): Promise<InvestorProfile | undefined>;
+  getInvestorProfilesBySessionId(sessionId: string): Promise<InvestorProfile[]>;
   createInvestorProfile(profile: InsertInvestorProfile): Promise<InvestorProfile>;
   updateInvestorProfile(id: number, data: Partial<InvestorProfile>): Promise<InvestorProfile | undefined>;
   getAllInvestorProfiles(): Promise<InvestorProfile[]>;
@@ -3424,9 +3425,20 @@ export class DatabaseStorage implements IStorage {
     try {
       return await db.select()
         .from(investorProfiles)
-        .where(eq(investorProfiles.kycStatus, status as any));
+        .where(eq(investorProfiles.verificationStatus, status as any));
     } catch (error) {
       console.error(`Error getting investor profiles by verification status ${status}:`, error);
+      return [];
+    }
+  }
+  
+  async getInvestorProfilesBySessionId(sessionId: string): Promise<InvestorProfile[]> {
+    try {
+      return await db.select()
+        .from(investorProfiles)
+        .where(eq(investorProfiles.verificationSessionId, sessionId));
+    } catch (error) {
+      console.error(`Error getting investor profiles by session ID ${sessionId}:`, error);
       return [];
     }
   }

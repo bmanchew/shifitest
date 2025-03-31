@@ -37,6 +37,7 @@ import { logger } from "../services/logger";
 import { authenticateToken, isInvestor, isAdmin } from "../middleware/auth";
 import { blockchainService } from "../services/blockchain";
 import { plaidService } from "../services/plaidService";
+import { diditService } from "../services/didit";
 import crypto from "crypto";
 
 const router = express.Router();
@@ -1119,8 +1120,262 @@ router.post("/documents", isAdmin, async (req: Request, res: Response) => {
 });
 
 /**
+ * @route POST /api/investor/kyc/create-session
+ * @desc Create a Didit KYC verification session
+ * @access Private - Investor only
+ */
+router.post("/kyc/create-session", isInvestor, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+    }
+
+    // Get investor profile
+    const investorProfile = await storage.getInvestorProfileByUserId(userId);
+
+    if (!investorProfile) {
+      return res.status(404).json({
+        success: false,
+        message: "Investor profile not found"
+      });
+    }
+
+    // Check if Didit service is available
+    if (!diditService.isInitialized()) {
+      return res.status(503).json({
+        success: false,
+        message: "KYC verification service is not available at this time",
+        serviceUnavailable: true
+      });
+    }
+
+    // Create a verification session
+    const callbackUrl = `${process.env.PUBLIC_URL || req.headers.origin}/investor/verify/kyc/success`;
+    
+    const sessionOptions = {
+      contractId: investorProfile.id.toString(), // Using investorId as contractId
+      callbackUrl,
+      customFields: {
+        userId: userId.toString(),
+        investorId: investorProfile.id.toString(),
+        email: req.user?.email || ""
+      }
+    };
+
+    const session = await diditService.createVerificationSession(sessionOptions);
+
+    if (!session || !session.session_url) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create verification session"
+      });
+    }
+
+    // Update the investor profile with session information
+    await storage.updateInvestorProfile(investorProfile.id, {
+      verificationStatus: 'pending',
+      verificationSessionId: session.session_id
+    });
+
+    logger.info({
+      message: `DiDit KYC session created for investor: ${investorProfile.id}`,
+      category: "investor",
+      source: "didit",
+      metadata: {
+        investorId: investorProfile.id,
+        userId,
+        sessionId: session.session_id
+      }
+    });
+
+    res.json({
+      success: true,
+      sessionUrl: session.session_url,
+      sessionId: session.session_id
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error creating DiDit KYC session: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "investor",
+      metadata: {
+        userId: req.user?.id,
+        error: error instanceof Error ? error.stack : undefined
+      }
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create verification session"
+    });
+  }
+});
+
+/**
+ * @route GET /api/investor/kyc/session/:sessionId
+ * @desc Get the status of a Didit KYC verification session
+ * @access Private - Investor only
+ */
+router.get("/kyc/session/:sessionId", isInvestor, async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+    }
+
+    // Get investor profile
+    const investorProfile = await storage.getInvestorProfileByUserId(userId);
+
+    if (!investorProfile) {
+      return res.status(404).json({
+        success: false,
+        message: "Investor profile not found"
+      });
+    }
+
+    // Ensure the session belongs to this investor
+    if (investorProfile.verificationSessionId !== sessionId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to access this session"
+      });
+    }
+
+    // Check session status
+    const sessionStatus = await diditService.getVerificationSessionStatus(sessionId);
+
+    if (!sessionStatus) {
+      return res.status(404).json({
+        success: false,
+        message: "Session not found"
+      });
+    }
+
+    // If session is completed and approved, update the investor profile
+    if (sessionStatus.status === 'completed' && sessionStatus.decision?.status === 'approved') {
+      await storage.updateInvestorProfile(investorProfile.id, {
+        verificationStatus: 'approved',
+        kycCompleted: true
+      });
+    }
+
+    res.json({
+      success: true,
+      status: sessionStatus
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error getting DiDit KYC session status: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "investor",
+      metadata: {
+        userId: req.user?.id,
+        sessionId: req.params.sessionId,
+        error: error instanceof Error ? error.stack : undefined
+      }
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to get verification session status"
+    });
+  }
+});
+
+/**
+ * @route POST /api/investor/kyc/webhook
+ * @desc Handle Didit KYC verification webhook events
+ * @access Public - No authentication required, uses signature validation
+ */
+router.post("/kyc/webhook", async (req: Request, res: Response) => {
+  try {
+    const signature = req.headers['x-didit-signature'] as string;
+    const event = req.body;
+
+    if (!event || !event.session_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid webhook payload"
+      });
+    }
+
+    // Process the webhook event
+    const result = diditService.processWebhookEvent(event, signature);
+
+    // Log event receipt
+    logger.info({
+      message: `DiDit webhook received: ${event.event_type}`,
+      category: "investor",
+      source: "didit",
+      metadata: {
+        sessionId: event.session_id,
+        eventType: event.event_type,
+        verified: result.isVerified
+      }
+    });
+
+    // If the event is a verification completion and the verification is successful
+    if (result.isCompleted && result.isApproved) {
+      // Find the investor profile with this session ID
+      const investorProfiles = await storage.getInvestorProfilesBySessionId(event.session_id);
+
+      if (investorProfiles && investorProfiles.length > 0) {
+        const investorProfile = investorProfiles[0];
+        
+        // Update the investor profile as verified
+        await storage.updateInvestorProfile(investorProfile.id, {
+          verificationStatus: 'approved',
+          kycCompleted: true
+        });
+
+        logger.info({
+          message: `Investor KYC automatically approved via DiDit webhook: ${investorProfile.id}`,
+          category: "investor",
+          source: "didit",
+          metadata: {
+            investorId: investorProfile.id,
+            sessionId: event.session_id
+          }
+        });
+      }
+    }
+
+    // Acknowledge receipt of the webhook
+    res.status(200).json({
+      success: true,
+      message: "Webhook processed successfully"
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error processing DiDit webhook: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "investor",
+      metadata: {
+        error: error instanceof Error ? error.stack : undefined
+      }
+    });
+
+    // Still return 200 to acknowledge receipt even if processing failed
+    res.status(200).json({
+      success: true,
+      message: "Webhook received, but processing failed"
+    });
+  }
+});
+
+/**
  * @route POST /api/investor/kyc/verify
- * @desc Update investor KYC verification status
+ * @desc Update investor KYC verification status (manual admin override)
  * @access Private - Admin only
  */
 router.post("/kyc/verify", isAdmin, async (req: Request, res: Response) => {
@@ -1167,7 +1422,7 @@ router.post("/kyc/verify", isAdmin, async (req: Request, res: Response) => {
     }
 
     logger.info({
-      message: `Investor KYC verification status updated: ${investorId}`,
+      message: `Investor KYC verification status manually updated by admin: ${investorId}`,
       category: "investor",
       source: "api",
       metadata: {

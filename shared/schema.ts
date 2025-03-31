@@ -1151,6 +1151,7 @@ export const investorProfiles = pgTable("investor_profiles", {
   riskTolerance: text("risk_tolerance"),
   investmentGoals: text("investment_goals"),
   taxIdNumber: text("tax_id_number"),
+  verificationSessionId: text("verification_session_id"),
 });
 
 export const insertInvestorProfileSchema = createInsertSchema(
