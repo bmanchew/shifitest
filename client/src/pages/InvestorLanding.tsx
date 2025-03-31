@@ -64,9 +64,11 @@ export default function InvestorLanding() {
     },
   });
   
-  // Form submission handler
+  // Form submission handler with enhanced debugging and redirection
   const onSubmit = async (data: ContactFormValues) => {
     try {
+      console.log('Form submitted with data:', data);
+      
       // Submit form data to the backend
       const response = await fetch('/api/investor/applications', {
         method: 'POST',
@@ -86,47 +88,54 @@ export default function InvestorLanding() {
       
       const result = await response.json();
       
-      // Debug the API response
+      // Enhanced debugging of API response
       console.log('API Response:', {
         ok: response.ok,
         status: response.status,
         result,
         hasUserId: !!result.userId,
-        hasToken: !!result.token
+        hasToken: !!result.token,
+        redirectPath: '/investor/signup'
       });
       
       if (!response.ok) {
         throw new Error(result.message || 'Failed to submit application');
       }
       
-      // Redirect to the next step or clear form
-      if (result.userId && result.token) {
-        // Store the authentication token in localStorage
-        localStorage.setItem('investorToken', result.token);
+      // Success toast with more information
+      toast({
+        title: "Application received!",
+        description: "Your application is being processed. Please wait while we redirect you...",
+        duration: 5000,
+      });
+      
+      // Store data regardless of result structure (defensive coding)
+      if (result.userId) {
         localStorage.setItem('investorUserId', result.userId.toString());
-        
-        toast({
-          title: "Application approved!",
-          description: "Setting up your account and redirecting to the investor portal...",
-        });
-        
-        // Redirect to the investor signup/onboarding page with forced navigation
-        console.log('Redirecting to /investor/signup...');
-        
-        // Try both methods to ensure the redirect happens
-        setTimeout(() => {
-          // Method 1: Use setLocation from wouter
-          setLocation('/investor/signup');
-          
-          // Method 2: Direct navigation as fallback
-          setTimeout(() => {
-            window.location.href = '/investor/signup';
-          }, 300);
-        }, 800);
-      } else {
-        // Only clear the form if we're not redirecting
-        form.reset();
+        console.log('Stored investorUserId in localStorage:', result.userId.toString());
       }
+      
+      if (result.token) {
+        localStorage.setItem('investorToken', result.token);
+        localStorage.setItem('authToken', result.token); // Store in both formats for compatibility
+        console.log('Stored token in localStorage');
+      }
+      
+      // Force navigation after a short delay (intentionally skipping conditions)
+      console.log('Will redirect to /investor/signup in 2 seconds...');
+      
+      // Use a longer timeout to ensure the toast is visible
+      setTimeout(() => {
+        // Try the most direct approach first
+        console.log('Executing redirect now...');
+        window.location.href = '/investor/signup';
+        
+        // As a fallback, try the wouter approach after a small delay
+        setTimeout(() => {
+          console.log('Fallback redirect with wouter...');
+          setLocation('/investor/signup');
+        }, 500);
+      }, 2000);
     } catch (error) {
       console.error('Application submission error:', error);
       toast({
@@ -773,7 +782,12 @@ export default function InvestorLanding() {
                           )}
                         />
                       
-                        <Button type="submit" className="w-full">Submit Application</Button>
+                        <div className="space-y-2">
+                          <Button type="submit" className="w-full">Submit Application</Button>
+                          <p className="text-center text-sm text-muted-foreground">
+                            Already applied? <a href="/investor/signup" className="font-medium text-primary hover:underline">Continue to signup</a>
+                          </p>
+                        </div>
                       </form>
                     </Form>
                   </CardContent>
