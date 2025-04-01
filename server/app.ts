@@ -19,7 +19,7 @@ export function createApp(): Express {
   
   // Common middleware
   app.use(express.json());
-  app.use(cookieParser());
+  app.use(cookieParser(process.env.COOKIE_SECRET || process.env.JWT_SECRET));
   
   // Security middleware
   app.use(helmet({
@@ -85,8 +85,17 @@ export function createApp(): Express {
       
       if (token) {
         try {
-          // Verify the token
-          const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_jwt_secret');
+          // Verify the token with required JWT_SECRET (no fallback)
+          if (!process.env.JWT_SECRET) {
+            logger.error({
+              message: "JWT_SECRET is not set in environment variables",
+              category: "security",
+              source: "internal"
+            });
+            throw new Error("JWT_SECRET is not configured");
+          }
+          
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
           
           if (typeof decoded === 'object' && decoded.userId) {
             // Get user from database
@@ -154,17 +163,23 @@ export function createApp(): Express {
 
 /**
  * Helper function to extract JWT token from request
+ * Prioritizes secure HttpOnly cookies over Authorization header
  */
 function getTokenFromRequest(req: Request): string | null {
-  // Check Authorization header (Bearer token)
+  // First check for secure HttpOnly cookie (more secure)
+  if (req.cookies && req.cookies.auth_token) {
+    return req.cookies.auth_token;
+  }
+
+  // Legacy support for old cookie name
+  if (req.cookies && req.cookies.token) {
+    return req.cookies.token;
+  }
+  
+  // Fallback to Authorization header (Bearer token) for backward compatibility
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.split(' ')[1];
-  }
-  
-  // Check cookies
-  if (req.cookies && req.cookies.token) {
-    return req.cookies.token;
   }
   
   return null;

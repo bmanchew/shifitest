@@ -72,10 +72,20 @@ export const authController = {
         });
       }
       
+      // Verify JWT_SECRET is set
+      if (!process.env.JWT_SECRET) {
+        logger.error({
+          message: "JWT_SECRET is not set in environment variables",
+          category: "security",
+          source: "internal"
+        });
+        throw new Error("JWT_SECRET is not configured");
+      }
+      
       // Generate JWT token
       const token = jwt.sign(
         { userId: user.id },
-        process.env.JWT_SECRET || 'default_jwt_secret',
+        process.env.JWT_SECRET,
         { expiresIn: '24h' }
       );
       
@@ -90,10 +100,20 @@ export const authController = {
         }
       });
       
-      // Return token and user info
+      // Set HttpOnly cookie with token
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        path: '/',
+        sameSite: 'strict' as const
+      };
+      
+      res.cookie('auth_token', token, cookieOptions);
+      
+      // Return user info (without exposing token in the response body)
       res.status(200).json({
         success: true,
-        token,
         user: {
           id: user.id,
           email: user.email,
@@ -187,18 +207,38 @@ export const authController = {
         }
       });
       
+      // Verify JWT_SECRET is set
+      if (!process.env.JWT_SECRET) {
+        logger.error({
+          message: "JWT_SECRET is not set in environment variables",
+          category: "security",
+          source: "internal"
+        });
+        throw new Error("JWT_SECRET is not configured");
+      }
+      
       // Generate JWT token
       const token = jwt.sign(
         { userId: user.id },
-        process.env.JWT_SECRET || 'default_jwt_secret',
+        process.env.JWT_SECRET,
         { expiresIn: '24h' }
       );
       
-      // Return success response
+      // Set HttpOnly cookie with token
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        path: '/',
+        sameSite: 'strict' as const
+      };
+      
+      res.cookie('auth_token', token, cookieOptions);
+      
+      // Return success response without exposing token in JSON
       res.status(201).json({
         success: true,
         message: "User registered successfully",
-        token,
         user: {
           id: user.id,
           email: user.email,
@@ -273,13 +313,19 @@ export const authController = {
   
   /**
    * Log out a user
-   * Note: For JWT, this is mostly a client-side operation
+   * For JWT with HttpOnly cookies, we need to clear the cookie
    * @param req Express Request
    * @param res Express Response
    */
   async logout(req: Request, res: Response) {
     try {
-      // In a real implementation with token blacklisting, we would add the token to a blacklist here
+      // Clear the auth_token cookie
+      res.clearCookie('auth_token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        sameSite: 'strict' as const
+      });
       
       // Log logout
       if (req.user) {
@@ -830,12 +876,33 @@ export const authController = {
       // Mark token as used
       await storage.consumeEmailVerificationToken(token);
       
+      // Verify JWT_SECRET is set
+      if (!process.env.JWT_SECRET) {
+        logger.error({
+          message: "JWT_SECRET is not set in environment variables",
+          category: "security",
+          source: "internal"
+        });
+        throw new Error("JWT_SECRET is not configured");
+      }
+      
       // Generate JWT token
       const jwtToken = jwt.sign(
         { userId: user.id },
-        process.env.JWT_SECRET || 'default_jwt_secret',
+        process.env.JWT_SECRET,
         { expiresIn: '24h' }
       );
+      
+      // Set HttpOnly cookie with token
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        path: '/',
+        sameSite: 'strict' as const
+      };
+      
+      res.cookie('auth_token', jwtToken, cookieOptions);
       
       // Log successful login
       logger.info({
@@ -849,10 +916,9 @@ export const authController = {
         }
       });
       
-      // Return token and user info
+      // Return user info without exposing token in the response body
       res.status(200).json({
         success: true,
-        token: jwtToken,
         user: {
           id: user.id,
           email: user.email,
@@ -1060,12 +1126,33 @@ export const authController = {
         });
       }
       
+      // Verify JWT_SECRET is set
+      if (!process.env.JWT_SECRET) {
+        logger.error({
+          message: "JWT_SECRET is not set in environment variables",
+          category: "security",
+          source: "internal"
+        });
+        throw new Error("JWT_SECRET is not configured");
+      }
+      
       // Generate JWT token
       const token = jwt.sign(
         { userId: user.id },
-        process.env.JWT_SECRET || 'default_jwt_secret',
+        process.env.JWT_SECRET,
         { expiresIn: '24h' }
       );
+      
+      // Set HttpOnly cookie with token
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        path: '/',
+        sameSite: 'strict' as const
+      };
+      
+      res.cookie('auth_token', token, cookieOptions);
       
       // Log successful login
       logger.info({
@@ -1079,10 +1166,9 @@ export const authController = {
         }
       });
       
-      // Return token and user info
+      // Return user info without exposing token in the response body
       res.status(200).json({
         success: true,
-        token,
         user: {
           id: user.id,
           email: user.email,
