@@ -103,12 +103,57 @@ export default function InvestorSignup() {
     } catch (error: any) {
       console.error("Signup error:", error);
       
+      // Enhanced error logging for debugging
+      if (error.response) {
+        console.error("Error response details:", {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      }
+      
       // Check if this is the existing email error
       if (error.response && error.response.status === 400 && error.message && error.message.includes("Email already exists")) {
         toast({
           title: "Email already exists",
           description: "This email is already registered. Please login or use a different email.",
           variant: "destructive"
+        });
+      } else if (error instanceof SyntaxError && error.message.includes('Unexpected token')) {
+        // Detect HTML responses that cause JSON parsing errors
+        console.error("Received invalid JSON response, possible HTML:", 
+          error.message.substring(0, 100));
+          
+        // Try to extract more details from the error
+        const errorText = error.message;
+        const isCSRFError = errorText.includes('CSRF') || errorText.includes('csrf');
+        const isProxyError = errorText.includes('proxy') || errorText.includes('gateway');
+        
+        if (isCSRFError) {
+          toast({
+            title: "Security Verification Failed",
+            description: "Your session may have expired. Please refresh the page and try again.",
+            variant: "destructive",
+          });
+        } else if (isProxyError) {
+          toast({
+            title: "Connection Issue",
+            description: "There appears to be a network gateway issue. Please try again later.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Connection Issue",
+            description: "The server returned an unexpected response format. This might be due to a connection or proxy issue.",
+            variant: "destructive",
+          });
+        }
+      } else if (error.response && error.response.status === 403) {
+        // Handle CSRF token validation errors
+        toast({
+          title: "Session Verification Failed",
+          description: "Your security token may have expired. Please refresh the page and try again.",
+          variant: "destructive",
         });
       } else {
         // Generic error message for other errors

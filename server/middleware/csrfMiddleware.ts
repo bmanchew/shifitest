@@ -11,6 +11,7 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     '/api/csrf-token',         // Endpoint to get a CSRF token
     '/api/auth/login',         // Login endpoint
     '/api/auth/register',      // Registration endpoint
+    '/api/investor/applications', // Investor application endpoint
     '/api/plaid/webhook',      // Plaid webhook
     '/api/stripe/webhook',     // Stripe webhook
     '/api/twilio/webhook',     // Twilio webhook

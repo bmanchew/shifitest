@@ -11,6 +11,7 @@
 import { spawn, execSync } from 'child_process';
 import { createServer } from 'net';
 import { createServer as createHttpServer } from 'http';
+import http from 'http';
 import { setTimeout as sleep } from 'timers/promises';
 
 console.log("Starting server with port conflict resolution...");
@@ -67,8 +68,7 @@ function startServer() {
 function startPortForwarder() {
   console.log("Starting port forwarder on port 5000 -> 5001...");
   
-  // Import http at function scope to avoid import errors
-  const http = require('http');
+  // We now import http at the top level, so no need to import it again here
   
   const forwarder = createHttpServer((req, res) => {
     // Log the forwarded request
