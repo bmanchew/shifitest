@@ -20,6 +20,18 @@ export const authController = {
     try {
       const { email, password, userType } = req.body;
       
+      // Debug login requests
+      logger.info({
+        message: `Login attempt received for email: ${email}${userType ? ` (userType: ${userType})` : ''}`,
+        category: "auth",
+        source: "internal",
+        metadata: {
+          ip: req.ip,
+          hasPassword: !!password,
+          userType
+        }
+      });
+      
       // Validate request
       if (!email || !password) {
         return res.status(400).json({
