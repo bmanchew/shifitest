@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useNavigate } from 'wouter';
+import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { formatPhoneNumber } from '@/lib/formatters';
 import { toast } from '@/hooks/use-toast';
@@ -40,7 +40,7 @@ interface SendApplicationProps {
 
 export default function SendApplication({ merchantId = 2 }: SendApplicationProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
 
   // Initialize form
   const form = useForm<FormValues>({

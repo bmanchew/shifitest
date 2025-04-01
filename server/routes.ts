@@ -1493,9 +1493,49 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
   // Simplified SMS application sending endpoint
   apiRouter.post("/twilio/send-application", async (req: Request, res: Response) => {
     try {
-      const { phoneNumber, merchantId, amount, email } = req.body;
+      logger.info({
+        message: "Processing /twilio/send-application request",
+        category: "api",
+        source: "internal",
+        metadata: {
+          method: "POST",
+          path: "/twilio/send-application",
+          body: JSON.stringify(req.body),
+          ip: req.ip,
+          userAgent: req.headers['user-agent']
+        }
+      });
+      
+      const { phoneNumber, merchantId, amount, email, customerName } = req.body;
+      
+      logger.debug({
+        message: "Send application parameters",
+        category: "api",
+        source: "internal",
+        metadata: {
+          phoneNumber,
+          merchantId,
+          amount,
+          email: email || null,
+          customerName: customerName || null,
+          hasPhoneNumber: !!phoneNumber, 
+          hasMerchantId: !!merchantId,
+          hasAmount: !!amount
+        }
+      });
 
       if (!phoneNumber || !merchantId || !amount) {
+        logger.warn({
+          message: "Missing required parameters for send-application",
+          category: "api",
+          source: "internal",
+          metadata: {
+            hasPhoneNumber: !!phoneNumber, 
+            hasMerchantId: !!merchantId,
+            hasAmount: !!amount
+          }
+        });
+        
         return res.status(400).json({
           success: false,
           message: "Phone number, merchant ID, and amount are required"
@@ -1510,18 +1550,51 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           phoneNumber,
           merchantId,
           amount,
-          email: email || null
+          email: email || null,
+          customerName: customerName || null
         }
       });
 
       // Get merchant
-      const merchant = await storage.getMerchant(parseInt(merchantId));
+      const parsedMerchantId = parseInt(merchantId);
+      logger.debug({
+        message: "Fetching merchant for application",
+        category: "api",
+        source: "internal",
+        metadata: {
+          merchantId: parsedMerchantId
+        }
+      });
+      
+      const merchant = await storage.getMerchant(parsedMerchantId);
+      
       if (!merchant) {
+        logger.warn({
+          message: "Merchant not found when sending application",
+          category: "api",
+          source: "internal",
+          metadata: {
+            merchantId: parsedMerchantId,
+            requestedPhoneNumber: phoneNumber
+          }
+        });
+        
         return res.status(404).json({ 
           success: false,
           message: "Merchant not found" 
         });
       }
+      
+      logger.debug({
+        message: "Found merchant for application",
+        category: "api",
+        source: "internal",
+        metadata: {
+          merchantId: parsedMerchantId,
+          merchantName: merchant.name,
+          merchantBusinessType: merchant.businessType || 'unknown'
+        }
+      });
 
       // Create a contract for this application
       const contractNumber = generateContractNumber();
@@ -1531,11 +1604,62 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       const downPayment = amount * (downPaymentPercent / 100);
       const financedAmount = amount - downPayment;
       const monthlyPayment = financedAmount / termMonths;
+      
+      logger.debug({
+        message: "Calculated contract terms for application",
+        category: "api",
+        source: "internal",
+        metadata: {
+          contractNumber,
+          termMonths,
+          interestRate,
+          downPaymentPercent,
+          downPayment,
+          financedAmount,
+          monthlyPayment,
+          totalAmount: amount
+        }
+      });
 
       // Find or create a user for this phone number
+      logger.debug({
+        message: "Finding or creating customer by phone number",
+        category: "api",
+        source: "internal",
+        metadata: {
+          phoneNumber,
+          hasEmail: email ? true : false
+        }
+      });
+      
       const customer = await storage.findOrCreateUserByPhone(phoneNumber, email);
+      
+      logger.debug({
+        message: "Customer found/created for application",
+        category: "api",
+        source: "internal",
+        metadata: {
+          customerId: customer.id,
+          customerName: customer.name,
+          isExistingCustomer: customer.createdAt ? true : false
+        }
+      });
 
       // Create the contract
+      logger.debug({
+        message: "Creating new contract",
+        category: "api",
+        source: "internal",
+        metadata: {
+          contractNumber,
+          merchantId,
+          customerId: customer.id,
+          amount,
+          downPayment,
+          financedAmount
+        }
+      });
+      
       const newContract = await storage.createContract({
         contractNumber,
         merchantId,
@@ -1550,9 +1674,34 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         currentStep: "terms",
         phoneNumber: phoneNumber
       });
+      
+      logger.info({
+        message: "Contract created successfully",
+        category: "api",
+        source: "internal",
+        metadata: {
+          contractId: newContract.id,
+          contractNumber: newContract.contractNumber,
+          customerId: newContract.customerId,
+          merchantId: newContract.merchantId,
+          status: newContract.status,
+          currentStep: newContract.currentStep
+        }
+      });
 
       // Create application progress for all steps
       const applicationSteps = ["terms", "kyc", "bank", "payment", "signing"];
+      
+      logger.debug({
+        message: "Creating application progress tracking",
+        category: "api",
+        source: "internal",
+        metadata: {
+          contractId: newContract.id,
+          steps: applicationSteps
+        }
+      });
+      
       for (const step of applicationSteps) {
         await storage.createApplicationProgress({
           contractId: newContract.id,
@@ -1561,18 +1710,64 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           data: null,
         });
       }
+      
+      logger.debug({
+        message: "Application progress tracking created",
+        category: "api",
+        source: "internal",
+        metadata: {
+          contractId: newContract.id,
+          stepCount: applicationSteps.length
+        }
+      });
 
       // Get the application URL - include both contract ID and merchant ID parameters
       const replitDomain = getAppDomain();
       const applicationUrl = `https://${replitDomain}/apply/${newContract.id}?mid=${merchantId}`;
+      
+      logger.debug({
+        message: "Generated application URL",
+        category: "api",
+        source: "internal",
+        metadata: {
+          contractId: newContract.id,
+          merchantId,
+          applicationUrl,
+          domain: replitDomain
+        }
+      });
 
       // Prepare the SMS message
       const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
+      
+      logger.debug({
+        message: "Preparing to send application SMS",
+        category: "api",
+        source: "twilio",
+        metadata: {
+          phoneNumber,
+          messageLength: messageText.length,
+          containsUrl: messageText.includes('http'),
+          merchantName: merchant.name
+        }
+      });
 
       // Send SMS using Twilio service
       const result = await twilioService.sendSMS({
         to: phoneNumber,
         body: messageText
+      });
+      
+      logger.info({
+        message: "Application SMS sending result",
+        category: "api",
+        source: "twilio",
+        metadata: {
+          success: result.success || true,
+          isSimulated: result.isSimulated,
+          messageId: result.messageId,
+          phoneNumber
+        }
       });
 
       // Log the SMS delivery attempt
