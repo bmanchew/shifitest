@@ -1,1 +1,1 @@
-{"_csrf":"jfEc4aPOVy_B8bH1QuPdqZrt"}
+auth_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTc0MzUyNTAzMCwiZXhwIjoxNzQzNjExNDMwfQ.iydKRij7KAZppU7j-0va0t6JYzF3vRfxyh5nWQ5NGKg; Max-Age=86400; Path=/; Expires=Wed, 02 Apr 2025 16:30:30 GMT; HttpOnly; SameSite=Strict
