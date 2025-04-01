@@ -142,11 +142,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <div className="flex items-center">
                 <Avatar>
                   <AvatarImage src="" />
-                  <AvatarFallback>{user?.name.charAt(0)}</AvatarFallback>
+                  <AvatarFallback>{user?.firstName?.charAt(0) || user?.email?.charAt(0) || 'U'}</AvatarFallback>
                 </Avatar>
                 <div className="ml-3">
                   <p className="text-base font-medium text-gray-700 group-hover:text-gray-900">
-                    {user?.name}
+                    {user?.firstName ? `${user.firstName} ${user.lastName || ''}` : user?.email}
                   </p>
                   <Button
                     variant="ghost"
