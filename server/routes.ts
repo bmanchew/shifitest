@@ -28,6 +28,7 @@ import { plaidTransferService } from "./services/plaid.transfers";
 import { middeskService } from "./services/middesk";
 import { thanksRogerService } from "./services/thanksroger";
 import { preFiService } from './services/prefi';
+import bcrypt from 'bcrypt';
 import { logger } from "./services/logger";
 import { nlpearlService, notificationService, merchantAnalyticsService, sesameAIService, emailService } from './services';
 import crypto from "crypto";
@@ -155,7 +156,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const user = await storage.getUserByEmail(email);
 
-      if (!user || user.password !== password) {
+      if (!user) {
+        // Log failed login attempt
+        logger.warn({
+          message: `Failed login attempt for email: ${email} - user not found`,
+          category: "security",
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            userAgent: req.headers["user-agent"]
+          }
+        });
+        
+        return res.status(401).json({ 
+          success: false,
+          message: "Invalid credentials" 
+        });
+      }
+      
+      // Use bcrypt to compare password
+      const isMatch = await bcrypt.compare(password, user.password);
+      
+      if (!isMatch) {
+        // Log failed login attempt
+        logger.warn({
+          message: `Failed login attempt for user: ${email} - invalid password`,
+          category: "security",
+          source: "internal",
+          metadata: {
+            ip: req.ip,
+            userAgent: req.headers["user-agent"]
+          }
+        });
+        
         return res.status(401).json({ 
           success: false,
           message: "Invalid credentials" 
@@ -285,8 +318,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .status(409)
           .json({ message: "User with this email already exists" });
       }
+      
+      // Hash the password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(userData.password, salt);
+      
+      // Replace plain password with hashed password
+      const secureUserData = {
+        ...userData,
+        password: hashedPassword
+      };
 
-      const newUser = await storage.createUser(userData);
+      const newUser = await storage.createUser(secureUserData);
 
       // Create log for user creation
       await storage.createLog({
