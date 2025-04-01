@@ -834,48 +834,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAllContracts(): Promise<Contract[]> {
     try {
-      // Use explicit field selection to avoid issues with schema differences
-      const results = await db.select({
-        id: contracts.id,
-        createdAt: contracts.createdAt,
-        merchantId: contracts.merchantId,
-        customerId: contracts.customerId,
-        contractNumber: contracts.contractNumber,
-        status: contracts.status,
-        amount: contracts.amount,
-        downPayment: contracts.downPayment,
-        financedAmount: contracts.financedAmount,
-        interestRate: contracts.interestRate,
-        termMonths: contracts.termMonths,
-        monthlyPayment: contracts.monthlyPayment,
-        currentStep: contracts.currentStep,
-        phoneNumber: contracts.phoneNumber,
-        archived: contracts.archived,
-        completedAt: contracts.completedAt,
-        purchasedByShifi: contracts.purchasedByShifi,
-        tokenizationStatus: contracts.tokenizationStatus,
-        tokenId: contracts.tokenId
-        // Omitting fields that might not exist in all environments
-      })
-      .from(contracts)
-      .orderBy(desc(contracts.createdAt));
+      // Simplified approach: Just get all contracts without filtering
+      const results = await db.select().from(contracts).orderBy(desc(contracts.createdAt));
       
-      // For each contract, add any missing fields with default values
-      const contractsWithDefaults = results.map(contract => ({
-        ...contract,
-        // Add default values for fields that might not exist in the database
-        smartContractAddress: null,
-        tokenizationError: null,
-        archivedAt: null,
-        archivedReason: null,
-        blockchainTransactionHash: null,
-        blockNumber: null,
-        tokenizationDate: null,
-        tokenMetadata: null,
-        salesRepId: null // Add this explicitly since it's causing issues
-      }));
-      
-      return contractsWithDefaults;
+      return results;
     } catch (error) {
       console.error("Error in getAllContracts:", error);
       return []; // Return an empty array instead of throwing
