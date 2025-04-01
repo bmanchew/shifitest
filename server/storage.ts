@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import {
   // User related schemas and types
   users, User, InsertUser,
@@ -718,10 +719,17 @@ export class DatabaseStorage implements IStorage {
     const timestamp = Date.now();
     const tempEmail = email || `temp_${normalizedPhone}_${timestamp}@shifi.com`;
 
-    // Create the new user
+    // Generate a random temporary password
+    const temporaryPassword = Math.random().toString(36).substring(2, 15);
+    
+    // Hash the password using bcrypt before storing it
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(temporaryPassword, salt);
+    
+    // Create the new user with hashed password
     const newUser: InsertUser = {
       email: tempEmail,
-      password: Math.random().toString(36).substring(2, 15), // temporary password
+      password: hashedPassword, // securely hashed password
       phone: normalizedPhone,
       role: 'customer',
       name: `Customer ${normalizedPhone}`,
