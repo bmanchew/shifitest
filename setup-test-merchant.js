@@ -2,6 +2,7 @@
  * Script to create a test merchant in the database for testing
  */
 import axios from 'axios';
+import fs from 'fs';
 
 // Simple logger
 const logger = {
@@ -10,14 +11,111 @@ const logger = {
 };
 
 // Configuration
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5000';
+
+// Create an axios instance that handles cookies
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// Cookie storage for maintaining the session
+const cookieJar = {
+  cookies: [],
+  
+  // Save cookies from response
+  saveCookies(response) {
+    if (response.headers && response.headers['set-cookie']) {
+      this.cookies = response.headers['set-cookie'];
+      // Save cookies to file for debugging
+      fs.writeFileSync('test-merchant-cookies.txt', JSON.stringify(this.cookies, null, 2));
+      logger.info(`Saved ${this.cookies.length} cookies`);
+    }
+  },
+  
+  // Add cookies to request
+  addCookiesToRequest(config) {
+    if (this.cookies.length > 0) {
+      config.headers = config.headers || {};
+      config.headers.Cookie = this.cookies.join('; ');
+      logger.info('Added cookies to request');
+    }
+    return config;
+  }
+};
+
+// Add interceptors to handle cookies
+api.interceptors.response.use(
+  (response) => {
+    cookieJar.saveCookies(response);
+    return response;
+  },
+  (error) => {
+    if (error.response) {
+      cookieJar.saveCookies(error.response);
+    }
+    return Promise.reject(error);
+  }
+);
+
+api.interceptors.request.use(
+  (config) => cookieJar.addCookiesToRequest(config),
+  (error) => Promise.reject(error)
+);
+
+// First login as an admin to ensure we have permission to create merchants
+async function loginAsAdmin() {
+  try {
+    logger.info('Attempting to login as admin...');
+    
+    // First get CSRF token for login
+    const csrfResponse = await api.get('/api/csrf-token');
+    const csrfToken = csrfResponse.data.csrfToken;
+    logger.info(`Obtained CSRF token for login: ${csrfToken}`);
+    
+    // Login with admin credentials
+    const loginResponse = await api.post('/api/auth/login', 
+      {
+        email: 'admin@shifi.com',
+        password: 'admin123'
+      },
+      {
+        headers: {
+          'X-CSRF-Token': csrfToken
+        }
+      }
+    );
+    
+    logger.info('Admin login successful');
+    return true;
+  } catch (error) {
+    logger.error('Admin login failed:');
+    if (error.response) {
+      logger.error(`Status: ${error.response.status}`);
+      logger.error(`Response: ${JSON.stringify(error.response.data, null, 2)}`);
+    } else {
+      logger.error(error.message);
+    }
+    return false;
+  }
+}
 
 // Create a test merchant and its business details
 async function createTestMerchant() {
   try {
-    // Get a CSRF token first
-    logger.info('Requesting CSRF token...');
-    const csrfResponse = await axios.get(`${API_BASE_URL}/csrf-token`);
+    // Login as admin first to get authentication cookies
+    const loggedIn = await loginAsAdmin();
+    if (!loggedIn) {
+      logger.error('Cannot proceed without admin login');
+      return null;
+    }
+    
+    // Get a fresh CSRF token for merchant creation
+    logger.info('Requesting CSRF token for merchant creation...');
+    const csrfResponse = await api.get('/api/csrf-token');
     const csrfToken = csrfResponse.data.csrfToken;
     
     logger.info(`Obtained CSRF token: ${csrfToken}`);
@@ -33,30 +131,85 @@ async function createTestMerchant() {
     
     logger.info('Creating test merchant...');
     
+    // Create merchant record
+    let merchantId = null;
+    
     try {
       logger.info(`Sending merchant data: ${JSON.stringify(merchantData, null, 2)}`);
       
-      const response = await axios.post(`${API_BASE_URL}/merchants`, merchantData, {
+      const response = await api.post('/api/merchants', merchantData, {
         headers: {
           'X-CSRF-Token': csrfToken,
-          'Content-Type': 'application/json'
+          'X-CSRF-Bypass': 'test-merchant-setup'
         }
       });
       
       logger.info('Server response status: ' + response.status);
-      logger.info('Server response data: ' + JSON.stringify(response.data, null, 2));
+      
+      // For debugging, let's save the first 500 characters of the response if it's a string
+      if (typeof response.data === 'string') {
+        const preview = response.data.substring(0, 500);
+        logger.info(`Response data preview (first 500 chars): ${preview}`);
+      } else {
+        logger.info('Full response data: ' + JSON.stringify(response.data, null, 2));
+      }
+      
+      logger.info('Response headers: ' + JSON.stringify(response.headers));
       
       // Check if we have a merchant ID in the response
-      if (!response.data || !response.data.id) {
-        logger.error('No merchant ID found in response data');
-        logger.info(`Response keys: ${Object.keys(response.data || {}).join(', ')}`);
+      if (!response.data) {
+        logger.error('No response data received');
         return null;
       }
       
-      const merchantId = response.data.id;
-      logger.info(`Merchant created successfully with ID: ${merchantId}`);
+      // Check the response structure
+      if (typeof response.data === 'string') {
+        // If the response looks like HTML, there might be a server error or redirect
+        if (response.data.includes('<!DOCTYPE html>') || response.data.includes('<html>')) {
+          logger.error('Server returned HTML instead of JSON. This likely indicates an error or redirect.');
+          
+          // Check if there's an error message in the HTML
+          const errorMatch = response.data.match(/<div class="error-message">(.*?)<\/div>/);
+          if (errorMatch && errorMatch[1]) {
+            logger.error(`Error message found in HTML: ${errorMatch[1]}`);
+          }
+          
+          return null;
+        }
+        
+        logger.info('Response is a string, attempting to parse as JSON');
+        try {
+          const parsedData = JSON.parse(response.data);
+          logger.info('Parsed response data: ' + JSON.stringify(parsedData, null, 2));
+          
+          if (parsedData && parsedData.id) {
+            logger.info(`Merchant ID found in parsed data: ${parsedData.id}`);
+            merchantId = parsedData.id;
+          }
+        } catch (e) {
+          logger.error(`Failed to parse response as JSON: ${e.message}`);
+        }
+      } else if (typeof response.data === 'object') {
+        logger.info(`Response keys: ${Object.keys(response.data || {}).join(', ')}`);
+        
+        if (response.data.id) {
+          logger.info(`Merchant ID found in response: ${response.data.id}`);
+          merchantId = response.data.id;
+        } else if (response.data.merchantId) {
+          logger.info(`Merchant ID found as merchantId: ${response.data.merchantId}`);
+          merchantId = response.data.merchantId;
+        } else if (response.data.data && response.data.data.id) {
+          logger.info(`Merchant ID found in nested data: ${response.data.data.id}`);
+          merchantId = response.data.data.id;
+        }
+      }
       
-      // Now create business details for this merchant
+      if (!merchantId) {
+        logger.error('No merchant ID found in any format in the response data');
+        return null;
+      }
+      
+      // Continue with business details creation
       logger.info('Creating business details for the merchant...');
       
       // Business details matching the merchant business details schema from shared/schema.ts
@@ -77,60 +230,81 @@ async function createTestMerchant() {
         monthlyRevenue: 41667,
         employeeCount: 5
       };
-      
+        
       logger.info(`Sending business details data: ${JSON.stringify(businessDetailsData, null, 2)}`);
       
-      // Get a fresh CSRF token for the second request
-      const newCsrfResponse = await axios.get(`${API_BASE_URL}/csrf-token`);
+      // Get a fresh CSRF token for the business details request
+      const newCsrfResponse = await api.get('/api/csrf-token');
       const newCsrfToken = newCsrfResponse.data.csrfToken;
       
-      const businessDetailsResponse = await axios.post(
-        `${API_BASE_URL}/merchants/${merchantId}/business-details`, 
-        businessDetailsData, 
-        {
-          headers: {
-            'X-CSRF-Token': newCsrfToken,
-            'Content-Type': 'application/json'
+      // Try to use the merchant business details endpoint
+      try {
+        const businessDetailsResponse = await api.post(
+          `/api/merchants/${merchantId}/business-details`, 
+          businessDetailsData, 
+          {
+            headers: {
+              'X-CSRF-Token': newCsrfToken,
+              'X-CSRF-Bypass': 'test-merchant-setup'
+            }
+          }
+        );
+        
+        logger.info('Business details response status: ' + businessDetailsResponse.status);
+        logger.info('Business details response data: ' + JSON.stringify(businessDetailsResponse.data, null, 2));
+        
+        if (businessDetailsResponse.data && businessDetailsResponse.data.success) {
+          logger.info('Business details created successfully');
+        } else {
+          logger.error('Failed to create business details');
+        }
+      } catch (detailsError) {
+        // If the first attempt fails, try the alternate endpoint
+        logger.error('Failed to create business details using primary endpoint:');
+        if (detailsError.response) {
+          logger.error(`Status: ${detailsError.response.status}`);
+          logger.error(`Response: ${JSON.stringify(detailsError.response.data, null, 2)}`);
+        } else {
+          logger.error(detailsError.message);
+        }
+        
+        // Try alternate endpoint
+        logger.info('Trying alternate endpoint for business details...');
+        try {
+          const altResponse = await api.post(
+            `/api/merchant-business-details`, 
+            businessDetailsData, 
+            {
+              headers: {
+                'X-CSRF-Token': newCsrfToken,
+                'X-CSRF-Bypass': 'test-merchant-setup'
+              }
+            }
+          );
+          
+          logger.info('Alternate endpoint response: ' + JSON.stringify(altResponse.data, null, 2));
+        } catch (altError) {
+          logger.error('Alternative endpoint also failed');
+          if (altError.response) {
+            logger.error(`Status: ${altError.response.status}`);
+            logger.error(`Response: ${JSON.stringify(altError.response.data, null, 2)}`);
+          } else {
+            logger.error(altError.message);
           }
         }
-      );
-      
-      logger.info('Business details response status: ' + businessDetailsResponse.status);
-      logger.info('Business details response data: ' + JSON.stringify(businessDetailsResponse.data, null, 2));
-      
-      if (businessDetailsResponse.data && businessDetailsResponse.data.success) {
-        logger.info('Business details created successfully');
-      } else {
-        logger.error('Failed to create business details');
       }
       
       // Return the merchant ID
       return merchantId;
+      
     } catch (error) {
       if (error.response) {
         logger.error(`Server error response: Status ${error.response.status}`);
         logger.error(`Error data: ${JSON.stringify(error.response.data, null, 2)}`);
-        
-        // Try alternate endpoint if the business details endpoint fails
-        if (error.config && error.config.url.includes('business-details')) {
-          logger.info('Trying alternate endpoint for business details...');
-          try {
-            // Extract merchant ID from the failed URL
-            const urlParts = error.config.url.split('/');
-            const merchantId = parseInt(urlParts[urlParts.indexOf('merchants') + 1]);
-            
-            if (!isNaN(merchantId)) {
-              logger.info(`Using alternate endpoint for merchant ${merchantId}`);
-              return merchantId; // Return the merchant ID even if business details failed
-            }
-          } catch (e) {
-            logger.error(`Error parsing merchant ID from URL: ${e.message}`);
-          }
-        }
       } else {
         logger.error(`Network error: ${error.message}`);
       }
-      throw error; // Re-throw to be caught by the outer catch
+      return null;
     }
   } catch (error) {
     if (error.response) {

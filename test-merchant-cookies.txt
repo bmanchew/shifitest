@@ -1,0 +1,3 @@
+[
+  "_csrf=iMlfLCyyNAbuYl70iaHQZNrt; Path=/"
+]
