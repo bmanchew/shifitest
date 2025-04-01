@@ -67,12 +67,14 @@ export default function ContractTable({ contracts, isLoading, onSendApplication 
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
+      case "active":
+        return "success";
       case "completed":
         return "success";
-      case "in_progress":
-        return "warning";
       case "pending":
-        return "secondary";
+        return "warning";
+      case "declined":
+        return "destructive";
       case "cancelled":
         return "destructive";
       default:
