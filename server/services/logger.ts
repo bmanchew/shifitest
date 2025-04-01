@@ -17,7 +17,13 @@ export type LogCategory =
   | "contract"
   | "payment"
   | "database"
-  | "realtime";
+  | "realtime"
+  | "investor"
+  | "email"
+  | "sms"
+  | "underwriting"
+  | "blockchain"
+  | "plaid";
 
 // Log sources
 export type LogSource = 
@@ -27,7 +33,15 @@ export type LogSource =
   | "sendgrid" 
   | "stripe" 
   | "openai"
-  | "sesameai";
+  | "sesameai"
+  | "api"
+  | "investor"
+  | "blockchain"
+  | "didit"
+  | "signing"
+  | "thanksroger"
+  | "prefi"
+  | "nlpearl";
 
 // Base log interface
 interface BaseLog {

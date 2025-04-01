@@ -18,7 +18,8 @@ export function createApp(): Express {
   const app = express();
   
   // Enable trust proxy to work with Replit and properly handle X-Forwarded-For headers
-  app.set('trust proxy', true);
+  // Use the first IP in X-Forwarded-For as this is most likely to be the actual client IP
+  app.set('trust proxy', 'uniquelocal');
   
   // Common middleware
   app.use(express.json());

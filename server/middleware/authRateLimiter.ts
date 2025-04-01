@@ -10,6 +10,14 @@ export const authRateLimiter = rateLimit({
   max: 20, // Limit each IP to 20 requests per window
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Configure to safely work with proxies
+  trustProxy: false, // Disable automatic trust proxy (we handle it at the app level)
+  // Use X-Forwarded-For header with the first IP in the list (most reliable in Replit)
+  keyGenerator: (req) => {
+    const xForwardedFor = req.headers['x-forwarded-for'] as string | undefined;
+    const ip = xForwardedFor ? xForwardedFor.split(',')[0].trim() : req.ip;
+    return ip || 'unknown-ip';
+  },
   message: {
     success: false,
     message: 'Too many requests, please try again later.'
@@ -21,9 +29,11 @@ export const authRateLimiter = rateLimit({
       source: 'internal',
       metadata: {
         ip: req.ip,
+        forwardedIp: req.headers['x-forwarded-for'],
         path: req.path,
         userAgent: req.headers['user-agent']
-      }
+      },
+      tags: ['rate-limit', 'auth-endpoint']
     });
     
     res.status(options.statusCode).send(options.message);
@@ -39,6 +49,14 @@ export const userCreationRateLimiter = rateLimit({
   max: 5, // Limit each IP to 5 requests per window
   standardHeaders: true,
   legacyHeaders: false,
+  // Configure to safely work with proxies
+  trustProxy: false, // Disable automatic trust proxy (we handle it at the app level)
+  // Use X-Forwarded-For header with the first IP in the list (most reliable in Replit)
+  keyGenerator: (req) => {
+    const xForwardedFor = req.headers['x-forwarded-for'] as string | undefined;
+    const ip = xForwardedFor ? xForwardedFor.split(',')[0].trim() : req.ip;
+    return ip || 'unknown-ip';
+  },
   message: {
     success: false,
     message: 'Too many accounts created from this IP, please try again after an hour.'
@@ -50,9 +68,11 @@ export const userCreationRateLimiter = rateLimit({
       source: 'internal',
       metadata: {
         ip: req.ip,
+        forwardedIp: req.headers['x-forwarded-for'],
         path: req.path,
         userAgent: req.headers['user-agent']
-      }
+      },
+      tags: ['rate-limit', 'user-creation']
     });
     
     res.status(options.statusCode).send(options.message);
@@ -68,6 +88,14 @@ export const apiRateLimiter = rateLimit({
   max: 100, // Limit each IP to 100 requests per window
   standardHeaders: true,
   legacyHeaders: false,
+  // Configure to safely work with proxies
+  trustProxy: false, // Disable automatic trust proxy (we handle it at the app level)
+  // Use X-Forwarded-For header with the first IP in the list (most reliable in Replit)
+  keyGenerator: (req) => {
+    const xForwardedFor = req.headers['x-forwarded-for'] as string | undefined;
+    const ip = xForwardedFor ? xForwardedFor.split(',')[0].trim() : req.ip;
+    return ip || 'unknown-ip';
+  },
   message: {
     success: false,
     message: 'Too many requests, please try again later.'
@@ -79,9 +107,11 @@ export const apiRateLimiter = rateLimit({
       source: 'internal',
       metadata: {
         ip: req.ip,
+        forwardedIp: req.headers['x-forwarded-for'],
         path: req.path,
         userAgent: req.headers['user-agent']
-      }
+      },
+      tags: ['rate-limit', 'api-endpoint']
     });
     
     res.status(options.statusCode).send(options.message);
