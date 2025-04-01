@@ -199,7 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = jwt.sign(
         { userId: user.id, role: user.role },
         process.env.JWT_SECRET || 'default_jwt_secret',
-        { expiresIn: '7d' }
+        { expiresIn: '24h' }
       );
       
       // Return user without password

@@ -86,6 +86,14 @@ export const logCategoryEnum = pgEnum("log_category", [
   "user",
   "payment",
   "blockchain",
+  "investor",
+  "plaid",
+  "sms",
+  "email",
+  "underwriting",
+  "didit",
+  "notification",
+  "contract",
 ]);
 
 export const logSourceEnum = pgEnum("log_source", [
@@ -110,6 +118,8 @@ export const logSourceEnum = pgEnum("log_source", [
   "signing",
   "thanksroger",
   "prefi",
+  "email",
+  "sms",
 ]);
 
 // Message enums
