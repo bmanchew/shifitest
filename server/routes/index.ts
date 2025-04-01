@@ -8,6 +8,7 @@ import communicationsRoutes from './communications';
 import merchantFundingRoutes from './merchant-funding';
 import customerRoutes from './customers';
 import exampleRoutes from './example.routes';
+import investorRoutes from './investor';
 import { apiRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 
@@ -26,6 +27,7 @@ modulesRouter.use('/api/v1/communications', communicationsRoutes);
 modulesRouter.use('/api/v1/merchant-funding', merchantFundingRoutes);
 modulesRouter.use('/api/v1/customers', customerRoutes);
 modulesRouter.use('/api/v1/examples', exampleRoutes);
+modulesRouter.use('/api/v1/investor', investorRoutes);
 
 // Support for legacy (non-versioned) routes during transition
 modulesRouter.use('/api/auth', authRoutes);
@@ -36,6 +38,7 @@ modulesRouter.use('/api/communications', communicationsRoutes);
 modulesRouter.use('/api/merchant-funding', merchantFundingRoutes);
 modulesRouter.use('/api/customers', customerRoutes);
 modulesRouter.use('/api/examples', exampleRoutes);
+modulesRouter.use('/api/investor', investorRoutes);
 
 // Add a simple status endpoint for health checks
 modulesRouter.get('/api/status', (req, res) => {
