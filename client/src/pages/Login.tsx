@@ -49,15 +49,10 @@ export default function Login() {
       console.log("Login component: Before login function call");
 
       // Use the login function from AuthContext which properly handles CSRF tokens
-      // For investor logins, we'll add a special query parameter to identify as investor login
+      // For investor logins, we'll pass the userType to distinguish investor logins
       if (userType === "investor") {
-        // Modify the URL to include the userType as a query parameter
-        const loginOptions = {
-          email,
-          password,
-          userType: "investor" // This will be used by the server to identify investor logins
-        };
-        await login(email, password);
+        // Call login with userType parameter
+        await login(email, password, "investor");
       } else {
         // Standard business login
         await login(email, password);

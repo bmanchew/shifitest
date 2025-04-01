@@ -18,7 +18,7 @@ export const authController = {
    */
   async login(req: Request, res: Response) {
     try {
-      const { email, password } = req.body;
+      const { email, password, userType } = req.body;
       
       // Validate request
       if (!email || !password) {

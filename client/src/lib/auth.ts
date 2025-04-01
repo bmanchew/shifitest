@@ -31,15 +31,16 @@ export async function registerUser(params: RegisterParams): Promise<void> {
   }
 }
 
-export async function loginUser(email: string, password: string): Promise<AuthResult> {
+export async function loginUser(email: string, password: string, userType?: string): Promise<AuthResult> {
   try {
     // First, get a CSRF token to be used for state-changing requests
     await fetchCsrfToken();
     
-    // Now make the login request
+    // Now make the login request with userType if provided
     const data = await apiRequest<AuthResult>("POST", "/api/auth/login", {
       email,
       password,
+      ...(userType ? { userType } : {}),
     });
     
     if (!data.user) {

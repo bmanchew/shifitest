@@ -17,7 +17,7 @@ import { apiRequest } from "@/lib/api";
 export interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, userType?: string) => Promise<void>;
   register: (params: RegisterParams) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -50,16 +50,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loadUser();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, userType?: string) => {
     setIsLoading(true);
     try {
-      console.log(`Attempting login for ${email}`);
+      console.log(`Attempting login for ${email}${userType ? ` (Type: ${userType})` : ''}`);
       
       // Fetch CSRF token first
       await fetchCsrfToken();
 
-      // Use the correct response type
-      const data = await apiRequest<{success: boolean; user: AuthUser}>("POST", "/api/auth/login", { email, password });
+      // Use the correct response type with userType if provided
+      const data = await apiRequest<{success: boolean; user: AuthUser}>(
+        "POST", 
+        "/api/auth/login", 
+        { email, password, userType }
+      );
       console.log(`Login API response:`, data);
 
       if (!data.user) {
