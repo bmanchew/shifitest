@@ -748,15 +748,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(contractsWithTiers);
       }
       
-      // For merchant-specific requests, return only their active contracts with credit tiers
+      // For merchant-specific requests, return all of their contracts with credit tiers
       if (merchantId) {
         const allContracts = await storage.getContractsByMerchantId(merchantId);
         
-        // Filter to only include active contracts
-        const activeContracts = allContracts.filter(contract => contract.status === "active");
+        // No filter - return all contracts regardless of status
+        // This change ensures merchants can see all their contracts in the system
         
         // Add underwriting data to each contract
-        const contractsWithTiers = await Promise.all(activeContracts.map(async (contract) => {
+        const contractsWithTiers = await Promise.all(allContracts.map(async (contract) => {
           const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
           // Use the most recent underwriting data if available
           const mostRecentUnderwriting = underwritingData.length > 0 ? 
