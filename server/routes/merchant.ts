@@ -521,11 +521,11 @@ router.get('/:id/contracts', async (req: Request, res: Response) => {
     // Get all contracts for this merchant using the storage method
     const allContracts = await storage.getContractsByMerchantId(merchantId);
     
-    // Filter to only include active contracts
-    const activeContracts = allContracts.filter(contract => contract.status === "active");
-
-    // Return the filtered contracts array
-    res.json(activeContracts || []);
+    // No filter - return all contracts regardless of status
+    // This change ensures endpoints return all contracts for a merchant
+    
+    // Return all contracts
+    res.json(allContracts || []);
   } catch (error) {
     console.error('Error fetching merchant contracts:', error);
     res.status(500).json({ 
