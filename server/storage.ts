@@ -877,53 +877,53 @@ export class DatabaseStorage implements IStorage {
 
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
     try {
-      // Use a basic select to get common fields, which should work across all database schemas
-      const results = await db.select({
-        id: contracts.id,
-        createdAt: contracts.createdAt,
-        merchantId: contracts.merchantId,
-        customerId: contracts.customerId,
-        contractNumber: contracts.contractNumber,
-        status: contracts.status,
-        amount: contracts.amount,
-        downPayment: contracts.downPayment,
-        financedAmount: contracts.financedAmount,
-        interestRate: contracts.interestRate,
-        termMonths: contracts.termMonths,
-        monthlyPayment: contracts.monthlyPayment,
-        currentStep: contracts.currentStep,
-        phoneNumber: contracts.phoneNumber,
-        archived: contracts.archived,
-        completedAt: contracts.completedAt
-        // Omitting fields that might not exist in all environments
-      })
-      .from(contracts)
-      .where(
-        eq(contracts.merchantId, merchantId)
-      )
-      .orderBy(desc(contracts.createdAt));
+      // Use a basic select with only the essential fields to prevent schema-related errors
+      const results = await db.select()
+        .from(contracts)
+        .where(
+          eq(contracts.merchantId, merchantId)
+        )
+        .orderBy(desc(contracts.createdAt));
       
-      // For each contract, add the missing fields with default values
-      const contractsWithDefaults = results.map(contract => ({
-        ...contract,
-        // Add default values for fields that might not exist in the database
-        purchasedByShifi: false,
-        tokenizationStatus: 'pending',
-        tokenId: null,
-        smartContractAddress: null,
-        tokenizationError: null,
-        archivedAt: null,
-        archivedReason: null,
-        blockchainTransactionHash: null,
-        blockNumber: null,
-        tokenizationDate: null,
-        tokenMetadata: null,
-        salesRepId: null
-      }));
-      
-      return contractsWithDefaults;
+      // Map the results to a consistent contract structure
+      // This avoids issues with missing fields in different database schemas
+      return results.map(contract => {
+        // Create a safe contract object with the essential fields
+        return {
+          id: contract.id,
+          createdAt: contract.createdAt,
+          merchantId: contract.merchantId,
+          customerId: contract.customerId || null,
+          contractNumber: contract.contractNumber || null,
+          status: contract.status || 'pending',
+          amount: contract.amount || 0,
+          interestRate: contract.interestRate || 0,
+          downPayment: contract.downPayment || 0,
+          financedAmount: contract.financedAmount || 0,
+          termMonths: contract.termMonths || 0,
+          monthlyPayment: contract.monthlyPayment || 0,
+          currentStep: contract.currentStep || null,
+          archived: contract.archived || false,
+          completedAt: contract.completedAt || null,
+          // Include additional fields with default values
+          archivedAt: contract.archivedAt || null,
+          archivedReason: contract.archivedReason || null,
+          salesRepId: contract.salesRepId || null,
+          // Blockchain and tokenization related fields
+          purchasedByShifi: contract.purchasedByShifi || false,
+          tokenizationStatus: contract.tokenizationStatus || 'pending',
+          tokenId: contract.tokenId || null,
+          smartContractAddress: contract.smartContractAddress || null,
+          tokenizationError: contract.tokenizationError || null,
+          blockchainTransactionHash: contract.blockchainTransactionHash || null,
+          blockNumber: contract.blockNumber || null,
+          tokenizationTimestamp: contract.tokenizationTimestamp || null,
+          tokenMetadata: contract.tokenMetadata || null
+        };
+      });
     } catch (error) {
       console.error(`Error getting contracts for merchant ID ${merchantId}:`, error);
+      // Return empty array in case of error
       return [];
     }
   }
