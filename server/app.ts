@@ -17,6 +17,9 @@ export function createApp(): Express {
   // Create Express app
   const app = express();
   
+  // Enable trust proxy to work with Replit and properly handle X-Forwarded-For headers
+  app.set('trust proxy', true);
+  
   // Common middleware
   app.use(express.json());
   app.use(cookieParser(process.env.COOKIE_SECRET || process.env.JWT_SECRET));
