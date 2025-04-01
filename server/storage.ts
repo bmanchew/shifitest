@@ -1,40 +1,58 @@
 import {
+  // User related schemas and types
   users, User, InsertUser,
+  emailVerificationTokens, EmailVerificationToken, InsertEmailVerificationToken,
+  passwordResetTokens, PasswordResetToken, InsertPasswordResetToken,
+  oneTimePasswords, OneTimePassword, InsertOneTimePassword,
+  
+  // Merchant related schemas and types
   merchants, Merchant, InsertMerchant,
-  contracts, Contract, InsertContract,
+  merchantBusinessDetails, MerchantBusinessDetail, InsertMerchantBusinessDetail,
+  merchantDocuments, MerchantDocument, InsertMerchantDocument,
   applicationProgress, ApplicationProgress, InsertApplicationProgress,
-  logs, Log, InsertLog,
-  underwritingData,
-  assetReports, AssetReport, InsertAssetReport,
-  portfolioMonitoring, PortfolioMonitoring, InsertPortfolioMonitoring,
-  complaintsData, ComplaintsData, InsertComplaintsData,
   plaidMerchants, PlaidMerchant, InsertPlaidMerchant,
   plaidTransfers, PlaidTransfer, InsertPlaidTransfer,
-  merchantBusinessDetails, MerchantBusinessDetails, InsertMerchantBusinessDetails,
-  merchantDocuments, MerchantDocument, InsertMerchantDocument,
-  notifications, Notification, InsertNotification,
-  notificationChannels, NotificationChannel, InsertNotificationChannel,
-  inAppNotifications, InAppNotification, InsertInAppNotification,
-  customerSatisfactionSurveys, CustomerSatisfactionSurvey, InsertCustomerSatisfactionSurvey,
-  smartContractTemplates, SmartContractTemplate, InsertSmartContractTemplate,
-  smartContractDeployments, SmartContractDeployment, InsertSmartContractDeployment,
+  
+  // Contract related schemas and types
+  contracts, Contract, InsertContract,
+  contractCancellationRequests, ContractCancellationRequest, InsertContractCancellationRequest,
+  underwritingData,
   salesReps, SalesRep, InsertSalesRep,
-  commissions, Commission, InsertCommission,
   salesRepAnalytics, SalesRepAnalytics, InsertSalesRepAnalytics,
+  
+  // Investment related schemas and types
+  investorProfiles, InvestorProfile, InsertInvestorProfile,
+  investmentOfferings, InvestmentOffering, InsertInvestmentOffering,
+  investments, Investment, InsertInvestment,
+  documentLibrary, DocumentLibrary, InsertDocumentLibrary,
+  
+  // Communication related schemas and types
   conversations, Conversation, InsertConversation,
   messages, Message, InsertMessage,
   supportTickets, SupportTicket, InsertSupportTicket,
   ticketAttachments, TicketAttachment, InsertTicketAttachment,
   ticketActivityLog, TicketActivityLog, InsertTicketActivityLog,
-  emailVerificationTokens, EmailVerificationToken, InsertEmailVerificationToken,
-  passwordResetTokens, PasswordResetToken, InsertPasswordResetToken,
-  oneTimePasswords, OneTimePassword, InsertOneTimePassword,
-  contractCancellationRequests, ContractCancellationRequest, InsertContractCancellationRequest,
-  investorProfiles, InvestorProfile, InsertInvestorProfile,
-  investmentOfferings, InvestmentOffering, InsertInvestmentOffering,
-  investments, Investment, InsertInvestment,
-  documentLibrary, DocumentLibrary, InsertDocumentLibrary
-} from "@shared/schema";
+  notifications, Notification, InsertNotification,
+  logs, Log, InsertLog,
+  
+  // Integration related schemas and types
+  assetReports, AssetReport, InsertAssetReport,
+  portfolioMonitoring, PortfolioMonitoring, InsertPortfolioMonitoring,
+  complaintsData, ComplaintsData, InsertComplaintsData,
+
+  // These types were not found in the modularized schema files
+  // They might have been removed or need to be added to the schema
+  notificationChannels, NotificationChannel, InsertNotificationChannel,
+  inAppNotifications, InAppNotification, InsertInAppNotification,
+  customerSatisfactionSurveys, CustomerSatisfactionSurvey, InsertCustomerSatisfactionSurvey,
+  smartContractTemplates, SmartContractTemplate, InsertSmartContractTemplate,
+  smartContractDeployments, SmartContractDeployment, InsertSmartContractDeployment,
+} from "@shared/schemas";
+
+// Import commissions from salesrep schema (moved in schema modularization)
+import {
+  commissions, Commission, InsertCommission
+} from "@shared/schemas/salesrep.schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt, not } from "drizzle-orm";
 
