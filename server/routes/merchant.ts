@@ -8,6 +8,7 @@ import { logger } from '../services/logger';
 import emailService from '../services/email';
 import crypto from 'crypto';
 import { ZodError } from "zod";
+import { authenticateToken } from '../middleware/auth';
 import { fromZodError } from "zod-validation-error";
 import { insertMerchantSchema } from '../../shared/schemas/merchant.schema';
 
@@ -507,7 +508,7 @@ router.post('/test-email', async (req, res) => {
 });
 
 // Route to get merchant contracts
-router.get('/:id/contracts', async (req: Request, res: Response) => {
+router.get('/:id/contracts', authenticateToken, async (req: Request, res: Response) => {
   try {
     const merchantId = parseInt(req.params.id);
 
