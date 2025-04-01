@@ -89,17 +89,11 @@ export function createApp(): Express {
       
       if (token) {
         try {
-          // Verify the token with required JWT_SECRET (no fallback)
-          if (!process.env.JWT_SECRET) {
-            logger.error({
-              message: "JWT_SECRET is not set in environment variables",
-              category: "security",
-              source: "internal"
-            });
-            throw new Error("JWT_SECRET is not configured");
-          }
+          // Import JWT_SECRET constant from auth.controller.ts
+          const { JWT_SECRET } = require('./controllers/auth.controller');
           
-          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          // Use the JWT_SECRET constant which handles fallback
+          const decoded = jwt.verify(token, JWT_SECRET);
           
           if (typeof decoded === 'object' && decoded.userId) {
             // Get user from database
