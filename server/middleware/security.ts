@@ -133,7 +133,7 @@ export function preventClickjacking(req: Request, res: Response, next: NextFunct
 export function setCSP(req: Request, res: Response, next: NextFunction) {
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' https://js.stripe.com https://cdn.plaid.com; frame-src https://js.stripe.com https://cdn.plaid.com; connect-src 'self' https://api.stripe.com https://api.openai.com https://sandbox.plaid.com https://development.plaid.com https://production.plaid.com; img-src 'self' data:; style-src 'self' 'unsafe-inline';"
+    "default-src 'self'; script-src 'self' https://js.stripe.com https://cdn.plaid.com; frame-src https://js.stripe.com https://cdn.plaid.com; connect-src 'self' https://api.stripe.com https://*.plaid.com wss://*.openai.com https://*.openai.com wss://*.replit.dev wss://*.janeway.replit.dev https://*.replit.dev https://*.janeway.replit.dev; img-src 'self' data:; style-src 'self' 'unsafe-inline';"
   );
   next();
 }
