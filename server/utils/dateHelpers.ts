@@ -49,8 +49,14 @@ export function safeDate(dateValue: string | Date | null | undefined): Date {
  * const sortedByUpdated = items.sort((a, b) => sortByDateDesc(a, b, 'updatedAt'));
  */
 export function sortByDateDesc(a: any, b: any, dateProperty = 'createdAt'): number {
-  const dateA = safeDate(a[dateProperty]);
-  const dateB = safeDate(b[dateProperty]);
+  // Handle null or undefined inputs
+  if (!a || !b) {
+    return 0;
+  }
+  
+  // Use optional chaining to handle missing properties
+  const dateA = safeDate(a?.[dateProperty]);
+  const dateB = safeDate(b?.[dateProperty]);
   return dateB.getTime() - dateA.getTime();
 }
 
@@ -73,8 +79,14 @@ export function sortByDateDesc(a: any, b: any, dateProperty = 'createdAt'): numb
  * const sortedByUpdated = items.sort((a, b) => sortByDateAsc(a, b, 'updatedAt'));
  */
 export function sortByDateAsc(a: any, b: any, dateProperty = 'createdAt'): number {
-  const dateA = safeDate(a[dateProperty]);
-  const dateB = safeDate(b[dateProperty]); 
+  // Handle null or undefined inputs
+  if (!a || !b) {
+    return 0;
+  }
+  
+  // Use optional chaining to handle missing properties
+  const dateA = safeDate(a?.[dateProperty]);
+  const dateB = safeDate(b?.[dateProperty]); 
   return dateA.getTime() - dateB.getTime();
 }
 
