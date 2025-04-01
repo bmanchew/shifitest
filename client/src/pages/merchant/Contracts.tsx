@@ -18,6 +18,7 @@ import { format } from "date-fns";
 import { Search, Filter } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+import { apiRequest } from "@/lib/api";
 
 interface Customer {
   id: number;
@@ -37,14 +38,16 @@ export default function Contracts() {
   const { data: contracts = [] } = useQuery<Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
     queryFn: async () => {
-      const res = await fetch(`/api/contracts?merchantId=${merchantId}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error("Failed to fetch contracts");
+      // Use apiRequest to ensure authentication headers are sent
+      try {
+        // Using apiRequest from lib/api.ts to properly handle token auth
+        return await apiRequest<Contract[]>("GET", `/api/contracts?merchantId=${merchantId}`);
+      } catch (error) {
+        console.error("Contract fetch error:", error);
+        throw error;
       }
-      return res.json();
     },
+    enabled: !!merchantId, // Only run query when merchantId is available
   });
 
   const filteredContracts = statusFilter === "all" 
@@ -81,15 +84,8 @@ export default function Contracts() {
     }
     
     try {
-      const response = await fetch(`/api/customers/${customerId}`, {
-        credentials: "include",
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch customer with ID ${customerId}`);
-      }
-      
-      const customer = await response.json();
+      // Using apiRequest from lib/api.ts to properly handle token auth
+      const customer = await apiRequest<Customer>("GET", `/api/customers/${customerId}`);
       setCustomerCache(prev => ({ ...prev, [customerId]: customer }));
       return customer;
     } catch (error) {
