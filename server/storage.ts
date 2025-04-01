@@ -834,8 +834,39 @@ export class DatabaseStorage implements IStorage {
 
   async getAllContracts(): Promise<Contract[]> {
     try {
-      // Simplified approach: Just get all contracts without filtering
-      const results = await db.select().from(contracts).orderBy(desc(contracts.createdAt));
+      // Use explicit field selection with correct column names
+      const results = await db.select({
+        id: contracts.id,
+        contractNumber: contracts.contractNumber,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        amount: contracts.amount,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        termMonths: contracts.termMonths,
+        interestRate: contracts.interestRate,
+        monthlyPayment: contracts.monthlyPayment,
+        status: contracts.status,
+        currentStep: contracts.currentStep,
+        createdAt: contracts.createdAt,
+        completedAt: contracts.completedAt,
+        phoneNumber: contracts.phoneNumber,
+        purchasedByShifi: contracts.purchasedByShifi,
+        archived: contracts.archived,
+        archivedAt: contracts.archivedAt,
+        archivedReason: contracts.archivedReason,
+        tokenizationStatus: contracts.tokenizationStatus,
+        tokenId: contracts.tokenId,
+        smartContractAddress: contracts.smartContractAddress,
+        blockchainTransactionHash: contracts.blockchainTransactionHash,
+        blockNumber: contracts.blockNumber,
+        tokenizationDate: contracts.tokenizationDate,
+        tokenMetadata: contracts.tokenMetadata,
+        tokenizationError: contracts.tokenizationError,
+        salesRepId: contracts.salesRepId
+      })
+      .from(contracts)
+      .orderBy(desc(contracts.createdAt));
       
       return results;
     } catch (error) {
