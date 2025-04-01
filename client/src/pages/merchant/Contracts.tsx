@@ -41,7 +41,19 @@ export default function Contracts() {
       // Use apiRequest to ensure authentication headers are sent
       try {
         // Using apiRequest from lib/api.ts to properly handle token auth
-        return await apiRequest<Contract[]>("GET", `/api/contracts?merchantId=${merchantId}`);
+        const response = await apiRequest<{ success: boolean; contracts: Contract[] }>("GET", `/api/contracts?merchantId=${merchantId}`);
+        
+        // Check if the response has the new format with success and contracts fields
+        if (response && response.success && Array.isArray(response.contracts)) {
+          return response.contracts;
+        } else if (Array.isArray(response)) {
+          // Fallback for backwards compatibility
+          console.warn("API response format unexpected - using direct array response");
+          return response;
+        } else {
+          console.error("Unexpected API response format:", response);
+          return [];
+        }
       } catch (error) {
         console.error("Contract fetch error:", error);
         throw error;

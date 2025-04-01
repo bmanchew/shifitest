@@ -711,26 +711,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get contracts (with admin support)
   apiRouter.get("/contracts", authenticateToken, async (req: Request, res: Response) => {
     try {
+      console.log("GET /api/contracts - Request received:", {
+        query: req.query,
+        user: (req as any).user
+      });
+      
       const isAdminRequest = req.query.admin === "true";
-      const merchantId = req.query.merchantId ? parseInt(req.query.merchantId as string) : undefined;
+      const merchantIdParam = req.query.merchantId ? parseInt(req.query.merchantId as string) : undefined;
+      
+      console.log("GET /api/contracts - Query parameters:", { isAdminRequest, merchantIdParam });
       
       // Check authentication for admin requests
       if (isAdminRequest) {
         const user = (req as any).user;
+        console.log("GET /api/contracts - Admin request from user:", user);
+        
         if (!user || user.role !== "admin") {
+          console.log("GET /api/contracts - Unauthorized admin access attempt");
           return res.status(401).json({ 
             success: false, 
             message: "Unauthorized: Admin access required" 
           });
         }
         
+        console.log("GET /api/contracts - Fetching all contracts for admin user");
         // Return all contracts for admin users
         const allContracts = await storage.getAllContracts();
+        console.log(`GET /api/contracts - Retrieved ${allContracts.length} contracts for admin user`);
         
         // For admin users, return all contracts regardless of status
-        // This change ensures admins can see all contracts in the system
         
         // Add underwriting data to each contract
+        console.log("GET /api/contracts - Adding credit tier information to contracts");
         const contractsWithTiers = await Promise.all(allContracts.map(async (contract) => {
           const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
           // Use the most recent underwriting data if available
@@ -745,36 +757,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         }));
         
-        return res.json(contractsWithTiers);
+        console.log(`GET /api/contracts - Returning ${contractsWithTiers.length} contracts with credit tiers`);
+        // Return in the {success: true, contracts: [...]} format for API consistency
+        return res.json({
+          success: true,
+          contracts: contractsWithTiers
+        });
       }
       
-      // For merchant-specific requests, return all of their contracts with credit tiers
+      // For merchant-specific requests, get the merchant ID either from the query or the user
+      let merchantId = merchantIdParam;
+      const user = (req as any).user;
+      
+      // If user is a merchant and no specific merchantId was requested,
+      // use the user's merchant ID
+      if (user && user.role === 'merchant' && !merchantId) {
+        merchantId = user.merchantId;
+        console.log(`GET /api/contracts - Using user's merchant ID: ${merchantId}`);
+      }
+      
       if (merchantId) {
-        const allContracts = await storage.getContractsByMerchantId(merchantId);
+        console.log(`GET /api/contracts - Non-admin user requesting contracts for merchant ID ${merchantId}`);
+        console.log(`GET /api/contracts - User's merchant: ${user?.merchantId}`);
         
-        // No filter - return all contracts regardless of status
-        // This change ensures merchants can see all their contracts in the system
+        // Only allow users to access their own merchant's contracts
+        if (user?.role !== 'admin' && user?.merchantId !== merchantId) {
+          console.log(`GET /api/contracts - Unauthorized cross-merchant access attempt: user ${user?.id} with merchant ${user?.merchantId} trying to access ${merchantId}`);
+          return res.status(403).json({ 
+            success: false, 
+            message: "Unauthorized: You can only access your own merchant's contracts" 
+          });
+        }
         
-        // Add underwriting data to each contract
-        const contractsWithTiers = await Promise.all(allContracts.map(async (contract) => {
-          const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
-          // Use the most recent underwriting data if available
-          const mostRecentUnderwriting = underwritingData.length > 0 ? 
-            underwritingData.sort((a, b) => 
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-            )[0] : null;
+        try {
+          console.log(`GET /api/contracts - Fetching contracts for merchant ID ${merchantId}`);
+          const allContracts = await storage.getContractsByMerchantId(merchantId);
+          console.log(`GET /api/contracts - Retrieved ${allContracts.length} contracts for merchant ID ${merchantId}`);
           
-          return {
-            ...contract,
-            creditTier: mostRecentUnderwriting?.creditTier || null
-          };
-        }));
-        
-        return res.json(contractsWithTiers);
+          // No filter - return all contracts regardless of status
+          
+          // Add underwriting data to each contract
+          console.log("GET /api/contracts - Adding credit tier information to contracts");
+          const contractsWithTiers = await Promise.all(allContracts.map(async (contract) => {
+            const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
+            // Use the most recent underwriting data if available
+            const mostRecentUnderwriting = underwritingData.length > 0 ? 
+              underwritingData.sort((a, b) => 
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+              )[0] : null;
+            
+            return {
+              ...contract,
+              creditTier: mostRecentUnderwriting?.creditTier || null
+            };
+          }));
+          
+          console.log(`GET /api/contracts - Returning ${contractsWithTiers.length} contracts with credit tiers`);
+          // Return in the {success: true, contracts: [...]} format for API consistency
+          return res.json({
+            success: true,
+            contracts: contractsWithTiers
+          });
+        } catch (error) {
+          console.error(`GET /api/contracts - Error fetching contracts for merchant ${merchantId}:`, error);
+          // Return empty array in case of database error with the merchant query
+          return res.json({
+            success: true,
+            contracts: []
+          });
+        }
       }
       
-      // Default: return empty array if no merchantId provided
-      return res.json([]);
+      // Default: return empty array with consistent response format if no merchantId provided
+      console.log("GET /api/contracts - No valid merchant ID provided, returning empty list");
+      return res.json({
+        success: true,
+        contracts: []
+      });
     } catch (error) {
       console.error("Get contracts error:", error);
       res.status(500).json({ 

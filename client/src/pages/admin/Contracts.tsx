@@ -24,14 +24,21 @@ export default function Contracts() {
         // Use apiRequest to include auth token and proper error handling
         const response = await apiRequest("GET", "/api/contracts?admin=true");
         
-        // Handle response data
-        if (Array.isArray(response)) {
+        // Handle response data based on format
+        if (response && response.success && Array.isArray(response.contracts)) {
+          // New API response format with success/contracts fields
+          return response.contracts;
+        } else if (Array.isArray(response)) {
+          // Legacy API response format (direct array)
+          console.warn("API using legacy format - direct contracts array");
           return response;
         } else if (response && response.success === false) {
+          // Error response
           throw new Error(response.message || "Failed to fetch contracts");
         }
         
         // Default return if response doesn't match expected format
+        console.error("Unexpected API response format:", response);
         return [];
       } catch (error) {
         console.error("Error fetching contracts:", error);

@@ -74,13 +74,19 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
         }));
         
         console.log(`GET /api/contracts - Returning ${contractsWithTiers.length} contracts with credit tiers`);
-        return res.status(200).json(contractsWithTiers);
+        return res.status(200).json({
+          success: true,
+          contracts: contractsWithTiers
+        });
       } else {
         // Admin requesting all contracts
         console.log('GET /api/contracts - Admin requesting all contracts');
         const contracts = await storage.getAllContracts();
         console.log(`GET /api/contracts - Retrieved ${contracts.length} contracts total`);
-        return res.status(200).json(contracts);
+        return res.status(200).json({
+          success: true,
+          contracts: contracts
+        });
       }
     }
     
@@ -131,7 +137,10 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
       }));
       
       console.log(`GET /api/contracts - Returning ${contractsWithTiers.length} contracts with credit tiers`);
-      return res.status(200).json(contractsWithTiers);
+      return res.status(200).json({
+        success: true,
+        contracts: contractsWithTiers
+      });
     }
     
     // Regular users with no merchantId - use their own merchant
@@ -168,7 +177,10 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
     }));
     
     console.log(`GET /api/contracts - Returning ${contractsWithTiers.length} contracts with credit tiers`);
-    res.status(200).json(contractsWithTiers);
+    res.status(200).json({
+      success: true,
+      contracts: contractsWithTiers
+    });
   } catch (error: any) {
     console.error('Error fetching contracts:', error);
     res.status(500).json({ 
@@ -238,16 +250,19 @@ router.get('/:id', isAuthenticated, async (req: Request, res: Response) => {
     }
     
     res.status(200).json({
-      ...contract,
-      merchant: merchant ? {
-        id: merchant.id,
-        name: merchant.name,
-        email: merchant.email,
-        phone: merchant.phone,
-        address: merchant.address,
-        contactName: merchant.contactName
-      } : null,
-      underwriting: underwritingDetails
+      success: true,
+      contract: {
+        ...contract,
+        merchant: merchant ? {
+          id: merchant.id,
+          name: merchant.name,
+          email: merchant.email,
+          phone: merchant.phone,
+          address: merchant.address,
+          contactName: merchant.contactName
+        } : null,
+        underwriting: underwritingDetails
+      }
     });
   } catch (error: any) {
     console.error('Error fetching contract details:', error);

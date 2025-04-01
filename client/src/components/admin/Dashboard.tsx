@@ -37,7 +37,21 @@ export default function AdminDashboard() {
         credentials: "include"
       });
       if (!res.ok) throw new Error("Failed to fetch contracts");
-      return res.json();
+      
+      const data = await res.json();
+      
+      // Handle both the new response format and the legacy format
+      if (data && data.success && Array.isArray(data.contracts)) {
+        // New format with success and contracts fields
+        return data.contracts;
+      } else if (Array.isArray(data)) {
+        // Legacy format (direct array)
+        console.warn("Admin dashboard using legacy contracts API format");
+        return data;
+      } else {
+        console.error("Unexpected API response format:", data);
+        return [];
+      }
     }
   });
   
