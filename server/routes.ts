@@ -709,7 +709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get contracts (with admin support)
-  apiRouter.get("/contracts", async (req: Request, res: Response) => {
+  apiRouter.get("/contracts", authenticateToken, async (req: Request, res: Response) => {
     try {
       const isAdminRequest = req.query.admin === "true";
       const merchantId = req.query.merchantId ? parseInt(req.query.merchantId as string) : undefined;
