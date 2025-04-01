@@ -143,6 +143,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Auth routes
+  // NOTE: Auth routes are now handled by the auth router (see line where apiRouter.use("/auth", authRouter) is used)
+  /* Commented out to avoid route conflicts
   apiRouter.post("/auth/login", authRateLimiter, async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
@@ -197,6 +199,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userAgent: req.headers["user-agent"]
           }
         });
+  */
+      /* End of commented section */
       } else if (user.password.startsWith('$2b$')) {
         // If the password is already hashed with bcrypt, use bcrypt.compare
         isMatch = await bcrypt.compare(password, user.password);
@@ -306,6 +310,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Logout endpoint
+  // NOTE: Auth routes are now handled by the auth router (see line where apiRouter.use("/auth", authRouter) is used)
+  /* Commented out to avoid route conflicts
   apiRouter.post("/auth/logout", async (req: Request, res: Response) => {
     try {
       // Clear authentication cookies
@@ -354,6 +360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+  */
 
   // User routes
   apiRouter.post("/users", userCreationRateLimiter, async (req: Request, res: Response) => {
