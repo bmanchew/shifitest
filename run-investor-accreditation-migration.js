@@ -5,8 +5,8 @@
  */
 
 // Import the required modules
-const { migrateInvestorAccreditation } = require('./server/migrations/investor-accreditation');
-const { logger } = require('./server/services/logger');
+import { migrateInvestorAccreditation } from './server/migrations/investor-accreditation.js';
+import { logger } from './server/services/logger.js';
 
 async function runMigration() {
   try {

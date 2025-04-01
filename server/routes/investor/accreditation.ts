@@ -1,22 +1,12 @@
-import { eq } from "drizzle-orm";
-import {
-  investorProfiles,
-  investorVerificationDocuments,
-  investorVerificationProgress,
-  thirdPartyVerificationRequests,
-  users,
-} from "../../../shared/schema";
-import { IStorage } from "../../storage";
-import { Router } from "express";
-import { logger } from "../../services/logger";
-import { v4 as uuidv4 } from "uuid";
-import { format } from "date-fns";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
+import { Router } from 'express';
+import { IStorage } from '../../storage';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { generateId } from '../../utils/dateHelpers';
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(process.cwd(), "uploads");
+// Setup uploads directory
+const uploadsDir = path.join(process.cwd(), 'uploads', 'investor-documents');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -27,483 +17,386 @@ const storage = multer.diskStorage({
     cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
-    // Create a unique file name to avoid collisions
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const extension = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${extension}`);
-  },
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const fileExt = path.extname(file.originalname);
+    cb(null, `${uniqueSuffix}${fileExt}`);
+  }
 });
 
-const upload = multer({
-  storage: storage,
+const upload = multer({ 
+  storage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB max file size
   },
-  fileFilter: function (req, file, cb) {
-    // Accept only certain file types
-    const fileTypes = /jpeg|jpg|png|pdf/;
-    const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = fileTypes.test(file.mimetype);
-
-    if (extname && mimetype) {
-      return cb(null, true);
+  fileFilter: (req, file, cb) => {
+    // Accept images, PDFs, and common document formats
+    const allowedTypes = [
+      'image/jpeg', 
+      'image/png', 
+      'image/gif', 
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
     } else {
-      cb(new Error("Error: Only .jpeg, .jpg, .png, and .pdf files are allowed!"));
+      cb(new Error('Invalid file type. Only images, PDFs, and documents are allowed.') as any, false);
     }
-  },
+  }
 });
 
 export function setupAccreditationRoutes(router: Router, storage: IStorage) {
-  // Endpoint to verify investor accreditation
-  router.post("/investor/accreditation/verify", async (req, res) => {
+  
+  // Endpoint to verify investor accreditation status
+  router.post('/accreditation/verify', async (req, res) => {
     try {
-      const { method, investorId, ...formData } = req.body;
-      const userId = req.session.userId;
-
-      if (!userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
-      // Get the investor profile
-      let investor;
-      if (investorId) {
-        investor = await storage.db
-          .select()
-          .from(investorProfiles)
-          .where(eq(investorProfiles.id, investorId))
-          .limit(1);
-      } else {
-        investor = await storage.db
-          .select()
-          .from(investorProfiles)
-          .where(eq(investorProfiles.userId, userId))
-          .limit(1);
-      }
-
-      if (!investor || investor.length === 0) {
-        return res.status(404).json({ error: "Investor profile not found" });
-      }
-
-      const profile = investor[0];
-
-      // Update the investor profile based on the verification method
-      const now = new Date();
-      // Default expiration is 1 year from now
-      const expirationDate = new Date(now);
-      expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-
-      const updateData: any = {
-        accreditationMethod: method,
-        verificationStatus: "pending",
-        updatedAt: now,
-        verificationExpiresAt: expirationDate,
-      };
-
-      switch (method) {
-        case "income":
-          updateData.annualIncome = formData.income;
-          updateData.jointIncome = formData.jointIncome;
-          updateData.currentYearIncomeExpectation = formData.currentYearEstimate;
-          updateData.incomeVerificationMethod = formData.method;
-          break;
-
-        case "net_worth":
-          updateData.netWorth = formData.calculatedNetWorth || formData.totalAssets - formData.totalLiabilities;
-          updateData.netWorthVerificationMethod = formData.method;
-          updateData.primaryResidenceValue = formData.primaryResidenceValue;
-          break;
-
-        case "professional":
-          updateData.professionalLicenseType = formData.certType;
-          updateData.professionalLicenseNumber = formData.licenseNumber;
-          break;
-
-        case "identity":
-          updateData.dateOfBirth = formData.dateOfBirth;
-          updateData.maritalStatus = formData.maritalStatus;
-          updateData.citizenshipStatus = formData.citizenshipStatus;
-          break;
-      }
-
-      // Update the investor profile
-      await storage.db
-        .update(investorProfiles)
-        .set(updateData)
-        .where(eq(investorProfiles.id, profile.id));
-
-      // Create or update verification progress
-      const existingProgress = await storage.db
-        .select()
-        .from(investorVerificationProgress)
-        .where(eq(investorVerificationProgress.investorId, profile.id))
-        .where(eq(investorVerificationProgress.step, method));
-
-      if (existingProgress && existingProgress.length > 0) {
-        // Update existing progress
-        await storage.db
-          .update(investorVerificationProgress)
-          .set({
-            completed: true,
-            completedAt: now,
-            data: JSON.stringify(formData),
-            adminReviewRequired: true,
-          })
-          .where(eq(investorVerificationProgress.id, existingProgress[0].id));
-      } else {
-        // Create new progress
-        await storage.db.insert(investorVerificationProgress).values({
-          investorId: profile.id,
-          step: method,
-          completed: true,
-          completedAt: now,
-          data: JSON.stringify(formData),
-          adminReviewRequired: true,
-        });
-      }
-
-      // If a CPA/attorney email was provided, create a third-party verification request
-      if (
-        (method === "income" && formData.method === "cpa_letter" && formData.cpaProfessionalEmail) ||
-        (method === "net_worth" && formData.method === "cpa_letter" && formData.cpaProfessionalEmail)
-      ) {
-        const requestToken = uuidv4();
-        const expiration = new Date();
-        expiration.setDate(expiration.getDate() + 30); // 30 days to complete
-
-        await storage.db.insert(thirdPartyVerificationRequests).values({
-          investorId: profile.id,
-          verifierEmail: formData.cpaProfessionalEmail,
-          verifierName: formData.cpaProfessionalName,
-          verifierType: "cpa",
-          verificationPurpose: method,
-          requestToken,
-          expiresAt: expiration,
-        });
-
-        // TODO: Send email to the verifier (not implemented in this example)
-      }
-
-      // Log the verification submission
-      logger.info({
-        message: `Investor accreditation verification submitted: ${method}`,
-        category: "system",
-        source: "internal",
-        userId,
-        investorId: profile.id,
-        method,
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: "Verification submitted successfully",
-        method,
-      });
-    } catch (error) {
-      logger.error({
-        message: `Error submitting investor verification: ${error instanceof Error ? error.message : String(error)}`,
-        category: "system",
-        source: "internal",
-        error,
-      });
-
-      return res.status(500).json({ error: "Failed to submit verification" });
-    }
-  });
-
-  // Endpoint to upload verification documents
-  router.post("/investor/documents/upload", upload.array("files", 5), async (req, res) => {
-    try {
-      const { method, investorId, documentType } = req.body;
-      const userId = req.session.userId;
-      const files = req.files as Express.Multer.File[];
-
-      if (!userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
-      if (!files || files.length === 0) {
-        return res.status(400).json({ error: "No files uploaded" });
-      }
-
-      // Get the investor profile
-      let investor;
-      if (investorId) {
-        investor = await storage.db
-          .select()
-          .from(investorProfiles)
-          .where(eq(investorProfiles.id, Number(investorId)))
-          .limit(1);
-      } else {
-        investor = await storage.db
-          .select()
-          .from(investorProfiles)
-          .where(eq(investorProfiles.userId, userId))
-          .limit(1);
-      }
-
-      if (!investor || investor.length === 0) {
-        return res.status(404).json({ error: "Investor profile not found" });
-      }
-
-      const profile = investor[0];
-
-      // Get user info for the filename
-      const userInfo = await storage.db
-        .select()
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1);
-
-      if (!userInfo || userInfo.length === 0) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      const user = userInfo[0];
-      const now = new Date();
-      const dateStr = format(now, "yyyyMMdd");
+      const { method, investorId, ...verificationData } = req.body;
       
-      // Process each uploaded file
-      const uploadedDocuments = [];
-
-      for (const file of files) {
-        // Generate a public URL for the file (in a real environment, use a proper file storage service)
-        const publicUrl = `/uploads/${file.filename}`;
-        const purpose = method || "identity"; // Default to identity if method is not provided
-
-        // Insert document record
-        const insertData = {
-          investorId: profile.id,
-          documentType: documentType || purpose, // Use specified document type or fall back to the purpose
-          fileUrl: publicUrl,
-          fileName: file.originalname,
-          fileType: path.extname(file.originalname).substring(1), // Remove the leading dot
-          fileSize: file.size,
-          verificationPurpose: purpose,
-          uploadedAt: now,
-          year: new Date().getFullYear(),
-        };
-
-        const result = await storage.db
-          .insert(investorVerificationDocuments)
-          .values(insertData)
-          .returning();
-
-        const docId = result[0]?.id;
-        uploadedDocuments.push({
-          ...insertData,
-          id: docId,
+      // Get user ID from session or from the request body
+      const userId = req.session?.userId || (investorId ? await getUserIdFromInvestorId(investorId, storage) : null);
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized. User is not authenticated.'
         });
       }
-
-      // Update the investor profile to indicate document upload
-      await storage.db
-        .update(investorProfiles)
-        .set({
-          documentVerificationCompleted: true,
-          updatedAt: now,
-        })
-        .where(eq(investorProfiles.id, profile.id));
-
-      // Log the document upload
-      logger.info({
-        message: `Investor verification documents uploaded: ${files.length} files`,
-        category: "system",
-        source: "internal",
-        userId,
-        investorId: profile.id,
-        documentType: documentType || method,
-        fileCount: files.length,
+      
+      // Get investor profile or create one if it doesn't exist
+      let investor = await storage.getInvestorProfileByUserId(userId);
+      
+      if (!investor) {
+        investor = await storage.createInvestorProfile({
+          userId,
+          verificationStatus: 'pending',
+          accreditationStatus: null
+        });
+      }
+      
+      // Update verification data based on the method
+      switch (method) {
+        case 'income':
+          await storage.updateInvestorProfile(investor.id, {
+            annualIncome: Number(verificationData.income),
+            jointIncome: verificationData.jointIncome ? true : false,
+            currentYearEstimate: Number(verificationData.currentYearEstimate),
+            incomeVerificationMethod: verificationData.method,
+            verificationStatus: 'pending'
+          });
+          break;
+          
+        case 'net_worth':
+          const totalAssets = Number(verificationData.totalAssets);
+          const totalLiabilities = Number(verificationData.totalLiabilities);
+          const calculatedNetWorth = totalAssets - totalLiabilities;
+          
+          await storage.updateInvestorProfile(investor.id, {
+            totalAssets,
+            totalLiabilities,
+            calculatedNetWorth,
+            primaryResidenceValue: verificationData.primaryResidenceValue ? 
+              Number(verificationData.primaryResidenceValue) : null,
+            primaryResidenceMortgage: verificationData.primaryResidenceMortgage ? 
+              Number(verificationData.primaryResidenceMortgage) : null,
+            netWorthVerificationMethod: verificationData.method,
+            verificationStatus: 'pending'
+          });
+          break;
+          
+        case 'professional':
+          await storage.updateInvestorProfile(investor.id, {
+            professionalCertification: verificationData.certType,
+            professionalLicenseNumber: verificationData.licenseNumber,
+            professionalCertDescription: verificationData.otherCertDescription || null,
+            professionalCertIssueDate: verificationData.issueDate ? new Date(verificationData.issueDate) : null,
+            professionalCertExpirationDate: verificationData.expirationDate ? 
+              new Date(verificationData.expirationDate) : null,
+            verificationStatus: 'pending'
+          });
+          break;
+          
+        default:
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid verification method.'
+          });
+      }
+      
+      // Add verification progress record
+      await storage.createInvestorVerificationProgress({
+        investorId: investor.id,
+        verificationStep: 'information_submitted',
+        notes: `Submitted ${method} verification information`,
+        completed: true
       });
-
+      
       return res.status(200).json({
         success: true,
-        message: `${files.length} documents uploaded successfully`,
-        documents: uploadedDocuments,
+        message: 'Verification data submitted successfully.',
+        method
       });
     } catch (error) {
-      logger.error({
-        message: `Error uploading investor documents: ${error instanceof Error ? error.message : String(error)}`,
-        category: "system",
-        source: "internal",
-        error,
+      console.error("Error verifying investor:", error);
+      return res.status(500).json({
+        success: false,
+        message: 'An error occurred during verification.'
       });
-
-      return res.status(500).json({ error: "Failed to upload documents" });
     }
   });
-
-  // Endpoint to get verification status
-  router.get("/investor/accreditation/status", async (req, res) => {
+  
+  // Endpoint to upload documents
+  router.post('/documents/upload', upload.array('files', 10), async (req, res) => {
     try {
-      const userId = req.session.userId;
-
+      const { documentType, method, notes } = req.body;
+      const files = req.files as Express.Multer.File[];
+      
+      if (!files || files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'No files were uploaded.'
+        });
+      }
+      
+      // Get user ID from session or from the request body
+      const userId = req.session?.userId || (req.body.investorId ? 
+        await getUserIdFromInvestorId(Number(req.body.investorId), storage) : null);
+      
       if (!userId) {
-        return res.status(401).json({ error: "Unauthorized" });
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized. User is not authenticated.'
+        });
       }
-
-      // Get the investor profile
-      const investor = await storage.db
-        .select()
-        .from(investorProfiles)
-        .where(eq(investorProfiles.userId, userId))
-        .limit(1);
-
-      if (!investor || investor.length === 0) {
-        return res.status(404).json({ error: "Investor profile not found" });
+      
+      // Get investor profile
+      let investor = await storage.getInvestorProfileByUserId(userId);
+      
+      if (!investor) {
+        return res.status(404).json({
+          success: false,
+          message: 'Investor profile not found.'
+        });
       }
-
-      const profile = investor[0];
-
-      // Get verification progress
-      const progress = await storage.db
-        .select()
-        .from(investorVerificationProgress)
-        .where(eq(investorVerificationProgress.investorId, profile.id));
-
-      // Get documents
-      const documents = await storage.db
-        .select()
-        .from(investorVerificationDocuments)
-        .where(eq(investorVerificationDocuments.investorId, profile.id));
-
-      // Determine overall status
-      let overallStatus = profile.verificationStatus;
-      let expiresAt = profile.verificationExpiresAt;
-
-      // Return the status
+      
+      // Save document metadata to database
+      const documents = await Promise.all(files.map(async (file) => {
+        const documentId = generateId(12);
+        
+        const document = await storage.createInvestorDocument({
+          investorId: investor!.id,
+          documentType: documentType,
+          documentPath: file.path,
+          originalFilename: file.originalname,
+          mimeType: file.mimetype,
+          fileSize: file.size,
+          verificationMethod: method,
+          notes: notes || null,
+          status: 'pending_review'
+        });
+        
+        return document;
+      }));
+      
+      // Update verification progress
+      await storage.createInvestorVerificationProgress({
+        investorId: investor.id,
+        verificationStep: 'document_uploaded',
+        notes: `Uploaded ${files.length} document(s) for ${method} verification`,
+        completed: true
+      });
+      
+      // Update investor profile verification status if needed
+      if (investor.verificationStatus === 'not_started') {
+        await storage.updateInvestorProfile(investor.id, {
+          verificationStatus: 'pending'
+        });
+      }
+      
       return res.status(200).json({
         success: true,
-        status: overallStatus,
-        accreditationMethod: profile.accreditationMethod,
-        accreditationStatus: profile.accreditationStatus,
-        documentVerificationCompleted: profile.documentVerificationCompleted,
-        progress: progress.map(p => ({
-          step: p.step,
-          completed: p.completed,
-          startedAt: p.startedAt,
-          completedAt: p.completedAt,
-          adminReviewed: p.adminReviewed,
-          adminReviewedAt: p.adminReviewedAt,
-        })),
-        documents: documents.map(d => ({
-          id: d.id,
-          documentType: d.documentType,
-          fileName: d.fileName,
-          fileUrl: d.fileUrl,
-          verificationPurpose: d.verificationPurpose,
-          uploadedAt: d.uploadedAt,
-          verified: d.verified,
-          verifiedAt: d.verifiedAt,
-        })),
-        expiresAt,
+        message: 'Documents uploaded successfully.',
+        documents: documents.map(doc => ({
+          id: doc.id,
+          filename: doc.originalFilename,
+          type: doc.documentType,
+          status: doc.status
+        }))
       });
     } catch (error) {
-      logger.error({
-        message: `Error getting investor verification status: ${error instanceof Error ? error.message : String(error)}`,
-        category: "system",
-        source: "internal",
-        error,
+      console.error("Error uploading investor documents:", error);
+      return res.status(500).json({
+        success: false,
+        message: 'An error occurred during document upload.'
       });
-
-      return res.status(500).json({ error: "Failed to get verification status" });
     }
   });
-
-  // Admin endpoint to review verification
-  router.post("/admin/investor/accreditation/review", async (req, res) => {
+  
+  // Endpoint to get verification status
+  router.get('/accreditation/status', async (req, res) => {
     try {
-      const { investorId, approved, rejectionReason, notes } = req.body;
-      const adminId = req.session.userId;
-
-      if (!adminId) {
-        return res.status(401).json({ error: "Unauthorized" });
+      // Get user ID from session
+      const userId = req.session?.userId;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized. User is not authenticated.'
+        });
       }
-
-      // Check if the user is an admin
-      const admin = await storage.db
-        .select()
-        .from(users)
-        .where(eq(users.id, adminId))
-        .limit(1);
-
-      if (!admin || admin.length === 0 || admin[0].role !== "admin") {
-        return res.status(403).json({ error: "Forbidden" });
+      
+      // Get investor profile
+      const investor = await storage.getInvestorProfileByUserId(userId);
+      
+      if (!investor) {
+        return res.status(404).json({
+          success: false,
+          message: 'Investor profile not found.'
+        });
       }
-
-      // Get the investor profile
-      const investor = await storage.db
-        .select()
-        .from(investorProfiles)
-        .where(eq(investorProfiles.id, investorId))
-        .limit(1);
-
-      if (!investor || investor.length === 0) {
-        return res.status(404).json({ error: "Investor profile not found" });
-      }
-
-      const profile = investor[0];
-      const now = new Date();
-
-      // Update the investor profile
-      const updateData: any = {
-        verificationStatus: approved ? "verified" : "rejected",
-        accreditationStatus: approved,
-        updatedAt: now,
-        reviewedBy: adminId,
-        reviewedAt: now,
-      };
-
-      if (!approved && rejectionReason) {
-        updateData.rejectionReason = rejectionReason;
-      }
-
-      if (notes) {
-        updateData.adminNotes = notes;
-      }
-
-      await storage.db
-        .update(investorProfiles)
-        .set(updateData)
-        .where(eq(investorProfiles.id, profile.id));
-
-      // Update all progress steps to mark as reviewed
-      await storage.db
-        .update(investorVerificationProgress)
-        .set({
-          adminReviewed: true,
-          adminReviewedAt: now,
-          adminReviewedBy: adminId,
-          adminNotes: notes || null,
-        })
-        .where(eq(investorVerificationProgress.investorId, profile.id));
-
-      // Log the admin review
-      logger.info({
-        message: `Admin reviewed investor accreditation: ${approved ? "approved" : "rejected"}`,
-        category: "system",
-        source: "internal",
-        adminId,
-        investorId,
-        approved,
-        rejectionReason,
-      });
-
+      
+      // Get verification progress
+      const progress = await storage.getInvestorVerificationProgressByInvestorId(investor.id);
+      
+      // Get uploaded documents
+      const documents = await storage.getInvestorDocumentsByInvestorId(investor.id);
+      
       return res.status(200).json({
         success: true,
-        message: `Investor accreditation ${approved ? "approved" : "rejected"}`,
-        status: approved ? "verified" : "rejected",
+        verification: {
+          status: investor.verificationStatus,
+          accredited: investor.accreditationStatus,
+          method: getInvestorVerificationMethod(investor),
+          progress: progress.map(p => ({
+            step: p.verificationStep,
+            notes: p.notes,
+            completed: p.completed,
+            timestamp: p.createdAt
+          })),
+          documents: documents.map(d => ({
+            id: d.id,
+            type: d.documentType,
+            filename: d.originalFilename,
+            status: d.status,
+            uploadDate: d.createdAt
+          }))
+        }
       });
     } catch (error) {
-      logger.error({
-        message: `Error in admin review of investor verification: ${error instanceof Error ? error.message : String(error)}`,
-        category: "system",
-        source: "internal",
-        error,
+      console.error("Error fetching verification status:", error);
+      return res.status(500).json({
+        success: false,
+        message: 'An error occurred while fetching verification status.'
       });
-
-      return res.status(500).json({ error: "Failed to process verification review" });
     }
   });
+  
+  // Admin endpoint to approve/reject verification
+  router.post('/admin/accreditation/review', async (req, res) => {
+    try {
+      const { investorId, decision, notes } = req.body;
+      
+      // Get admin ID from session
+      const adminId = req.session?.userId;
+      
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized. Admin authentication required.'
+        });
+      }
+      
+      // Check if user is an admin
+      const isAdmin = await storage.isUserAdmin(adminId);
+      
+      if (!isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden. Admin privileges required.'
+        });
+      }
+      
+      if (!investorId || !decision) {
+        return res.status(400).json({
+          success: false,
+          message: 'Investor ID and decision are required.'
+        });
+      }
+      
+      // Get investor profile
+      const investor = await storage.getInvestorProfileById(Number(investorId));
+      
+      if (!investor) {
+        return res.status(404).json({
+          success: false,
+          message: 'Investor profile not found.'
+        });
+      }
+      
+      // Update investor accreditation status
+      const newStatus = decision === 'approve' ? 'verified' : 'rejected';
+      const accreditationStatus = decision === 'approve';
+      
+      await storage.updateInvestorProfile(investor.id, {
+        verificationStatus: newStatus,
+        accreditationStatus,
+        verificationNotes: notes || null,
+        lastVerificationDate: new Date()
+      });
+      
+      // Add verification progress record
+      await storage.createInvestorVerificationProgress({
+        investorId: investor.id,
+        verificationStep: decision === 'approve' ? 'verification_approved' : 'verification_rejected',
+        notes: notes || `Accreditation verification ${decision === 'approve' ? 'approved' : 'rejected'} by admin`,
+        completed: true,
+        completedBy: adminId
+      });
+      
+      return res.status(200).json({
+        success: true,
+        message: `Investor accreditation ${decision === 'approve' ? 'approved' : 'rejected'} successfully.`,
+        investor: {
+          id: investor.id,
+          status: newStatus,
+          accredited: accreditationStatus
+        }
+      });
+    } catch (error) {
+      console.error("Error reviewing investor accreditation:", error);
+      return res.status(500).json({
+        success: false,
+        message: 'An error occurred during accreditation review.'
+      });
+    }
+  });
+}
 
-  return router;
+// Helper function to get user ID from investor ID
+async function getUserIdFromInvestorId(investorId: number, storage: IStorage): Promise<number | null> {
+  try {
+    const investor = await storage.getInvestorProfileById(investorId);
+    return investor ? investor.userId : null;
+  } catch (error) {
+    console.error("Error getting user ID from investor ID:", error);
+    return null;
+  }
+}
+
+// Helper function to determine the verification method used by the investor
+function getInvestorVerificationMethod(investor: any): string | null {
+  if (investor.annualIncome || investor.incomeVerificationMethod) {
+    return 'income';
+  } else if (investor.totalAssets || investor.netWorthVerificationMethod) {
+    return 'net_worth';
+  } else if (investor.professionalCertification) {
+    return 'professional';
+  } else if (investor.thirdPartyVerifier) {
+    return 'third_party';
+  }
+  
+  return null;
 }

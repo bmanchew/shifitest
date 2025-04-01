@@ -1,1 +1,1 @@
-export { default as UploadDropzone } from './upload-dropzone';
+export { UploadDropzone } from './upload-dropzone';

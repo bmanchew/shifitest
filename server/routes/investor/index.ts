@@ -1,10 +1,10 @@
-import { Router } from "express";
-import { IStorage } from "../../storage";
-import { setupAccreditationRoutes } from "./accreditation";
+import { Router } from 'express';
+import { IStorage } from '../../storage';
+import { setupAccreditationRoutes } from './accreditation';
 
 export function setupInvestorRoutes(router: Router, storage: IStorage) {
-  // Set up accreditation routes
+  // Setup accreditation routes
   setupAccreditationRoutes(router, storage);
-
-  return router;
+  
+  // Other investor related routes can be added here
 }
