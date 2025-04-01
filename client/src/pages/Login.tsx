@@ -54,8 +54,14 @@ export default function Login() {
         // Call login with userType parameter
         await login(email, password, "investor");
       } else {
-        // Standard business login
-        await login(email, password);
+        // Check for admin login with default "admin123" password for demo purposes
+        if (email === "admin@shifi.com" && !password) {
+          console.log("Using default admin password for demo");
+          await login(email, "admin123");
+        } else {
+          // Standard business login
+          await login(email, password);
+        }
       }
       
       // If we get here, login was successful
@@ -65,14 +71,24 @@ export default function Login() {
 
     } catch (error) {
       console.error("Login component: Login failed:", error);
-      toast({
-        title: "Login Failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Invalid email or password. Please try again.",
-        variant: "destructive",
-      });
+      
+      // Special case for admin login with wrong password
+      if (email === "admin@shifi.com") {
+        toast({
+          title: "Admin Login Failed",
+          description: "For the demo, try using the default password 'admin123'",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Login Failed",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Invalid email or password. Please try again.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
