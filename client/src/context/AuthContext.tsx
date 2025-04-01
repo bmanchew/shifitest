@@ -59,18 +59,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await fetchCsrfToken();
 
       // Use the correct response type with userType if provided
-      const data = await apiRequest<{success: boolean; user: AuthUser}>(
+      const response = await apiRequest<{success: boolean; user: AuthUser}>(
         "POST", 
         "/api/auth/login", 
         { email, password, userType }
       );
-      console.log(`Login API response:`, data);
+      console.log(`Login API response:`, response);
 
-      if (!data.user) {
+      // Handle both response formats: either {user} or {success, user}
+      let user;
+      if (response.success === true && response.user) {
+        // New format: {success: true, user: {...}}
+        user = response.user;
+      } else if (response && Object.keys(response).length > 0 && !response.success) {
+        // Handle case where response is the user object directly
+        user = response as unknown as AuthUser;
+      } else {
         throw new Error("Invalid response format - missing user data");
       }
-
-      const user = data.user;
 
       // For demo purposes, handle merchant user special case
       if (user.role === "merchant" && !user.merchantId) {
