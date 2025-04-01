@@ -877,18 +877,35 @@ export class DatabaseStorage implements IStorage {
 
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
     try {
-      // Use a basic select with only the essential fields to prevent schema-related errors
-      const results = await db.select()
-        .from(contracts)
-        .where(
-          eq(contracts.merchantId, merchantId)
-        )
-        .orderBy(desc(contracts.createdAt));
+      // Use a more precise select with explicit columns that we know exist in the schema
+      const results = await db.select({
+        id: contracts.id,
+        createdAt: contracts.createdAt,
+        merchantId: contracts.merchantId,
+        customerId: contracts.customerId,
+        contractNumber: contracts.contractNumber,
+        status: contracts.status,
+        amount: contracts.amount,
+        interestRate: contracts.interestRate,
+        downPayment: contracts.downPayment,
+        financedAmount: contracts.financedAmount,
+        termMonths: contracts.termMonths,
+        monthlyPayment: contracts.monthlyPayment,
+        currentStep: contracts.currentStep,
+        archived: contracts.archived,
+        completedAt: contracts.completedAt,
+        phoneNumber: contracts.phoneNumber,
+        purchasedByShifi: contracts.purchasedByShifi
+      })
+      .from(contracts)
+      .where(
+        eq(contracts.merchantId, merchantId)
+      )
+      .orderBy(desc(contracts.createdAt));
       
-      // Map the results to a consistent contract structure
-      // This avoids issues with missing fields in different database schemas
+      // Map the results to ensure all required fields are present
       return results.map(contract => {
-        // Create a safe contract object with the essential fields
+        // Create a safe contract object with consistent fields
         return {
           id: contract.id,
           createdAt: contract.createdAt,
@@ -905,20 +922,21 @@ export class DatabaseStorage implements IStorage {
           currentStep: contract.currentStep || null,
           archived: contract.archived || false,
           completedAt: contract.completedAt || null,
-          // Include additional fields with default values
-          archivedAt: contract.archivedAt || null,
-          archivedReason: contract.archivedReason || null,
-          salesRepId: contract.salesRepId || null,
+          phoneNumber: contract.phoneNumber || null,
+          // Additional fields with default values
+          archivedAt: null,
+          archivedReason: null,
+          salesRepId: null,
           // Blockchain and tokenization related fields
           purchasedByShifi: contract.purchasedByShifi || false,
-          tokenizationStatus: contract.tokenizationStatus || 'pending',
-          tokenId: contract.tokenId || null,
-          smartContractAddress: contract.smartContractAddress || null,
-          tokenizationError: contract.tokenizationError || null,
-          blockchainTransactionHash: contract.blockchainTransactionHash || null,
-          blockNumber: contract.blockNumber || null,
-          tokenizationTimestamp: contract.tokenizationTimestamp || null,
-          tokenMetadata: contract.tokenMetadata || null
+          tokenizationStatus: 'pending',
+          tokenId: null,
+          smartContractAddress: null,
+          tokenizationError: null,
+          blockchainTransactionHash: null,
+          blockNumber: null,
+          tokenizationDate: null,
+          tokenMetadata: null
         };
       });
     } catch (error) {
