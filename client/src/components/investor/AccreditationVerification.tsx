@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { Card } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { OnboardingTutorial } from './OnboardingTutorial';
 
 export interface AccreditationVerificationProps {
   investorId?: number;
@@ -34,6 +35,34 @@ export function AccreditationVerification({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [tutorialCompleted, setTutorialCompleted] = useState(false);
+  
+  // Track when the user changes the verification method for the tutorial
+  useEffect(() => {
+    // The tutorial will automatically update to show method-specific guidance
+    // based on the activeTab value passed to the OnboardingTutorial component
+    
+    // We could also store the user's progress in local storage or make an API call
+    // to update their progress in the database when they change methods
+    if (investorId) {
+      // Example: track that the user viewed this verification method
+      console.log(`Investor ${investorId} viewed ${activeTab} verification method`);
+      
+      // In a real implementation, we would store this progress
+      // const trackVerificationProgress = async () => {
+      //   try {
+      //     await fetch('/api/investor/verification/progress', {
+      //       method: 'POST',
+      //       headers: { 'Content-Type': 'application/json' },
+      //       body: JSON.stringify({ investorId, method: activeTab })
+      //     });
+      //   } catch (error) {
+      //     console.error('Failed to track verification progress:', error);
+      //   }
+      // };
+      // trackVerificationProgress();
+    }
+  }, [activeTab, investorId]);
   
   // Form state
   const [incomeData, setIncomeData] = useState({
@@ -596,6 +625,15 @@ export function AccreditationVerification({
           </Card>
         </TabsContent>
       </Tabs>
+      
+      {/* Onboarding Tutorial */}
+      <OnboardingTutorial 
+        defaultOpen={!tutorialCompleted}
+        onComplete={() => setTutorialCompleted(true)}
+        onboardingCompleted={tutorialCompleted}
+        investorId={investorId}
+        verificationMethod={activeTab}
+      />
       
       {/* Status messages */}
       {verificationStatus === 'success' && (
