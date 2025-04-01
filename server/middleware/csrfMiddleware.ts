@@ -22,7 +22,13 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
   ];
   
   // Check if the request path should be excluded
-  const shouldExclude = excludedPaths.some(path => req.path.startsWith(path));
+  const fullPath = `/api${req.path}`;
+  const shouldExclude = excludedPaths.some(path => 
+    req.path === path.slice(4) || // Compare without the /api prefix
+    req.path.startsWith(path.slice(4)) || // Compare paths without the /api prefix for startsWith
+    fullPath === path || // Compare with the /api prefix
+    fullPath.startsWith(path) // Compare with the /api prefix for startsWith
+  );
   
   // Check for test bypass header - allow multiple test bypass values for different test scripts
   const bypassValues = [
@@ -37,7 +43,18 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     req.headers['x-testing-only'] === 'true';
 
   // Add debugging
-  console.log(`CSRF check for path: ${req.path}, method: ${req.method}, excluded: ${shouldExclude}, bypass: ${hasBypassHeader}`);
+  const fullApiPath = `/api${req.path}`;
+  console.log(`CSRF check for path: ${req.path}, fullPath: ${fullApiPath}, method: ${req.method}, excluded: ${shouldExclude}, bypass: ${hasBypassHeader}`);
+  
+  // Log the comparison details to debug exclusion paths
+  excludedPaths.forEach(excludePath => {
+    const withoutPrefix = excludePath.slice(4);
+    console.log(`- Comparing against "${excludePath}": ` +
+      `exact match: ${req.path === withoutPrefix}, ` +
+      `startsWith: ${req.path.startsWith(withoutPrefix)}, ` +
+      `full match: ${fullApiPath === excludePath}, ` +
+      `full startsWith: ${fullApiPath.startsWith(excludePath)}`);
+  });
   
   if (shouldExclude || hasBypassHeader) {
     // Skip CSRF verification for excluded paths or with valid bypass header
