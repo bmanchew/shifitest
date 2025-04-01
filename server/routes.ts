@@ -720,11 +720,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Return all contracts for admin users
         const allContracts = await storage.getAllContracts();
         
-        // Filter to only include active contracts
-        const activeContracts = allContracts.filter(contract => contract.status === "active");
+        // For admin users, return all contracts regardless of status
+        // This change ensures admins can see all contracts in the system
         
         // Add underwriting data to each contract
-        const contractsWithTiers = await Promise.all(activeContracts.map(async (contract) => {
+        const contractsWithTiers = await Promise.all(allContracts.map(async (contract) => {
           const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
           // Use the most recent underwriting data if available
           const mostRecentUnderwriting = underwritingData.length > 0 ? 
