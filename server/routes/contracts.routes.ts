@@ -17,8 +17,14 @@ const router = Router();
  */
 router.get('/', isAuthenticated, async (req: Request, res: Response) => {
   try {
+    console.log('GET /api/contracts - Request received:', {
+      query: req.query,
+      user: { id: req.user?.id, role: req.user?.role, merchantId: req.user?.merchantId }
+    });
+    
     const userId = req.user?.id;
     if (!userId) {
+      console.log('GET /api/contracts - Unauthorized: No user ID in request');
       return res.status(401).json({ 
         success: false, 
         message: 'Unauthorized - User not authenticated' 
@@ -30,22 +36,29 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
     
     // Check for merchantId query parameter
     const merchantIdParam = req.query.merchantId ? parseInt(req.query.merchantId as string) : undefined;
+    console.log(`GET /api/contracts - Query parameters: isAdminRequest=${isAdminRequest}, merchantIdParam=${merchantIdParam}`);
     
     // If admin request, verify admin permissions
     if (isAdminRequest) {
       // Check if user has admin role
       if (req.user?.role !== 'admin') {
+        console.log('GET /api/contracts - Forbidden: User is not an admin');
         return res.status(403).json({ 
           success: false,
           message: 'Forbidden - Admin permission required' 
         });
       }
       
+      console.log('GET /api/contracts - Processing admin request');
+      
       // Admin can view all contracts or filtered by merchantId
       if (merchantIdParam) {
+        console.log(`GET /api/contracts - Admin requesting contracts for merchant ID ${merchantIdParam}`);
         const contracts = await storage.getContractsByMerchantId(merchantIdParam);
+        console.log(`GET /api/contracts - Retrieved ${contracts.length} contracts for merchant ID ${merchantIdParam}`);
         
         // Add credit tier info to each contract
+        console.log('GET /api/contracts - Adding credit tier information to contracts');
         const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
           const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
           // Use the most recent underwriting data if available
@@ -60,20 +73,27 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
           };
         }));
         
+        console.log(`GET /api/contracts - Returning ${contractsWithTiers.length} contracts with credit tiers`);
         return res.status(200).json(contractsWithTiers);
       } else {
         // Admin requesting all contracts
+        console.log('GET /api/contracts - Admin requesting all contracts');
         const contracts = await storage.getAllContracts();
+        console.log(`GET /api/contracts - Retrieved ${contracts.length} contracts total`);
         return res.status(200).json(contracts);
       }
     }
     
     // For non-admin users with merchantId parameter
     if (merchantIdParam) {
+      console.log(`GET /api/contracts - Non-admin user requesting contracts for merchant ID ${merchantIdParam}`);
+      
       // Verify that the user has access to this merchant
       const userMerchant = await storage.getMerchantByUserId(userId);
+      console.log(`GET /api/contracts - User's merchant: ${userMerchant?.id || 'not found'}`);
       
       if (!userMerchant) {
+        console.log('GET /api/contracts - Merchant not found for this user');
         return res.status(404).json({
           success: false,
           message: 'Merchant not found for this user'
@@ -82,6 +102,7 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
       
       // Check if the user has access to the requested merchant
       if (userMerchant.id !== merchantIdParam && req.user?.role !== 'admin') {
+        console.log(`GET /api/contracts - Forbidden: User's merchant (${userMerchant.id}) does not match requested merchant ID (${merchantIdParam})`);
         return res.status(403).json({
           success: false,
           message: 'Forbidden - Not authorized to view contracts for this merchant'
@@ -89,9 +110,12 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
       }
       
       // Get contracts for the merchant
+      console.log(`GET /api/contracts - Fetching contracts for merchant ID ${merchantIdParam}`);
       const contracts = await storage.getContractsByMerchantId(merchantIdParam);
+      console.log(`GET /api/contracts - Retrieved ${contracts.length} contracts for merchant ID ${merchantIdParam}`);
       
       // Add credit tier info to each contract
+      console.log('GET /api/contracts - Adding credit tier information to contracts');
       const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
         const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
         // Use the most recent underwriting data if available
@@ -106,22 +130,29 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
         };
       }));
       
+      console.log(`GET /api/contracts - Returning ${contractsWithTiers.length} contracts with credit tiers`);
       return res.status(200).json(contractsWithTiers);
     }
     
     // Regular users with no merchantId - use their own merchant
+    console.log('GET /api/contracts - No merchantId provided, using user\'s merchant');
     const userMerchant = await storage.getMerchantByUserId(userId);
+    console.log(`GET /api/contracts - User's merchant: ${userMerchant?.id || 'not found'}`);
     
     if (!userMerchant) {
+      console.log('GET /api/contracts - Merchant not found for this user');
       return res.status(404).json({
         success: false,
         message: 'Merchant not found for this user'
       });
     }
     
+    console.log(`GET /api/contracts - Fetching contracts for user's merchant ID ${userMerchant.id}`);
     const contracts = await storage.getContractsByMerchantId(userMerchant.id);
+    console.log(`GET /api/contracts - Retrieved ${contracts.length} contracts for merchant ID ${userMerchant.id}`);
     
     // Add credit tier info to each contract
+    console.log('GET /api/contracts - Adding credit tier information to contracts');
     const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
       const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
       // Use the most recent underwriting data if available
@@ -136,6 +167,7 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
       };
     }));
     
+    console.log(`GET /api/contracts - Returning ${contractsWithTiers.length} contracts with credit tiers`);
     res.status(200).json(contractsWithTiers);
   } catch (error: any) {
     console.error('Error fetching contracts:', error);
