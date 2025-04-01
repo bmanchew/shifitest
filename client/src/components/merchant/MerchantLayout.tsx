@@ -46,18 +46,18 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
       try {
         const response = await fetch("/api/communications/merchant/unread-count");
         if (!response.ok) {
-          return { count: 0 };
+          return { success: false, unreadCount: 0 };
         }
         return response.json();
       } catch (error) {
         console.error("Error fetching unread messages count:", error);
-        return { count: 0 };
+        return { success: false, unreadCount: 0 };
       }
     },
     refetchInterval: 60000, // Refetch every minute
   });
 
-  const unreadCount = unreadMessagesData?.count || 0;
+  const unreadCount = unreadMessagesData?.unreadCount || 0;
 
   // Navigation items
   const navItems = [

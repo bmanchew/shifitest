@@ -123,6 +123,7 @@ export interface IStorage {
   getMessagesByConversationId(conversationId: number, options?: { limit?: number, offset?: number }): Promise<Message[]>;
   markMessageAsRead(id: number): Promise<Message | undefined>;
   markAllMessagesAsRead(conversationId: number, userId: number): Promise<number>; // Returns count of messages updated
+  getUnreadMessageCountForMerchant(merchantId: number): Promise<number>;
   
   // Smart Contract Template operations
   getSmartContractTemplates(): Promise<SmartContractTemplate[]>;
@@ -560,6 +561,47 @@ export class DatabaseStorage implements IStorage {
       return result.rowCount || 0;
     } catch (error) {
       console.error(`Error marking all messages as read in conversation ${conversationId}:`, error);
+      return 0;
+    }
+  }
+  
+  async getUnreadMessageCountForMerchant(merchantId: number): Promise<number> {
+    try {
+      // Get the merchant's user ID
+      const merchant = await this.getMerchant(merchantId);
+      if (!merchant || !merchant.userId) {
+        console.log(`No merchant found with ID ${merchantId} or missing userId`);
+        return 0;
+      }
+
+      try {
+        // Find unread messages in conversations related to merchant's contracts
+        // We need to:
+        // 1. Join conversations to contracts where merchant_id matches
+        // 2. Join messages to those conversations
+        // 3. Count messages where is_read is false and sender_id is not the merchant's user ID
+        //    (we only care about unread messages sent by others)
+        const result = await this.db.query(
+          `SELECT COUNT(*) AS unread_count 
+           FROM messages m
+           JOIN conversations c ON m.conversation_id = c.id
+           JOIN contracts ct ON c.contract_id = ct.id
+           WHERE ct.merchant_id = $1
+           AND m.is_read = false
+           AND m.sender_id != $2`,
+          [merchantId, merchant.userId]
+        );
+
+        // Extract the count from the result
+        const unreadCount = result.rows[0]?.unread_count || 0;
+        return parseInt(unreadCount);
+      } catch (error) {
+        console.error(`Database error in unread count:`, error);
+        // Return 0 on database errors
+        return 0;
+      }
+    } catch (error) {
+      console.error(`Error getting unread message count for merchant ${merchantId}:`, error);
       return 0;
     }
   }
@@ -3252,7 +3294,25 @@ export class DatabaseStorage implements IStorage {
   async getAllSupportTickets(options: { limit?: number, offset?: number } = {}): Promise<SupportTicket[]> {
     try {
       let query = db
-        .select()
+        .select({
+          id: supportTickets.id,
+          ticketNumber: supportTickets.ticketNumber,
+          merchantId: supportTickets.merchantId,
+          createdBy: supportTickets.createdBy, // Using createdBy instead of userId
+          category: supportTickets.category,
+          subcategory: supportTickets.subcategory,
+          subject: supportTickets.subject,
+          description: supportTickets.description,
+          status: supportTickets.status,
+          priority: supportTickets.priority,
+          assignedTo: supportTickets.assignedTo,
+          conversationId: supportTickets.conversationId,
+          createdAt: supportTickets.createdAt,
+          updatedAt: supportTickets.updatedAt,
+          resolvedAt: supportTickets.resolvedAt,
+          closedAt: supportTickets.closedAt,
+          metadata: supportTickets.metadata
+        })
         .from(supportTickets)
         .orderBy(desc(supportTickets.updatedAt));
 

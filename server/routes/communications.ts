@@ -624,6 +624,137 @@ router.post("/:id/read", async (req: Request, res: Response) => {
   }
 });
 
+// Get unread message count for a merchant
+// Get unread message count for merchant by ID
+router.get("/merchant/:merchantId/unread-count", async (req: Request, res: Response) => {
+  try {
+    const merchantId = parseInt(req.params.merchantId);
+    if (isNaN(merchantId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid merchant ID format"
+      });
+    }
+    
+    // Check if merchant exists
+    const merchant = await storage.getMerchant(merchantId);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found"
+      });
+    }
+    
+    try {
+      const unreadCount = await storage.getUnreadMessageCountForMerchant(merchantId);
+      
+      res.json({
+        success: true,
+        unreadCount
+      });
+    } catch (dbError) {
+      // Handle database errors specifically
+      logger.error({
+        message: `Database error retrieving unread count: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          merchantId,
+          error: dbError instanceof Error ? dbError.stack : String(dbError)
+        }
+      });
+      
+      // Return 0 count when there's a database error rather than failing the API call
+      res.json({
+        success: true,
+        unreadCount: 0
+      });
+    }
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving merchant unread count: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        merchantId: req.params.merchantId,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve merchant unread message count"
+    });
+  }
+});
+
+// Special endpoint for the frontend that uses the current authenticated merchant
+// This endpoint matches the URL /api/communications/merchant/unread-count that the frontend expects
+router.get("/merchant/unread-count", async (req: Request, res: Response) => {
+  try {
+    // Get the current authenticated user from request
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized - User not authenticated"
+      });
+    }
+    
+    // Find the merchant associated with this user
+    const merchant = await storage.getMerchantByUserId(user.id);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found for current user"
+      });
+    }
+    
+    const merchantId = merchant.id;
+    
+    try {
+      const unreadCount = await storage.getUnreadMessageCountForMerchant(merchantId);
+      
+      res.json({
+        success: true,
+        unreadCount
+      });
+    } catch (dbError) {
+      // Handle database errors specifically
+      logger.error({
+        message: `Database error retrieving unread count: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          merchantId,
+          userId: user.id,
+          error: dbError instanceof Error ? dbError.stack : String(dbError)
+        }
+      });
+      
+      // Return 0 count when there's a database error rather than failing the API call
+      res.json({
+        success: true,
+        unreadCount: 0
+      });
+    }
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving merchant unread count for current user: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve merchant unread message count"
+    });
+  }
+});
+
 // Get conversations for a merchant
 router.get("/merchant/:merchantId", async (req: Request, res: Response) => {
   try {
