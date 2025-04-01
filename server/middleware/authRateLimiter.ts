@@ -1,5 +1,33 @@
 import { rateLimit } from 'express-rate-limit';
 import { logger } from '../services/logger';
+import { Request, Response, NextFunction } from 'express';
+
+/**
+ * Helper function to extract client IP safely with fallback
+ * @param req Express request object
+ * @returns Client IP address or 'unknown-ip' if none found
+ */
+function getClientIp(req: Request): string {
+  const xForwardedFor = req.headers['x-forwarded-for'] as string | undefined;
+  const ip = xForwardedFor ? xForwardedFor.split(',')[0].trim() : req.ip;
+  return ip || 'unknown-ip';
+}
+
+/**
+ * Helper function to determine if a request should be skipped for rate limiting
+ * @param req Express request object
+ * @param skipPaths Array of path prefixes to skip 
+ * @returns Boolean indicating if rate limiting should be skipped
+ */
+function shouldSkipRateLimit(req: Request, skipPaths: string[] = []): boolean {
+  // Skip for testing and health check endpoints
+  if (req.path.includes('/health') || req.path.includes('/status')) {
+    return true;
+  }
+  
+  // Skip for API webhook endpoints that need to receive high volume of requests
+  return skipPaths.some(path => req.path.startsWith(path));
+}
 
 /**
  * Rate limiter for authentication endpoints
@@ -12,19 +40,19 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   // Configure to safely work with proxies
   trustProxy: false, // Disable automatic trust proxy (we handle it at the app level)
-  // Use X-Forwarded-For header with the first IP in the list (most reliable in Replit)
-  keyGenerator: (req) => {
-    const xForwardedFor = req.headers['x-forwarded-for'] as string | undefined;
-    const ip = xForwardedFor ? xForwardedFor.split(',')[0].trim() : req.ip;
-    return ip || 'unknown-ip';
-  },
+  // Use centralized IP extraction function
+  keyGenerator: (req) => getClientIp(req),
+  // Skip health check and status endpoints
+  skip: (req) => shouldSkipRateLimit(req),
   message: {
     success: false,
-    message: 'Too many requests, please try again later.'
+    message: 'Too many authentication attempts. For security reasons, please wait 10 minutes before trying again.',
+    retryAfter: '10 minutes',
+    errorCode: 'RATE_LIMIT_AUTH'
   },
   handler: (req, res, next, options) => {
     logger.warn({
-      message: `Rate limit exceeded for IP: ${req.ip} on path: ${req.path}`,
+      message: `Rate limit exceeded for IP: ${getClientIp(req)} on path: ${req.path}`,
       category: 'security',
       source: 'internal',
       metadata: {
@@ -36,6 +64,7 @@ export const authRateLimiter = rateLimit({
       tags: ['rate-limit', 'auth-endpoint']
     });
     
+    // Send a more helpful response with retry information
     res.status(options.statusCode).send(options.message);
   }
 });
@@ -51,19 +80,19 @@ export const userCreationRateLimiter = rateLimit({
   legacyHeaders: false,
   // Configure to safely work with proxies
   trustProxy: false, // Disable automatic trust proxy (we handle it at the app level)
-  // Use X-Forwarded-For header with the first IP in the list (most reliable in Replit)
-  keyGenerator: (req) => {
-    const xForwardedFor = req.headers['x-forwarded-for'] as string | undefined;
-    const ip = xForwardedFor ? xForwardedFor.split(',')[0].trim() : req.ip;
-    return ip || 'unknown-ip';
-  },
+  // Use centralized IP extraction function
+  keyGenerator: (req) => getClientIp(req),
+  // Skip health check and status endpoints
+  skip: (req) => shouldSkipRateLimit(req),
   message: {
     success: false,
-    message: 'Too many accounts created from this IP, please try again after an hour.'
+    message: 'For security reasons, account creation from this IP address has been temporarily limited. Please try again later or contact support.',
+    retryAfter: '60 minutes',
+    errorCode: 'RATE_LIMIT_REGISTRATION'
   },
   handler: (req, res, next, options) => {
     logger.warn({
-      message: `User creation rate limit exceeded for IP: ${req.ip}`,
+      message: `User creation rate limit exceeded for IP: ${getClientIp(req)}`,
       category: 'security',
       source: 'internal',
       metadata: {
@@ -75,6 +104,7 @@ export const userCreationRateLimiter = rateLimit({
       tags: ['rate-limit', 'user-creation']
     });
     
+    // Send a more helpful response with retry information
     res.status(options.statusCode).send(options.message);
   }
 });
@@ -90,19 +120,17 @@ export const apiRateLimiter = rateLimit({
   legacyHeaders: false,
   // Configure to safely work with proxies
   trustProxy: false, // Disable automatic trust proxy (we handle it at the app level)
-  // Use X-Forwarded-For header with the first IP in the list (most reliable in Replit)
-  keyGenerator: (req) => {
-    const xForwardedFor = req.headers['x-forwarded-for'] as string | undefined;
-    const ip = xForwardedFor ? xForwardedFor.split(',')[0].trim() : req.ip;
-    return ip || 'unknown-ip';
-  },
+  // Use centralized IP extraction function
+  keyGenerator: (req) => getClientIp(req),
   message: {
     success: false,
-    message: 'Too many requests, please try again later.'
+    message: 'Rate limit exceeded. Please wait before making additional requests.',
+    retryAfter: '60 seconds',
+    errorCode: 'RATE_LIMIT_API'
   },
   handler: (req, res, next, options) => {
     logger.warn({
-      message: `API rate limit exceeded for IP: ${req.ip} on path: ${req.path}`,
+      message: `API rate limit exceeded for IP: ${getClientIp(req)} on path: ${req.path}`,
       category: 'security',
       source: 'internal',
       metadata: {
@@ -114,16 +142,19 @@ export const apiRateLimiter = rateLimit({
       tags: ['rate-limit', 'api-endpoint']
     });
     
+    // Send a more helpful response with retry information
     res.status(options.statusCode).send(options.message);
   },
-  // Skip rate limiting for certain endpoints like webhook receivers
+  // Skip rate limiting for certain endpoints using our utility function
   skip: (req) => {
     const skipPaths = [
       '/api/plaid/webhook',
       '/api/stripe/webhook',
-      '/api/twilio/webhook'
+      '/api/twilio/webhook',
+      '/api/health',
+      '/api/status'
     ];
     
-    return skipPaths.some(path => req.path.startsWith(path));
+    return shouldSkipRateLimit(req, skipPaths);
   }
 });
