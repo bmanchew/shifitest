@@ -17,8 +17,6 @@ import {
   contracts, Contract, InsertContract,
   contractCancellationRequests, ContractCancellationRequest, InsertContractCancellationRequest,
   underwritingData,
-  salesReps, SalesRep, InsertSalesRep,
-  salesRepAnalytics, SalesRepAnalytics, InsertSalesRepAnalytics,
   
   // Investment related schemas and types
   investorProfiles, InvestorProfile, InsertInvestorProfile,
@@ -39,20 +37,27 @@ import {
   assetReports, AssetReport, InsertAssetReport,
   portfolioMonitoring, PortfolioMonitoring, InsertPortfolioMonitoring,
   complaintsData, ComplaintsData, InsertComplaintsData,
-
-  // These types were not found in the modularized schema files
-  // They might have been removed or need to be added to the schema
-  notificationChannels, NotificationChannel, InsertNotificationChannel,
-  inAppNotifications, InAppNotification, InsertInAppNotification,
-  customerSatisfactionSurveys, CustomerSatisfactionSurvey, InsertCustomerSatisfactionSurvey,
-  smartContractTemplates, SmartContractTemplate, InsertSmartContractTemplate,
-  smartContractDeployments, SmartContractDeployment, InsertSmartContractDeployment,
 } from "@shared/schemas";
 
-// Import commissions from salesrep schema (moved in schema modularization)
+// Import salesrep related schemas
 import {
+  salesReps, SalesRep, InsertSalesRep,
+  salesRepAnalytics, SalesRepAnalytics, InsertSalesRepAnalytics,
   commissions, Commission, InsertCommission
 } from "@shared/schemas/salesrep.schema";
+
+// Import notification related schemas
+import {
+  notificationChannels, NotificationChannel, InsertNotificationChannel,
+  inAppNotifications, InAppNotification, InsertInAppNotification,
+  customerSatisfactionSurveys, CustomerSatisfactionSurvey, InsertCustomerSatisfactionSurvey
+} from "@shared/schemas/notification.schema";
+
+// Import blockchain related schemas
+import {
+  smartContractTemplates, SmartContractTemplate, InsertSmartContractTemplate,
+  smartContractDeployments, SmartContractDeployment, InsertSmartContractDeployment
+} from "@shared/schemas/blockchain.schema";
 import { db } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt, not } from "drizzle-orm";
 

@@ -249,3 +249,34 @@ export const thirdPartyVerificationStatusEnum = pgEnum("third_party_verification
   "failed",
   "cancelled",
 ]);
+
+// Commission rate type enum
+export const commissionRateTypeEnum = pgEnum("commission_rate_type", [
+  "percentage",
+  "fixed",
+]);
+
+// Smart contract type enum
+export const smartContractTypeEnum = pgEnum("smart_contract_type", [
+  "standard_financing",
+  "investment_offering",
+  "payment_distribution",
+  "custom",
+]);
+
+// Notification channel enum
+export const notificationChannelEnum = pgEnum("notification_channel", [
+  "email",
+  "sms",
+  "push",
+  "in_app",
+]);
+
+// Notification recipient type enum
+export const notificationRecipientTypeEnum = pgEnum("notification_recipient_type", [
+  "merchant",
+  "customer",
+  "investor",
+  "admin",
+  "sales_rep",
+]);
