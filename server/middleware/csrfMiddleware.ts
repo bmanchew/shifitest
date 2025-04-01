@@ -6,6 +6,11 @@ import csrf from 'csurf';
  * CSRF protection middleware with exclusions for certain endpoints
  */
 export const csrfProtectionWithExclusions = (req: Request, res: Response, next: NextFunction) => {
+  // GET requests don't need CSRF protection as they don't modify state
+  if (req.method === 'GET') {
+    return next();
+  }
+
   // List of paths that should be excluded from CSRF protection
   const excludedPaths = [
     '/api/csrf-token',         // Endpoint to get a CSRF token
