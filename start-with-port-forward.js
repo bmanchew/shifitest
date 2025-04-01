@@ -87,21 +87,41 @@ function startPortForwarder() {
     // Log the forwarded request
     console.log(`Forwarding: ${req.method} ${req.url}`);
     
-    // Simple HTML page with auto-redirect
-    res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta http-equiv="refresh" content="0;url=http://${req.headers.host.replace('5000', '5001')}${req.url}">
-          <title>Redirecting...</title>
-        </head>
-        <body>
-          <h1>Redirecting to active server port...</h1>
-          <p>If you are not redirected, <a href="http://${req.headers.host.replace('5000', '5001')}${req.url}">click here</a>.</p>
-        </body>
-      </html>
-    `);
+    // Create options for the proxied request
+    const options = {
+      hostname: 'localhost',
+      port: 5001,
+      path: req.url,
+      method: req.method,
+      headers: req.headers
+    };
+    
+    // Create the proxy request
+    const proxyReq = http.request(options, (proxyRes) => {
+      // Forward the status code and headers
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      
+      // Pipe the response data directly
+      proxyRes.pipe(res);
+    });
+    
+    // Handle errors in the proxy request
+    proxyReq.on('error', (err) => {
+      console.error(`Proxy error: ${err.message}`);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        success: false, 
+        message: 'Error connecting to server',
+        error: err.message
+      }));
+    });
+    
+    // If there's request data, pipe it to the proxied request
+    if(req.method !== 'GET' && req.method !== 'HEAD') {
+      req.pipe(proxyReq);
+    } else {
+      proxyReq.end();
+    }
   });
   
   // Error handler for the forwarder
