@@ -7,9 +7,105 @@ import { middeskService } from '../services/middesk';
 import { logger } from '../services/logger';
 import emailService from '../services/email';
 import crypto from 'crypto';
+import { ZodError } from "zod";
+import { fromZodError } from "zod-validation-error";
+import { insertMerchantSchema } from '../../shared/schemas/merchant.schema';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Get all merchants with proper error handling
+router.get("/", async (req: Request, res: Response) => {
+  try {
+    const merchants = await storage.getAllMerchants();
+    return res.json({
+      success: true,
+      merchants
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error fetching all merchants: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch merchants"
+    });
+  }
+});
+
+// Create a new merchant with proper validation
+router.post("/", async (req: Request, res: Response) => {
+  try {
+    const merchantData = insertMerchantSchema.parse(req.body);
+
+    // If there's a userId, make sure the user exists and has role 'merchant'
+    if (merchantData.userId) {
+      const user = await storage.getUser(merchantData.userId);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "User not found" 
+        });
+      }
+      if (user.role !== "merchant") {
+        return res.status(400).json({ 
+          success: false, 
+          message: "User is not a merchant" 
+        });
+      }
+    }
+
+    const newMerchant = await storage.createMerchant(merchantData);
+
+    // Create log for merchant creation
+    await logger.info({
+      message: `Merchant created: ${newMerchant.name}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        id: newMerchant.id,
+        email: newMerchant.email,
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      merchant: newMerchant
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      const formattedError = fromZodError(error);
+      return res
+        .status(400)
+        .json({ 
+          success: false, 
+          message: "Validation error", 
+          errors: formattedError 
+        });
+    }
+    
+    logger.error({
+      message: `Create merchant error: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error),
+        requestBody: JSON.stringify(req.body)
+      }
+    });
+    
+    return res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
+  }
+});
 
 router.post('/signup', upload.any(), async (req, res) => {
   try {

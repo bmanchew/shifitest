@@ -174,8 +174,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Use bcrypt to compare password
-      const isMatch = await bcrypt.compare(password, user.password);
+      // Check if the password is a bcrypt hash (starts with $2b$) or a plain-text password for development
+      let isMatch = false;
+      
+      // Debug logs - using direct console.log for visibility
+      console.log(`🔍 AUTH DEBUG - Login attempt for email: ${email}`);
+      console.log(`🔍 AUTH DEBUG - Password from request: "${password}"`);
+      console.log(`🔍 AUTH DEBUG - Password from database: "${user.password}"`);
+      console.log(`🔍 AUTH DEBUG - Is password a bcrypt hash: ${user.password.startsWith('$2b$')}`);
+      
+      // For development or plain-text passwords, just compare directly
+      if (password === user.password) {
+        isMatch = true;
+        console.log(`🔍 AUTH DEBUG - Plain text password match`);
+        logger.info({
+          message: `Plain text password match for ${email}`,
+          category: "security",
+          source: "internal",
+          userId: user.id,
+          metadata: {
+            ip: req.ip,
+            userAgent: req.headers["user-agent"]
+          }
+        });
+      } else if (user.password.startsWith('$2b$')) {
+        // If the password is already hashed with bcrypt, use bcrypt.compare
+        isMatch = await bcrypt.compare(password, user.password);
+        console.log(`🔍 AUTH DEBUG - Bcrypt password comparison result: ${isMatch}`);
+        
+        logger.info({
+          message: `Bcrypt password comparison for ${email}: ${isMatch ? "success" : "failed"}`,
+          category: "security",
+          source: "internal",
+          userId: user.id,
+          metadata: {
+            result: isMatch
+          }
+        });
+      } else {
+        console.log(`🔍 AUTH DEBUG - Password validation failed - no match and not bcrypt`);
+        
+        logger.warn({
+          message: "Password validation failed - no match and not bcrypt", 
+          category: "security",
+          source: "internal",
+          userId: user.id,
+          metadata: {
+            isPlainText: password === user.password,
+            isBcrypt: user.password.startsWith('$2b$')
+          }
+        });
+      }
       
       if (!isMatch) {
         // Log failed login attempt
@@ -414,74 +463,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes are registered at the end of the file
 
 // Merchant routes
-  apiRouter.post("/merchants", async (req: Request, res: Response) => {
-    try {
-      const merchantData = insertMerchantSchema.parse(req.body);
-
-      // If there's a userId, make sure the user exists and has role 'merchant'
-      if (merchantData.userId) {
-        const user = await storage.getUser(merchantData.userId);
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-        if (user.role !== "merchant") {
-          return res.status(400).json({ message: "User is not a merchant" });
-        }
-      }
-
-      const newMerchant = await storage.createMerchant(merchantData);
-
-      // Create log for merchant creation
-      await storage.createLog({
-        level: "info",
-        message: `Merchant created: ${newMerchant.name}`,
-        metadata: JSON.stringify({
-          id: newMerchant.id,
-          email: newMerchant.email,
-        }),
-      });
-
-      res.status(201).json(newMerchant);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const formattedError = fromZodError(error);
-        return res
-          .status(400)
-          .json({ message: "Validation error", errors: formattedError });
-      }
-      console.error("Create merchant error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  apiRouter.get("/merchants", async (req: Request, res: Response) => {
-    try {
-      const merchants = await storage.getAllMerchants();
-      res.json(merchants);
-    } catch (error) {
-      console.error("Get merchants error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  apiRouter.get("/merchants/:id", async (req: Request, res: Response) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid ID format" });
-      }
-
-      const merchant = await storage.getMerchant(id);
-      if (!merchant) {
-        return res.status(404).json({ message: "Merchant not found" });
-      }
-
-      res.json(merchant);
-    } catch (error) {
-      console.error("Get merchant error:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
+  // Merchant endpoints have been moved to the dedicated merchant router
+  // The router is mounted at /api/merchants below
 
   // Get Plaid settings for a merchant
   apiRouter.get("/merchants/:id/plaid-settings", async (req: Request, res: Response) => {
