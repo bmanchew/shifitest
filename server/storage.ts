@@ -877,40 +877,26 @@ export class DatabaseStorage implements IStorage {
 
   async getContractsByMerchantId(merchantId: number): Promise<Contract[]> {
     try {
-      // Use a more precise select with explicit columns that we know exist in the schema
-      const results = await db.select({
-        id: contracts.id,
-        createdAt: contracts.createdAt,
-        merchantId: contracts.merchantId,
-        customerId: contracts.customerId,
-        contractNumber: contracts.contractNumber,
-        status: contracts.status,
-        amount: contracts.amount,
-        interestRate: contracts.interestRate,
-        downPayment: contracts.downPayment,
-        financedAmount: contracts.financedAmount,
-        termMonths: contracts.termMonths,
-        monthlyPayment: contracts.monthlyPayment,
-        currentStep: contracts.currentStep,
-        archived: contracts.archived,
-        completedAt: contracts.completedAt,
-        phoneNumber: contracts.phoneNumber,
-        purchasedByShifi: contracts.purchasedByShifi
-      })
-      .from(contracts)
-      .where(
-        eq(contracts.merchantId, merchantId)
-      )
-      .orderBy(desc(contracts.createdAt));
+      console.log(`Getting contracts for merchant ID ${merchantId}`);
+      
+      // Simplified query without select mapping to avoid missing column errors
+      const results = await db
+        .select()
+        .from(contracts)
+        .where(eq(contracts.merchantId, merchantId))
+        .orderBy(desc(contracts.createdAt));
+      
+      console.log(`Found ${results.length} contracts for merchant ID ${merchantId}`);
       
       // Map the results to ensure all required fields are present
       return results.map(contract => {
         // Create a safe contract object with consistent fields
         return {
           id: contract.id,
-          createdAt: contract.createdAt,
+          createdAt: contract.createdAt || null,
           merchantId: contract.merchantId,
           customerId: contract.customerId || null,
+          customerName: contract.customerName || null,
           contractNumber: contract.contractNumber || null,
           status: contract.status || 'pending',
           amount: contract.amount || 0,
@@ -922,21 +908,24 @@ export class DatabaseStorage implements IStorage {
           currentStep: contract.currentStep || null,
           archived: contract.archived || false,
           completedAt: contract.completedAt || null,
-          phoneNumber: contract.phoneNumber || null,
+          // Use standard schema field names
+          startDate: contract.startDate || null,
+          endDate: contract.endDate || null,
+          tokenizationDate: contract.tokenizationDate || contract.tokenizationTimestamp || null,
           // Additional fields with default values
-          archivedAt: null,
-          archivedReason: null,
-          salesRepId: null,
+          archivedAt: contract.archivedAt || null,
+          archivedReason: contract.archivedReason || null,
+          salesRepId: contract.salesRepId || null,
           // Blockchain and tokenization related fields
           purchasedByShifi: contract.purchasedByShifi || false,
-          tokenizationStatus: 'pending',
-          tokenId: null,
-          smartContractAddress: null,
-          tokenizationError: null,
-          blockchainTransactionHash: null,
-          blockNumber: null,
-          tokenizationDate: null,
-          tokenMetadata: null
+          tokenizationStatus: contract.tokenizationStatus || 'pending',
+          tokenId: contract.tokenId || null,
+          smartContractAddress: contract.smartContractAddress || null,
+          tokenizationError: contract.tokenizationError || null,
+          blockchainTransactionHash: contract.blockchainTransactionHash || null,
+          blockNumber: contract.blockNumber || null,
+          tokenMetadata: contract.tokenMetadata || null,
+          type: contract.type || 'custom'
         };
       });
     } catch (error) {
