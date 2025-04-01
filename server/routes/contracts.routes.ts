@@ -28,6 +28,9 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
     // Check for admin query param - this requires admin permissions
     const isAdminRequest = req.query.admin === 'true';
     
+    // Check for merchantId query parameter
+    const merchantIdParam = req.query.merchantId ? parseInt(req.query.merchantId as string) : undefined;
+    
     // If admin request, verify admin permissions
     if (isAdminRequest) {
       // Check if user has admin role
@@ -38,12 +41,75 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
         });
       }
       
-      // Admin can view all contracts
-      const contracts = await storage.getAllContracts();
-      return res.status(200).json(contracts);
+      // Admin can view all contracts or filtered by merchantId
+      if (merchantIdParam) {
+        const contracts = await storage.getContractsByMerchantId(merchantIdParam);
+        
+        // Add credit tier info to each contract
+        const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
+          const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
+          // Use the most recent underwriting data if available
+          const mostRecentUnderwriting = underwritingData.length > 0 ? 
+            underwritingData.sort((a, b) => 
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            )[0] : null;
+          
+          return {
+            ...contract,
+            creditTier: mostRecentUnderwriting?.creditTier || null
+          };
+        }));
+        
+        return res.status(200).json(contractsWithTiers);
+      } else {
+        // Admin requesting all contracts
+        const contracts = await storage.getAllContracts();
+        return res.status(200).json(contracts);
+      }
     }
     
-    // Regular users can only view their own merchant contracts
+    // For non-admin users with merchantId parameter
+    if (merchantIdParam) {
+      // Verify that the user has access to this merchant
+      const userMerchant = await storage.getMerchantByUserId(userId);
+      
+      if (!userMerchant) {
+        return res.status(404).json({
+          success: false,
+          message: 'Merchant not found for this user'
+        });
+      }
+      
+      // Check if the user has access to the requested merchant
+      if (userMerchant.id !== merchantIdParam && req.user?.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden - Not authorized to view contracts for this merchant'
+        });
+      }
+      
+      // Get contracts for the merchant
+      const contracts = await storage.getContractsByMerchantId(merchantIdParam);
+      
+      // Add credit tier info to each contract
+      const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
+        const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
+        // Use the most recent underwriting data if available
+        const mostRecentUnderwriting = underwritingData.length > 0 ? 
+          underwritingData.sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )[0] : null;
+        
+        return {
+          ...contract,
+          creditTier: mostRecentUnderwriting?.creditTier || null
+        };
+      }));
+      
+      return res.status(200).json(contractsWithTiers);
+    }
+    
+    // Regular users with no merchantId - use their own merchant
     const userMerchant = await storage.getMerchantByUserId(userId);
     
     if (!userMerchant) {
@@ -54,7 +120,23 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
     }
     
     const contracts = await storage.getContractsByMerchantId(userMerchant.id);
-    res.status(200).json(contracts);
+    
+    // Add credit tier info to each contract
+    const contractsWithTiers = await Promise.all(contracts.map(async (contract) => {
+      const underwritingData = await storage.getUnderwritingDataByContractId(contract.id);
+      // Use the most recent underwriting data if available
+      const mostRecentUnderwriting = underwritingData.length > 0 ? 
+        underwritingData.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0] : null;
+      
+      return {
+        ...contract,
+        creditTier: mostRecentUnderwriting?.creditTier || null
+      };
+    }));
+    
+    res.status(200).json(contractsWithTiers);
   } catch (error: any) {
     console.error('Error fetching contracts:', error);
     res.status(500).json({ 
