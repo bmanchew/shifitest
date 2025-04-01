@@ -667,3 +667,132 @@ export const authenticateAdmin = async (req: Request, res: Response, next: NextF
     });
   }
 };
+
+/**
+ * Generic role-based middleware that can be used to restrict access based on user roles
+ * This is a higher-order function that returns a middleware function
+ * 
+ * @param role The role or array of roles that should be allowed access
+ * @returns Middleware function that checks if the user has the required role
+ * 
+ * @example
+ * // Only allow admins
+ * router.get('/admin/users', requireRole('admin'), AdminController.getUsers);
+ * 
+ * @example
+ * // Allow either admins or merchants
+ * router.get('/shared-resource', requireRole(['admin', 'merchant']), Controller.getResource);
+ */
+export const requireRole = (role: string | string[]) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Check if user is already attached to request (by JWT middleware)
+      if (!req.user) {
+        logger.warn({
+          message: 'Role-based authorization required but no user found on request',
+          category: 'security',
+          source: 'internal',
+          metadata: {
+            path: req.path,
+            method: req.method,
+            requiredRole: role
+          }
+        });
+        
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+      }
+      
+      // Handle both single role and array of roles
+      const roles = Array.isArray(role) ? role : [role];
+      
+      // Check if user has one of the required roles
+      if (!roles.includes(req.user.role)) {
+        logger.warn({
+          message: `User ${req.user.email} (${req.user.id}) attempted to access resource requiring role(s) [${roles.join(', ')}] with role ${req.user.role}`,
+          category: 'security',
+          userId: req.user.id,
+          source: 'internal',
+          metadata: {
+            path: req.path,
+            method: req.method,
+            userRole: req.user.role,
+            requiredRoles: roles
+          }
+        });
+        
+        return res.status(403).json({
+          success: false,
+          message: `Access denied. Required role: ${Array.isArray(role) ? role.join(' or ') : role}`
+        });
+      }
+      
+      // For merchant role, also fetch and attach merchant data
+      if (req.user.role === 'merchant' && !req.merchant) {
+        try {
+          // Get the merchant record for this user
+          const merchantRecords = await db.select()
+            .from(merchants)
+            .where(eq(merchants.userId, req.user.id))
+            .limit(1);
+          
+          if (merchantRecords.length > 0) {
+            // Create a merchant record with the correct type structure
+            const merchantRecord = {
+              id: merchantRecords[0].id,
+              name: merchantRecords[0].name,
+              contactName: merchantRecords[0].contactName,
+              email: merchantRecords[0].email,
+              phone: merchantRecords[0].phone,
+              address: merchantRecords[0].address || undefined,
+              active: merchantRecords[0].active ?? undefined,
+              archived: merchantRecords[0].archived ?? undefined,
+              createdAt: merchantRecords[0].createdAt || undefined,
+              userId: merchantRecords[0].userId || undefined
+            };
+            
+            // Attach merchant to request
+            req.merchant = merchantRecord as Express.Request['merchant'];
+          }
+        } catch (dbError) {
+          // Log the error but continue processing since we need to provide a proper response
+          logger.error({
+            message: `Error fetching merchant data in requireRole: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+            category: 'database',
+            userId: req.user.id,
+            source: 'internal',
+            metadata: {
+              error: dbError instanceof Error ? dbError.message : String(dbError),
+              stack: dbError instanceof Error ? dbError.stack : undefined,
+              path: req.path,
+              method: req.method
+            }
+          });
+        }
+      }
+      
+      next();
+    } catch (error) {
+      logger.error({
+        message: `Role-based authorization error: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'security',
+        userId: req.user?.id,
+        source: 'internal',
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          path: req.path,
+          method: req.method,
+          requiredRole: role
+        }
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: 'An error occurred during authorization'
+      });
+    }
+  };
+};

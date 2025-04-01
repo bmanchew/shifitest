@@ -2,13 +2,13 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { storage } from "../../storage";
 import { logger } from "../../services/logger";
-import { authenticateToken, isAdmin } from "../../middleware/auth";
+import { authenticateToken, requireRole } from "../../middleware/auth";
 
 const router = Router();
 
-// Apply authentication to all routes
+// Apply authentication and role-based middleware to all routes
 router.use(authenticateToken);
-router.use(isAdmin);
+router.use(requireRole('admin'));
 
 // Get all pending cancellation requests
 router.get("/pending", async (req: Request, res: Response) => {
