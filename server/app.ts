@@ -89,11 +89,11 @@ export function createApp(): Express {
       
       if (token) {
         try {
-          // Import JWT_SECRET constant from auth.controller.ts
-          const { JWT_SECRET } = require('./controllers/auth.controller');
+          // Use process.env.JWT_SECRET directly with a fallback for safety
+          const jwtSecret = process.env.JWT_SECRET || 'shifi-secure-jwt-secret-for-development-only';
           
-          // Use the JWT_SECRET constant which handles fallback
-          const decoded = jwt.verify(token, JWT_SECRET);
+          // Use the secret to verify the token
+          const decoded = jwt.verify(token, jwtSecret);
           
           if (typeof decoded === 'object' && decoded.userId) {
             // Get user from database
