@@ -161,10 +161,53 @@ export async function initiateTransfer(
   }
 }
 
+/**
+ * Get all active merchants who have completed onboarding with Plaid
+ * @returns Array of active merchants with their details
+ */
+export async function getActivePlaidMerchants() {
+  try {
+    // In a real implementation, this would query the database for merchants
+    // who have completed Plaid onboarding and have active status
+    
+    // For now, fetch from storage or provide structured mock data for development
+    const response = await fetch('http://localhost:5001/api/merchants');
+    if (!response.ok) {
+      throw new Error('Failed to fetch merchant data');
+    }
+    
+    const merchantsData = await response.json();
+    const merchants = Array.isArray(merchantsData) ? merchantsData : 
+                     (merchantsData && merchantsData.merchants ? merchantsData.merchants : []);
+    
+    // Filter for active merchants only
+    const activeMerchants = merchants.filter((merchant: any) => 
+      !merchant.isArchived && merchant.status === 'active'
+    );
+    
+    logger.info(`Retrieved ${activeMerchants.length} active Plaid merchants`, {
+      category: 'plaid',
+      action: 'get_active_merchants'
+    });
+    
+    return activeMerchants;
+  } catch (error) {
+    logger.error(`Error retrieving active Plaid merchants: ${error instanceof Error ? error.message : String(error)}`, {
+      error: error instanceof Error ? error.message : String(error),
+      category: 'plaid',
+      action: 'get_active_merchants_error'
+    });
+    
+    // Return empty array instead of throwing to prevent UI breakage
+    return [];
+  }
+}
+
 // Export the Plaid service
 export const plaidService = {
   createLinkToken,
   exchangePublicToken,
   getAccountInfo,
-  initiateTransfer
+  initiateTransfer,
+  getActivePlaidMerchants
 };
