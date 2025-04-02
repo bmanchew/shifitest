@@ -24,6 +24,7 @@ import { logger } from "../services/logger";
 import { notificationService } from "../services/index";
 import { NotificationType } from "../services/notification";
 import crypto from "crypto";
+import { authenticateToken, isAuthenticated } from "../middleware/auth";
 
 const router = Router();
 
@@ -648,9 +649,11 @@ router.get("/merchant/:merchantId/unread-count", async (req: Request, res: Respo
     try {
       const unreadCount = await storage.getUnreadMessageCountForMerchant(merchantId);
       
+      // Ensure format is consistent with merchant/unread-count endpoint
       res.json({
         success: true,
-        unreadCount
+        unreadCount,
+        count: unreadCount
       });
     } catch (dbError) {
       // Handle database errors specifically
@@ -665,9 +668,11 @@ router.get("/merchant/:merchantId/unread-count", async (req: Request, res: Respo
       });
       
       // Return 0 count when there's a database error rather than failing the API call
+      // Include count property for consistency with successful response
       res.json({
         success: true,
-        unreadCount: 0
+        unreadCount: 0,
+        count: 0
       });
     }
   } catch (error) {
@@ -690,7 +695,7 @@ router.get("/merchant/:merchantId/unread-count", async (req: Request, res: Respo
 
 // Special endpoint for the frontend that uses the current authenticated merchant
 // This endpoint matches the URL /api/communications/merchant/unread-count that the frontend expects
-router.get("/merchant/unread-count", async (req: Request, res: Response) => {
+router.get("/merchant/unread-count", authenticateToken, async (req: Request, res: Response) => {
   try {
     // Get the current authenticated user from request
     const user = (req as any).user;
@@ -715,9 +720,13 @@ router.get("/merchant/unread-count", async (req: Request, res: Response) => {
     try {
       const unreadCount = await storage.getUnreadMessageCountForMerchant(merchantId);
       
+      // Return data in format expected by the frontend
+      // Ensure we include both unreadCount and count properties
+      // This is to maintain compatibility with different versions of the frontend
       res.json({
         success: true,
-        unreadCount
+        unreadCount,
+        count: unreadCount
       });
     } catch (dbError) {
       // Handle database errors specifically
@@ -733,9 +742,11 @@ router.get("/merchant/unread-count", async (req: Request, res: Response) => {
       });
       
       // Return 0 count when there's a database error rather than failing the API call
+      // Include both count and unreadCount properties
       res.json({
         success: true,
-        unreadCount: 0
+        unreadCount: 0,
+        count: 0
       });
     }
   } catch (error) {
