@@ -980,38 +980,9 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log("Getting all contracts");
       
-      // Explicitly select only the columns we know exist
+      // Use a simpler approach with regular select to avoid issues
       const results = await db
-        .select({
-          id: contracts.id,
-          contractNumber: contracts.contractNumber,
-          merchantId: contracts.merchantId,
-          customerId: contracts.customerId,
-          amount: contracts.amount,
-          termMonths: contracts.termMonths,
-          interestRate: contracts.interestRate,
-          status: contracts.status,
-          currentStep: contracts.currentStep,
-          createdAt: contracts.createdAt,
-          completedAt: contracts.completedAt,
-          phoneNumber: contracts.phoneNumber,
-          purchasedByShifi: contracts.purchasedByShifi,
-          tokenizationStatus: contracts.tokenizationStatus,
-          tokenId: contracts.tokenId,
-          smartContractAddress: contracts.smartContractAddress,
-          blockchainTransactionHash: contracts.blockchainTransactionHash,
-          blockNumber: contracts.blockNumber,
-          tokenizationDate: contracts.tokenizationDate,
-          tokenMetadata: contracts.tokenMetadata,
-          tokenizationError: contracts.tokenizationError,
-          archived: contracts.archived,
-          archivedAt: contracts.archivedAt,
-          archivedReason: contracts.archivedReason,
-          downPayment: contracts.downPayment,
-          financedAmount: contracts.financedAmount,
-          monthlyPayment: contracts.monthlyPayment,
-          salesRepId: contracts.salesRepId
-        })
+        .select()
         .from(contracts)
         .orderBy(desc(contracts.createdAt));
       
@@ -1035,9 +1006,9 @@ export class DatabaseStorage implements IStorage {
           
           // Dates
           createdAt: contract.createdAt || null,
-          updatedAt: null, // not selected in query
-          startDate: null, // not selected in query
-          endDate: null, // not selected in query
+          updatedAt: contract.updatedAt || null,
+          startDate: contract.startDate || null,
+          endDate: contract.endDate || null,
           completedAt: contract.completedAt || null,
           
           // Financial fields
