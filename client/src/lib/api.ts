@@ -89,6 +89,7 @@ export async function apiRequest<T = Response>(
   method: string,
   url: string,
   data?: unknown | undefined,
+  customHeaders?: Record<string, string> | null,
   options: {
     retry?: boolean;
     maxRetries?: number;
@@ -107,10 +108,16 @@ export async function apiRequest<T = Response>(
   if (import.meta.env.DEV) {
     console.log(`API Request: ${method} ${fullUrl}`);
     if (data) console.log(`Request data:`, data);
+    if (customHeaders) console.log(`Custom headers:`, customHeaders);
   }
 
   // Get auth token from local storage
   let headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
+  
+  // Add any custom headers if provided
+  if (customHeaders) {
+    headers = { ...headers, ...customHeaders };
+  }
   
   // Add authentication token if available
   try {
@@ -344,28 +351,31 @@ export async function apiRequest<T = Response>(
 export const createApiQuery = <T>(
   url: string,
   method: string = "GET",
-  data?: unknown
+  data?: unknown,
+  customHeaders?: Record<string, string>
 ): QueryFunction<T> => {
   return async () => {
-    return apiRequest<T>(method, url, data);
+    return apiRequest<T>(method, url, data, customHeaders);
   };
 };
 
 /**
  * Fetch payment schedule data for a customer
  * @param customerId - The ID of the customer
+ * @param customHeaders - Optional custom headers to include with the request
  * @returns Promise with the payment schedule data
  */
-export const fetchPaymentSchedule = async (customerId: string) => {
-  return apiRequest('GET', `/api/customers/${customerId}/payment-schedule`);
+export const fetchPaymentSchedule = async (customerId: string, customHeaders?: Record<string, string>) => {
+  return apiRequest('GET', `/api/customers/${customerId}/payment-schedule`, undefined, customHeaders);
 };
 
 /**
  * Update payment schedule for a customer
  * @param customerId - The ID of the customer
  * @param scheduleData - The updated schedule data
+ * @param customHeaders - Optional custom headers to include with the request
  * @returns Promise with the updated payment schedule
  */
-export const updatePaymentSchedule = async (customerId: string, scheduleData: any) => {
-  return apiRequest('PUT', `/api/customers/${customerId}/payment-schedule`, scheduleData);
+export const updatePaymentSchedule = async (customerId: string, scheduleData: any, customHeaders?: Record<string, string>) => {
+  return apiRequest('PUT', `/api/customers/${customerId}/payment-schedule`, scheduleData, customHeaders);
 };

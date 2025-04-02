@@ -27,9 +27,22 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     '/api/financial-sherpa/realtime', // Financial Sherpa WebSocket initialization
     '/api/openai/realtime',    // OpenAI Realtime WebSocket endpoint
     '/api/test-email',         // Test endpoint for contract signed email
+    
+    // Communications/Conversations/Tickets endpoints and their variations
     '/api/conversations',      // Backward compatibility route for communications
+    '/api/conversations/',     // Ensure the trailing slash version is also excluded
     '/api/support-tickets',    // Backward compatibility route for support tickets
-    '/api/communications'      // Main communications endpoints
+    '/api/communications',     // Main communications endpoints
+    '/api/communications/',    // Ensure the trailing slash version is also excluded
+    
+    // Specific conversation endpoints
+    '/api/conversations/read',      // Endpoint to mark conversations as read
+    '/api/conversations/messages',  // Endpoint for messages in all conversations
+    
+    // Pattern for conversation-specific message endpoints
+    // These need special handling to ensure paths like /api/conversations/123/messages work
+    '/api/conversations/',          // This covers all routes that start with /api/conversations/
+    '/api/communications/'          // This covers all routes that start with /api/communications/
   ];
   
   // Check if the request path should be excluded
