@@ -249,16 +249,16 @@ router.post("/", async (req: Request, res: Response) => {
     });
     
     // Define an extended schema that includes the initial message
+    // Allow either 'topic' or 'subject' for better client compatibility
     const extendedSchema = z.object({
       merchantId: z.number({
         required_error: "Merchant ID is required",
         invalid_type_error: "Merchant ID must be a number"
       }),
       contractId: z.number().optional().nullable(),
-      topic: z.string({
-        required_error: "Topic is required",
-        invalid_type_error: "Topic must be a string"
-      }).min(1, "Topic cannot be empty"),
+      // Support both 'topic' and 'subject' field names
+      subject: z.string().min(1, "Subject cannot be empty").optional(),
+      topic: z.string().min(1, "Topic cannot be empty").optional(),
       message: z.string({
         required_error: "Initial message is required",
         invalid_type_error: "Message must be a string"
@@ -368,11 +368,24 @@ router.post("/", async (req: Request, res: Response) => {
     console.log("Found creator:", creator.email);
     
     // Create the conversation with the correct field mapping
-    // We know from examining the schema that it uses 'subject' not 'topic'
-    console.log("Creating conversation with mapped fields from 'topic' to 'subject'");
+    // Allow either subject or topic field to support different clients
+    console.log("Creating conversation with flexible field mapping for subject/topic");
+    
+    // Determine which field to use for subject (prefer subject if provided, fall back to topic)
+    const subjectContent = conversationData.subject || conversationData.topic;
+    
+    if (!subjectContent) {
+      console.error("Neither subject nor topic field was provided");
+      return res.status(400).json({
+        success: false,
+        message: "Either subject or topic field is required",
+        details: { providedFields: Object.keys(conversationData) }
+      });
+    }
+    
     const conversationDbData = {
-      // Map 'topic' from client to 'subject' for database
-      subject: conversationData.topic,
+      // Use the determined subject content
+      subject: subjectContent,
       merchantId: conversationData.merchantId,
       contractId: conversationData.contractId,
       status: conversationData.status,
@@ -454,8 +467,9 @@ router.post("/", async (req: Request, res: Response) => {
       });
     }
     
+    // Use subjectContent here to be consistent
     logger.info({
-      message: `Created new conversation with initial message: ${conversationData.topic}`,
+      message: `Created new conversation with initial message: ${subjectContent}`,
       category: "api",
       source: "internal",
       userId: conversationData.createdBy,
