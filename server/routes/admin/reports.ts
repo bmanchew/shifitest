@@ -41,48 +41,18 @@ reportsRouter.get("/complaint-trends", async (req: Request, res: Response) => {
   } catch (error) {
     logger.error({
       message: `Error fetching complaint trends: ${error instanceof Error ? error.message : String(error)}`,
-      category: "api",
+      category: "external",
       source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null,
       },
     });
 
-    // Return mock data as fallback
-    const mockData = {
-      personalLoans: {
-        hits: {
-          total: 120,
-          hits: Array(15).fill(0).map((_, i) => ({
-            _source: {
-              date_received: new Date(Date.now() - i * 86400000).toISOString().split('T')[0],
-              issue: ["High interest", "Unexpected fees", "Difficult application process"][i % 3],
-              sub_product: "Unsecured personal loan"
-            }
-          }))
-        }
-      },
-      merchantCashAdvance: {
-        hits: {
-          total: 85,
-          hits: Array(10).fill(0).map((_, i) => ({
-            _source: {
-              date_received: new Date(Date.now() - i * 86400000).toISOString().split('T')[0],
-              issue: ["High fees", "Confusing terms", "Collection practices"][i % 3],
-              sub_product: "Merchant cash advance"
-            }
-          }))
-        }
-      },
-      isMockData: true
-    };
-
-    res.json({
-      success: true,
-      data: mockData,
-      isMockData: true,
-      error: "Used mock data due to API error",
-      errorDetails: error instanceof Error ? error.message : String(error)
+    // Return error status with details
+    res.status(500).json({
+      success: false,
+      message: "Failed to load CFPB complaint data. Please try again later.",
+      error: error instanceof Error ? error.message : String(error)
     });
   }
 });
@@ -92,7 +62,7 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
   try {
     logger.info({
       message: "Starting CFPB complaint trends analysis",
-      category: "api",
+      category: "external",
       source: "internal",
     });
 
@@ -106,7 +76,7 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
   } catch (error) {
     logger.error({
       message: `Failed to get CFPB complaint trends: ${error instanceof Error ? error.message : String(error)}`,
-      category: "api",
+      category: "external",
       source: "internal",
       metadata: {
         error: error instanceof Error ? error.stack : null,

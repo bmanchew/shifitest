@@ -23,7 +23,8 @@ export type LogCategory =
   | "sms"
   | "underwriting"
   | "blockchain"
-  | "plaid";
+  | "plaid"
+  | "external";
 
 // Log sources
 export type LogSource = 
@@ -41,7 +42,8 @@ export type LogSource =
   | "signing"
   | "thanksroger"
   | "prefi"
-  | "nlpearl";
+  | "nlpearl"
+  | "cfpb";
 
 // Base log interface
 interface BaseLog {

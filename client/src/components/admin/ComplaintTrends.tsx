@@ -11,23 +11,43 @@ export default function ComplaintTrends() {
   const { data: complaintData, isLoading, isError, error, refetch } = useQuery<any, Error>({
     queryKey: ["/api/admin/reports/complaint-trends"],
     queryFn: async () => {
-      const response = await fetch('/api/admin/reports/complaint-trends');
-      if (!response.ok) {
-        throw new Error('Failed to fetch complaint trends');
+      try {
+        const response = await fetch('/api/admin/reports/complaint-trends');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch complaint trends: ${response.status} ${response.statusText}`);
+        }
+        
+        // First parse as text to catch JSON parse errors
+        const textData = await response.text();
+        let responseData;
+        
+        try {
+          responseData = JSON.parse(textData);
+        } catch (parseError) {
+          console.error('Failed to parse JSON response:', textData.substring(0, 500));
+          throw new Error(`Failed to parse response as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+        }
+        
+        if (!responseData.success) {
+          throw new Error(responseData.message || 'Failed to fetch complaint trends');
+        }
+        
+        return responseData;
+      } catch (err) {
+        console.error('CFPB data fetch error:', err);
+        throw err; // Rethrow for React Query to handle
       }
-      const responseData = await response.json();
-      if (!responseData.success) {
-        throw new Error(responseData.message || 'Failed to fetch complaint trends');
-      }
-      return responseData;
     },
     refetchOnWindowFocus: false,
+    retry: 1, // Only retry once before showing error
   });
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
       await refetch();
+    } catch (err) {
+      console.error('Error refreshing CFPB data:', err);
     } finally {
       setIsRefreshing(false);
     }

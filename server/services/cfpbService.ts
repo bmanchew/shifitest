@@ -21,30 +21,64 @@ export class CFPBService {
 
       logger.info({
         message: 'Fetching CFPB complaint data',
-        category: 'api',
+        category: 'external',
         source: 'cfpb',
         metadata: { params: params.toString() }
       });
 
       const response = await axios.get(`${this.baseUrl}?${params.toString()}`, {
         timeout: 30000,
-        headers: { 'Accept': 'application/json' }
+        headers: { 
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; FinTechApp/1.0)' 
+        },
+        validateStatus: (status) => status === 200, // Only treat 200 as success
+        responseType: 'text' // Get raw text first to validate it's JSON
       });
 
       if (!response.data) {
         throw new Error('Empty response from CFPB API');
       }
 
-      return response.data;
+      // Check if the response is actually JSON and not HTML
+      if (typeof response.data === 'string' && (response.data.trim().startsWith('<!DOCTYPE') || response.data.trim().startsWith('<html'))) {
+        throw new Error('Received HTML instead of JSON from CFPB API');
+      }
+
+      // Now parse the data if it's a string
+      let jsonData;
+      if (typeof response.data === 'string') {
+        try {
+          jsonData = JSON.parse(response.data);
+        } catch (parseError) {
+          logger.error({
+            message: `Failed to parse JSON response from CFPB API: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+            category: 'external',
+            source: 'cfpb',
+            metadata: {
+              responseStart: response.data.substring(0, 500) // Log the start of the response
+            }
+          });
+          throw new Error(`Invalid JSON response: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+        }
+      } else {
+        jsonData = response.data; // Already parsed by axios
+      }
+
+      return jsonData;
     } catch (error) {
       logger.error({
         message: `Error fetching CFPB data: ${error instanceof Error ? error.message : String(error)}`,
-        category: 'api',
+        category: 'external',
         source: 'cfpb',
         metadata: {
           error: error instanceof Error ? error.stack : null,
           params: params.toString(),
-          response: axios.isAxiosError(error) ? error.response?.data : null
+          response: axios.isAxiosError(error) ? 
+            (typeof error.response?.data === 'string' ? 
+              error.response.data.substring(0, 500) : 
+              error.response?.data) : 
+            null
         }
       });
       throw error;
@@ -66,7 +100,7 @@ export class CFPBService {
     } catch (error) {
       logger.error({
         message: `Error fetching personal loan complaints: ${error instanceof Error ? error.message : String(error)}`,
-        category: 'api',
+        category: 'external',
         source: 'cfpb',
         metadata: { error: error instanceof Error ? error.stack : null }
       });
@@ -89,7 +123,7 @@ export class CFPBService {
     } catch (error) {
       logger.error({
         message: `Error fetching merchant cash advance complaints: ${error instanceof Error ? error.message : String(error)}`,
-        category: 'api',
+        category: 'external',
         source: 'cfpb',
         metadata: { error: error instanceof Error ? error.stack : null }
       });
@@ -108,7 +142,7 @@ export class CFPBService {
       // Log what we got from the API
       logger.info({
         message: 'Successfully fetched complaint trends data',
-        category: 'api',
+        category: 'external',
         source: 'cfpb',
         metadata: {
           personalLoanCount: personalLoanComplaints?.hits?.total || 0,
@@ -123,7 +157,7 @@ export class CFPBService {
     } catch (error) {
       logger.error({
         message: `Error fetching complaint trends: ${error instanceof Error ? error.message : String(error)}`,
-        category: 'api',
+        category: 'external',
         source: 'cfpb',
         metadata: { error: error instanceof Error ? error.stack : null }
       });
