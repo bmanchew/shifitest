@@ -321,18 +321,55 @@ export default function AdminMessages() {
     },
   ];
   
-  // Handle creating a new conversation
+  // Handle creating a new conversation with enhanced error handling
   const handleCreateConversation = async (values: z.infer<typeof newConversationSchema>) => {
     try {
-      const response = await apiRequest("POST", "/api/conversations", values) as any;
-      console.log("Conversation creation response:", response);
+      console.log("Creating conversation with values:", values);
       
-      // Extract the conversation ID from the response
-      // The server returns either response.id or response.conversation.id
-      const conversationId = response.id || (response.conversation && response.conversation.id);
+      // Add more diagnostic information
+      const headers = new Headers();
+      headers.append('Content-Type', 'application/json');
+      headers.append('X-CSRF-Token', document.cookie.replace(/(?:(?:^|.*;\s*)XSRF-TOKEN\s*\=\s*([^;]*).*$)|^.*$/, "$1"));
+      
+      // Log the headers for debugging
+      console.log("Request headers:", {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': document.cookie.replace(/(?:(?:^|.*;\s*)XSRF-TOKEN\s*\=\s*([^;]*).*$)|^.*$/, "$1").substring(0, 5) + '...'
+      });
+      
+      // First try to fetch a fresh CSRF token to ensure it's valid
+      try {
+        await fetch('/api/csrf-token');
+        console.log("Successfully refreshed CSRF token");
+      } catch (tokenError) {
+        console.error("Error refreshing CSRF token:", tokenError);
+      }
+      
+      // Make the API request with detailed logging
+      console.log("Sending request to create conversation");
+      const response = await apiRequest("POST", "/api/conversations", values) as any;
+      console.log("Conversation creation raw response:", response);
+      
+      // More detailed response inspection
+      if (!response) {
+        throw new Error("Empty response received from server");
+      }
+      
+      if (response.error) {
+        throw new Error(`Server error: ${response.error || response.message || "Unknown error"}`);
+      }
+      
+      // Extract the conversation ID from the response with more robust handling
+      // The server returns either response.id or response.conversation.id or response.data.id
+      const conversationId = response.id || 
+                            (response.conversation && response.conversation.id) || 
+                            (response.data && response.data.id);
+      
+      console.log("Extracted conversation ID:", conversationId);
       
       if (!conversationId) {
-        throw new Error("No conversation ID returned from server");
+        console.error("Full response object:", JSON.stringify(response, null, 2));
+        throw new Error("No conversation ID returned from server. See console for details.");
       }
       
       toast({
@@ -347,9 +384,40 @@ export default function AdminMessages() {
       navigate(`/admin/messages/${conversationId}`);
     } catch (error) {
       console.error("Error creating conversation:", error);
+      
+      // Enhanced error handling with more specific messages
+      let errorMessage = "Failed to create the conversation. Please try again.";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Check for network errors
+        if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+          errorMessage = "Network error occurred. Please check your connection and try again.";
+        }
+        
+        // Check for CSRF token errors
+        if (error.message.includes('CSRF') || error.message.includes('csrf') || error.message.includes('403')) {
+          errorMessage = "Authentication error. Please refresh the page and try again.";
+          
+          // Try to refresh the token automatically
+          try {
+            await fetch('/api/csrf-token');
+            errorMessage += " (Token refreshed, please try again)";
+          } catch (tokenError) {
+            console.error("Failed to refresh token:", tokenError);
+          }
+        }
+        
+        // Check for validation errors
+        if (error.message.includes('validation') || error.message.includes('required')) {
+          errorMessage = "Validation error: " + error.message;
+        }
+      }
+      
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create the conversation. Please try again.",
+        title: "Error Creating Conversation",
+        description: errorMessage,
         variant: "destructive",
       });
     }

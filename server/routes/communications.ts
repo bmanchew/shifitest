@@ -241,6 +241,13 @@ router.post("/", async (req: Request, res: Response) => {
   try {
     console.log("Creating conversation with data:", req.body);
     
+    // Log request headers for debugging CSRF issues
+    console.log("Request headers:", {
+      csrfToken: req.headers['x-csrf-token'] ? 'Present' : 'Missing',
+      contentType: req.headers['content-type'],
+      cookies: req.headers.cookie ? 'Present' : 'Missing'
+    });
+    
     // Define an extended schema that includes the initial message
     const extendedSchema = z.object({
       merchantId: z.number({
@@ -269,88 +276,250 @@ router.post("/", async (req: Request, res: Response) => {
     });
     
     // Parse and validate the input
-    const validatedData = extendedSchema.parse(req.body);
-    console.log("Validated data:", validatedData);
+    let validatedData;
+    try {
+      validatedData = extendedSchema.parse(req.body);
+      console.log("Validated data:", validatedData);
+    } catch (validationError) {
+      if (validationError instanceof ZodError) {
+        const formattedError = fromZodError(validationError);
+        console.error("Validation error:", formattedError.toString());
+        
+        // Log validation error details
+        const errorDetails = validationError.errors.map(err => ({
+          path: err.path.join('.'),
+          message: err.message,
+          code: err.code
+        }));
+        console.error("Validation error details:", errorDetails);
+        
+        return res.status(400).json({
+          success: false,
+          message: "Validation error",
+          errors: formattedError.toString(),
+          details: errorDetails
+        });
+      }
+      throw validationError; // Re-throw if not a Zod error
+    }
     
     // Extract message content from validated data
     const { message, ...conversationData } = validatedData;
     
     // If createdBy is not provided, use the authenticated user's ID if available
     if (!conversationData.createdBy && req.user) {
+      console.log("Using authenticated user ID:", req.user.id);
       conversationData.createdBy = req.user.id;
     }
     
     // Ensure createdBy exists at this point
     if (!conversationData.createdBy) {
+      console.error("No createdBy ID found in request or user session");
       return res.status(400).json({
         success: false,
-        message: "Creator ID (createdBy) is required"
+        message: "Creator ID (createdBy) is required",
+        details: {
+          requestBody: req.body,
+          userPresent: !!req.user,
+          userId: req.user?.id
+        }
       });
     }
     
     // Validate that the merchant exists
+    console.log("Looking up merchant:", conversationData.merchantId);
     const merchant = await storage.getMerchant(conversationData.merchantId);
     if (!merchant) {
+      console.error("Merchant not found:", conversationData.merchantId);
       return res.status(404).json({
         success: false,
-        message: "Referenced merchant not found"
+        message: "Referenced merchant not found",
+        details: { merchantId: conversationData.merchantId }
       });
     }
+    console.log("Found merchant:", merchant.businessName);
     
     // Validate that the contract exists if specified
     if (conversationData.contractId) {
+      console.log("Looking up contract:", conversationData.contractId);
       const contract = await storage.getContract(conversationData.contractId);
       if (!contract) {
+        console.error("Contract not found:", conversationData.contractId);
         return res.status(404).json({
           success: false,
-          message: "Referenced contract not found"
+          message: "Referenced contract not found",
+          details: { contractId: conversationData.contractId }
         });
       }
+      console.log("Found contract:", contract.contractNumber);
     }
     
     // Validate that the creator exists
+    console.log("Looking up creator user:", conversationData.createdBy);
     const creator = await storage.getUser(conversationData.createdBy);
     if (!creator) {
+      console.error("Creator user not found:", conversationData.createdBy);
       return res.status(404).json({
         success: false,
-        message: "Creator user not found"
+        message: "Creator user not found",
+        details: { createdBy: conversationData.createdBy }
       });
     }
+    console.log("Found creator:", creator.email);
     
     // Create the conversation - use matching fields for the database schema
-    const conversationDbData = {
-      topic: conversationData.topic, // Database table uses 'topic' not 'subject'
-      contractId: conversationData.contractId,
-      status: conversationData.status,
-      createdBy: conversationData.createdBy,
-      priority: conversationData.priority,
-      category: conversationData.category,
-      // Adding required timestamps
-      updatedAt: new Date(),
-      lastMessageAt: new Date()
-    };
+    // Check what fields the database schema expects
+    let conversationDbData;
+    try {
+      // See if we need to map fields differently
+      const schemaTest = await db.query.conversations.findMany({ limit: 1 });
+      console.log("Database schema test:", Object.keys(schemaTest[0] || {}));
+      
+      if (schemaTest.length > 0 && 'subject' in schemaTest[0]) {
+        // If the schema uses 'subject' instead of 'topic'
+        console.log("Database schema uses 'subject' field, mapping from 'topic'");
+        conversationDbData = {
+          subject: conversationData.topic,
+          merchantId: conversationData.merchantId,
+          contractId: conversationData.contractId,
+          status: conversationData.status,
+          metadata: JSON.stringify({
+            createdBy: conversationData.createdBy,
+            priority: conversationData.priority,
+            category: conversationData.category,
+          }),
+          // Adding required timestamps
+          updatedAt: new Date(),
+          lastMessageAt: new Date()
+        };
+      } else {
+        // Use direct field mapping
+        console.log("Using direct field mapping for conversation");
+        conversationDbData = {
+          topic: conversationData.topic,
+          merchantId: conversationData.merchantId,
+          contractId: conversationData.contractId,
+          status: conversationData.status,
+          createdBy: conversationData.createdBy,
+          priority: conversationData.priority,
+          category: conversationData.category,
+          // Adding required timestamps
+          updatedAt: new Date(),
+          lastMessageAt: new Date()
+        };
+      }
+    } catch (schemaError) {
+      console.error("Error determining database schema:", schemaError);
+      // Fallback to direct mapping
+      conversationDbData = {
+        topic: conversationData.topic,
+        merchantId: conversationData.merchantId,
+        contractId: conversationData.contractId,
+        status: conversationData.status,
+        createdBy: conversationData.createdBy,
+        priority: conversationData.priority,
+        category: conversationData.category,
+        // Adding required timestamps
+        updatedAt: new Date(),
+        lastMessageAt: new Date()
+      };
+    }
     
     console.log("Conversation data being sent to storage:", conversationDbData);
     
     // Create the conversation in the database
-    const newConversation = await storage.createConversation(conversationDbData);
-    console.log("New conversation created:", newConversation);
+    let newConversation;
+    try {
+      newConversation = await storage.createConversation(conversationDbData);
+      console.log("New conversation created:", newConversation);
+    } catch (dbError) {
+      console.error("Database error creating conversation:", dbError);
+      return res.status(500).json({
+        success: false,
+        message: "Database error when creating conversation",
+        details: dbError instanceof Error ? dbError.message : String(dbError),
+        code: "DB_CREATE_ERROR"
+      });
+    }
+    
+    if (!newConversation || !newConversation.id) {
+      console.error("Invalid conversation created:", newConversation);
+      return res.status(500).json({
+        success: false,
+        message: "Created conversation is invalid or missing ID",
+        code: "INVALID_CONVERSATION"
+      });
+    }
     
     // Create the initial message
-    const messageData = {
-      conversationId: newConversation.id,
-      senderId: conversationData.createdBy,
-      content: message,
-      isRead: false,
-      senderRole: creator.role, // Add sender role from the creator's user record
-    };
+    let messageData;
+    try {
+      // Check if we need to modify message fields based on database schema
+      const schemaTest = await db.query.messages.findMany({ limit: 1 });
+      console.log("Message schema test:", Object.keys(schemaTest[0] || {}));
+      
+      if (schemaTest.length > 0) {
+        // Adapt message data based on actual database schema
+        messageData = {
+          conversationId: newConversation.id,
+          senderId: conversationData.createdBy,
+          content: message,
+          // Only add fields that exist in the schema
+          ...(schemaTest[0].hasOwnProperty('isRead') && { isRead: false }),
+          ...(schemaTest[0].hasOwnProperty('senderRole') && { senderRole: creator.role }),
+          ...(schemaTest[0].hasOwnProperty('senderType') && { senderType: creator.role === 'admin' ? 'admin' : 'merchant' }),
+        };
+      } else {
+        // Fallback to basic fields
+        messageData = {
+          conversationId: newConversation.id,
+          senderId: conversationData.createdBy,
+          content: message
+        };
+      }
+    } catch (schemaError) {
+      console.error("Error determining message schema:", schemaError);
+      // Fallback to basic fields
+      messageData = {
+        conversationId: newConversation.id,
+        senderId: conversationData.createdBy,
+        content: message
+      };
+    }
     
     console.log("Creating initial message:", messageData);
-    const newMessage = await storage.createMessage(messageData);
-    console.log("New message created:", newMessage);
+    
+    let newMessage;
+    try {
+      newMessage = await storage.createMessage(messageData);
+      console.log("New message created:", newMessage);
+    } catch (messageError) {
+      console.error("Error creating initial message:", messageError);
+      
+      // Even if the message creation fails, the conversation was created
+      logger.warn({
+        message: `Created conversation but failed to create initial message: ${conversationData.topic}`,
+        category: "api",
+        source: "internal",
+        userId: conversationData.createdBy,
+        metadata: {
+          conversationId: newConversation.id,
+          error: messageError instanceof Error ? messageError.message : String(messageError)
+        }
+      });
+      
+      // Return a partial success
+      return res.status(201).json({
+        success: true,
+        id: newConversation.id,
+        conversationId: newConversation.id,
+        conversation: newConversation,
+        warning: "Conversation created but initial message failed" 
+      });
+    }
     
     logger.info({
-      message: `Created new conversation: ${conversationData.topic}`,
+      message: `Created new conversation with initial message: ${conversationData.topic}`,
       category: "api",
       source: "internal",
       userId: conversationData.createdBy,
@@ -363,26 +532,21 @@ router.post("/", async (req: Request, res: Response) => {
     });
     
     // Return the ID directly in the root of the response for client redirection
-    // Include both formats to ensure compatibility
+    // Include multiple formats to ensure compatibility with all clients
     const response = {
       success: true,
       id: newConversation.id, // This is what the client expects for redirection
       conversationId: newConversation.id, // Alternative field name
-      conversation: newConversation // Full conversation object for reference
+      conversation: newConversation, // Full conversation object for reference
+      message: newMessage // Include the created message
     };
     
-    console.log("Sending response:", response);
+    console.log("Sending successful response:", 
+      { id: response.id, conversationId: response.conversationId, success: response.success });
+    
     res.status(201).json(response);
   } catch (error) {
-    console.error("Conversation creation error:", error);
-    
-    if (error instanceof ZodError) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation error",
-        errors: fromZodError(error).toString()
-      });
-    }
+    console.error("Unexpected conversation creation error:", error);
     
     logger.error({
       message: `Error creating conversation: ${error instanceof Error ? error.message : String(error)}`,
@@ -394,9 +558,13 @@ router.post("/", async (req: Request, res: Response) => {
       }
     });
     
+    // Provide detailed error info to help debugging
     res.status(500).json({
       success: false,
-      message: "Failed to create conversation"
+      message: "Failed to create conversation due to an unexpected error",
+      error: error instanceof Error ? error.message : String(error),
+      code: "UNEXPECTED_ERROR",
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -531,20 +699,38 @@ router.get("/:id/messages", async (req: Request, res: Response) => {
 // Send a message in a conversation
 router.post("/:id/messages", async (req: Request, res: Response) => {
   try {
+    console.log("Creating message in conversation. Request:", {
+      conversationId: req.params.id,
+      body: req.body,
+      user: req.user?.id,
+      method: req.method,
+      path: req.path,
+      headers: {
+        csrfToken: req.headers['x-csrf-token'] ? 'Present' : 'Missing',
+        contentType: req.headers['content-type'],
+        cookies: req.headers.cookie ? 'Present' : 'Missing'
+      }
+    });
+    
     const conversationId = parseInt(req.params.id);
     if (isNaN(conversationId)) {
+      console.error(`Invalid conversation ID format: ${req.params.id}`);
       return res.status(400).json({
         success: false,
-        message: "Invalid conversation ID format"
+        message: "Invalid conversation ID format",
+        details: { providedId: req.params.id }
       });
     }
     
     // Verify conversation exists
+    console.log("Looking up conversation:", conversationId);
     const conversation = await storage.getConversation(conversationId);
     if (!conversation) {
+      console.error(`Conversation not found: ${conversationId}`);
       return res.status(404).json({
         success: false,
-        message: "Conversation not found"
+        message: "Conversation not found",
+        details: { conversationId }
       });
     }
     

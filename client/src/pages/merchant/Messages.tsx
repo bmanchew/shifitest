@@ -44,7 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { PlusCircle, MessageCircle, Clock, Filter } from "lucide-react";
+import { PlusCircle, MessageCircle, Clock, Filter, X, RefreshCw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 
@@ -73,14 +73,24 @@ export default function MerchantMessages() {
   });
 
   // Query to get all conversations
-  const { data: conversationsData, isLoading } = useQuery({
+  const { 
+    data: conversationsData, 
+    isLoading,
+    error: conversationsError,
+    refetch: refetchConversations 
+  } = useQuery({
     queryKey: ["/api/communications/merchant"],
     queryFn: async () => {
-      const response = await fetch("/api/communications/merchant");
-      if (!response.ok) {
-        throw new Error("Failed to fetch conversations");
+      console.log("Fetching merchant conversations");
+      try {
+        // Use the apiRequest utility which handles CSRF tokens
+        const response = await apiRequest("GET", "/api/communications/merchant");
+        console.log("Merchant conversations response:", response);
+        return response;
+      } catch (error) {
+        console.error("Error fetching merchant conversations:", error);
+        throw error;
       }
-      return response.json();
     },
   });
 
@@ -172,7 +182,19 @@ export default function MerchantMessages() {
     }
   };
 
-  const filteredConversations = filterConversations(conversationsData?.conversations || []);
+  // Check for error state
+  const hasError = conversationsError !== null;
+  
+  // Extract conversations with better error handling for various response formats
+  console.log("Raw conversations data:", conversationsData);
+  
+  const conversations = conversationsData?.conversations || 
+                       (conversationsData?.data) || 
+                       (conversationsData?.success && conversationsData) || 
+                       [];
+  
+  // Apply filtering to the conversations
+  const filteredConversations = filterConversations(Array.isArray(conversations) ? conversations : []);
 
   return (
     <MerchantLayout>
@@ -202,6 +224,28 @@ export default function MerchantMessages() {
               <div className="flex justify-center p-8">
                 <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary" />
               </div>
+            ) : hasError ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-8">
+                  <div className="text-red-500 rounded-full bg-red-50 p-3 mb-4">
+                    <X className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">Connection Error</h3>
+                  <p className="text-gray-500 text-center mb-4 max-w-md">
+                    We're having trouble connecting to the messaging system. This might be due to network issues or server maintenance.
+                  </p>
+                  <Button 
+                    onClick={() => refetchConversations()}
+                    className="mb-2"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Try Again
+                  </Button>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Error: {conversationsError instanceof Error ? conversationsError.message : "Unknown error"}
+                  </p>
+                </CardContent>
+              </Card>
             ) : filteredConversations.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-8">
@@ -265,6 +309,25 @@ export default function MerchantMessages() {
               <div className="flex justify-center p-8">
                 <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary" />
               </div>
+            ) : hasError ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-8">
+                  <div className="text-red-500 rounded-full bg-red-50 p-3 mb-4">
+                    <X className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">Connection Error</h3>
+                  <p className="text-gray-500 text-center mb-4 max-w-md">
+                    We're having trouble connecting to the messaging system. This might be due to network issues or server maintenance.
+                  </p>
+                  <Button 
+                    onClick={() => refetchConversations()}
+                    className="mb-2"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Try Again
+                  </Button>
+                </CardContent>
+              </Card>
             ) : filteredConversations.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-8">
@@ -313,6 +376,25 @@ export default function MerchantMessages() {
               <div className="flex justify-center p-8">
                 <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary" />
               </div>
+            ) : hasError ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-8">
+                  <div className="text-red-500 rounded-full bg-red-50 p-3 mb-4">
+                    <X className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">Connection Error</h3>
+                  <p className="text-gray-500 text-center mb-4 max-w-md">
+                    We're having trouble connecting to the messaging system. This might be due to network issues or server maintenance.
+                  </p>
+                  <Button 
+                    onClick={() => refetchConversations()}
+                    className="mb-2"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Try Again
+                  </Button>
+                </CardContent>
+              </Card>
             ) : filteredConversations.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-8">

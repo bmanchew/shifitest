@@ -226,9 +226,65 @@ export default function MessageDetail() {
     }
   };
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      sendMessageMutation.mutate(newMessage.trim());
+  const handleSendMessage = async () => {
+    if (!newMessage.trim()) return;
+    
+    try {
+      console.log("Attempting to send message to conversation:", conversationId);
+      
+      // Log the current CSRF token for debugging
+      const csrfToken = document.cookie.replace(/(?:(?:^|.*;\s*)XSRF-TOKEN\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+      console.log("Message sending context:", {
+        csrfTokenPresent: !!csrfToken,
+        message: newMessage.substring(0, 20) + (newMessage.length > 20 ? '...' : '')
+      });
+      
+      // First ensure we have a fresh CSRF token
+      try {
+        await fetch('/api/csrf-token');
+        console.log("CSRF token refreshed before sending message");
+      } catch (tokenError) {
+        console.error("Error refreshing CSRF token:", tokenError);
+      }
+      
+      // Attempt to send the message with additional debugging
+      sendMessageMutation.mutate(newMessage.trim(), {
+        onSuccess: () => {
+          console.log("Message sent successfully");
+          // Scrolling is handled in the mutation's onSuccess
+        },
+        onError: (error) => {
+          console.error("Detailed send message error:", error);
+          
+          // Provide more specific error messages to the user
+          let errorMessage = "Failed to send message. Please try again.";
+          
+          if (error instanceof Error) {
+            // Extract more specific error information if available
+            if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+              errorMessage = "Network error. Please check your connection and try again.";
+            } else if (error.message.includes('403') || error.message.includes('CSRF')) {
+              errorMessage = "Session error. Please refresh the page and try again.";
+              
+              // Try to refresh the token automatically
+              fetch('/api/csrf-token').catch(e => console.error("Token refresh failed:", e));
+            }
+          }
+          
+          toast({
+            title: "Error Sending Message",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
+      });
+    } catch (error) {
+      console.error("Error in handleSendMessage outer try/catch:", error);
+      toast({
+        title: "Error",
+        description: "Unexpected error when sending message. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 

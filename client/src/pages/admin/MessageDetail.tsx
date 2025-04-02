@@ -151,10 +151,31 @@ export default function AdminMessageDetail() {
     if (!newMessage.trim()) return;
 
     try {
-      await apiRequest("POST", `/api/conversations/${conversationId}/messages`, {
-        content: newMessage
+      console.log("Admin attempting to send message to conversation:", conversationId);
+      
+      // Log current token and request context for debugging
+      const csrfToken = document.cookie.replace(/(?:(?:^|.*;\s*)XSRF-TOKEN\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+      console.log("Admin message sending context:", {
+        csrfTokenPresent: !!csrfToken,
+        endpoint: `/api/conversations/${conversationId}/messages`,
+        messagePreview: newMessage.substring(0, 20) + (newMessage.length > 20 ? '...' : '')
       });
-
+      
+      // Refresh CSRF token before sending
+      try {
+        await fetch('/api/csrf-token');
+        console.log("CSRF token refreshed before sending admin message");
+      } catch (tokenError) {
+        console.error("Error refreshing CSRF token:", tokenError);
+      }
+      
+      // Send message with proper error handling
+      const response = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, {
+        content: newMessage.trim()
+      });
+      
+      console.log("Admin message sent successfully:", response);
+      
       // Clear the input and refetch messages
       setNewMessage("");
       refetchMessages();
@@ -167,11 +188,38 @@ export default function AdminMessageDetail() {
         description: "Your message has been sent successfully.",
       });
     } catch (error) {
+      console.error("Detailed admin message send error:", error);
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to send message. Please try again.";
+      
+      if (error instanceof Error) {
+        // Extract specific error information
+        if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+          errorMessage = "Network error. Please check your connection and try again.";
+        } else if (error.message.includes('403') || error.message.includes('CSRF')) {
+          errorMessage = "Session error. Please refresh the page and try again.";
+          
+          // Try to refresh the token automatically
+          fetch('/api/csrf-token').catch(e => console.error("Token refresh failed:", e));
+        } else if (error.message.includes('conversation not found') || error.message.includes('404')) {
+          errorMessage = "This conversation may have been deleted or you don't have permission to access it.";
+        } else {
+          // Include the actual error message for more specific feedback
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      
       toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
+        title: "Error Sending Message",
+        description: errorMessage,
         variant: "destructive",
       });
+      
+      // If we get an access error, refresh the conversation data
+      if (errorMessage.includes('permission') || errorMessage.includes('404')) {
+        refetchConversation();
+      }
     }
   };
 
