@@ -165,12 +165,10 @@ export default function AdminMessages() {
     : (Array.isArray(merchants) ? merchants.filter((m: any) => !m.isArchived) : []);
     
   // Map merchants to format used in dropdown
-  const dropdownMerchants = activeMerchants.length > 0 && activeMerchants[0].merchantId
-    ? activeMerchants  // Format from active merchants API
-    : activeMerchants.map((m: any) => ({
-        merchantId: m.id,
-        merchantName: m.businessName
-      }));
+  const dropdownMerchants = activeMerchants.map((m: any) => ({
+    merchantId: m.id || m.merchantId,
+    merchantName: m.businessName || m.companyName || m.name || `Merchant ID: ${m.id || m.merchantId}`
+  }));
   
   // Define the columns for the conversations data table
   const conversationsColumns: ColumnDef<any>[] = [
@@ -566,7 +564,7 @@ export default function AdminMessages() {
                         ) : dropdownMerchants.length > 0 ? (
                           dropdownMerchants.map((merchant: any) => (
                             <SelectItem key={merchant.merchantId} value={String(merchant.merchantId)}>
-                              {merchant.merchantName || "Unnamed Merchant"}
+                              {merchant.merchantName}
                             </SelectItem>
                           ))
                         ) : (
