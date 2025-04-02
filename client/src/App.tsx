@@ -15,6 +15,7 @@ const AdminSettings = lazy(() => import("@/pages/admin/Settings"));
 const AdminBlockchain = lazy(() => import("@/pages/admin/Blockchain"));
 const AdminSupportTickets = lazy(() => import("@/pages/admin/SupportTickets"));
 const AdminMessages = lazy(() => import("@/pages/admin/Messages"));
+const AdminMessageDetail = lazy(() => import("@/pages/admin/MessageDetail"));
 
 // Merchant pages
 const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
@@ -120,6 +121,7 @@ function App() {
             <Route path="/admin/blockchain" component={AdminBlockchain} />
             <Route path="/admin/support-tickets" component={AdminSupportTickets} />
             <Route path="/admin/messages" component={AdminMessages} />
+            <Route path="/admin/messages/:id" component={AdminMessageDetail} />
           </>
         )}
 
