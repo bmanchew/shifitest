@@ -133,7 +133,10 @@ export async function apiRequest<T = Response>(
       '/api/auth/register',
       '/api/auth/reset-password',
       '/api/auth/forgot-password',
-      '/api/investor/applications'  // Investor application submission endpoint
+      '/api/investor/applications',  // Investor application submission endpoint
+      '/api/communications',         // Communications endpoints
+      '/api/conversations',          // Conversation endpoints (backward compatibility)
+      '/api/support-tickets'         // Support tickets endpoints
     ];
     
     const shouldAddCsrf = !excludedCsrfEndpoints.some(endpoint => url.startsWith(endpoint));

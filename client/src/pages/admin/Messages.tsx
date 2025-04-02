@@ -62,12 +62,14 @@ import { Link } from "wouter";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 // Define the schema for creating a new conversation
+// Note: Using the field 'topic' which gets mapped to 'subject' on the server
 const newConversationSchema = z.object({
   merchantId: z.number(),
   contractId: z.number().optional().nullable(),
   topic: z.string().min(1, { message: "Topic is required" }),
   message: z.string().min(1, { message: "Initial message is required" }),
   priority: z.string().optional(),
+  category: z.string().optional(),
 });
 
 export default function AdminMessages() {
