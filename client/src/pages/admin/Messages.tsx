@@ -121,7 +121,7 @@ export default function AdminMessages() {
   });
   
   // Extract conversations array from the response
-  const conversations = data?.conversations || [];
+  const conversations = (data?.conversations || []) as any[];
   
   // Ensure it's an array
   if (!Array.isArray(conversations)) {
@@ -145,12 +145,12 @@ export default function AdminMessages() {
   });
   
   // Extract merchants array from the response
-  const merchants = Array.isArray(allMerchants) ? allMerchants : 
-                   (allMerchants && allMerchants.merchants ? allMerchants.merchants : []);
+  const merchants = Array.isArray(allMerchants) ? allMerchants as any[] : 
+                   (allMerchants && (allMerchants as any).merchants ? (allMerchants as any).merchants : []);
   
   // Use all merchants as fallback when active merchants API fails
-  const activeMerchants = activeMerchantsData.merchants && activeMerchantsData.merchants.length > 0 
-    ? activeMerchantsData.merchants 
+  const activeMerchants = activeMerchantsData && activeMerchantsData.merchants && activeMerchantsData.merchants.length > 0 
+    ? activeMerchantsData.merchants as any[]
     : (Array.isArray(merchants) ? merchants.filter((m: any) => !m.isArchived) : []);
     
   // Map merchants to format used in dropdown
@@ -320,7 +320,7 @@ export default function AdminMessages() {
   // Handle creating a new conversation
   const handleCreateConversation = async (values: z.infer<typeof newConversationSchema>) => {
     try {
-      const data = await apiRequest("POST", "/api/conversations", values);
+      const data = await apiRequest("POST", "/api/conversations", values) as any;
       
       toast({
         title: "Conversation Created",

@@ -37,13 +37,32 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Define a message interface
+// Define message interface
 interface MessageItem {
   id: number;
   content: string;
   senderType: 'admin' | 'merchant';
   createdAt: string;
   senderId: number;
+}
+
+// Define conversation interface
+interface Conversation {
+  id: number;
+  topic: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt?: string;
+  merchantId: number;
+  merchant?: {
+    businessName: string;
+  };
+  contractId?: number;
+  contract?: {
+    contractNumber: string;
+  };
+  unreadCount?: number;
 }
 
 export default function AdminMessageDetail() {
@@ -89,8 +108,8 @@ export default function AdminMessageDetail() {
   });
 
   // Extract data from responses
-  const conversation = conversationData?.conversation;
-  const messages = messagesData?.messages || [];
+  const conversation = conversationData?.conversation as Conversation | undefined;
+  const messages = (messagesData?.messages || []) as MessageItem[];
 
   // Scroll to bottom of messages when new messages arrive
   useEffect(() => {
