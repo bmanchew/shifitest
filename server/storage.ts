@@ -978,16 +978,30 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts for merchant ID ${merchantId}`);
       
-      // Use a query that explicitly selects only the fields we know exist to avoid errors
+      // Use a query that explicitly selects only fields we know exist
+      // Avoid selecting 'term' since it doesn't exist in the schema
       const results = await db
-        .select()
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          merchantId: contracts.merchantId,
+          customerId: contracts.customerId,
+          amount: contracts.amount,
+          interestRate: contracts.interestRate,
+          status: contracts.status,
+          termMonths: contracts.termMonths,
+          createdAt: contracts.createdAt,
+          updatedAt: contracts.updatedAt,
+          startDate: contracts.startDate,
+          endDate: contracts.endDate
+        })
         .from(contracts)
         .where(eq(contracts.merchantId, merchantId))
         .orderBy(desc(contracts.createdAt));
       
       console.log(`Found ${results.length} contracts for merchant ID ${merchantId}`);
       
-      // Map the results to ensure all required fields are present
+      // Map the results to ensure all required fields are present and add the term field
       return results.map(contract => {
         // For logging purposes to help diagnose any issues
         if (contract.id && contract.id % 10 === 0) { // Log sample contracts to avoid cluttering logs
@@ -1010,38 +1024,38 @@ export class DatabaseStorage implements IStorage {
           // Financial fields
           amount: contract.amount || 0,
           interestRate: contract.interestRate || 0,
-          downPayment: contract.downPayment || 0,
-          financedAmount: contract.financedAmount || 0,
-          monthlyPayment: contract.monthlyPayment || 0,
+          downPayment: 0, // Default value if not in the results
+          financedAmount: 0, // Default value if not in the results
+          monthlyPayment: 0, // Default value if not in the results
           
           // Term fields - ensure both are set consistently
           termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0, // Maintain backward compatibility
+          term: contract.termMonths || 0, // Add term field based on termMonths
           
           // Status fields
-          currentStep: contract.currentStep || 'created',
-          archived: contract.archived || false,
-          completedAt: contract.completedAt || null,
-          phoneNumber: contract.phoneNumber || null,
-          archivedAt: contract.archivedAt || null,
-          archivedReason: contract.archivedReason || null,
-          salesRepId: contract.salesRepId || null,
+          currentStep: 'created', // Default value if not in the results
+          archived: false, // Default value if not in the results
+          completedAt: null, // Default value if not in the results
+          phoneNumber: null, // Default value if not in the results
+          archivedAt: null, // Default value if not in the results
+          archivedReason: null, // Default value if not in the results
+          salesRepId: null, // Default value if not in the results
           
           // Blockchain and tokenization related fields
-          purchasedByShifi: contract.purchasedByShifi || false,
-          tokenizationStatus: contract.tokenizationStatus || null,
-          tokenId: contract.tokenId || null,
-          smartContractAddress: contract.smartContractAddress || null,
-          tokenizationError: contract.tokenizationError || null,
-          blockchainTransactionHash: contract.blockchainTransactionHash || null,
-          blockNumber: contract.blockNumber || null,
-          tokenizationDate: contract.tokenizationDate || null,
-          tokenMetadata: contract.tokenMetadata || null,
+          purchasedByShifi: false, // Default value if not in the results
+          tokenizationStatus: null, // Default value if not in the results
+          tokenId: null, // Default value if not in the results
+          smartContractAddress: null, // Default value if not in the results
+          tokenizationError: null, // Default value if not in the results
+          blockchainTransactionHash: null, // Default value if not in the results
+          blockNumber: null, // Default value if not in the results
+          tokenizationDate: null, // Default value if not in the results
+          tokenMetadata: null, // Default value if not in the results
           
           // Additional frontend expected fields
           startDate: contract.startDate || null,
           endDate: contract.endDate || null,
-          type: contract.type || 'custom'
+          type: 'custom' // Default value if not in the results
         };
       });
     } catch (error) {
