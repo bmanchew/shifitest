@@ -499,7 +499,8 @@ router.get("/unread-count", async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      count: unreadCount,
+      unreadCount: unreadCount,
+      count: unreadCount, // Keep count for backward compatibility
     });
     
   } catch (error) {
