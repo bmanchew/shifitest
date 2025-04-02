@@ -107,9 +107,21 @@ export default function AdminMessageDetail() {
     },
   });
 
-  // Extract data from responses
-  const conversation = conversationData?.conversation as Conversation | undefined;
-  const messages = (messagesData?.messages || []) as MessageItem[];
+  // Extract data from responses - handle different response formats
+  console.log("Conversation data:", conversationData);
+  console.log("Messages data:", messagesData);
+  
+  // Handle various API response formats
+  const conversation = conversationData?.conversation || 
+                       (conversationData?.success && conversationData) || 
+                       conversationData as Conversation | undefined;
+  
+  // Extract messages from various response formats
+  const messagesArray = messagesData?.messages || 
+                        (messagesData?.data) || 
+                        (messagesData?.success && messagesData) || 
+                        [];
+  const messages = (Array.isArray(messagesArray) ? messagesArray : []) as MessageItem[];
 
   // Scroll to bottom of messages when new messages arrive
   useEffect(() => {

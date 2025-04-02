@@ -284,9 +284,21 @@ export default function MessageDetail() {
     );
   }
 
-  // Get data
-  const conversation = conversationData?.conversation as Conversation | undefined;
-  const messages = (messagesData?.messages || []) as Message[];
+  // Get data - handle different response formats
+  console.log("Merchant conversation data:", conversationData);
+  console.log("Merchant messages data:", messagesData);
+  
+  // Handle various API response formats
+  const conversation = conversationData?.conversation || 
+                      (conversationData?.success && conversationData) || 
+                      conversationData as Conversation | undefined;
+  
+  // Extract messages from various response formats
+  const messagesArray = messagesData?.messages || 
+                        (messagesData?.data) || 
+                        (messagesData?.success && messagesData) || 
+                        [];
+  const messages = (Array.isArray(messagesArray) ? messagesArray : []) as Message[];
 
   // If no conversation found
   if (!conversation) {

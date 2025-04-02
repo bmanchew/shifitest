@@ -121,11 +121,15 @@ export default function AdminMessages() {
   });
   
   // Extract conversations array from the response
-  const conversations = (data?.conversations || []) as any[];
+  // The API can return data in different formats, so we need to handle all cases
+  console.log("Conversations data:", data);
+  const conversationsData = data?.data || data?.conversations || (data?.success && data) || [];
+  const conversations = Array.isArray(conversationsData) ? conversationsData : 
+                        (Array.isArray(data) ? data : []) as any[];
   
-  // Ensure it's an array
+  // Log any potential issues for debugging
   if (!Array.isArray(conversations)) {
-    console.error('Conversations data is not an array:', conversations);
+    console.error('Conversations data is not an array:', conversations, 'Raw data:', data);
   }
   
   // Query to fetch all merchants (for filtering)

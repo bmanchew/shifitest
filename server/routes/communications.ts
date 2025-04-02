@@ -239,6 +239,8 @@ router.get("/:id", async (req: Request, res: Response) => {
 // Create a new conversation
 router.post("/", async (req: Request, res: Response) => {
   try {
+    console.log("Creating conversation with data:", req.body);
+    
     // Define an extended schema that includes the initial message
     const extendedSchema = z.object({
       merchantId: z.number({
@@ -268,6 +270,7 @@ router.post("/", async (req: Request, res: Response) => {
     
     // Parse and validate the input
     const validatedData = extendedSchema.parse(req.body);
+    console.log("Validated data:", validatedData);
     
     // Extract message content from validated data
     const { message, ...conversationData } = validatedData;
@@ -314,30 +317,37 @@ router.post("/", async (req: Request, res: Response) => {
       });
     }
     
-    // Create the conversation
-    // Map fields from our validated schema to the database schema
+    // Create the conversation - use matching fields for the database schema
     const conversationDbData = {
-      merchantId: conversationData.merchantId,
+      topic: conversationData.topic, // Database table uses 'topic' not 'subject'
       contractId: conversationData.contractId,
-      subject: conversationData.topic, // Map 'topic' to 'subject' for DB
       status: conversationData.status,
-      metadata: JSON.stringify({
-        priority: conversationData.priority,
-        category: conversationData.category,
-        createdBy: conversationData.createdBy
-      })
+      createdBy: conversationData.createdBy,
+      priority: conversationData.priority,
+      category: conversationData.category,
+      // Adding required timestamps
+      updatedAt: new Date(),
+      lastMessageAt: new Date()
     };
+    
+    console.log("Conversation data being sent to storage:", conversationDbData);
     
     // Create the conversation in the database
     const newConversation = await storage.createConversation(conversationDbData);
+    console.log("New conversation created:", newConversation);
     
     // Create the initial message
-    const newMessage = await storage.createMessage({
+    const messageData = {
       conversationId: newConversation.id,
       senderId: conversationData.createdBy,
       content: message,
       isRead: false,
-    });
+      senderRole: creator.role, // Add sender role from the creator's user record
+    };
+    
+    console.log("Creating initial message:", messageData);
+    const newMessage = await storage.createMessage(messageData);
+    console.log("New message created:", newMessage);
     
     logger.info({
       message: `Created new conversation: ${conversationData.topic}`,
@@ -352,20 +362,20 @@ router.post("/", async (req: Request, res: Response) => {
       }
     });
     
-    // Return the ID for redirection plus conversation details
-    res.status(201).json({
+    // Return the ID directly in the root of the response for client redirection
+    // Include both formats to ensure compatibility
+    const response = {
       success: true,
-      id: newConversation.id,
-      conversation: {
-        ...newConversation,
-        // Add the fields expected by the client that are stored in metadata
-        topic: conversationData.topic,
-        priority: conversationData.priority,
-        category: conversationData.category,
-        createdBy: conversationData.createdBy
-      }
-    });
+      id: newConversation.id, // This is what the client expects for redirection
+      conversationId: newConversation.id, // Alternative field name
+      conversation: newConversation // Full conversation object for reference
+    };
+    
+    console.log("Sending response:", response);
+    res.status(201).json(response);
   } catch (error) {
+    console.error("Conversation creation error:", error);
+    
     if (error instanceof ZodError) {
       return res.status(400).json({
         success: false,
