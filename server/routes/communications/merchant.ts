@@ -106,15 +106,18 @@ router.post("/", async (req: Request, res: Response) => {
       });
     }
 
-    // First, create the conversation
+    // Create metadata that includes other fields that aren't in the DB schema
+    const metadata = JSON.stringify({ 
+      priority,
+      category: "general" // Default category
+    });
+
+    // First, create the conversation with the correct field names
     const conversation = await storage.createConversation({
       merchantId: merchant.id,
-      topic,
+      subject: topic, // Map 'topic' to 'subject' field
       status: "active",
-      priority,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      lastMessageAt: new Date(),
+      metadata: metadata, // Store priority in metadata
     });
 
     // Then, create the initial message
