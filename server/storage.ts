@@ -359,20 +359,61 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
+      // Ensure category is set if missing
+      if (!normalizedData.category) {
+        normalizedData.category = 'general';
+      }
+      
+      // Make sure priority is set if missing
+      if (!normalizedData.priority) {
+        normalizedData.priority = 'normal';
+      }
+      
+      // Ensure createdBy is set
+      if (!normalizedData.createdBy) {
+        // Set a default created by - in this case we'll set the contract's merchant user ID if available
+        if (normalizedData.merchantId) {
+          try {
+            const merchant = await this.getMerchant(normalizedData.merchantId);
+            if (merchant && merchant.userId) {
+              normalizedData.createdBy = merchant.userId;
+            }
+          } catch (err) {
+            console.warn(`Could not find merchant user ID for conversation creation:`, err);
+          }
+        }
+        
+        // If we still don't have a createdBy value, set admin user 1 as default
+        if (!normalizedData.createdBy) {
+          normalizedData.createdBy = 1; // Default to admin user ID
+        }
+      }
+      
       // Create a clean data object that matches the database schema (without 'subject')
       const { subject, ...validData } = normalizedData;
       
-      console.log("Final conversation data being inserted:", validData);
+      console.log("Final conversation data being inserted:", JSON.stringify(validData, null, 2));
 
+      // Insert into the database
       const [newConversation] = await db
         .insert(conversations)
         .values(validData)
         .returning();
+      
+      // For client compatibility, add subject back to the returned object
+      const conversationWithSubject = {
+        ...newConversation,
+        subject: newConversation.topic  // Add subject that matches topic for client compatibility
+      };
 
-      return newConversation;
+      return conversationWithSubject as Conversation;
     } catch (error) {
       console.error(`Error creating conversation:`, error);
-      throw new Error('Failed to create conversation');
+      if (error instanceof Error) {
+        throw new Error(`Failed to create conversation: ${error.message}`);
+      } else {
+        throw new Error('Failed to create conversation: Unknown error');
+      }
     }
   }
 
@@ -590,7 +631,23 @@ export class DatabaseStorage implements IStorage {
   // Message methods
   async createMessage(message: InsertMessage): Promise<Message> {
     try {
-      const [newMessage] = await db.insert(messages).values(message).returning();
+      // Map input fields to match schema expectations
+      // The field 'userId' in client input needs to be mapped to 'senderId' in the database
+      const messageToInsert = {
+        conversationId: message.conversationId,
+        senderId: message.userId, // Map userId to senderId
+        senderRole: message.isFromMerchant ? "merchant" : "admin", // Derive role from isFromMerchant flag
+        content: message.content,
+        isRead: message.isRead || false,
+        readAt: message.isRead ? new Date() : null,
+        createdAt: message.createdAt || new Date()
+      };
+      
+      // Log the prepared message data
+      console.log("Creating message with data:", JSON.stringify(messageToInsert, null, 2));
+      
+      // Insert the message
+      const [newMessage] = await db.insert(messages).values(messageToInsert).returning();
 
       // Update the conversation's lastMessageAt timestamp
       await db
@@ -601,10 +658,11 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(conversations.id, message.conversationId));
 
+      console.log("Successfully created message:", newMessage.id);
       return newMessage;
     } catch (error) {
       console.error(`Error creating message:`, error);
-      throw new Error('Failed to create message');
+      throw new Error(`Failed to create message: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

@@ -56,8 +56,8 @@ async function testUnreadMessageCount() {
     // 1. First login as a merchant
     console.log('Logging in as a merchant...');
     const loginResponse = await instance.post('/api/auth/login', {
-      email: process.env.TEST_MERCHANT_EMAIL || 'merchant-1743200041688@test.com',
-      password: process.env.TEST_MERCHANT_PASSWORD || 'password123'
+      email: process.env.TEST_MERCHANT_EMAIL || 'merchant@example.com',
+      password: process.env.TEST_MERCHANT_PASSWORD || 'Merchant123!'
     });
     
     if (loginResponse.status !== 200 || !loginResponse.data.success) {

@@ -51,6 +51,8 @@ import { format } from "date-fns";
 // Define form schema for new conversation
 const newConversationSchema = z.object({
   topic: z.string().min(1, "Topic is required"),
+  // Adding subject for compatibility with both field names
+  subject: z.string().optional(),
   message: z.string().min(1, "Message is required"),
   priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
 });
@@ -67,6 +69,7 @@ export default function MerchantMessages() {
     resolver: zodResolver(newConversationSchema),
     defaultValues: {
       topic: "",
+      subject: "",
       message: "",
       priority: "normal",
     },
@@ -97,10 +100,8 @@ export default function MerchantMessages() {
   // Create conversation mutation
   const createConversationMutation = useMutation({
     mutationFn: async (data: z.infer<typeof newConversationSchema>) => {
-      return apiRequest("/api/communications/merchant", {
-        method: "POST",
-        data,
-      });
+      // Fix: Correct parameter order for apiRequest - method first, then URL, then data
+      return apiRequest("POST", "/api/communications/merchant", data);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/communications/merchant"] });
@@ -116,6 +117,7 @@ export default function MerchantMessages() {
       }
     },
     onError: (error) => {
+      console.error("Error creating conversation:", error);
       toast({
         title: "Error",
         description: `Failed to create conversation: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -274,7 +276,7 @@ export default function MerchantMessages() {
                       <CardHeader className="pb-2">
                         <div className="flex justify-between items-start">
                           <CardTitle className="text-lg truncate">
-                            {conversation.topic}
+                            {conversation.topic || conversation.subject || "Conversation"}
                           </CardTitle>
                           <Badge className={getStatusColor(conversation.status)}>
                             {conversation.status}
@@ -348,7 +350,7 @@ export default function MerchantMessages() {
                       <CardHeader className="pb-2">
                         <div className="flex justify-between items-start">
                           <CardTitle className="text-lg truncate">
-                            {conversation.topic}
+                            {conversation.topic || conversation.subject || "Conversation"}
                           </CardTitle>
                           <Badge className={getStatusColor(conversation.status)}>
                             {conversation.status}
@@ -415,7 +417,7 @@ export default function MerchantMessages() {
                       <CardHeader className="pb-2">
                         <div className="flex justify-between items-start">
                           <CardTitle className="text-lg truncate">
-                            {conversation.topic}
+                            {conversation.topic || conversation.subject || "Conversation"}
                           </CardTitle>
                           <Badge className={getStatusColor(conversation.status)}>
                             {conversation.status}

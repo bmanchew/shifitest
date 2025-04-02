@@ -124,9 +124,13 @@ router.post("/", async (req: Request, res: Response) => {
     // First, create the conversation with the correct field names
     const conversation = await storage.createConversation({
       merchantId: merchant.id,
-      subject: topic, // Map 'topic' to 'subject' field
+      topic: topic, // Use 'topic' field directly as per schema
+      subject: topic, // For backwards compatibility with routes expecting 'subject'
       status: "active",
-      metadata: metadata, // Store priority in metadata
+      category: "general", // Default category for merchant-initiated conversations
+      priority: priority, // Set priority directly
+      createdBy: req.user.id, // Set the creator
+      metadata: metadata, // Store additional metadata
     });
 
     // Then, create the initial message

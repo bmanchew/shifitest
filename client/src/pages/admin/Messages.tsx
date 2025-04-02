@@ -368,8 +368,9 @@ export default function AdminMessages() {
       
       // Map client-side field names to server-side field names
       const adaptedValues = {
-        // Map client 'topic' to server 'subject' 
-        subject: values.topic,
+        // Send both topic and subject to ensure compatibility 
+        topic: values.topic,
+        subject: values.topic, // Also include as subject for backward compatibility
         merchantId: values.merchantId,
         contractId: values.contractId,
         // Store the initial message content

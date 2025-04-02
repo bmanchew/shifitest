@@ -40,12 +40,18 @@ interface Message {
 // Conversation interface
 interface Conversation {
   id: number;
-  topic: string;
+  topic?: string;  // Database uses topic but might be missing in some responses
+  subject?: string; // Some API responses use subject instead of topic
   status: string;
   createdAt: string;
   updatedAt: string;
   lastMessageAt?: string;
   priority?: string;
+  category?: string;
+  merchantId?: number;
+  contractId?: number;
+  // Add any additional fields that might be in the response
+  unreadMessages?: number;
 }
 import {
   DropdownMenu,
@@ -124,17 +130,77 @@ export default function MessageDetail() {
   // Send a new message
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
-      return apiRequest("POST", `/api/communications/merchant/${conversationId}/messages`, { content });
+      console.log(`Sending message to conversation ${conversationId}:`, { content: content.substring(0, 20) + (content.length > 20 ? '...' : '') });
+      
+      // Use the apiRequest utility with improved error handling
+      try {
+        // First ensure we have a fresh CSRF token
+        await fetch('/api/csrf-token');
+        console.log("CSRF token refreshed before sending message");
+        
+        // Send the message with the updated CSRF token
+        const response = await apiRequest("POST", `/api/communications/merchant/${conversationId}/messages`, { content });
+        console.log("Send message response:", response);
+        return response;
+      } catch (error) {
+        console.error("Error in sendMessageMutation:", error);
+        
+        // Handle CSRF token errors
+        if (error instanceof Error && 
+            (error.message.includes('CSRF') || error.message.includes('403'))) {
+          
+          // One more attempt with a fresh token
+          try {
+            await fetch('/api/csrf-token');
+            const retryResponse = await apiRequest("POST", 
+              `/api/communications/merchant/${conversationId}/messages`, 
+              { content }
+            );
+            return retryResponse;
+          } catch (retryError) {
+            console.error("Error on retry:", retryError);
+            throw retryError;
+          }
+        }
+        
+        throw error;
+      }
     },
     onSuccess: () => {
       setNewMessage("");
       refetchMessages();
       queryClient.invalidateQueries({ queryKey: ["/api/communications/merchant"] });
+      
+      // Add a small delay and scroll to bottom after message is added
+      setTimeout(() => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 300);
+      
+      // Provide user feedback
+      toast({
+        title: "Message Sent",
+        description: "Your message has been sent successfully.",
+      });
     },
     onError: (error) => {
+      console.error("Error details:", error);
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to send message. Please try again.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+          errorMessage = "Network error. Please check your connection and try again.";
+        } else if (error.message.includes('403') || error.message.includes('CSRF')) {
+          errorMessage = "Session error. Please refresh the page and try again.";
+        }
+      }
+      
       toast({
         title: "Error",
-        description: `Failed to send message: ${error instanceof Error ? error.message : "Unknown error"}`,
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -391,7 +457,7 @@ export default function MessageDetail() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <h1 className="text-2xl font-bold">{conversation.topic}</h1>
+            <h1 className="text-2xl font-bold">{conversation.topic || conversation.subject || "Conversation"}</h1>
           </div>
           
           <div className="flex items-center gap-2">
