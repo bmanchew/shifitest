@@ -85,9 +85,15 @@ router.get("/", async (req: Request, res: Response) => {
       }
     });
     
+    // Map database field 'topic' to expected client field 'subject' for backward compatibility
+    const mappedConversations = conversations.map(convo => ({
+      ...convo,
+      subject: convo.topic // Add subject field that client code expects
+    }));
+    
     res.json({
       success: true,
-      conversations,
+      conversations: mappedConversations,
       meta: {
         count: conversations.length,
         limit: parsedLimit,
@@ -214,9 +220,15 @@ router.get("/:id", async (req: Request, res: Response) => {
       });
     }
     
+    // Map topic to subject for client compatibility
+    const mappedConversation = {
+      ...conversation,
+      subject: conversation.topic // Add subject field that client code expects
+    };
+    
     res.json({
       success: true,
-      conversation
+      conversation: mappedConversation
     });
   } catch (error) {
     logger.error({
@@ -371,10 +383,11 @@ router.post("/", async (req: Request, res: Response) => {
     // Allow either subject or topic field to support different clients
     console.log("Creating conversation with flexible field mapping for subject/topic");
     
-    // Determine which field to use for subject (prefer subject if provided, fall back to topic)
-    const subjectContent = conversationData.subject || conversationData.topic;
+    // Our storage method now handles both 'subject' and 'topic' fields, so we can pass the data directly
+    // The storage method will normalize the fields internally
     
-    if (!subjectContent) {
+    // Check that at least one of subject or topic exists for backwards compatibility
+    if (!conversationData.subject && !conversationData.topic) {
       console.error("Neither subject nor topic field was provided");
       return res.status(400).json({
         success: false,
@@ -383,17 +396,22 @@ router.post("/", async (req: Request, res: Response) => {
       });
     }
     
+    // We'll pass the full data to our storage method, which will handle normalization
     const conversationDbData = {
-      // Use the determined subject content
-      subject: subjectContent,
+      // Preserve the original subject field for client-side compatibility
+      subject: conversationData.subject,
+      // Pass either the topic field if it exists, or the subject field mapped to topic
+      topic: conversationData.topic || conversationData.subject,
       merchantId: conversationData.merchantId,
       contractId: conversationData.contractId,
-      status: conversationData.status,
-      // Store additional fields in metadata as JSON
+      status: conversationData.status || 'active',
+      createdBy: conversationData.createdBy,
+      priority: conversationData.priority || 'normal',
+      category: conversationData.category || 'general',
+      // Keep metadata for other supplementary info
       metadata: JSON.stringify({
-        createdBy: conversationData.createdBy,
-        priority: conversationData.priority,
-        category: conversationData.category,
+        originalFormat: conversationData.subject ? 'subject' : 'topic',
+        created: new Date().toISOString()
       })
     };
     
@@ -559,9 +577,15 @@ router.patch("/:id/status", async (req: Request, res: Response) => {
       }
     });
     
+    // Map topic to subject for client compatibility
+    const mappedConversation = {
+      ...updatedConversation,
+      subject: updatedConversation.topic // Add subject field that client code expects
+    };
+    
     res.json({
       success: true,
-      conversation: updatedConversation
+      conversation: mappedConversation
     });
   } catch (error) {
     logger.error({
@@ -1020,9 +1044,15 @@ router.get("/merchant/:merchantId", async (req: Request, res: Response) => {
     
     const conversations = await storage.getConversationsForMerchant(merchantId);
     
+    // Map database field 'topic' to expected client field 'subject' for backward compatibility
+    const mappedConversations = conversations.map(convo => ({
+      ...convo,
+      subject: convo.topic // Add subject field that client code expects
+    }));
+    
     res.json({
       success: true,
-      conversations,
+      conversations: mappedConversations,
       count: conversations.length
     });
   } catch (error) {
@@ -1083,10 +1113,16 @@ router.get("/customer/:customerId", async (req: Request, res: Response) => {
     // Remove duplicates based on conversation ID
     const uniqueConversations = [...new Map(allConversations.map(conv => [conv.id, conv])).values()];
     
+    // Map database field 'topic' to expected client field 'subject' for backward compatibility
+    const mappedConversations = uniqueConversations.map(convo => ({
+      ...convo,
+      subject: convo.topic // Add subject field that client code expects
+    }));
+    
     res.json({
       success: true,
-      conversations: uniqueConversations,
-      count: uniqueConversations.length
+      conversations: mappedConversations,
+      count: mappedConversations.length
     });
   } catch (error) {
     logger.error({

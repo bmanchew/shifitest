@@ -334,18 +334,38 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // Conversation methods
-  async createConversation(conversation: InsertConversation): Promise<Conversation> {
+  async createConversation(conversation: InsertConversation | any): Promise<Conversation> {
     try {
-      // Set timestamps
-      const conversationData = {
+      // Handle the case where the client sends 'subject' instead of 'topic'
+      // First, create a normalized data object with all fields
+      const normalizedData: any = {
         ...conversation,
         updatedAt: new Date(),
-        lastMessageAt: new Date()
+        lastMessageAt: new Date(),
       };
+      
+      // If 'subject' was provided but not 'topic', map subject to topic
+      if (conversation.subject && !conversation.topic) {
+        normalizedData.topic = conversation.subject;
+      }
+      
+      // If neither 'subject' nor 'topic' was provided and this is a required field, use a default
+      if (!normalizedData.topic) {
+        if (normalizedData.category) {
+          normalizedData.topic = `${normalizedData.category} conversation`;
+        } else {
+          normalizedData.topic = 'New conversation';
+        }
+      }
+      
+      // Create a clean data object that matches the database schema (without 'subject')
+      const { subject, ...validData } = normalizedData;
+      
+      console.log("Final conversation data being inserted:", validData);
 
       const [newConversation] = await db
         .insert(conversations)
-        .values(conversationData)
+        .values(validData)
         .returning();
 
       return newConversation;
@@ -3425,26 +3445,9 @@ export class DatabaseStorage implements IStorage {
 
   async getAllSupportTickets(options: { limit?: number, offset?: number } = {}): Promise<SupportTicket[]> {
     try {
+      // Use a simpler approach with regular select to avoid issues
       let query = db
-        .select({
-          id: supportTickets.id,
-          ticketNumber: supportTickets.ticketNumber,
-          merchantId: supportTickets.merchantId,
-          createdBy: supportTickets.createdBy, // Using createdBy instead of userId
-          category: supportTickets.category,
-          subcategory: supportTickets.subcategory,
-          subject: supportTickets.subject,
-          description: supportTickets.description,
-          status: supportTickets.status,
-          priority: supportTickets.priority,
-          assignedTo: supportTickets.assignedTo,
-          conversationId: supportTickets.conversationId,
-          createdAt: supportTickets.createdAt,
-          updatedAt: supportTickets.updatedAt,
-          resolvedAt: supportTickets.resolvedAt,
-          closedAt: supportTickets.closedAt,
-          metadata: supportTickets.metadata
-        })
+        .select()
         .from(supportTickets)
         .orderBy(desc(supportTickets.updatedAt));
 
@@ -3456,7 +3459,8 @@ export class DatabaseStorage implements IStorage {
         query = query.offset(options.offset);
       }
 
-      return await query;
+      const results = await query;
+      return results;
     } catch (error) {
       console.error(`Error getting all support tickets:`, error);
       return [];
