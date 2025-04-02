@@ -239,7 +239,60 @@ router.get("/:id", async (req: Request, res: Response) => {
 // Create a new conversation
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const conversationData = insertConversationSchema.parse(req.body);
+    // Define an extended schema that includes the initial message
+    const extendedSchema = z.object({
+      merchantId: z.number({
+        required_error: "Merchant ID is required",
+        invalid_type_error: "Merchant ID must be a number"
+      }),
+      contractId: z.number().optional().nullable(),
+      topic: z.string({
+        required_error: "Topic is required",
+        invalid_type_error: "Topic must be a string"
+      }).min(1, "Topic cannot be empty"),
+      message: z.string({
+        required_error: "Initial message is required",
+        invalid_type_error: "Message must be a string"
+      }).min(1, "Message cannot be empty"),
+      createdBy: z.number({
+        required_error: "Creator ID is required",
+        invalid_type_error: "Creator ID must be a number"
+      }).optional(),
+      category: z.string({
+        required_error: "Category is required",
+        invalid_type_error: "Category must be a string"
+      }).default("general"),
+      priority: z.string().optional().default("normal"),
+      status: z.enum(["active", "resolved", "archived"]).optional().default("active"),
+    });
+    
+    // Parse and validate the input
+    const validatedData = extendedSchema.parse(req.body);
+    
+    // Extract message content from validated data
+    const { message, ...conversationData } = validatedData;
+    
+    // If createdBy is not provided, use the authenticated user's ID if available
+    if (!conversationData.createdBy && req.user) {
+      conversationData.createdBy = req.user.id;
+    }
+    
+    // Ensure createdBy exists at this point
+    if (!conversationData.createdBy) {
+      return res.status(400).json({
+        success: false,
+        message: "Creator ID (createdBy) is required"
+      });
+    }
+    
+    // Validate that the merchant exists
+    const merchant = await storage.getMerchant(conversationData.merchantId);
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Referenced merchant not found"
+      });
+    }
     
     // Validate that the contract exists if specified
     if (conversationData.contractId) {
@@ -261,7 +314,18 @@ router.post("/", async (req: Request, res: Response) => {
       });
     }
     
+    // Create the conversation
     const newConversation = await storage.createConversation(conversationData);
+    
+    // Create the initial message
+    const newMessage = await storage.createMessage({
+      conversationId: newConversation.id,
+      senderId: conversationData.createdBy,
+      senderRole: creator.role,
+      content: message,
+      isRead: false,
+      createdAt: new Date(),
+    });
     
     logger.info({
       message: `Created new conversation: ${newConversation.topic}`,
@@ -271,12 +335,15 @@ router.post("/", async (req: Request, res: Response) => {
       metadata: {
         conversationId: newConversation.id,
         contractId: conversationData.contractId,
-        category: conversationData.category
+        category: conversationData.category,
+        messageId: newMessage.id
       }
     });
     
+    // Return the created conversation with its ID for redirection
     res.status(201).json({
       success: true,
+      id: newConversation.id,
       conversation: newConversation
     });
   } catch (error) {
