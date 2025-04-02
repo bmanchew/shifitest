@@ -980,9 +980,38 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log("Getting all contracts");
       
-      // Simplified approach - get all columns from the contracts table
+      // Explicitly select only the columns we know exist
       const results = await db
-        .select()
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          merchantId: contracts.merchantId,
+          customerId: contracts.customerId,
+          amount: contracts.amount,
+          termMonths: contracts.termMonths,
+          interestRate: contracts.interestRate,
+          status: contracts.status,
+          currentStep: contracts.currentStep,
+          createdAt: contracts.createdAt,
+          completedAt: contracts.completedAt,
+          phoneNumber: contracts.phoneNumber,
+          purchasedByShifi: contracts.purchasedByShifi,
+          tokenizationStatus: contracts.tokenizationStatus,
+          tokenId: contracts.tokenId,
+          smartContractAddress: contracts.smartContractAddress,
+          blockchainTransactionHash: contracts.blockchainTransactionHash,
+          blockNumber: contracts.blockNumber,
+          tokenizationDate: contracts.tokenizationDate,
+          tokenMetadata: contracts.tokenMetadata,
+          tokenizationError: contracts.tokenizationError,
+          archived: contracts.archived,
+          archivedAt: contracts.archivedAt,
+          archivedReason: contracts.archivedReason,
+          downPayment: contracts.downPayment,
+          financedAmount: contracts.financedAmount,
+          monthlyPayment: contracts.monthlyPayment,
+          salesRepId: contracts.salesRepId
+        })
         .from(contracts)
         .orderBy(desc(contracts.createdAt));
       
@@ -1006,9 +1035,9 @@ export class DatabaseStorage implements IStorage {
           
           // Dates
           createdAt: contract.createdAt || null,
-          updatedAt: contract.updatedAt || null,
-          startDate: contract.startDate || null,
-          endDate: contract.endDate || null,
+          updatedAt: null, // not selected in query
+          startDate: null, // not selected in query
+          endDate: null, // not selected in query
           completedAt: contract.completedAt || null,
           
           // Financial fields
@@ -1038,7 +1067,7 @@ export class DatabaseStorage implements IStorage {
           tokenMetadata: contract.tokenMetadata || null,
           
           // Additional frontend expected fields
-          type: contract.type || 'custom' // Default contract type
+          type: 'custom' // Default contract type
         };
       });
       
@@ -1053,7 +1082,7 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts for merchant ID ${merchantId}`);
       
-      // Simplified approach - get all columns from the contracts table with a where clause
+      // Use a simpler approach with regular select to avoid issues
       const results = await db
         .select()
         .from(contracts)
@@ -1064,14 +1093,6 @@ export class DatabaseStorage implements IStorage {
       
       // Map the results to ensure consistent contract structure
       const contractsWithDefaults = results.map(contract => {
-        // For logging purposes to help diagnose any issues
-        if (contract.id && contract.id % 10 === 0) { // Log sample contracts to avoid cluttering logs
-          console.log(`Sample contract data for ID ${contract.id}:`, JSON.stringify({
-            id: contract.id,
-            termMonths: contract.termMonths || 0
-          }));
-        }
-        
         return {
           // Basic fields
           id: contract.id,
@@ -1136,7 +1157,7 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts for customer ID ${customerId}`);
       
-      // Simplified approach - get all columns from the contracts table with a where clause
+      // Use a simpler approach with regular select to avoid issues
       const results = await db
         .select()
         .from(contracts)
@@ -1213,7 +1234,7 @@ export class DatabaseStorage implements IStorage {
       
       console.log(`Getting contracts for phone number ${normalizedPhone}`);
       
-      // Simplified approach - get all columns from the contracts table with a where clause
+      // Use a simpler approach with regular select to avoid issues
       const results = await db
         .select()
         .from(contracts)
@@ -1504,7 +1525,7 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts with status: ${status}`);
       
-      // Simplified approach - get all columns from the contracts table with a where clause
+      // Use a simpler approach with regular select to avoid issues
       const results = await db
         .select()
         .from(contracts)
