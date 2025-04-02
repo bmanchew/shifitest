@@ -1047,7 +1047,8 @@ router.get("/merchant/:merchantId", async (req: Request, res: Response) => {
     // Map database field 'topic' to expected client field 'subject' for backward compatibility
     const mappedConversations = conversations.map(convo => ({
       ...convo,
-      subject: convo.topic // Add subject field that client code expects
+      subject: convo.topic, // Add subject field that client code expects
+      unreadMessages: convo.unreadMessages || 0,
     }));
     
     res.json({
@@ -1069,6 +1070,74 @@ router.get("/merchant/:merchantId", async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve merchant conversations"
+    });
+  }
+});
+
+// Get conversations for the currently authenticated merchant
+router.get("/merchant", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    // Get the current authenticated user from request
+    const user = (req as any).user;
+    
+    if (!user || user.role !== "merchant") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only merchant users can access their conversations."
+      });
+    }
+    
+    // Find the merchant associated with this user
+    const merchant = await storage.getMerchantByUserId(user.id);
+    
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant profile not found for this user."
+      });
+    }
+    
+    // Get all conversations for this merchant
+    const conversations = await storage.getConversationsForMerchant(merchant.id);
+    
+    // Map database field 'topic' to expected client field 'subject' for backward compatibility
+    const mappedConversations = conversations.map(convo => ({
+      ...convo,
+      subject: convo.topic, // Add subject field that client code expects
+      // Calculate unread messages count per conversation
+      unreadMessages: convo.unreadMessages || 0,
+    }));
+    
+    logger.info({
+      message: `Retrieved ${conversations.length} conversations for merchant ${merchant.id}`,
+      category: "api",
+      source: "communication",
+      metadata: {
+        merchantId: merchant.id,
+        userId: user.id,
+      }
+    });
+    
+    return res.json({
+      success: true,
+      conversations: mappedConversations,
+    });
+    
+  } catch (error) {
+    logger.error({
+      message: `Error getting merchant conversations: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "communication", 
+      metadata: {
+        userId: (req as any).user?.id,
+        error: error instanceof Error ? error.stack : null,
+      },
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve conversations.",
+      error: error instanceof Error ? error.message : "Unknown error"
     });
   }
 });
