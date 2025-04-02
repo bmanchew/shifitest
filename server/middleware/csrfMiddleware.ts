@@ -23,7 +23,10 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     '/api/communications/merchant/auto-reply', // Auto-reply webhook
     '/api/financial-sherpa/realtime', // Financial Sherpa WebSocket initialization
     '/api/openai/realtime',    // OpenAI Realtime WebSocket endpoint
-    '/api/test-email'          // Test endpoint for contract signed email
+    '/api/test-email',         // Test endpoint for contract signed email
+    '/api/conversations',      // Backward compatibility route for communications
+    '/api/support-tickets',    // Backward compatibility route for support tickets
+    '/api/communications'      // Main communications endpoints
   ];
   
   // Check if the request path should be excluded
