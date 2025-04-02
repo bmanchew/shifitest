@@ -315,20 +315,32 @@ router.post("/", async (req: Request, res: Response) => {
     }
     
     // Create the conversation
-    const newConversation = await storage.createConversation(conversationData);
+    // Map fields from our validated schema to the database schema
+    const conversationDbData = {
+      merchantId: conversationData.merchantId,
+      contractId: conversationData.contractId,
+      subject: conversationData.topic, // Map 'topic' to 'subject' for DB
+      status: conversationData.status,
+      metadata: JSON.stringify({
+        priority: conversationData.priority,
+        category: conversationData.category,
+        createdBy: conversationData.createdBy
+      })
+    };
+    
+    // Create the conversation in the database
+    const newConversation = await storage.createConversation(conversationDbData);
     
     // Create the initial message
     const newMessage = await storage.createMessage({
       conversationId: newConversation.id,
       senderId: conversationData.createdBy,
-      senderRole: creator.role,
       content: message,
       isRead: false,
-      createdAt: new Date(),
     });
     
     logger.info({
-      message: `Created new conversation: ${newConversation.topic}`,
+      message: `Created new conversation: ${conversationData.topic}`,
       category: "api",
       source: "internal",
       userId: conversationData.createdBy,
@@ -340,11 +352,18 @@ router.post("/", async (req: Request, res: Response) => {
       }
     });
     
-    // Return the created conversation with its ID for redirection
+    // Return the ID for redirection plus conversation details
     res.status(201).json({
       success: true,
       id: newConversation.id,
-      conversation: newConversation
+      conversation: {
+        ...newConversation,
+        // Add the fields expected by the client that are stored in metadata
+        topic: conversationData.topic,
+        priority: conversationData.priority,
+        category: conversationData.category,
+        createdBy: conversationData.createdBy
+      }
     });
   } catch (error) {
     if (error instanceof ZodError) {

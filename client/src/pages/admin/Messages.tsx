@@ -320,7 +320,16 @@ export default function AdminMessages() {
   // Handle creating a new conversation
   const handleCreateConversation = async (values: z.infer<typeof newConversationSchema>) => {
     try {
-      const data = await apiRequest("POST", "/api/conversations", values) as any;
+      const response = await apiRequest("POST", "/api/conversations", values) as any;
+      console.log("Conversation creation response:", response);
+      
+      // Extract the conversation ID from the response
+      // The server returns either response.id or response.conversation.id
+      const conversationId = response.id || (response.conversation && response.conversation.id);
+      
+      if (!conversationId) {
+        throw new Error("No conversation ID returned from server");
+      }
       
       toast({
         title: "Conversation Created",
@@ -331,7 +340,7 @@ export default function AdminMessages() {
       newConversationForm.reset();
       
       // Redirect to the new conversation
-      navigate(`/admin/messages/${data.id}`);
+      navigate(`/admin/messages/${conversationId}`);
     } catch (error) {
       console.error("Error creating conversation:", error);
       toast({
