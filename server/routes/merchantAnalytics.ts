@@ -94,15 +94,13 @@ router.get('/merchant/:merchantId/contracts', authenticateToken, async (req: Req
       });
     }
 
-    // Add your logic to fetch contracts for the merchant
-    // This is a placeholder - implement actual logic based on your database
-    const contracts = await storage.db.query.contracts.findMany({
-      where: (contracts, { eq }) => eq(contracts.merchantId, merchantId)
-    });
+    // Use the standard method to fetch contracts
+    const contracts = await storage.getContractsByMerchantId(merchantId);
 
+    // Return in the same format as other contract endpoints for consistency
     res.json({
       success: true,
-      data: contracts
+      contracts: contracts // Return as "contracts" key to match other endpoints
     });
   } catch (error) {
     logger.error({
