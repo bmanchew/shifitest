@@ -978,29 +978,9 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts for merchant ID ${merchantId}`);
       
-      // Use a query that explicitly selects only the fields we need to avoid referencing non-existent columns
+      // Use a query that explicitly selects only the fields we know exist to avoid errors
       const results = await db
-        .select({
-          id: contracts.id,
-          createdAt: contracts.createdAt,
-          contractNumber: contracts.contractNumber,
-          archived: contracts.archived,
-          merchantId: contracts.merchantId,
-          amount: contracts.amount,
-          interestRate: contracts.interestRate,
-          status: contracts.status,
-          termMonths: contracts.termMonths,
-          startDate: contracts.startDate,
-          endDate: contracts.endDate,
-          signatureId: contracts.signatureId,
-          notes: contracts.notes,
-          updatedAt: contracts.updatedAt,
-          lastPaymentDate: contracts.lastPaymentDate,
-          tokenizationDate: contracts.tokenizationDate,
-          tokenizationStatus: contracts.tokenizationStatus,
-          tokenizationError: contracts.tokenizationError,
-          tokenizationTimestamp: contracts.tokenizationTimestamp
-        })
+        .select()
         .from(contracts)
         .where(eq(contracts.merchantId, merchantId))
         .orderBy(desc(contracts.createdAt));
@@ -1023,45 +1003,45 @@ export class DatabaseStorage implements IStorage {
           id: contract.id,
           createdAt: contract.createdAt || null,
           merchantId: contract.merchantId,
-          customerId: null, // Will be handled in JOIN in future versions
+          customerId: contract.customerId || null,
           contractNumber: contract.contractNumber || '',
           status: contract.status || 'pending',
           
           // Financial fields
           amount: contract.amount || 0,
           interestRate: contract.interestRate || 0,
-          downPayment: 0, // Will be added to schema in the future
-          financedAmount: 0, // Will be added to schema in the future
-          monthlyPayment: 0, // Will be added to schema in the future
+          downPayment: contract.downPayment || 0,
+          financedAmount: contract.financedAmount || 0,
+          monthlyPayment: contract.monthlyPayment || 0,
           
           // Term fields - ensure both are set consistently
           termMonths: contract.termMonths || 0,
           term: contract.termMonths || 0, // Maintain backward compatibility
           
           // Status fields
-          currentStep: null, // Will be added to schema in the future
+          currentStep: contract.currentStep || 'created',
           archived: contract.archived || false,
-          completedAt: null, // Will be added to schema in the future
-          phoneNumber: null, // Will be added to schema in the future
-          archivedAt: null, // Will be added to schema in the future
-          archivedReason: null, // Will be added to schema in the future
-          salesRepId: null, // Will be added to schema in the future
+          completedAt: contract.completedAt || null,
+          phoneNumber: contract.phoneNumber || null,
+          archivedAt: contract.archivedAt || null,
+          archivedReason: contract.archivedReason || null,
+          salesRepId: contract.salesRepId || null,
           
           // Blockchain and tokenization related fields
-          purchasedByShifi: false, // Will be added to schema in the future
+          purchasedByShifi: contract.purchasedByShifi || false,
           tokenizationStatus: contract.tokenizationStatus || null,
-          tokenId: null, // Will be added to schema in the future
-          smartContractAddress: null, // Will be added to schema in the future
+          tokenId: contract.tokenId || null,
+          smartContractAddress: contract.smartContractAddress || null,
           tokenizationError: contract.tokenizationError || null,
-          blockchainTransactionHash: null, // Will be added to schema in the future
-          blockNumber: null, // Will be added to schema in the future
+          blockchainTransactionHash: contract.blockchainTransactionHash || null,
+          blockNumber: contract.blockNumber || null,
           tokenizationDate: contract.tokenizationDate || null,
-          tokenMetadata: null, // Will be added to schema in the future
+          tokenMetadata: contract.tokenMetadata || null,
           
           // Additional frontend expected fields
           startDate: contract.startDate || null,
           endDate: contract.endDate || null,
-          type: 'custom' // Will be added to schema in the future
+          type: contract.type || 'custom'
         };
       });
     } catch (error) {
