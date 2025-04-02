@@ -231,7 +231,7 @@ export default function AdminMessageDetail() {
     return (
       <AdminLayout>
         <div className="container mx-auto py-6">
-          <Link href="/admin/messages">
+          <Link to="/admin/messages">
             <Button variant="outline" size="sm" className="mb-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Messages
@@ -260,7 +260,7 @@ export default function AdminMessageDetail() {
     <AdminLayout>
       <div className="container mx-auto py-6">
         <div className="flex items-center justify-between mb-6">
-          <Link href="/admin/messages">
+          <Link to="/admin/messages">
             <Button variant="outline" size="sm">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Messages
@@ -452,7 +452,7 @@ export default function AdminMessageDetail() {
                 <p className="text-gray-500 mt-2">
                   The conversation you're looking for doesn't exist or has been deleted.
                 </p>
-                <Link href="/admin/messages">
+                <Link to="/admin/messages">
                   <Button className="mt-4">
                     Go Back to Messages
                   </Button>
