@@ -60,7 +60,7 @@ import {
   smartContractTemplates, SmartContractTemplate, InsertSmartContractTemplate,
   smartContractDeployments, SmartContractDeployment, InsertSmartContractDeployment
 } from "@shared/schemas/blockchain.schema";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, and, desc, inArray, SQL, or, like, lt, not } from "drizzle-orm";
 
 export interface IStorage {
@@ -548,7 +548,7 @@ export class DatabaseStorage implements IStorage {
         // Find unread messages in conversations related to this merchant using a direct SQL query
         // which is more efficient for this particular operation
         // Note: conversations are linked to merchants through the contracts table
-        const result = await db.query(
+        const result = await pool.query(
           `SELECT COUNT(*) AS unread_count 
            FROM messages m
            JOIN conversations c ON m.conversation_id = c.id
@@ -575,7 +575,7 @@ export class DatabaseStorage implements IStorage {
         
         // Fallback to the ORM-based method with a simpler query approach
         try {
-          const result = await db.query(
+          const result = await pool.query(
             `SELECT COUNT(*) as count
              FROM messages m
              JOIN conversations c ON m.conversation_id = c.id
