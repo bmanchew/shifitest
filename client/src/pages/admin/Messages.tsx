@@ -362,16 +362,40 @@ export default function AdminMessages() {
       }
       
       // Extract the conversation ID from the response with more robust handling
-      // The server returns either response.id or response.conversation.id or response.data.id
-      const conversationId = response.id || 
-                            (response.conversation && response.conversation.id) || 
-                            (response.data && response.data.id);
+      // Log the full response for debugging
+      console.log("Full response object:", JSON.stringify(response, null, 2));
+      
+      // More comprehensive extraction of conversation ID to handle various response formats
+      let conversationId;
+      
+      if (typeof response === 'object' && response !== null) {
+        // Try direct id property
+        if (response.id) {
+          conversationId = response.id;
+        } 
+        // Try conversation object
+        else if (response.conversation && response.conversation.id) {
+          conversationId = response.conversation.id;
+        } 
+        // Try data object
+        else if (response.data && response.data.id) {
+          conversationId = response.data.id;
+        }
+        // Try conversationId property directly
+        else if (response.conversationId) {
+          conversationId = response.conversationId;
+        }
+        // If it's an array, try to get the first item's id
+        else if (Array.isArray(response) && response.length > 0 && response[0].id) {
+          conversationId = response[0].id;
+        }
+      }
       
       console.log("Extracted conversation ID:", conversationId);
       
       if (!conversationId) {
-        console.error("Full response object:", JSON.stringify(response, null, 2));
-        throw new Error("No conversation ID returned from server. See console for details.");
+        console.error("Could not extract conversation ID from response");
+        throw new Error("No conversation ID found in server response. See console for detailed response data.");
       }
       
       toast({
