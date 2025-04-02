@@ -367,63 +367,22 @@ router.post("/", async (req: Request, res: Response) => {
     }
     console.log("Found creator:", creator.email);
     
-    // Create the conversation - use matching fields for the database schema
-    // Check what fields the database schema expects
-    let conversationDbData;
-    try {
-      // See if we need to map fields differently
-      const schemaTest = await db.query.conversations.findMany({ limit: 1 });
-      console.log("Database schema test:", Object.keys(schemaTest[0] || {}));
-      
-      if (schemaTest.length > 0 && 'subject' in schemaTest[0]) {
-        // If the schema uses 'subject' instead of 'topic'
-        console.log("Database schema uses 'subject' field, mapping from 'topic'");
-        conversationDbData = {
-          subject: conversationData.topic,
-          merchantId: conversationData.merchantId,
-          contractId: conversationData.contractId,
-          status: conversationData.status,
-          metadata: JSON.stringify({
-            createdBy: conversationData.createdBy,
-            priority: conversationData.priority,
-            category: conversationData.category,
-          }),
-          // Adding required timestamps
-          updatedAt: new Date(),
-          lastMessageAt: new Date()
-        };
-      } else {
-        // Use direct field mapping
-        console.log("Using direct field mapping for conversation");
-        conversationDbData = {
-          topic: conversationData.topic,
-          merchantId: conversationData.merchantId,
-          contractId: conversationData.contractId,
-          status: conversationData.status,
-          createdBy: conversationData.createdBy,
-          priority: conversationData.priority,
-          category: conversationData.category,
-          // Adding required timestamps
-          updatedAt: new Date(),
-          lastMessageAt: new Date()
-        };
-      }
-    } catch (schemaError) {
-      console.error("Error determining database schema:", schemaError);
-      // Fallback to direct mapping
-      conversationDbData = {
-        topic: conversationData.topic,
-        merchantId: conversationData.merchantId,
-        contractId: conversationData.contractId,
-        status: conversationData.status,
+    // Create the conversation with the correct field mapping
+    // We know from examining the schema that it uses 'subject' not 'topic'
+    console.log("Creating conversation with mapped fields from 'topic' to 'subject'");
+    const conversationDbData = {
+      // Map 'topic' from client to 'subject' for database
+      subject: conversationData.topic,
+      merchantId: conversationData.merchantId,
+      contractId: conversationData.contractId,
+      status: conversationData.status,
+      // Store additional fields in metadata as JSON
+      metadata: JSON.stringify({
         createdBy: conversationData.createdBy,
         priority: conversationData.priority,
         category: conversationData.category,
-        // Adding required timestamps
-        updatedAt: new Date(),
-        lastMessageAt: new Date()
-      };
-    }
+      })
+    };
     
     console.log("Conversation data being sent to storage:", conversationDbData);
     
@@ -451,41 +410,18 @@ router.post("/", async (req: Request, res: Response) => {
       });
     }
     
-    // Create the initial message
-    let messageData;
-    try {
-      // Check if we need to modify message fields based on database schema
-      const schemaTest = await db.query.messages.findMany({ limit: 1 });
-      console.log("Message schema test:", Object.keys(schemaTest[0] || {}));
-      
-      if (schemaTest.length > 0) {
-        // Adapt message data based on actual database schema
-        messageData = {
-          conversationId: newConversation.id,
-          senderId: conversationData.createdBy,
-          content: message,
-          // Only add fields that exist in the schema
-          ...(schemaTest[0].hasOwnProperty('isRead') && { isRead: false }),
-          ...(schemaTest[0].hasOwnProperty('senderRole') && { senderRole: creator.role }),
-          ...(schemaTest[0].hasOwnProperty('senderType') && { senderType: creator.role === 'admin' ? 'admin' : 'merchant' }),
-        };
-      } else {
-        // Fallback to basic fields
-        messageData = {
-          conversationId: newConversation.id,
-          senderId: conversationData.createdBy,
-          content: message
-        };
-      }
-    } catch (schemaError) {
-      console.error("Error determining message schema:", schemaError);
-      // Fallback to basic fields
-      messageData = {
-        conversationId: newConversation.id,
-        senderId: conversationData.createdBy,
-        content: message
-      };
-    }
+    // Create the initial message with fields we know are in the schema
+    console.log("Creating initial message for new conversation");
+    const messageData = {
+      conversationId: newConversation.id,
+      senderId: conversationData.createdBy,
+      content: message,
+      // Include additional metadata if needed
+      metadata: JSON.stringify({
+        isFromMerchant: creator.role === 'merchant',
+        senderRole: creator.role
+      })
+    };
     
     console.log("Creating initial message:", messageData);
     

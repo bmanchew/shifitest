@@ -21,6 +21,9 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     '/api/stripe/webhook',     // Stripe webhook
     '/api/twilio/webhook',     // Twilio webhook
     '/api/communications/merchant/auto-reply', // Auto-reply webhook
+    '/api/communications/merchant', // Merchant-specific communications endpoint
+    '/api/conversations/merchant', // Merchant-specific conversations endpoint
+    '/api/support-tickets/merchant', // Merchant-specific support tickets endpoint
     '/api/financial-sherpa/realtime', // Financial Sherpa WebSocket initialization
     '/api/openai/realtime',    // OpenAI Realtime WebSocket endpoint
     '/api/test-email',         // Test endpoint for contract signed email
