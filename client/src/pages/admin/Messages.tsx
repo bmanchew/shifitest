@@ -159,6 +159,20 @@ export default function AdminMessages() {
     ? activeMerchantsData.merchants as any[]
     : (Array.isArray(merchants) ? merchants.filter((m: any) => !m.isArchived) : []);
     
+  // State for selected merchant ID (to fetch contracts)
+  const [selectedMerchantId, setSelectedMerchantId] = useState<number | null>(null);
+  
+  // Query to fetch contracts for the selected merchant
+  const { data: merchantContracts = [], isLoading: isLoadingContracts } = useQuery({
+    queryKey: ["/api/merchant", selectedMerchantId, "contracts"],
+    queryFn: async () => {
+      if (!selectedMerchantId) return [];
+      return apiRequest("GET", `/api/merchant/${selectedMerchantId}/contracts`);
+    },
+    // Only run this query when we have a selected merchant
+    enabled: !!selectedMerchantId,
+  });
+    
   // Map merchants to format used in dropdown
   const dropdownMerchants = activeMerchants.map((m: any) => ({
     merchantId: m.id || m.merchantId,
@@ -736,7 +750,16 @@ export default function AdminMessages() {
                     <FormLabel>Merchant</FormLabel>
                     <Select
                       value={field.value ? String(field.value) : "0"}
-                      onValueChange={(value) => field.onChange(Number(value))}
+                      onValueChange={(value) => {
+                        const merchantId = Number(value);
+                        field.onChange(merchantId);
+                        
+                        // Update the selectedMerchantId state to trigger the contracts query
+                        setSelectedMerchantId(merchantId);
+                        
+                        // Reset the contractId field when merchant changes
+                        newConversationForm.setValue('contractId', null);
+                      }}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -757,6 +780,40 @@ export default function AdminMessages() {
                         )}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={newConversationForm.control}
+                name="contractId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contract (Optional)</FormLabel>
+                    <Select
+                      value={field.value ? String(field.value) : ""}
+                      onValueChange={(value) => field.onChange(value ? Number(value) : null)}
+                      disabled={!selectedMerchantId || isLoadingContracts}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={isLoadingContracts ? "Loading contracts..." : "Select a contract"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">No specific contract</SelectItem>
+                        {Array.isArray(merchantContracts) && merchantContracts.map((contract: any) => (
+                          <SelectItem key={contract.id} value={String(contract.id)}>
+                            {contract.contractNumber || contract.id}
+                            {contract.amount ? ` - $${contract.amount.toLocaleString()}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Link this conversation to a specific contract (optional)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
