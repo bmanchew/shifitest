@@ -978,11 +978,15 @@ export class DatabaseStorage implements IStorage {
 
   async getAllContracts(): Promise<Contract[]> {
     try {
+      console.log("Getting all contracts");
+      
       // Simplified approach - get all columns from the contracts table
       const results = await db
         .select()
         .from(contracts)
         .orderBy(desc(contracts.createdAt));
+      
+      console.log(`Found ${results.length} contracts total`);
       
       // Map the results to ensure consistent contract structure
       const contractsWithDefaults = results.map(contract => {
@@ -998,7 +1002,7 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0,  // Provide term from termMonths
+          term: contract.termMonths || 0,  // Provide term from termMonths for backwards compatibility
           
           // Dates
           createdAt: contract.createdAt || null,
@@ -1034,7 +1038,7 @@ export class DatabaseStorage implements IStorage {
           tokenMetadata: contract.tokenMetadata || null,
           
           // Additional frontend expected fields
-          type: 'custom' // Default contract type
+          type: contract.type || 'custom' // Default contract type
         };
       });
       
