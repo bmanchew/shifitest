@@ -131,8 +131,19 @@ export class CFPBService {
     }
   }
   
-  async getComplaintTrends() {
+  async getComplaintTrends(forceReal = false) {
     try {
+      // Add more detailed logging at the start
+      logger.info({
+        message: `Starting complaint trends data fetch${forceReal ? ' (forced real API call)' : ''}`,
+        category: 'external',
+        source: 'cfpb',
+        metadata: {
+          forceReal,
+          startTime: new Date().toISOString()
+        }
+      });
+      
       // Fetch both types of complaints in parallel
       const [personalLoanComplaints, merchantCashAdvanceComplaints] = await Promise.all([
         this.getPersonalLoanComplaints(),
@@ -145,8 +156,10 @@ export class CFPBService {
         category: 'external',
         source: 'cfpb',
         metadata: {
+          forceReal,
           personalLoanCount: personalLoanComplaints?.hits?.total || 0,
-          merchantCashAdvanceCount: merchantCashAdvanceComplaints?.hits?.total || 0
+          merchantCashAdvanceCount: merchantCashAdvanceComplaints?.hits?.total || 0,
+          endTime: new Date().toISOString()
         }
       });
       
@@ -159,7 +172,11 @@ export class CFPBService {
         message: `Error fetching complaint trends: ${error instanceof Error ? error.message : String(error)}`,
         category: 'external',
         source: 'cfpb',
-        metadata: { error: error instanceof Error ? error.stack : null }
+        metadata: { 
+          error: error instanceof Error ? error.stack : null,
+          forceReal,
+          endTime: new Date().toISOString()
+        }
       });
       
       // Instead of propagating the error, return empty results
