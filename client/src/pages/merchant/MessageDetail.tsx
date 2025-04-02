@@ -26,8 +26,27 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/api";
 import { z } from "zod";
+
+// Message interface
+interface Message {
+  id: number;
+  content: string;
+  isFromMerchant: boolean;
+  createdAt: string;
+}
+
+// Conversation interface
+interface Conversation {
+  id: number;
+  topic: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt?: string;
+  priority?: string;
+}
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,9 +73,9 @@ export default function MessageDetail() {
   const [newMessage, setNewMessage] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
-  const conversationId = parseInt(id, 10);
+  const conversationId = id ? parseInt(id, 10) : 0;
 
   // Validate conversation ID
   if (isNaN(conversationId)) {
@@ -73,11 +92,7 @@ export default function MessageDetail() {
   } = useQuery({
     queryKey: [`/api/communications/merchant/${conversationId}`],
     queryFn: async () => {
-      const response = await fetch(`/api/communications/merchant/${conversationId}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch conversation details");
-      }
-      return response.json();
+      return apiRequest("GET", `/api/communications/merchant/${conversationId}`);
     },
   });
 
@@ -90,20 +105,14 @@ export default function MessageDetail() {
   } = useQuery({
     queryKey: [`/api/communications/merchant/${conversationId}/messages`],
     queryFn: async () => {
-      const response = await fetch(`/api/communications/merchant/${conversationId}/messages`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch messages");
-      }
-      return response.json();
+      return apiRequest("GET", `/api/communications/merchant/${conversationId}/messages`);
     },
   });
 
   // Mark messages as read when we open the conversation
   const markAsReadMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/communications/merchant/${conversationId}/read`, {
-        method: "POST",
-      });
+      return apiRequest("POST", `/api/communications/merchant/${conversationId}/read`);
     },
     onSuccess: () => {
       // Don't need to refetch as this is just marking them as read on the server
@@ -115,10 +124,7 @@ export default function MessageDetail() {
   // Send a new message
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
-      return apiRequest(`/api/communications/merchant/${conversationId}/messages`, {
-        method: "POST",
-        data: { content },
-      });
+      return apiRequest("POST", `/api/communications/merchant/${conversationId}/messages`, { content });
     },
     onSuccess: () => {
       setNewMessage("");
@@ -138,10 +144,7 @@ export default function MessageDetail() {
   const updateStatusMutation = useMutation({
     mutationFn: async (status: "active" | "resolved" | "archived") => {
       setStatusUpdateLoading(true);
-      return apiRequest(`/api/communications/merchant/${conversationId}/status`, {
-        method: "PATCH",
-        data: { status },
-      });
+      return apiRequest("PATCH", `/api/communications/merchant/${conversationId}/status`, { status });
     },
     onSuccess: () => {
       refetchConversation();
@@ -163,14 +166,14 @@ export default function MessageDetail() {
   });
 
   // Format date for display
-  const formatDate = (dateString) => {
+  const formatDate = (dateString: string | null | undefined): string => {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
     return format(date, "MMM d, yyyy h:mm a");
   };
 
   // Get status badge color
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string): string => {
     switch (status) {
       case "active":
         return "bg-green-100 text-green-800";
@@ -184,7 +187,7 @@ export default function MessageDetail() {
   };
 
   // Get priority badge color
-  const getPriorityColor = (priority) => {
+  const getPriorityColor = (priority: string | null | undefined): string => {
     switch (priority) {
       case "low":
         return "bg-blue-100 text-blue-800";
@@ -214,7 +217,7 @@ export default function MessageDetail() {
   }, [messagesData]);
 
   // Send message on Enter (but allow Shift+Enter for new lines)
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (newMessage.trim()) {
@@ -282,8 +285,8 @@ export default function MessageDetail() {
   }
 
   // Get data
-  const conversation = conversationData?.conversation;
-  const messages = messagesData?.messages || [];
+  const conversation = conversationData?.conversation as Conversation | undefined;
+  const messages = (messagesData?.messages || []) as Message[];
 
   // If no conversation found
   if (!conversation) {
@@ -467,7 +470,7 @@ export default function MessageDetail() {
               </div>
             ) : (
               <div className="space-y-4">
-                {messages.map((message) => (
+                {messages.map((message: Message) => (
                   <div
                     key={message.id}
                     className={`flex ${

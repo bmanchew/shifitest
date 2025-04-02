@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateTime, getStatusColor } from "@/lib/utils";
+import { apiRequest } from "@/lib/api";
 import {
   ArrowLeft,
   RefreshCw,
@@ -70,11 +71,7 @@ export default function AdminMessageDetail() {
   } = useQuery({
     queryKey: [`/api/conversations/${conversationId}`],
     queryFn: async () => {
-      const response = await fetch(`/api/conversations/${conversationId}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch conversation details");
-      }
-      return response.json();
+      return apiRequest("GET", `/api/conversations/${conversationId}`);
     },
   });
 
@@ -87,11 +84,7 @@ export default function AdminMessageDetail() {
   } = useQuery({
     queryKey: [`/api/conversations/${conversationId}/messages`],
     queryFn: async () => {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch messages");
-      }
-      return response.json();
+      return apiRequest("GET", `/api/conversations/${conversationId}/messages`);
     },
   });
 
@@ -111,9 +104,7 @@ export default function AdminMessageDetail() {
     const markAsRead = async () => {
       if (conversation && conversation.unreadCount > 0) {
         try {
-          await fetch(`/api/conversations/${conversationId}/read`, {
-            method: "POST",
-          });
+          await apiRequest("POST", `/api/conversations/${conversationId}/read`);
           queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
         } catch (error) {
           console.error("Failed to mark messages as read:", error);
@@ -129,17 +120,9 @@ export default function AdminMessageDetail() {
     if (!newMessage.trim()) return;
 
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ content: newMessage }),
+      await apiRequest("POST", `/api/conversations/${conversationId}/messages`, {
+        content: newMessage
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to send message");
-      }
 
       // Clear the input and refetch messages
       setNewMessage("");
@@ -166,17 +149,7 @@ export default function AdminMessageDetail() {
     setStatusUpdateLoading(true);
     
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/status`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update status");
-      }
+      await apiRequest("POST", `/api/conversations/${conversationId}/status`, { status });
 
       // Refetch conversation details
       refetchConversation();
@@ -202,13 +175,7 @@ export default function AdminMessageDetail() {
   // Handle archiving conversation
   const handleArchiveConversation = async () => {
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/archive`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to archive conversation");
-      }
+      await apiRequest("POST", `/api/conversations/${conversationId}/archive`);
 
       toast({
         title: "Conversation Archived",

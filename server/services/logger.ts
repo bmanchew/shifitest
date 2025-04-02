@@ -60,39 +60,83 @@ interface BaseLog {
 export const logger = {
   /**
    * Log an info message
-   * @param log Log data
+   * @param log Log data or message string
+   * @param metadata Optional metadata when using string message format
    */
-  info(log: BaseLog): void {
-    logToConsole('info', log);
+  info(log: BaseLog | string, metadata?: Record<string, any>): void {
+    if (typeof log === 'string') {
+      // Convert string format to BaseLog format
+      const baseLog: BaseLog = {
+        message: log,
+        category: metadata?.category || 'system',
+        metadata: metadata
+      };
+      logToConsole('info', baseLog);
+    } else {
+      logToConsole('info', log);
+    }
     // In production, additional logging to external services would occur here
   },
   
   /**
    * Log a warning message
-   * @param log Log data
+   * @param log Log data or message string
+   * @param metadata Optional metadata when using string message format
    */
-  warn(log: BaseLog): void {
-    logToConsole('warn', log);
+  warn(log: BaseLog | string, metadata?: Record<string, any>): void {
+    if (typeof log === 'string') {
+      // Convert string format to BaseLog format
+      const baseLog: BaseLog = {
+        message: log,
+        category: metadata?.category || 'system',
+        metadata: metadata
+      };
+      logToConsole('warn', baseLog);
+    } else {
+      logToConsole('warn', log);
+    }
     // In production, additional logging to external services would occur here
   },
   
   /**
    * Log an error message
-   * @param log Log data
+   * @param log Log data or message string
+   * @param metadata Optional metadata when using string message format
    */
-  error(log: BaseLog): void {
-    logToConsole('error', log);
+  error(log: BaseLog | string, metadata?: Record<string, any>): void {
+    if (typeof log === 'string') {
+      // Convert string format to BaseLog format
+      const baseLog: BaseLog = {
+        message: log,
+        category: metadata?.category || 'system',
+        metadata: metadata
+      };
+      logToConsole('error', baseLog);
+    } else {
+      logToConsole('error', log);
+    }
     // In production, additional logging to external services would occur here
   },
   
   /**
    * Log a debug message
-   * @param log Log data
+   * @param log Log data or message string
+   * @param metadata Optional metadata when using string message format
    */
-  debug(log: BaseLog): void {
+  debug(log: BaseLog | string, metadata?: Record<string, any>): void {
     // Only log debug messages in development
     if (process.env.NODE_ENV !== 'production') {
-      logToConsole('debug', log);
+      if (typeof log === 'string') {
+        // Convert string format to BaseLog format
+        const baseLog: BaseLog = {
+          message: log,
+          category: metadata?.category || 'system',
+          metadata: metadata
+        };
+        logToConsole('debug', baseLog);
+      } else {
+        logToConsole('debug', log);
+      }
       // In production, additional logging to external services would occur here
     }
   }

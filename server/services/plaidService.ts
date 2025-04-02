@@ -41,19 +41,25 @@ export async function createLinkToken(userId: number, clientName: string = 'ShiF
     };
 
     const response = await plaidClient.linkTokenCreate(request);
-    logger.info(`Created Plaid link token for user ${userId}`, {
+    logger.info({
+      message: `Created Plaid link token for user ${userId}`,
       category: 'plaid',
-      action: 'create_link_token',
-      userId
+      metadata: {
+        action: 'create_link_token',
+        userId
+      }
     });
     
     return response.data;
   } catch (error) {
-    logger.error(`Error creating Plaid link token for user ${userId}`, {
-      error: error instanceof Error ? error.message : String(error),
+    logger.error({
+      message: `Error creating Plaid link token for user ${userId}`,
       category: 'plaid',
-      action: 'create_link_token_error',
-      userId
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        action: 'create_link_token_error',
+        userId
+      }
     });
     throw error;
   }

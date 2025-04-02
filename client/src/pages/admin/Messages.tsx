@@ -5,6 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { useSearchParams } from "@/hooks/use-search-params";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate, formatDateTime, getStatusColor, getInitials } from "@/lib/utils";
+import { apiRequest } from "@/lib/api";
 import {
   Archive,
   Filter,
@@ -115,11 +116,7 @@ export default function AdminMessages() {
     queryKey: ["/api/conversations", searchParams.toString()],
     queryFn: async () => {
       const url = `/api/conversations${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error("Failed to load conversations");
-      }
-      return response.json();
+      return apiRequest("GET", url);
     },
   });
   
@@ -135,11 +132,7 @@ export default function AdminMessages() {
   const { data: allMerchants = [] } = useQuery({
     queryKey: ["/api/merchants"],
     queryFn: async () => {
-      const response = await fetch("/api/merchants");
-      if (!response.ok) {
-        throw new Error("Failed to load merchants");
-      }
-      return response.json();
+      return apiRequest("GET", "/api/merchants");
     },
   });
   
@@ -147,11 +140,7 @@ export default function AdminMessages() {
   const { data: activeMerchantsData = { merchants: [] }, isLoading: isLoadingActiveMerchants } = useQuery({
     queryKey: ["/api/plaid/active-merchants"],
     queryFn: async () => {
-      const response = await fetch("/api/plaid/active-merchants");
-      if (!response.ok) {
-        throw new Error("Failed to load active merchants");
-      }
-      return response.json();
+      return apiRequest("GET", "/api/plaid/active-merchants");
     },
   });
   
@@ -294,17 +283,26 @@ export default function AdminMessages() {
                   <DropdownMenuItem
                     className="text-red-600"
                     onClick={() => {
-                      fetch(`/api/conversations/${conversation.id}/archive`, {
-                        method: "POST",
-                      })
-                        .then((res) => {
-                          if (res.ok) {
-                            refetch();
-                          }
-                        })
-                        .catch((error) => {
+                      (async () => {
+                        try {
+                          await apiRequest(
+                            "POST", 
+                            `/api/conversations/${conversation.id}/archive`
+                          );
+                          refetch();
+                          toast({
+                            title: "Conversation Archived",
+                            description: "The conversation has been archived successfully.",
+                          });
+                        } catch (error) {
                           console.error("Error archiving conversation:", error);
-                        });
+                          toast({
+                            title: "Error",
+                            description: "Failed to archive the conversation. Please try again.",
+                            variant: "destructive",
+                          });
+                        }
+                      })();
                     }}
                   >
                     <Archive className="mr-2 h-4 w-4" />
@@ -322,19 +320,7 @@ export default function AdminMessages() {
   // Handle creating a new conversation
   const handleCreateConversation = async (values: z.infer<typeof newConversationSchema>) => {
     try {
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
-      
-      if (!response.ok) {
-        throw new Error("Failed to create conversation");
-      }
-      
-      const data = await response.json();
+      const data = await apiRequest("POST", "/api/conversations", values);
       
       toast({
         title: "Conversation Created",
@@ -347,9 +333,10 @@ export default function AdminMessages() {
       // Redirect to the new conversation
       navigate(`/admin/messages/${data.id}`);
     } catch (error) {
+      console.error("Error creating conversation:", error);
       toast({
         title: "Error",
-        description: "Failed to create the conversation. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create the conversation. Please try again.",
         variant: "destructive",
       });
     }
