@@ -10,6 +10,7 @@ import {
 import merchantsRouter from "./merchants";
 import { logger } from "../../services/logger";
 import contractCancellationsRouter from "./contract-cancellations";
+import { reportsRouter } from "./reports-improved";
 
 const router = express.Router();
 
@@ -35,6 +36,7 @@ router.use((req, res, next) => {
 // Register sub-routes
 router.use("/merchants", merchantsRouter);
 router.use("/cancellation-requests", contractCancellationsRouter);
+router.use("/reports", reportsRouter);
 
 // Merchant Performance routes
 router.get("/merchant-performances", getAllMerchantPerformances);

@@ -12,6 +12,14 @@ export const reportsRouter = express.Router();
 reportsRouter.use(authenticateToken);
 reportsRouter.use(isAdmin);
 
+// Helper function to set proper JSON content type headers
+function setJsonContentType(res: Response) {
+  res.type('application/json'); // Use res.type() to ensure correct Content-Type
+  res.set('Content-Type', 'application/json'); // Set it again to be sure
+  res.setHeader('X-Content-Type-Options', 'nosniff'); // Tell browser to respect our content type
+  res.setHeader('X-Content-Type-Workaround', 'true');
+}
+
 // Get CFPB complaint trends
 reportsRouter.get("/complaint-trends", async (req: Request, res: Response) => {
   try {
@@ -42,10 +50,7 @@ reportsRouter.get("/complaint-trends", async (req: Request, res: Response) => {
       });
       
       // Set explicit content type header with high priority
-      res.type('application/json'); // Use res.type() instead of setHeader to ensure correct Content-Type
-      res.set('Content-Type', 'application/json'); // Set it again to be sure
-      res.setHeader('X-Content-Type-Options', 'nosniff'); // Tell browser to respect our content type
-      res.setHeader('X-Content-Type-Workaround', 'true');
+      setJsonContentType(res);
       res.setHeader('X-Mock-Data', 'true');
       
       // Return the mock data from our predefined responses
@@ -92,10 +97,7 @@ reportsRouter.get("/complaint-trends", async (req: Request, res: Response) => {
     }
 
     // Set headers and return response with high priority content-type
-    res.type('application/json'); // Use res.type() instead of setHeader to ensure correct Content-Type
-    res.set('Content-Type', 'application/json'); // Set it again to be sure
-    res.setHeader('X-Content-Type-Options', 'nosniff'); // Tell browser to respect our content type
-    res.setHeader('X-Content-Type-Workaround', 'true');
+    setJsonContentType(res);
     
     // Return the results with success status
     return res.json({
@@ -123,9 +125,8 @@ reportsRouter.get("/complaint-trends", async (req: Request, res: Response) => {
         }
       });
       
-      // Set explicit content type header
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('X-Content-Type-Workaround', 'true');
+      // Set explicit content type header with high priority
+      setJsonContentType(res);
       res.setHeader('X-Mock-Data', 'true');
       res.setHeader('X-Error-Fallback', 'true');
       
@@ -155,10 +156,7 @@ reportsRouter.get("/complaint-trends", async (req: Request, res: Response) => {
     });
 
     // Set headers and return error response with high priority content-type
-    res.type('application/json'); // Use res.type() to ensure correct Content-Type
-    res.set('Content-Type', 'application/json'); // Set it again to be sure
-    res.setHeader('X-Content-Type-Options', 'nosniff'); // Tell browser to respect our content type
-    res.setHeader('X-Content-Type-Workaround', 'true');
+    setJsonContentType(res);
     res.status(500);
     
     return res.json({
@@ -198,10 +196,7 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
       });
       
       // Set explicit content type header with high priority
-      res.type('application/json'); // Use res.type() instead of setHeader to ensure correct Content-Type
-      res.set('Content-Type', 'application/json'); // Set it again to be sure
-      res.setHeader('X-Content-Type-Options', 'nosniff'); // Tell browser to respect our content type
-      res.setHeader('X-Content-Type-Workaround', 'true');
+      setJsonContentType(res);
       res.setHeader('X-Mock-Data', 'true');
       
       // Return a mock analysis response
@@ -243,8 +238,7 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
     const analysisResults = await aiAnalyticsService.analyzeComplaintTrends();
 
     // Set headers and return response
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('X-Content-Type-Workaround', 'true');
+    setJsonContentType(res);
     
     return res.json({
       success: true,
@@ -269,9 +263,8 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
         }
       });
       
-      // Set explicit content type header
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('X-Content-Type-Workaround', 'true');
+      // Set explicit content type header with high priority
+      setJsonContentType(res);
       res.setHeader('X-Mock-Data', 'true');
       res.setHeader('X-Error-Fallback', 'true');
       
@@ -312,8 +305,7 @@ reportsRouter.get("/cfpb-trends", async (req: Request, res: Response) => {
     });
 
     // Set headers and return error response
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('X-Content-Type-Workaround', 'true');
+    setJsonContentType(res);
     res.status(500);
     
     return res.json({
@@ -328,8 +320,7 @@ reportsRouter.get("/portfolio-health", async (req, res) => {
   // In a real application, this would fetch data from a database or other service
   
   // Set headers and return response
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('X-Content-Type-Workaround', 'true');
+  setJsonContentType(res);
   
   return res.json({
     totalContracts: 142,
