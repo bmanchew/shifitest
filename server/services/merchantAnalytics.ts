@@ -372,9 +372,9 @@ export class MerchantAnalyticsService {
       const topMerchants = await db
         .select({
           merchantId: merchantPerformance.merchantId,
-          businessName: merchants.businessName,
+          businessName: merchants.name, // Use name instead of businessName
           performanceScore: merchantPerformance.performanceScore,
-          performanceGrade: merchantPerformance.performanceGrade,
+          performanceGrade: merchantPerformance.grade, // Use grade instead of performanceGrade
           defaultRate: merchantPerformance.defaultRate,
           avgContractValue: merchantPerformance.avgContractValue,
         })
@@ -392,6 +392,83 @@ export class MerchantAnalyticsService {
         source: "analytics"
       });
 
+      throw error;
+    }
+  }
+  
+  // Get all merchant performances
+  async getAllMerchantPerformances() {
+    try {
+      // Join merchant performance with merchant data
+      const performances = await db
+        .select({
+          id: merchantPerformance.id,
+          merchantId: merchantPerformance.merchantId,
+          businessName: merchants.name, // Use name instead of businessName
+          performanceScore: merchantPerformance.performanceScore,
+          grade: merchantPerformance.grade, // Use grade instead of performanceGrade
+          defaultRate: merchantPerformance.defaultRate,
+          latePaymentRate: merchantPerformance.latePaymentRate,
+          avgContractValue: merchantPerformance.avgContractValue,
+          riskAdjustedReturn: merchantPerformance.riskAdjustedReturn,
+          customerSatisfactionScore: merchantPerformance.customerSatisfactionScore,
+          underwritingRecommendations: merchantPerformance.underwritingRecommendations, // Match schema field name
+          lastUpdated: merchantPerformance.lastUpdated, // Use lastUpdated instead of updatedAt
+        })
+        .from(merchantPerformance)
+        .innerJoin(merchants, eq(merchantPerformance.merchantId, merchants.id))
+        .orderBy(sql`${merchantPerformance.performanceScore} DESC`);
+
+      return performances;
+    } catch (error) {
+      logger.error({
+        message: "Error retrieving all merchant performances",
+        error,
+        category: "service",
+        source: "analytics"
+      });
+
+      return [];
+    }
+  }
+  
+  // Update all merchant performances
+  async updateAllMerchantPerformances() {
+    try {
+      // Get all merchants
+      const allMerchants = await db
+        .select({
+          id: merchants.id
+        })
+        .from(merchants);
+      
+      const results = [];
+      
+      // Update performance for each merchant
+      for (const merchant of allMerchants) {
+        try {
+          const result = await this.updateMerchantPerformance(merchant.id);
+          results.push(result);
+        } catch (error) {
+          logger.error({
+            message: `Failed to update performance for merchant ${merchant.id}`,
+            error,
+            category: "service",
+            source: "analytics",
+            metadata: { merchantId: merchant.id }
+          });
+        }
+      }
+      
+      return results;
+    } catch (error) {
+      logger.error({
+        message: "Failed to update all merchant performances",
+        error,
+        category: "service",
+        source: "analytics"
+      });
+      
       throw error;
     }
   }
