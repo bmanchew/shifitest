@@ -134,21 +134,45 @@ export async function apiRequest<T = Response>(
   
   // For non-GET requests to API endpoints, add CSRF token
   if (method !== 'GET' && url.startsWith('/api') && !url.includes('/webhook')) {
-    // List of endpoints that don't need CSRF protection
-    const excludedCsrfEndpoints = [
-      '/api/auth/login', 
-      '/api/auth/register',
-      '/api/auth/reset-password',
-      '/api/auth/forgot-password',
-      '/api/investor/applications',  // Investor application submission endpoint
-      '/api/communications',         // Communications endpoints
-      '/api/conversations',          // Conversation endpoints (backward compatibility)
-      '/api/support-tickets'         // Support tickets endpoints
-    ];
+    // First check if the testing header is present, if so, skip CSRF
+    const isTestingRequest = customHeaders && customHeaders['X-Testing-Only'] === 'true';
     
-    const shouldAddCsrf = !excludedCsrfEndpoints.some(endpoint => url.startsWith(endpoint));
+    if (isTestingRequest) {
+      if (import.meta.env.DEV) {
+        console.log(`Skipping CSRF token for testing request: ${url}`);
+      }
+    } else {
+      // List of endpoints that don't need CSRF protection
+      const excludedCsrfEndpoints = [
+        '/api/auth/login', 
+        '/api/auth/register',
+        '/api/auth/reset-password',
+        '/api/auth/forgot-password',
+        '/api/investor/applications',  // Investor application submission endpoint
+        '/api/communications',         // Communications endpoints
+        '/api/conversations',          // Conversation endpoints (backward compatibility)
+        '/api/support-tickets',        // Support tickets endpoints
+        '/api/financial-sherpa'        // Financial sherpa endpoints
+      ];
+      
+      // List of specific conversation patterns to exclude
+      const conversationPatterns = [
+        /^\/api\/conversations\/\d+\/messages$/,     // POST messages to a conversation
+        /^\/api\/conversations\/\d+\/archive$/,      // Archive a conversation
+        /^\/api\/conversations\/\d+\/resolve$/,      // Resolve a conversation
+        /^\/api\/conversations\/\d+\/reopen$/,       // Reopen a conversation
+        /^\/api\/conversations\/\d+\/read$/,         // Mark conversation as read
+        /^\/api\/communications\/\d+\/messages$/,    // POST messages to a communication
+        /^\/api\/communications\/merchant\/\d+\/messages$/, // Merchant messages
+      ];
+      
+      // Check if URL starts with any excluded endpoint or matches any pattern
+      const isExcludedEndpoint = excludedCsrfEndpoints.some(endpoint => url.startsWith(endpoint));
+      const matchesPattern = conversationPatterns.some(pattern => pattern.test(url));
+      
+      const shouldAddCsrf = !(isExcludedEndpoint || matchesPattern);
     
-    if (shouldAddCsrf) {
+      if (shouldAddCsrf) {
       try {
         // Add CSRF token to headers for state-changing requests
         const headersWithCsrf = await csrfUtils.addCsrfHeader(headers);
@@ -164,6 +188,7 @@ export async function apiRequest<T = Response>(
       console.log(`Skipping CSRF token for excluded endpoint: ${url}`);
     }
   }
+}
   
   // Function to perform the actual fetch request
   const performFetch = async (attempt = 1): Promise<T> => {

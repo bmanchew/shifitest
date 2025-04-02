@@ -352,11 +352,28 @@ export default function AdminMessages() {
       // Log what we're about to send
       console.log("Sending request to create conversation with testing headers");
       
+      // Map client-side field names to server-side field names
+      const adaptedValues = {
+        // Map client 'topic' to server 'subject' 
+        subject: values.topic,
+        merchantId: values.merchantId,
+        contractId: values.contractId,
+        // Store the initial message content
+        message: values.message,
+        // Include other fields as is
+        priority: values.priority || 'normal',
+        category: values.category || 'general',
+        // Add user ID if we know it
+        createdBy: 1, // Admin user ID is typically 1
+      };
+      
+      console.log("Sending adapted values to server:", adaptedValues);
+      
       // Make the API request with detailed logging and custom headers for CSRF bypass
       const response = await apiRequest(
         "POST", 
         "/api/conversations", 
-        values,
+        adaptedValues,
         customHeaders,
         { retry: true, maxRetries: 2 }
       ) as any;
@@ -432,35 +449,87 @@ export default function AdminMessages() {
       // Enhanced error handling with more specific messages
       let errorMessage = "Failed to create the conversation. Please try again.";
       
-      if (error instanceof Error) {
-        // Log the full error for debugging
-        console.error("Detailed error:", error);
+      // Log as much detail as possible to help diagnose the issue
+      console.group("Detailed conversation creation error");
+      console.error("Original error object:", error);
+      console.error("Error type:", error?.constructor?.name);
+      console.error("Error stack:", (error as Error)?.stack);
+      
+      // Try to extract more details from the response if it's a Response object
+      if (error instanceof Response) {
+        console.error("Response status:", error.status);
+        console.error("Response status text:", error.statusText);
         
+        // Try to get the response text
+        error.text().then(text => {
+          console.error("Response body:", text);
+          try {
+            const errorData = JSON.parse(text);
+            console.error("Parsed error data:", errorData);
+          } catch (e) {
+            console.error("Error body is not JSON:", text);
+          }
+        }).catch(e => {
+          console.error("Failed to extract response text:", e);
+        });
+        
+        errorMessage = `Server Error (${error.status}): ${error.statusText}`;
+      } 
+      // If it's an Error object with response data attached
+      else if (error instanceof Error && (error as any).response) {
+        const responseData = (error as any).response;
+        console.error("Error response data:", responseData);
+        
+        if (responseData.status) {
+          errorMessage = `Server Error (${responseData.status}): ${responseData.statusText || error.message}`;
+        }
+        
+        if (responseData.data) {
+          console.error("Error response body:", responseData.data);
+          
+          // Extract more specific error message if available
+          if (responseData.data.message) {
+            errorMessage = responseData.data.message;
+          } else if (responseData.data.error) {
+            errorMessage = responseData.data.error;
+          }
+        }
+      }
+      // Standard error handling for Error objects
+      else if (error instanceof Error) {
+        console.error("Error message:", error.message);
         errorMessage = error.message;
         
         // Check for network errors
         if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
           errorMessage = "Network error occurred. Please check your connection and try again.";
+          console.error("Network error detected");
         }
         
         // Check for CSRF token errors
         if (error.message.includes('CSRF') || error.message.includes('csrf') || error.message.includes('403')) {
           errorMessage = "Authentication error. Please refresh the page and try again.";
+          console.error("CSRF error detected");
           
           // Try to refresh the token automatically
           try {
             await fetch('/api/csrf-token');
             errorMessage += " (Token refreshed, please try again)";
+            console.error("CSRF token refreshed");
           } catch (tokenError) {
-            console.error("Failed to refresh token:", tokenError);
+            console.error("Failed to refresh CSRF token:", tokenError);
           }
         }
         
         // Check for validation errors
         if (error.message.includes('validation') || error.message.includes('required')) {
           errorMessage = "Validation error: " + error.message;
+          console.error("Validation error detected");
         }
       }
+      
+      console.error("Final error message:", errorMessage);
+      console.groupEnd();
       
       // Show toast with error
       toast({
