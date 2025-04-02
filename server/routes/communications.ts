@@ -1101,17 +1101,23 @@ router.get("/merchant", authenticateToken, async (req: Request, res: Response) =
     const conversations = await storage.getConversationsForMerchant(merchant.id);
     
     // Map database field 'topic' to expected client field 'subject' for backward compatibility
-    const mappedConversations = conversations.map(convo => ({
-      ...convo,
-      subject: convo.topic, // Add subject field that client code expects
-      // Calculate unread messages count per conversation
-      unreadMessages: convo.unreadMessages || 0,
-    }));
+    const mappedConversations = conversations.map(convo => {
+      // Determine if this object has a topic field (from database) or subject field
+      const subject = convo.topic || convo.subject || "";
+      
+      return {
+        ...convo,
+        // Make sure it has the subject field regardless of whether database uses 'topic'
+        subject: subject, 
+        // Get unread count only if it exists
+        unreadMessages: convo.unreadMessages || 0,
+      };
+    });
     
     logger.info({
       message: `Retrieved ${conversations.length} conversations for merchant ${merchant.id}`,
       category: "api",
-      source: "communication",
+      source: "internal",
       metadata: {
         merchantId: merchant.id,
         userId: user.id,
@@ -1127,11 +1133,11 @@ router.get("/merchant", authenticateToken, async (req: Request, res: Response) =
     logger.error({
       message: `Error getting merchant conversations: ${error instanceof Error ? error.message : String(error)}`,
       category: "api",
-      source: "communication", 
+      source: "internal", 
       metadata: {
         userId: (req as any).user?.id,
         error: error instanceof Error ? error.stack : null,
-      },
+      }
     });
     
     return res.status(500).json({

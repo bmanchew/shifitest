@@ -30,6 +30,9 @@ router.get("/", async (req: Request, res: Response) => {
     // Get all conversations for this merchant
     const conversations = await storage.getConversationsForMerchant(merchant.id);
     
+    // Get unread message count
+    const unreadCount = await storage.getUnreadMessageCountForMerchant(merchant.id);
+    
     logger.info({
       message: `Retrieved ${conversations.length} conversations for merchant ${merchant.id}`,
       category: "api",
@@ -37,16 +40,22 @@ router.get("/", async (req: Request, res: Response) => {
       metadata: {
         merchantId: merchant.id,
         userId: req.user.id,
+        unreadCount
       }
     });
 
+    // Create mapped conversations with subject field for backward compatibility
+    const mappedConversations = conversations.map(c => ({
+      ...c,
+      // Map topic to subject for client compatibility
+      subject: c.topic,
+      // Add unread messages count (for now, we'll just use the total unread count for all)
+      unreadMessages: unreadCount
+    }));
+
     return res.json({
       success: true,
-      conversations: conversations.map(c => ({
-        ...c,
-        // Calculate the unread messages count
-        unreadMessages: c.unreadMessages || 0,
-      })),
+      conversations: mappedConversations,
     });
     
   } catch (error) {
@@ -480,20 +489,9 @@ router.get("/unread-count", async (req: Request, res: Response) => {
     
     let unreadCount = 0;
 
-    // For each conversation, get the messages
-    for (const conversation of conversations) {
-      if (conversation.status !== "active") continue;
-      
-      // Get messages for this conversation
-      const messages = await storage.getMessagesByConversationId(conversation.id);
-      
-      // Count unread messages not from the merchant
-      const unread = messages.filter(
-        msg => !msg.isRead && msg.senderId !== req.user!.id
-      ).length;
-      
-      unreadCount += unread;
-    }
+    // Instead of looping through each conversation, use the optimized 
+    // method in storage that handles the database join properly
+    unreadCount = await storage.getUnreadMessageCountForMerchant(merchant.id);
 
     return res.json({
       success: true,

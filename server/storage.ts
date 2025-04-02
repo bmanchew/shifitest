@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import { logger } from './services/logger';
 import {
   // User related schemas and types
   users, User, InsertUser,
@@ -474,8 +475,101 @@ export class DatabaseStorage implements IStorage {
           .orderBy(desc(conversations.lastMessageAt));
       }
     } catch (error) {
-      console.error(`Error getting conversations for merchant ${merchantId}:`, error);
+      const logger = this.logger;
+      logger.error({
+        message: `Error getting conversations for merchant ${merchantId}: ${error instanceof Error ? error.message : String(error)}`,
+        category: "database",
+        source: "storage",
+        metadata: {
+          merchantId,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
       return [];
+    }
+  }
+  
+  async getUnreadMessageCountForMerchant(merchantId: number): Promise<number> {
+    try {
+      // Get the merchant's user ID
+      const merchant = await this.getMerchant(merchantId);
+      if (!merchant || !merchant.userId) {
+        logger.warn({
+          message: `No merchant found with ID ${merchantId} or missing userId`,
+          category: "database",
+          source: "storage",
+          metadata: { merchantId }
+        });
+        return 0;
+      }
+
+      try {
+        // Find unread messages in conversations related to this merchant using a direct SQL query
+        // which is more efficient for this particular operation
+        // Note: conversations are linked to merchants through the contracts table
+        const result = await db.query(
+          `SELECT COUNT(*) AS unread_count 
+           FROM messages m
+           JOIN conversations c ON m.conversation_id = c.id
+           JOIN contracts ct ON c.contract_id = ct.id
+           WHERE ct.merchant_id = $1
+           AND m.is_read = false
+           AND m.sender_id != $2`,
+          [merchantId, merchant.userId]
+        );
+
+        // Extract the count from the result
+        const unreadCount = result.rows[0]?.unread_count || 0;
+        return parseInt(unreadCount);
+      } catch (dbError) {
+        logger.error({
+          message: `Database error in unread count: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+          category: "database",
+          source: "storage",
+          metadata: {
+            merchantId,
+            error: dbError instanceof Error ? dbError.stack : null
+          }
+        });
+        
+        // Fallback to the ORM-based method with a simpler query approach
+        try {
+          const result = await db.query(
+            `SELECT COUNT(*) as count
+             FROM messages m
+             JOIN conversations c ON m.conversation_id = c.id
+             JOIN contracts ct ON c.contract_id = ct.id
+             WHERE ct.merchant_id = $1
+             AND m.is_read = false
+             AND m.sender_id != $2`,
+            [merchantId, merchant.userId]
+          );
+          
+          return parseInt(result.rows[0]?.count || '0');
+        } catch (fallbackError) {
+          logger.error({
+            message: `Fallback query also failed: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
+            category: "database",
+            source: "storage",
+            metadata: {
+              merchantId,
+              error: fallbackError instanceof Error ? fallbackError.stack : null
+            }
+          });
+          return 0;
+        }
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error getting unread messages count for merchant ${merchantId}: ${error instanceof Error ? error.message : String(error)}`,
+        category: "database",
+        source: "storage",
+        metadata: {
+          merchantId,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      return 0;
     }
   }
 
@@ -585,46 +679,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
   
-  async getUnreadMessageCountForMerchant(merchantId: number): Promise<number> {
-    try {
-      // Get the merchant's user ID
-      const merchant = await this.getMerchant(merchantId);
-      if (!merchant || !merchant.userId) {
-        console.log(`No merchant found with ID ${merchantId} or missing userId`);
-        return 0;
-      }
 
-      try {
-        // Find unread messages in conversations related to merchant's contracts
-        // We need to:
-        // 1. Join conversations to contracts where merchant_id matches
-        // 2. Join messages to those conversations
-        // 3. Count messages where is_read is false and sender_id is not the merchant's user ID
-        //    (we only care about unread messages sent by others)
-        const result = await this.db.query(
-          `SELECT COUNT(*) AS unread_count 
-           FROM messages m
-           JOIN conversations c ON m.conversation_id = c.id
-           JOIN contracts ct ON c.contract_id = ct.id
-           WHERE ct.merchant_id = $1
-           AND m.is_read = false
-           AND m.sender_id != $2`,
-          [merchantId, merchant.userId]
-        );
-
-        // Extract the count from the result
-        const unreadCount = result.rows[0]?.unread_count || 0;
-        return parseInt(unreadCount);
-      } catch (error) {
-        console.error(`Database error in unread count:`, error);
-        // Return 0 on database errors
-        return 0;
-      }
-    } catch (error) {
-      console.error(`Error getting unread message count for merchant ${merchantId}:`, error);
-      return 0;
-    }
-  }
 
   async updateMerchant(id: number, updateData: Partial<Merchant>): Promise<Merchant | undefined> {
     try {
