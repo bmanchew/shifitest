@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { ColumnDef } from "@tanstack/react-table";
 import { useSearchParams } from "@/hooks/use-search-params";
 import { useToast } from "@/hooks/use-toast";
@@ -68,156 +69,8 @@ const newConversationSchema = z.object({
   priority: z.string().optional(),
 });
 
-// Define the columns for the conversations data table
-const conversationsColumns: ColumnDef<any>[] = [
-  {
-    accessorKey: "id",
-    header: "#",
-    cell: ({ row }) => <span>#{row.original.id}</span>,
-  },
-  {
-    accessorKey: "topic",
-    header: "Topic",
-    cell: ({ row }) => (
-      <div className="max-w-[200px] truncate" title={row.original.topic}>
-        <Link 
-          to={`/admin/messages/${row.original.id}`}
-          className="text-blue-600 hover:underline font-medium"
-        >
-          {row.original.topic}
-        </Link>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "merchantName",
-    header: "Merchant",
-    cell: ({ row }) => (
-      <div className="flex items-center space-x-2">
-        <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-blue-100 text-blue-800">
-            {getInitials(row.original.merchantName || "Unknown Merchant")}
-          </AvatarFallback>
-        </Avatar>
-        <Link 
-          to={`/admin/merchants/${row.original.merchantId}`}
-          className="text-blue-600 hover:underline"
-        >
-          {row.original.merchantName}
-        </Link>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "contractNumber",
-    header: "Contract",
-    cell: ({ row }) => {
-      if (!row.original.contractNumber) return <span className="text-gray-500">N/A</span>;
-      
-      return (
-        <Link 
-          to={`/admin/contracts/${row.original.contractId}`}
-          className="text-blue-600 hover:underline"
-        >
-          {row.original.contractNumber}
-        </Link>
-      );
-    },
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => {
-      const status = row.original.status;
-      return (
-        <Badge className={getStatusColor(status)}>
-          {status.toUpperCase()}
-        </Badge>
-      );
-    },
-  },
-  {
-    accessorKey: "lastMessageAt",
-    header: "Last Message",
-    cell: ({ row }) => 
-      row.original.lastMessageAt ? 
-      formatDateTime(row.original.lastMessageAt) : 
-      formatDateTime(row.original.createdAt),
-  },
-  {
-    accessorKey: "unreadCount",
-    header: "Unread",
-    cell: ({ row }) => {
-      if (!row.original.unreadCount) return null;
-      
-      return (
-        <Badge variant="destructive" className="rounded-full px-2">
-          {row.original.unreadCount}
-        </Badge>
-      );
-    },
-  },
-  {
-    id: "actions",
-    header: "Actions",
-    cell: ({ row }) => {
-      const conversation = row.original;
-      
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={() => window.location.href = `/admin/messages/${conversation.id}`}
-            >
-              <MessageCircle className="mr-2 h-4 w-4" />
-              View Conversation
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => window.location.href = `/admin/merchants/${conversation.merchantId}`}
-            >
-              <UserCircle className="mr-2 h-4 w-4" />
-              View Merchant
-            </DropdownMenuItem>
-            {conversation.status !== "archived" && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-red-600"
-                  onClick={() => {
-                    fetch(`/api/conversations/${conversation.id}/archive`, {
-                      method: "POST",
-                    })
-                      .then((res) => {
-                        if (res.ok) {
-                          window.location.reload();
-                        }
-                      })
-                      .catch((error) => {
-                        console.error("Error archiving conversation:", error);
-                      });
-                  }}
-                >
-                  <Archive className="mr-2 h-4 w-4" />
-                  Archive
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    },
-  },
-];
-
 export default function AdminMessages() {
+  const [, navigate] = useLocation();
   const { 
     searchParams,
     getParam,
@@ -273,6 +126,11 @@ export default function AdminMessages() {
   // Extract conversations array from the response
   const conversations = data?.conversations || [];
   
+  // Ensure it's an array
+  if (!Array.isArray(conversations)) {
+    console.error('Conversations data is not an array:', conversations);
+  }
+  
   // Query to fetch all merchants (for filtering)
   const { data: allMerchants = [] } = useQuery({
     queryKey: ["/api/merchants"],
@@ -298,12 +156,13 @@ export default function AdminMessages() {
   });
   
   // Extract merchants array from the response
-  const merchants = allMerchants;
+  const merchants = Array.isArray(allMerchants) ? allMerchants : 
+                   (allMerchants && allMerchants.merchants ? allMerchants.merchants : []);
   
   // Use all merchants as fallback when active merchants API fails
   const activeMerchants = activeMerchantsData.merchants && activeMerchantsData.merchants.length > 0 
     ? activeMerchantsData.merchants 
-    : merchants.filter((m: any) => !m.isArchived);
+    : (Array.isArray(merchants) ? merchants.filter((m: any) => !m.isArchived) : []);
     
   // Map merchants to format used in dropdown
   const dropdownMerchants = activeMerchants.length > 0 && activeMerchants[0].merchantId
@@ -312,6 +171,155 @@ export default function AdminMessages() {
         merchantId: m.id,
         merchantName: m.businessName
       }));
+  
+  // Define the columns for the conversations data table
+  const conversationsColumns: ColumnDef<any>[] = [
+    {
+      accessorKey: "id",
+      header: "#",
+      cell: ({ row }) => <span>#{row.original.id}</span>,
+    },
+    {
+      accessorKey: "topic",
+      header: "Topic",
+      cell: ({ row }) => (
+        <div className="max-w-[200px] truncate" title={row.original.topic}>
+          <Link 
+            to={`/admin/messages/${row.original.id}`}
+            className="text-blue-600 hover:underline font-medium"
+          >
+            {row.original.topic}
+          </Link>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "merchantName",
+      header: "Merchant",
+      cell: ({ row }) => (
+        <div className="flex items-center space-x-2">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-blue-100 text-blue-800">
+              {getInitials(row.original.merchantName || "Unknown Merchant")}
+            </AvatarFallback>
+          </Avatar>
+          <Link 
+            to={`/admin/merchants/${row.original.merchantId}`}
+            className="text-blue-600 hover:underline"
+          >
+            {row.original.merchantName}
+          </Link>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "contractNumber",
+      header: "Contract",
+      cell: ({ row }) => {
+        if (!row.original.contractNumber) return <span className="text-gray-500">N/A</span>;
+        
+        return (
+          <Link 
+            to={`/admin/contracts/${row.original.contractId}`}
+            className="text-blue-600 hover:underline"
+          >
+            {row.original.contractNumber}
+          </Link>
+        );
+      },
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.original.status;
+        return (
+          <Badge className={getStatusColor(status)}>
+            {status.toUpperCase()}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "lastMessageAt",
+      header: "Last Message",
+      cell: ({ row }) => 
+        row.original.lastMessageAt ? 
+        formatDateTime(row.original.lastMessageAt) : 
+        formatDateTime(row.original.createdAt),
+    },
+    {
+      accessorKey: "unreadCount",
+      header: "Unread",
+      cell: ({ row }) => {
+        if (!row.original.unreadCount) return null;
+        
+        return (
+          <Badge variant="destructive" className="rounded-full px-2">
+            {row.original.unreadCount}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => {
+        const conversation = row.original;
+        
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => navigate(`/admin/messages/${conversation.id}`)}
+              >
+                <MessageCircle className="mr-2 h-4 w-4" />
+                View Conversation
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => navigate(`/admin/merchants/${conversation.merchantId}`)}
+              >
+                <UserCircle className="mr-2 h-4 w-4" />
+                View Merchant
+              </DropdownMenuItem>
+              {conversation.status !== "archived" && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-600"
+                    onClick={() => {
+                      fetch(`/api/conversations/${conversation.id}/archive`, {
+                        method: "POST",
+                      })
+                        .then((res) => {
+                          if (res.ok) {
+                            refetch();
+                          }
+                        })
+                        .catch((error) => {
+                          console.error("Error archiving conversation:", error);
+                        });
+                    }}
+                  >
+                    <Archive className="mr-2 h-4 w-4" />
+                    Archive
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
+  ];
   
   // Handle creating a new conversation
   const handleCreateConversation = async (values: z.infer<typeof newConversationSchema>) => {
@@ -339,7 +347,7 @@ export default function AdminMessages() {
       newConversationForm.reset();
       
       // Redirect to the new conversation
-      window.location.href = `/admin/messages/${data.id}`;
+      navigate(`/admin/messages/${data.id}`);
     } catch (error) {
       toast({
         title: "Error",
