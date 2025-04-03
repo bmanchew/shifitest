@@ -66,23 +66,48 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     }
 
     // Attempt to validate the session and get fresh merchant data
-    if (user?.role === 'merchant') {
+    if (user?.role === 'merchant' && !user.merchantId) {
+      console.log("Merchant user found without merchantId, attempting to fetch from API");
+      
       try {
-        // Use the merchant-dashboard endpoint since it's working properly
-        const response = await apiRequest<{ success: boolean; merchant: any }>(
+        // First try the merchants/current endpoint
+        const merchantResponse = await apiRequest<{ success: boolean; merchant: { id: number } }>(
           "GET", 
-          "/api/merchant-dashboard/current"
+          "/api/merchants/current"
         );
         
-        if (response.success && response.merchant) {
+        if (merchantResponse.success && merchantResponse.merchant) {
+          console.log(`Successfully retrieved merchant ID from /api/merchants/current: ${merchantResponse.merchant.id}`);
+          
           // Update the local user data with merchant information
           user = {
             ...user,
-            merchantId: response.merchant.id
+            merchantId: merchantResponse.merchant.id
           };
           
           // Store the updated user data
           storeUserData(user);
+        } else {
+          console.warn("Failed to get merchant data from /api/merchants/current, trying alternative endpoint");
+          
+          // Fallback to the merchant-dashboard endpoint
+          const dashboardResponse = await apiRequest<{ success: boolean; merchant: any }>(
+            "GET", 
+            "/api/merchant-dashboard/current"
+          );
+          
+          if (dashboardResponse.success && dashboardResponse.merchant) {
+            console.log(`Successfully retrieved merchant ID from dashboard endpoint: ${dashboardResponse.merchant.id}`);
+            
+            // Update the local user data with merchant information
+            user = {
+              ...user,
+              merchantId: dashboardResponse.merchant.id
+            };
+            
+            // Store the updated user data
+            storeUserData(user);
+          }
         }
       } catch (error) {
         console.warn("Failed to get current merchant data:", error);

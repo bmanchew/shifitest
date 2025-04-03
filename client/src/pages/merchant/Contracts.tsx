@@ -16,7 +16,7 @@ import { Contract } from "@shared/schema";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Search, Filter } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/api";
 
@@ -31,9 +31,35 @@ interface Customer {
 
 export default function Contracts() {
   const { user } = useAuth();
-  const merchantId = user?.merchantId; // Default to Shiloh Finance ID (49)
+  const [merchantId, setMerchantId] = useState<number | undefined>(user?.merchantId);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [customerCache, setCustomerCache] = useState<Record<number, Customer>>({});
+  
+  // If user exists but merchantId is missing, try to fetch it from the API
+  useEffect(() => {
+    if (user?.role === 'merchant' && !merchantId) {
+      const fetchMerchantId = async () => {
+        try {
+          console.log("Attempting to fetch merchant ID from API...");
+          const response = await apiRequest<{ success: boolean; merchant: { id: number } }>(
+            "GET", 
+            "/api/merchants/current"
+          );
+          
+          if (response.success && response.merchant?.id) {
+            console.log(`Successfully retrieved merchant ID: ${response.merchant.id}`);
+            setMerchantId(response.merchant.id);
+          } else {
+            console.warn("Merchant endpoint did not return a valid ID");
+          }
+        } catch (error) {
+          console.error("Failed to fetch merchant ID:", error);
+        }
+      };
+      
+      fetchMerchantId();
+    }
+  }, [user]);
 
   const { data: contracts = [] } = useQuery<Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
@@ -75,9 +101,9 @@ export default function Contracts() {
       case "completed":
         return "info";
       case "declined":
-        return "danger";
+        return "destructive";
       case "cancelled":
-        return "danger";
+        return "destructive";
       default:
         return "default";
     }
@@ -290,10 +316,19 @@ export default function Contracts() {
             <Button variant="outline">Export</Button>
           </div>
 
-          <DataTable
-            columns={columns}
-            data={filteredContracts}
-          />
+          {merchantId ? (
+            <DataTable
+              columns={columns}
+              data={filteredContracts}
+            />
+          ) : (
+            <div className="bg-blue-50 p-4 rounded-md mt-4 flex flex-col items-center justify-center">
+              <h3 className="text-lg font-medium text-blue-800 mb-2">Loading merchant information...</h3>
+              <p className="text-blue-700 text-center mb-4">
+                We're retrieving your merchant profile data to show your contracts.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </MerchantLayout>

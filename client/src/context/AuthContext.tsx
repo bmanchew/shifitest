@@ -78,9 +78,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error("Invalid response format - missing user data");
       }
 
-      // For demo purposes, handle merchant user special case
+      // If this is a merchant user without a merchantId, we need to fetch it
       if (user.role === "merchant" && !user.merchantId) {
-        user.merchantId = 49; // Default to Shiloh Finance merchant ID (49)
+        try {
+          // Try to get the merchant ID from the merchants/current endpoint
+          const merchantResponse = await apiRequest<{ success: boolean; merchant: { id: number } }>(
+            "GET", 
+            "/api/merchants/current"
+          );
+          
+          if (merchantResponse.success && merchantResponse.merchant) {
+            user.merchantId = merchantResponse.merchant.id;
+            console.log(`Fetched actual merchant ID: ${user.merchantId}`);
+          } else {
+            console.warn("Failed to get merchantId from /api/merchants/current endpoint");
+          }
+        } catch (merchantError) {
+          console.error("Error fetching merchant ID:", merchantError);
+        }
       }
 
       // Handle backward compatibility with name field during migration
