@@ -1,7 +1,7 @@
-// CommonJS version of the password reset script
-const { Pool, neonConfig } = require('@neondatabase/serverless');
-const bcrypt = require('bcrypt');
-const ws = require('ws');
+// ES Module version of the password reset script
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import bcrypt from 'bcrypt';
+import ws from 'ws';
 
 // Configure Neon to use WebSockets
 neonConfig.webSocketConstructor = ws;

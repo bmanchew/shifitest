@@ -1208,83 +1208,60 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts for merchant ID ${merchantId}`);
       
-      // Simplify the query to start - this is a debug fallback
-      console.log("Attempting fallback query with simplified selection");
-      const results = await db.query.contracts.findMany({
-        where: eq(contracts.merchantId, merchantId),
-        orderBy: [desc(contracts.createdAt)]
-      });
+      // Try using raw SQL query to avoid potential issues with drizzle-orm field selection
+      const rawQuery = `
+        SELECT 
+          id, 
+          contract_number as "contractNumber", 
+          merchant_id as "merchantId", 
+          customer_id as "customerId", 
+          amount, 
+          interest_rate as "interestRate", 
+          status, 
+          term_months as "termMonths", 
+          created_at as "createdAt"
+        FROM contracts 
+        WHERE merchant_id = $1
+        ORDER BY created_at DESC;
+      `;
       
-      if (results && results.length > 0) {
-        // Process the results to ensure term and termMonths both exist
-        return results.map(contract => ({
-          ...contract,
-          term: contract.termMonths || 0,
-          updatedAt: null,
-          startDate: null,
-          endDate: null,
-          type: 'custom'
-        }));
-      }
+      const result = await pool.query(rawQuery, [merchantId]);
+      const minimalResults = result.rows;
       
-      console.log("No contracts found with fallback query, will try standard query");
+      console.log(`Found ${minimalResults.length} contracts for merchant ID ${merchantId}`);
       
-      // Let's use the full contract selection for merchant ID filtering
-      const detailedResults = await db
-        .select({
-          id: contracts.id,
-          contractNumber: contracts.contractNumber,
-          merchantId: contracts.merchantId,
-          customerId: contracts.customerId,
-          amount: contracts.amount,
-          interestRate: contracts.interestRate,
-          status: contracts.status,
-          // Map termMonths to both termMonths and term
-          termMonths: contracts.termMonths,
-          // Additional dates
-          createdAt: contracts.createdAt,
-          completedAt: contracts.completedAt,
-          // Financial fields
-          downPayment: contracts.downPayment,
-          financedAmount: contracts.financedAmount,
-          monthlyPayment: contracts.monthlyPayment,
-          // Status fields
-          currentStep: contracts.currentStep,
-          archived: contracts.archived,
-          archivedAt: contracts.archivedAt,
-          archivedReason: contracts.archivedReason,
-          // Contact info
-          phoneNumber: contracts.phoneNumber,
-          salesRepId: contracts.salesRepId,
-          // Blockchain fields
-          purchasedByShifi: contracts.purchasedByShifi,
-          tokenizationStatus: contracts.tokenizationStatus,
-          tokenId: contracts.tokenId,
-          smartContractAddress: contracts.smartContractAddress,
-          tokenizationError: contracts.tokenizationError,
-          blockchainTransactionHash: contracts.blockchainTransactionHash,
-          blockNumber: contracts.blockNumber,
-          tokenizationDate: contracts.tokenizationDate,
-          tokenMetadata: contracts.tokenMetadata,
-        })
-        .from(contracts)
-        .where(eq(contracts.merchantId, merchantId))
-        .orderBy(desc(contracts.createdAt));
-      
-      console.log(`Found ${detailedResults.length} contracts for merchant ID ${merchantId}`);
-      
-      // Map the results to add any fields expected by the Contract type that weren't in the database query
-      const contractsWithDefaults = detailedResults.map(contract => {
+      // Map the results to include the term field (mapped from termMonths) 
+      // and any other expected fields that weren't in the minimal query
+      const contractsWithDefaults = minimalResults.map(contract => {
         return {
           ...contract,
           // Add the term field that maps to termMonths for backwards compatibility
           term: contract.termMonths || 0,
-          // Add fields expected by the frontend that might not be in our database schema
-          updatedAt: null, // We don't have this field in the database
-          startDate: null, // We don't have this field in the database
-          endDate: null, // We don't have this field in the database
+          // Add default values for fields not in our minimal query
+          completedAt: null,
+          downPayment: 0,
+          financedAmount: contract.amount || 0,
+          monthlyPayment: 0,
+          currentStep: "completed",
+          archived: false,
+          archivedAt: null,
+          archivedReason: null,
+          phoneNumber: null,
+          salesRepId: null,
+          purchasedByShifi: false,
+          tokenizationStatus: "pending",
+          tokenId: null,
+          smartContractAddress: null,
+          tokenizationError: null,
+          blockchainTransactionHash: null, 
+          blockNumber: null,
+          tokenizationDate: null,
+          tokenMetadata: null,
           // Additional frontend expected fields
-          type: 'custom' // Default contract type
+          updatedAt: null,
+          startDate: null,
+          endDate: null,
+          type: 'custom'
         };
       });
       
@@ -1300,62 +1277,60 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts for customer ID ${customerId}`);
       
-      // Use explicit column selection, mapping termMonths as term
-      const results = await db
-        .select({
-          id: contracts.id,
-          contractNumber: contracts.contractNumber,
-          merchantId: contracts.merchantId,
-          customerId: contracts.customerId,
-          amount: contracts.amount,
-          interestRate: contracts.interestRate,
-          status: contracts.status,
-          // Map termMonths to both termMonths and term
-          termMonths: contracts.termMonths,
-          // Additional dates
-          createdAt: contracts.createdAt,
-          completedAt: contracts.completedAt,
-          // Financial fields
-          downPayment: contracts.downPayment,
-          financedAmount: contracts.financedAmount,
-          monthlyPayment: contracts.monthlyPayment,
-          // Status fields
-          currentStep: contracts.currentStep,
-          archived: contracts.archived,
-          archivedAt: contracts.archivedAt,
-          archivedReason: contracts.archivedReason,
-          // Contact info
-          phoneNumber: contracts.phoneNumber,
-          salesRepId: contracts.salesRepId,
-          // Blockchain fields
-          purchasedByShifi: contracts.purchasedByShifi,
-          tokenizationStatus: contracts.tokenizationStatus,
-          tokenId: contracts.tokenId,
-          smartContractAddress: contracts.smartContractAddress,
-          tokenizationError: contracts.tokenizationError,
-          blockchainTransactionHash: contracts.blockchainTransactionHash,
-          blockNumber: contracts.blockNumber,
-          tokenizationDate: contracts.tokenizationDate,
-          tokenMetadata: contracts.tokenMetadata,
-        })
-        .from(contracts)
-        .where(eq(contracts.customerId, customerId))
-        .orderBy(desc(contracts.createdAt));
+      // Try using raw SQL query to avoid potential issues with drizzle-orm field selection
+      const rawQuery = `
+        SELECT 
+          id, 
+          contract_number as "contractNumber", 
+          merchant_id as "merchantId", 
+          customer_id as "customerId", 
+          amount, 
+          interest_rate as "interestRate", 
+          status, 
+          term_months as "termMonths", 
+          created_at as "createdAt"
+        FROM contracts 
+        WHERE customer_id = $1
+        ORDER BY created_at DESC;
+      `;
       
-      console.log(`Found ${results.length} contracts for customer ID ${customerId}`);
+      const result = await pool.query(rawQuery, [customerId]);
+      const minimalResults = result.rows;
       
-      // Map the results to add any fields expected by the Contract type that weren't in the database query
-      const contractsWithDefaults = results.map(contract => {
+      console.log(`Found ${minimalResults.length} contracts for customer ID ${customerId}`);
+      
+      // Map the results to include the term field (mapped from termMonths) 
+      // and any other expected fields that weren't in the minimal query
+      const contractsWithDefaults = minimalResults.map(contract => {
         return {
           ...contract,
           // Add the term field that maps to termMonths for backwards compatibility
           term: contract.termMonths || 0,
-          // Add fields expected by the frontend that might not be in our database schema
-          updatedAt: null, // We don't have this field in the database
-          startDate: null, // We don't have this field in the database
-          endDate: null, // We don't have this field in the database
+          // Add default values for fields not in our minimal query
+          completedAt: null,
+          downPayment: 0,
+          financedAmount: contract.amount || 0,
+          monthlyPayment: 0,
+          currentStep: "completed",
+          archived: false,
+          archivedAt: null,
+          archivedReason: null,
+          phoneNumber: null,
+          salesRepId: null,
+          purchasedByShifi: false,
+          tokenizationStatus: "pending",
+          tokenId: null,
+          smartContractAddress: null,
+          tokenizationError: null,
+          blockchainTransactionHash: null, 
+          blockNumber: null,
+          tokenizationDate: null,
+          tokenMetadata: null,
           // Additional frontend expected fields
-          type: 'custom' // Default contract type
+          updatedAt: null,
+          startDate: null,
+          endDate: null,
+          type: 'custom'
         };
       });
       
@@ -1373,62 +1348,60 @@ export class DatabaseStorage implements IStorage {
       
       console.log(`Getting contracts for phone number ${normalizedPhone}`);
       
-      // Use explicit column selection, mapping termMonths as term
-      const results = await db
-        .select({
-          id: contracts.id,
-          contractNumber: contracts.contractNumber,
-          merchantId: contracts.merchantId,
-          customerId: contracts.customerId,
-          amount: contracts.amount,
-          interestRate: contracts.interestRate,
-          status: contracts.status,
-          // Map termMonths to both termMonths and term
-          termMonths: contracts.termMonths,
-          // Additional dates
-          createdAt: contracts.createdAt,
-          completedAt: contracts.completedAt,
-          // Financial fields
-          downPayment: contracts.downPayment,
-          financedAmount: contracts.financedAmount,
-          monthlyPayment: contracts.monthlyPayment,
-          // Status fields
-          currentStep: contracts.currentStep,
-          archived: contracts.archived,
-          archivedAt: contracts.archivedAt,
-          archivedReason: contracts.archivedReason,
-          // Contact info
-          phoneNumber: contracts.phoneNumber,
-          salesRepId: contracts.salesRepId,
-          // Blockchain fields
-          purchasedByShifi: contracts.purchasedByShifi,
-          tokenizationStatus: contracts.tokenizationStatus,
-          tokenId: contracts.tokenId,
-          smartContractAddress: contracts.smartContractAddress,
-          tokenizationError: contracts.tokenizationError,
-          blockchainTransactionHash: contracts.blockchainTransactionHash,
-          blockNumber: contracts.blockNumber,
-          tokenizationDate: contracts.tokenizationDate,
-          tokenMetadata: contracts.tokenMetadata,
-        })
-        .from(contracts)
-        .where(eq(contracts.phoneNumber, normalizedPhone))
-        .orderBy(desc(contracts.createdAt));
+      // Try using raw SQL query to avoid potential issues with drizzle-orm field selection
+      const rawQuery = `
+        SELECT 
+          id, 
+          contract_number as "contractNumber", 
+          merchant_id as "merchantId", 
+          customer_id as "customerId", 
+          amount, 
+          interest_rate as "interestRate", 
+          status, 
+          term_months as "termMonths", 
+          created_at as "createdAt",
+          phone_number as "phoneNumber"
+        FROM contracts 
+        WHERE phone_number = $1
+        ORDER BY created_at DESC;
+      `;
       
-      console.log(`Found ${results.length} contracts for phone number ${normalizedPhone}`);
+      const result = await pool.query(rawQuery, [normalizedPhone]);
+      const minimalResults = result.rows;
       
-      // Map the results to add any fields expected by the Contract type that weren't in the database query
-      const contractsWithDefaults = results.map(contract => {
+      console.log(`Found ${minimalResults.length} contracts for phone number ${normalizedPhone}`);
+      
+      // Map the results to include the term field (mapped from termMonths) 
+      // and any other expected fields that weren't in the minimal query
+      const contractsWithDefaults = minimalResults.map(contract => {
         return {
           ...contract,
           // Add the term field that maps to termMonths for backwards compatibility
           term: contract.termMonths || 0,
-          // Add fields expected by the frontend that might not be in our database schema
-          updatedAt: null, // We don't have this field in the database
-          startDate: null, // We don't have this field in the database
-          endDate: null, // We don't have this field in the database
+          // Add default values for fields not in our minimal query
+          completedAt: null,
+          downPayment: 0,
+          financedAmount: contract.amount || 0,
+          monthlyPayment: 0,
+          currentStep: "completed",
+          archived: false,
+          archivedAt: null,
+          archivedReason: null,
+          salesRepId: null,
+          purchasedByShifi: false,
+          tokenizationStatus: "pending",
+          tokenId: null,
+          smartContractAddress: null,
+          tokenizationError: null,
+          blockchainTransactionHash: null, 
+          blockNumber: null,
+          tokenizationDate: null,
+          tokenMetadata: null,
           // Additional frontend expected fields
-          type: 'custom' // Default contract type
+          updatedAt: null,
+          startDate: null,
+          endDate: null,
+          type: 'custom'
         };
       });
       
@@ -1660,62 +1633,60 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts with status: ${status}`);
       
-      // Use explicit column selection, mapping termMonths as term
-      const results = await db
-        .select({
-          id: contracts.id,
-          contractNumber: contracts.contractNumber,
-          merchantId: contracts.merchantId,
-          customerId: contracts.customerId,
-          amount: contracts.amount,
-          interestRate: contracts.interestRate,
-          status: contracts.status,
-          // Map termMonths to both termMonths and term
-          termMonths: contracts.termMonths,
-          // Additional dates
-          createdAt: contracts.createdAt,
-          completedAt: contracts.completedAt,
-          // Financial fields
-          downPayment: contracts.downPayment,
-          financedAmount: contracts.financedAmount,
-          monthlyPayment: contracts.monthlyPayment,
-          // Status fields
-          currentStep: contracts.currentStep,
-          archived: contracts.archived,
-          archivedAt: contracts.archivedAt,
-          archivedReason: contracts.archivedReason,
-          // Contact info
-          phoneNumber: contracts.phoneNumber,
-          salesRepId: contracts.salesRepId,
-          // Blockchain fields
-          purchasedByShifi: contracts.purchasedByShifi,
-          tokenizationStatus: contracts.tokenizationStatus,
-          tokenId: contracts.tokenId,
-          smartContractAddress: contracts.smartContractAddress,
-          tokenizationError: contracts.tokenizationError,
-          blockchainTransactionHash: contracts.blockchainTransactionHash,
-          blockNumber: contracts.blockNumber,
-          tokenizationDate: contracts.tokenizationDate,
-          tokenMetadata: contracts.tokenMetadata,
-        })
-        .from(contracts)
-        .where(eq(contracts.status, status as any))
-        .orderBy(desc(contracts.createdAt));
+      // Try using raw SQL query to avoid potential issues with drizzle-orm field selection
+      const rawQuery = `
+        SELECT 
+          id, 
+          contract_number as "contractNumber", 
+          merchant_id as "merchantId", 
+          customer_id as "customerId", 
+          amount, 
+          interest_rate as "interestRate", 
+          status, 
+          term_months as "termMonths", 
+          created_at as "createdAt"
+        FROM contracts 
+        WHERE status = $1
+        ORDER BY created_at DESC;
+      `;
       
-      console.log(`Found ${results.length} contracts with status: ${status}`);
+      const result = await pool.query(rawQuery, [status]);
+      const minimalResults = result.rows;
       
-      // Map the results to add any fields expected by the Contract type that weren't in the database query
-      const contractsWithDefaults = results.map(contract => {
+      console.log(`Found ${minimalResults.length} contracts with status: ${status}`);
+      
+      // Map the results to include the term field (mapped from termMonths) 
+      // and any other expected fields that weren't in the minimal query
+      const contractsWithDefaults = minimalResults.map(contract => {
         return {
           ...contract,
           // Add the term field that maps to termMonths for backwards compatibility
           term: contract.termMonths || 0,
-          // Add fields expected by the frontend that might not be in our database schema
-          updatedAt: null, // We don't have this field in the database
-          startDate: null, // We don't have this field in the database
-          endDate: null, // We don't have this field in the database
+          // Add default values for fields not in our minimal query
+          completedAt: null,
+          downPayment: 0,
+          financedAmount: contract.amount || 0,
+          monthlyPayment: 0,
+          currentStep: "completed",
+          archived: false,
+          archivedAt: null,
+          archivedReason: null,
+          phoneNumber: null,
+          salesRepId: null,
+          purchasedByShifi: false,
+          tokenizationStatus: "pending",
+          tokenId: null,
+          smartContractAddress: null,
+          tokenizationError: null,
+          blockchainTransactionHash: null, 
+          blockNumber: null,
+          tokenizationDate: null,
+          tokenMetadata: null,
           // Additional frontend expected fields
-          type: 'custom' // Default contract type
+          updatedAt: null,
+          startDate: null,
+          endDate: null,
+          type: 'custom'
         };
       });
       
