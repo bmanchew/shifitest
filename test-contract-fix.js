@@ -13,7 +13,7 @@ const __dirname = dirname(__filename);
 const baseUrl = 'http://localhost:5000';
 const adminEmail = 'admin@shifi.com';
 const adminPassword = 'admin123';
-const merchantEmail = 'merchant-1743200041688@test.com';
+const merchantEmail = 'test-merchant@example.com';
 const merchantPassword = 'Password123!';
 
 // Cookie handling
@@ -173,9 +173,10 @@ async function testMerchantContracts() {
   try {
     const csrfToken = await getCsrfToken();
     
-    // Get merchant contracts
+    // Get merchant contracts - use the same endpoint as admin but without admin=true param
+    // The API will filter contracts based on the user's merchant ID
     const response = await axios.get(
-      `${baseUrl}/api/merchant/contracts`,
+      `${baseUrl}/api/contracts`,
       {
         withCredentials: true,
         headers: {
