@@ -19,7 +19,7 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
   try {
     console.log('GET /api/contracts - Request received:', {
       query: req.query,
-      user: { id: req.user?.id, role: req.user?.role, merchantId: req.user?.merchantId }
+      user: { id: req.user?.id, role: req.user?.role }
     });
     
     const userId = req.user?.id;

@@ -28,7 +28,7 @@ export const contracts = pgTable("contracts", {
     .notNull()
     .references(() => merchants.id),
   amount: doublePrecision("amount").notNull(),
-  term: integer("term").notNull(), // months
+  term: integer("term_months").notNull(), // months - renamed to match the main schema
   interestRate: doublePrecision("interest_rate").notNull(),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),

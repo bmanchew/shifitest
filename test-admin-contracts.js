@@ -1,14 +1,13 @@
 /**
- * Test script for the contracts API endpoints
- * This script logs in as a merchant user and accesses contract data
+ * Test script for the contracts API endpoints using admin credentials
  */
 
 import fs from 'fs';
 import axios from 'axios';
 
-// Test merchant credentials
-const TEST_EMAIL = 'brandon@shilohfinance.com';
-const TEST_PASSWORD = 'shifitest123';
+// Admin credentials
+const ADMIN_EMAIL = 'admin@shifi.com';
+const ADMIN_PASSWORD = 'admin123';
 
 // Cookie storage
 let cookies = [];
@@ -20,17 +19,17 @@ const API_BASE_URL = 'http://localhost:5000/api';
 function saveCookies(response) {
   if (response.headers['set-cookie']) {
     cookies = response.headers['set-cookie'];
-    fs.writeFileSync('cookies.txt', cookies.join('\n'));
-    console.log('Cookies saved to cookies.txt');
+    fs.writeFileSync('admin-cookies.txt', cookies.join('\n'));
+    console.log('Cookies saved to admin-cookies.txt');
   }
 }
 
 // Load cookies from file
 function loadCookies() {
   try {
-    if (fs.existsSync('cookies.txt')) {
-      cookies = fs.readFileSync('cookies.txt', 'utf8').split('\n');
-      console.log('Cookies loaded from cookies.txt');
+    if (fs.existsSync('admin-cookies.txt')) {
+      cookies = fs.readFileSync('admin-cookies.txt', 'utf8').split('\n');
+      console.log('Cookies loaded from admin-cookies.txt');
     }
   } catch (error) {
     console.error('Error loading cookies:', error);
@@ -45,7 +44,8 @@ async function getCsrfToken() {
     const response = await axios.get(`${API_BASE_URL}/csrf-token`, {
       headers: {
         Cookie: cookies.join('; ')
-      }
+      },
+      withCredentials: true // This is important for session cookie handling
     });
     
     saveCookies(response);
@@ -56,8 +56,8 @@ async function getCsrfToken() {
   }
 }
 
-// Login as merchant
-async function loginAsMerchant() {
+// Login as admin
+async function loginAsAdmin() {
   // First load any existing cookies
   loadCookies();
   
@@ -68,16 +68,18 @@ async function loginAsMerchant() {
     return false;
   }
   
-  console.log('Logging in as merchant...');
+  console.log('Logging in as admin...');
   try {
     const response = await axios.post(`${API_BASE_URL}/auth/login`, {
-      email: TEST_EMAIL,
-      password: TEST_PASSWORD
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+      userType: 'admin'
     }, {
       headers: {
         'X-CSRF-Token': csrfToken,
         Cookie: cookies.join('; ')
-      }
+      },
+      withCredentials: true // Important for session cookie handling
     });
     
     saveCookies(response);
@@ -89,9 +91,9 @@ async function loginAsMerchant() {
   }
 }
 
-// Test merchant contracts endpoint
-async function testMerchantContracts() {
-  console.log('\nTesting merchant contracts endpoint...');
+// Test contracts endpoint as admin
+async function testContracts() {
+  console.log('\nTesting contracts endpoint as admin...');
   
   try {
     // Get CSRF token
@@ -101,25 +103,14 @@ async function testMerchantContracts() {
       return;
     }
     
-    // Get current merchant
-    console.log('Getting current merchant info...');
-    const merchantResponse = await axios.get(`${API_BASE_URL}/merchants/current`, {
+    // Get all contracts (admin can see all)
+    console.log('Getting all contracts as admin...');
+    const contractsResponse = await axios.get(`${API_BASE_URL}/contracts?admin=true`, {
       headers: {
         'X-CSRF-Token': csrfToken,
         Cookie: cookies.join('; ')
-      }
-    });
-    
-    const merchantId = merchantResponse.data.merchant.id;
-    console.log(`Current merchant ID: ${merchantId}`);
-    
-    // Get merchant's contracts
-    console.log('Getting merchant contracts...');
-    const contractsResponse = await axios.get(`${API_BASE_URL}/contracts?merchantId=${merchantId}`, {
-      headers: {
-        'X-CSRF-Token': csrfToken,
-        Cookie: cookies.join('; ')
-      }
+      },
+      withCredentials: true // Important for session cookie handling
     });
     
     console.log(`Retrieved ${contractsResponse.data.contracts.length} contracts`);
@@ -133,7 +124,8 @@ async function testMerchantContracts() {
         headers: {
           'X-CSRF-Token': csrfToken,
           Cookie: cookies.join('; ')
-        }
+        },
+        withCredentials: true // Important for session cookie handling
       });
       
       console.log('Contract details:', JSON.stringify(contractResponse.data.contract, null, 2));
@@ -144,7 +136,8 @@ async function testMerchantContracts() {
         headers: {
           'X-CSRF-Token': csrfToken,
           Cookie: cookies.join('; ')
-        }
+        },
+        withCredentials: true // Important for session cookie handling
       });
       
       console.log('Underwriting data response:', JSON.stringify(underwritingResponse.data, null, 2));
@@ -156,15 +149,15 @@ async function testMerchantContracts() {
 
 // Main function
 async function main() {
-  console.log('Starting contract API test...\n');
+  console.log('Starting contract API test as admin...\n');
   
-  // Login as a merchant
-  const loggedIn = await loginAsMerchant();
+  // Login as admin
+  const loggedIn = await loginAsAdmin();
   
   if (loggedIn) {
-    await testMerchantContracts();
+    await testContracts();
   } else {
-    console.error('Login failed. Cannot proceed with tests.');
+    console.error('Admin login failed. Cannot proceed with tests.');
   }
 }
 
