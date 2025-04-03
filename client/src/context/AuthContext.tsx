@@ -82,16 +82,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (user.role === "merchant" && !user.merchantId) {
         try {
           // Try to get the merchant ID from the merchants/current endpoint
-          const merchantResponse = await apiRequest<{ success: boolean; merchant: { id: number } }>(
+          const merchantResponse = await apiRequest<{ success: boolean; data?: { id: number }, merchant?: { id: number } }>(
             "GET", 
             "/api/merchants/current"
           );
           
-          if (merchantResponse.success && merchantResponse.merchant) {
-            user.merchantId = merchantResponse.merchant.id;
-            console.log(`Fetched actual merchant ID: ${user.merchantId}`);
+          if (merchantResponse.success) {
+            if (merchantResponse.data?.id) {
+              user.merchantId = merchantResponse.data.id;
+              console.log(`Fetched actual merchant ID from data.id: ${user.merchantId}`);
+            } else if (merchantResponse.merchant?.id) {
+              user.merchantId = merchantResponse.merchant.id;
+              console.log(`Fetched actual merchant ID from merchant.id: ${user.merchantId}`);
+            } else {
+              console.warn("Failed to get merchantId from /api/merchants/current endpoint: response format issue", merchantResponse);
+            }
           } else {
-            console.warn("Failed to get merchantId from /api/merchants/current endpoint");
+            console.warn("Failed to get merchantId from /api/merchants/current endpoint: not successful", merchantResponse);
           }
         } catch (merchantError) {
           console.error("Error fetching merchant ID:", merchantError);

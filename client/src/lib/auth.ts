@@ -71,22 +71,37 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       
       try {
         // First try the merchants/current endpoint
-        const merchantResponse = await apiRequest<{ success: boolean; merchant: { id: number } }>(
+        const merchantResponse = await apiRequest<{ success: boolean; data?: { id: number }; merchant?: { id: number } }>(
           "GET", 
           "/api/merchants/current"
         );
         
-        if (merchantResponse.success && merchantResponse.merchant) {
-          console.log(`Successfully retrieved merchant ID from /api/merchants/current: ${merchantResponse.merchant.id}`);
-          
-          // Update the local user data with merchant information
-          user = {
-            ...user,
-            merchantId: merchantResponse.merchant.id
-          };
-          
-          // Store the updated user data
-          storeUserData(user);
+        if (merchantResponse.success) {
+          if (merchantResponse.data?.id) {
+            console.log(`Successfully retrieved merchant ID from data.id: ${merchantResponse.data.id}`);
+            
+            // Update the local user data with merchant information
+            user = {
+              ...user,
+              merchantId: merchantResponse.data.id
+            };
+            
+            // Store the updated user data
+            storeUserData(user);
+          } else if (merchantResponse.merchant?.id) {
+            console.log(`Successfully retrieved merchant ID from merchant.id: ${merchantResponse.merchant.id}`);
+            
+            // Update the local user data with merchant information
+            user = {
+              ...user,
+              merchantId: merchantResponse.merchant.id
+            };
+            
+            // Store the updated user data
+            storeUserData(user);
+          } else {
+            console.warn("Merchant endpoint returned success but no valid ID found in response", merchantResponse);
+          }
         } else {
           console.warn("Failed to get merchant data from /api/merchants/current, trying alternative endpoint");
           

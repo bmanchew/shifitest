@@ -41,16 +41,24 @@ export default function Contracts() {
       const fetchMerchantId = async () => {
         try {
           console.log("Attempting to fetch merchant ID from API...");
-          const response = await apiRequest<{ success: boolean; merchant: { id: number } }>(
+          const response = await apiRequest<{ success: boolean; data?: { id: number }; merchant?: { id: number } }>(
             "GET", 
             "/api/merchants/current"
           );
           
-          if (response.success && response.merchant?.id) {
-            console.log(`Successfully retrieved merchant ID: ${response.merchant.id}`);
-            setMerchantId(response.merchant.id);
+          // Handle both response formats - either data.id (current API) or merchant.id (old format)
+          if (response.success) {
+            if (response.data?.id) {
+              console.log(`Successfully retrieved merchant ID from data.id: ${response.data.id}`);
+              setMerchantId(response.data.id);
+            } else if (response.merchant?.id) {
+              console.log(`Successfully retrieved merchant ID from merchant.id: ${response.merchant.id}`);
+              setMerchantId(response.merchant.id);
+            } else {
+              console.warn("Merchant endpoint returned success but no valid merchant ID found in the response", response);
+            }
           } else {
-            console.warn("Merchant endpoint did not return a valid ID");
+            console.warn("Merchant endpoint did not return success", response);
           }
         } catch (error) {
           console.error("Failed to fetch merchant ID:", error);
