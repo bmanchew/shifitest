@@ -97,6 +97,14 @@ async function fetchCurrentMerchant() {
     console.log('Fetching current merchant data...');
     const csrfToken = await getCsrfToken();
     
+    // Log the exact request URL and headers for debugging
+    console.log('Request URL:', `${API_URL}/merchants/current`);
+    console.log('Request headers:', {
+      'X-CSRF-Token': csrfToken,
+      'Cookie': loadCookies()
+    });
+    
+    // The API_URL already includes '/api' so we just need the route path
     const response = await api.get('/merchants/current', {
       headers: {
         'X-CSRF-Token': csrfToken
@@ -110,6 +118,14 @@ async function fetchCurrentMerchant() {
       error.response?.status, 
       error.response?.data || error.message
     );
+    
+    // Log more detailed error information
+    if (error.response) {
+      console.error('Response headers:', error.response.headers);
+      console.error('Request path:', error.config?.url);
+      console.error('Request method:', error.config?.method);
+    }
+    
     throw error;
   }
 }

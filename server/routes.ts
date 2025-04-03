@@ -5339,10 +5339,8 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Mount the customers router
   apiRouter.use("/customers", customersRouter);
 
-  // Mount the merchant router for multi-merchant operations (admin view)
-  apiRouter.use("/merchants", merchantRouter);
-  
   // Special endpoint to get the current authenticated merchant
+  // This must be defined BEFORE mounting the merchantRouter to avoid route conflicts
   apiRouter.get("/merchants/current", authenticateToken, async (req: Request, res: Response) => {
     try {
       // Check if user exists and is authenticated
@@ -5352,6 +5350,18 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
           message: "Authentication required"
         });
       }
+      
+      // Log user information for debugging
+      logger.info({
+        message: `Merchant current endpoint accessed by user ID ${req.user.id}, email: ${req.user.email}, role: ${req.user.role}`,
+        category: 'api',
+        userId: req.user.id,
+        source: 'internal',
+        metadata: {
+          userRole: req.user.role,
+          path: req.path
+        }
+      });
       
       // Check if user is a merchant
       if (req.user.role !== 'merchant') {
@@ -5365,6 +5375,22 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
         return res.status(403).json({
           success: false,
           message: "Merchant access required"
+        });
+      }
+      
+      // Check if user ID is valid
+      if (typeof req.user.id !== 'number' || isNaN(req.user.id)) {
+        logger.error({
+          message: `Invalid user ID format: ${req.user.id}`,
+          category: 'api',
+          userId: req.user.id,
+          source: 'internal'
+        });
+        
+        return res.status(400).json({
+          success: false,
+          message: "Invalid user ID format",
+          debug: { userId: req.user.id, type: typeof req.user.id }
         });
       }
       
@@ -5408,6 +5434,9 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
       });
     }
   });
+    
+  // Mount the merchant router for multi-merchant operations (admin view)
+  apiRouter.use("/merchants", merchantRouter);
   
   // Endpoint for submitting a merchant for MidDesk verification
   apiRouter.post("/merchants/:id/submit-verification", async (req: Request, res: Response) => {
