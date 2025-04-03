@@ -5,6 +5,7 @@ import CustomerLayout from "@/components/layout/CustomerLayout";
 import ContractTerms from "@/components/customer/ContractTerms";
 import KycVerification from "@/components/customer/KycVerification";
 import BankConnection from "@/components/customer/BankConnection";
+import FinancingOffer from "@/components/customer/FinancingOffer";
 import PaymentSchedule from "@/components/customer/PaymentSchedule";
 import ContractSigning from "@/components/customer/ContractSigning";
 import ApplicationSteps, { Step } from "@/components/customer/ApplicationSteps";
@@ -301,8 +302,8 @@ export default function Application() {
   const steps: Step[] = [
     {
       id: "terms",
-      title: "Review Contract Terms",
-      description: "Review and accept financing terms",
+      title: "Pre-Qualification",
+      description: "Consent to credit check",
     },
     {
       id: "kyc",
@@ -313,6 +314,11 @@ export default function Application() {
       id: "bank",
       title: "Bank Connection",
       description: "Connect your bank account via Plaid",
+    },
+    {
+      id: "offer",
+      title: "Financing Offer",
+      description: "Review your approved offer",
     },
     {
       id: "payment",
@@ -512,6 +518,22 @@ export default function Application() {
           <BankConnection
             contractId={contractData.id}
             progressId={progressMap.bank?.id || 0}
+            onComplete={handleCompleteStep}
+            onBack={handleGoBack}
+          />
+        );
+      case "offer":
+        return (
+          <FinancingOffer
+            contractId={contractData.id}
+            progressId={progressMap.offer?.id || 0}
+            merchantName={contractData.merchantName}
+            amount={contractData.amount}
+            downPayment={contractData.downPayment}
+            financedAmount={contractData.financedAmount}
+            termMonths={contractData.termMonths}
+            interestRate={contractData.interestRate}
+            monthlyPayment={contractData.monthlyPayment}
             onComplete={handleCompleteStep}
             onBack={handleGoBack}
           />
