@@ -14,7 +14,6 @@ import {
   X,
   Bell,
   CreditCard,
-  MessageSquare,
   TicketCheck,
 } from "lucide-react";
 
@@ -27,25 +26,7 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Query to get unread messages count
-  const { data: unreadMessagesData } = useQuery({
-    queryKey: ["/api/communications/merchant/unread-count"],
-    queryFn: async () => {
-      try {
-        const response = await fetch("/api/communications/merchant/unread-count");
-        if (!response.ok) {
-          return { success: false, unreadCount: 0 };
-        }
-        return response.json();
-      } catch (error) {
-        console.error("Error fetching unread messages count:", error);
-        return { success: false, unreadCount: 0 };
-      }
-    },
-    refetchInterval: 60000, // Refetch every minute
-  });
-
-  const unreadCount = unreadMessagesData?.unreadCount || 0;
+  // Support tickets don't have an unread count feature
 
   const navigationItems = [
     {
@@ -77,13 +58,6 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
       href: "/merchant/support-tickets",
       icon: TicketCheck,
       current: location === "/merchant/support-tickets",
-    },
-    {
-      name: "Messages",
-      href: "/merchant/messages",
-      icon: MessageSquare,
-      current: location === "/merchant/messages",
-      badge: unreadCount > 0 ? unreadCount : undefined,
     },
     {
       name: "Settings",
