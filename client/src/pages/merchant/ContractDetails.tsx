@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import MerchantLayout from "@/components/layout/MerchantLayout";
+import MerchantLayout from "@/components/merchant/MerchantLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
