@@ -175,7 +175,11 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
                 <div>
                   <Avatar>
                     <AvatarImage src="" />
-                    <AvatarFallback>{user?.name.charAt(0)}</AvatarFallback>
+                    <AvatarFallback>
+                      {user?.firstName ? user.firstName.charAt(0) : 
+                       user?.name ? user.name.charAt(0) : 
+                       user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
+                    </AvatarFallback>
                   </Avatar>
                 </div>
               </div>
