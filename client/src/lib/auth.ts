@@ -56,16 +56,41 @@ export async function loginUser(email: string, password: string, userType?: stri
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
-    // In a real application, this would make an API request to validate the session
-    // or check a JWT token, etc.
-    
-    // For demo purposes, we'll check local storage
+    // First check if we have user data in local storage
     const userData = localStorage.getItem("shifi_user");
-    if (!userData) {
-      return null;
+    let user: AuthUser | null = null;
+
+    if (userData) {
+      // Parse the existing user data from localStorage
+      user = JSON.parse(userData);
+    }
+
+    // Attempt to validate the session and get fresh merchant data
+    if (user?.role === 'merchant') {
+      try {
+        // Use the merchant-dashboard endpoint since it's working properly
+        const response = await apiRequest<{ success: boolean; merchant: any }>(
+          "GET", 
+          "/api/merchant-dashboard/current"
+        );
+        
+        if (response.success && response.merchant) {
+          // Update the local user data with merchant information
+          user = {
+            ...user,
+            merchantId: response.merchant.id
+          };
+          
+          // Store the updated user data
+          storeUserData(user);
+        }
+      } catch (error) {
+        console.warn("Failed to get current merchant data:", error);
+        // We'll continue with the existing user data even if the merchant API call fails
+      }
     }
     
-    return JSON.parse(userData);
+    return user;
   } catch (error) {
     console.error("Failed to get current user:", error);
     return null;

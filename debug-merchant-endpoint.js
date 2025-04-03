@@ -90,10 +90,13 @@ async function getCurrentMerchant(csrfToken) {
     console.log('Using CSRF token:', csrfToken);
     console.log('Using cookies:', cookies);
     
-    // Try with /merchants/current instead of /api/merchants/current 
-    // because it's already prefixed with API_URL
-    console.log('Full URL will be:', API_URL + '/merchants/current');
-    const response = await api.get('/merchants/current', {
+    // Create a direct Axios instance without the /api prefix in baseURL
+    const directApi = axios.create({
+      baseURL: 'http://localhost:5000'
+    });
+    
+    console.log('Full URL will be:', 'http://localhost:5000/api/merchants/current');
+    const response = await directApi.get('/api/merchants/current', {
       headers: {
         'Cookie': cookies,
         'X-CSRF-Token': csrfToken
@@ -103,11 +106,20 @@ async function getCurrentMerchant(csrfToken) {
     console.log('Current merchant data:', JSON.stringify(response.data, null, 2));
     return response.data;
   } catch (error) {
-    console.error('Error fetching current merchant:', error.response?.status, error.response?.data);
+    console.error('Error fetching current merchant:', error.response?.status, JSON.stringify(error.response?.data, null, 2));
     if (error.response?.status === 400) {
-      console.error('Invalid merchant ID format error - this suggests user.id might not be a valid number');
-      console.error('Debug info in response:', error.response.data?.debug || 'No debug info available');
+      console.error('400 Bad Request error - this suggests a problem with the request parameters');
+      console.error('Debug info in response:', error.response.data?.debug ? JSON.stringify(error.response.data.debug, null, 2) : 'No debug info available');
     }
+    
+    // Log additional request details for debugging
+    console.error('Request details:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      headers: error.config?.headers,
+      baseURL: error.config?.baseURL
+    });
+    
     throw new Error(`Failed to get current merchant: ${error.response?.status} ${error.response?.statusText}`);
   }
 }

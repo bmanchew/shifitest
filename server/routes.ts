@@ -5655,6 +5655,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   
   // Mount the merchant API router for authenticated merchant operations
   // This path is for the currently logged-in merchant to access their own dashboard
+  apiRouter.use("/merchant-dashboard", merchantDashboardRouter);
   apiRouter.use("/merchant-funding", merchantFundingRouter);
   
   // Mount the notification router
