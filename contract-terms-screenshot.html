@@ -1,0 +1,77 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Contract Terms Screenshot</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    .alert { background-color: #ebf5ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+    .alert-title { font-weight: 600; color: #1e40af; margin-bottom: 4px; }
+    .alert-desc { color: #3b82f6; }
+    .bg-gray { background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+    .checkbox-item { display: flex; align-items: flex-start; margin-bottom: 12px; }
+    .checkbox { margin-right: 10px; margin-top: 3px; }
+    .btn-container { display: flex; justify-content: space-between; }
+    .btn { padding: 8px 16px; border-radius: 4px; font-weight: 500; cursor: pointer; }
+    .btn-primary { background-color: #3b82f6; color: white; border: none; }
+    .btn-outline { background-color: white; border: 1px solid #d1d5db; color: #374151; }
+    .text-blue { color: #3b82f6; }
+    a { color: #3b82f6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h3 style="font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 8px;">Pre-Qualification for Financing</h3>
+    <p style="font-size: 14px; color: #4b5563; margin-bottom: 16px;">
+      Before we can show you your personalized financing options for your purchase from
+      <span style="font-weight: 500; color: #1f2937;">TechGadgetStore</span>, we need to check your eligibility.
+    </p>
+
+    <div class="alert">
+      <div class="alert-title">What happens next?</div>
+      <div class="alert-desc">
+        After you provide consent, we'll guide you through the application process. Once we've verified your information and 
+        connected to your bank account, we'll present your personalized financing offer.
+      </div>
+    </div>
+
+    <div class="bg-gray">
+      <h4 style="font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 8px;">FCRA Disclosure</h4>
+      <div style="font-size: 14px; color: #4b5563;">
+        <p>
+          I am providing written instructions authorizing TechGadgetStore and affiliates to obtain my personal credit profile or other
+          information from credit reporting agencies under the FCRA solely to conduct a credit pre-qualification.
+        </p>
+        <p>
+          I further understand that this is a soft pull and will not harm my credit in any way whatsoever.
+        </p>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 24px;">
+      <div class="checkbox-item">
+        <input type="checkbox" id="fcra-consent" class="checkbox" />
+        <label for="fcra-consent" style="font-size: 14px; line-height: 1.4;">
+          I authorize TechGadgetStore to obtain my credit information to determine what financing options I qualify for.
+          This will not affect my credit score.
+        </label>
+      </div>
+
+      <div class="checkbox-item">
+        <input type="checkbox" id="privacy-policy" class="checkbox" />
+        <label for="privacy-policy" style="font-size: 14px; line-height: 1.4;">
+          I agree to the <a href="#">terms and conditions</a> and
+          <a href="#">privacy policy</a>.
+        </label>
+      </div>
+    </div>
+
+    <div class="btn-container">
+      <button class="btn btn-outline">Back</button>
+      <button class="btn btn-primary">PreQualify Me!</button>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Application Flow Diagram</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      color: #334155;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 24px;
+      color: #111827;
+    }
+    .flow-diagram {
+      display: flex;
+      overflow-x: auto;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .step {
+      min-width: 200px;
+      padding: 20px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-right: 15px;
+      position: relative;
+      background: white;
+    }
+    .step.active {
+      border-color: #3b82f6;
+      box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1), 0 2px 4px -1px rgba(59, 130, 246, 0.06);
+    }
+    .step.new {
+      border-color: #10b981;
+      background-color: #f0fdf4;
+    }
+    .step-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: #111827;
+    }
+    .step-desc {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+    .step-content {
+      font-size: 13px;
+      color: #4b5563;
+    }
+    .arrow {
+      position: absolute;
+      right: -17px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #9ca3af;
+      font-size: 20px;
+      z-index: 10;
+    }
+    .note {
+      background-color: #fff7ed;
+      border-left: 4px solid #f97316;
+      padding: 16px;
+      margin-bottom: 24px;
+      font-size: 14px;
+      color: #7c2d12;
+    }
+    .note-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #9a3412;
+    }
+    .highlight {
+      background-color: #fef3c7;
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <h1>Updated Customer Financing Flow</h1>
+  
+  <div class="note">
+    <div class="note-title">Key Changes to the Application Flow</div>
+    <p>
+      1. The <span class="highlight">Terms Step</span> now shows FCRA disclosure with consent checkboxes instead of upfront financing terms.<br>
+      2. A new <span class="highlight">Financing Offer Step</span> has been added after bank connection to show qualified financing terms.<br>
+      3. The overall number of steps remains the same, but with improved disclosure compliance.
+    </p>
+  </div>
+
+  <div class="flow-diagram">
+    <div class="step active">
+      <div class="step-title">Step 1: Pre-Qualification</div>
+      <div class="step-desc">FCRA Disclosure & Consent</div>
+      <div class="step-content">
+        • FCRA disclaimer for credit check<br>
+        • Consent checkbox for credit pull<br>
+        • Privacy policy acceptance<br>
+        • No financing details shown yet
+      </div>
+      <div class="arrow">→</div>
+    </div>
+    
+    <div class="step">
+      <div class="step-title">Step 2: Identity Verification</div>
+      <div class="step-desc">Complete KYC process</div>
+      <div class="step-content">
+        • Verify customer identity<br>
+        • DiDit verification service<br>
+        • Protect against fraud<br>
+        • Regulatory compliance
+      </div>
+      <div class="arrow">→</div>
+    </div>
+    
+    <div class="step">
+      <div class="step-title">Step 3: Bank Connection</div>
+      <div class="step-desc">Link bank via Plaid</div>
+      <div class="step-content">
+        • Connect checking account<br>
+        • Verify account ownership<br>
+        • Set up for ACH payments<br>
+        • Financial data collected
+      </div>
+      <div class="arrow">→</div>
+    </div>
+    
+    <div class="step new">
+      <div class="step-title">Step 4: Financing Offer</div>
+      <div class="step-desc">Show qualified terms</div>
+      <div class="step-content">
+        • Display ShiFi financing terms<br>
+        • Based on credit qualification<br>
+        • Show APR, term, and payments<br>
+        • Customer accepts offer
+      </div>
+      <div class="arrow">→</div>
+    </div>
+    
+    <div class="step">
+      <div class="step-title">Step 5: Payment Schedule</div>
+      <div class="step-desc">Confirm payment details</div>
+      <div class="step-content">
+        • Set payment due dates<br>
+        • Confirm monthly amount<br>
+        • Review total cost<br>
+        • Schedule first payment
+      </div>
+      <div class="arrow">→</div>
+    </div>
+    
+    <div class="step">
+      <div class="step-title">Step 6: Contract Signing</div>
+      <div class="step-desc">Sign financing agreement</div>
+      <div class="step-content">
+        • Review final agreement<br>
+        • E-signature process<br>
+        • Get contract copy<br>
+        • Complete the process
+      </div>
+    </div>
+  </div>
+
+  <h2 style="font-size: 18px; margin-bottom: 16px;">Component Screenshots</h2>
+  
+  <p style="margin-bottom: 16px;">Below you can see how the key updated components appear in the application:</p>
+  
+  <div style="margin-bottom: 30px;">
+    <div style="font-weight: 600; margin-bottom: 8px;">Step 1: Contract Terms with FCRA Disclosure</div>
+    <p style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">
+      The first step now collects FCRA consent before showing any financing offers.
+    </p>
+    <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+      <iframe src="contract-terms-screenshot.html" width="100%" height="450" frameborder="0"></iframe>
+    </div>
+  </div>
+  
+  <div style="margin-bottom: 30px;">
+    <div style="font-weight: 600; margin-bottom: 8px;">Step 4: Financing Offer (New Step)</div>
+    <p style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">
+      After bank connection, customers see their pre-qualified financing offer before proceeding.
+    </p>
+    <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+      <iframe src="financing-offer-screenshot.html" width="100%" height="550" frameborder="0"></iframe>
+    </div>
+  </div>
+</body>
+</html>
