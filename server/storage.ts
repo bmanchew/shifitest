@@ -943,13 +943,47 @@ export class DatabaseStorage implements IStorage {
 
   // Contract methods
   async getContract(id: number): Promise<Contract | undefined> {
-    // Fix for the term vs termMonths issue
     try {
       console.log(`Attempting to fetch contract with ID: ${id}`);
       
-      // Simplified approach - get all columns from the contracts table with a where clause
+      // Use explicit column selection, mapping termMonths as term
       const result = await db
-        .select()
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          merchantId: contracts.merchantId,
+          customerId: contracts.customerId,
+          amount: contracts.amount,
+          interestRate: contracts.interestRate,
+          status: contracts.status,
+          // Map termMonths to both termMonths and term
+          termMonths: contracts.termMonths,
+          // Additional dates
+          createdAt: contracts.createdAt,
+          completedAt: contracts.completedAt,
+          // Financial fields
+          downPayment: contracts.downPayment,
+          financedAmount: contracts.financedAmount,
+          monthlyPayment: contracts.monthlyPayment,
+          // Status fields
+          currentStep: contracts.currentStep,
+          archived: contracts.archived,
+          archivedAt: contracts.archivedAt,
+          archivedReason: contracts.archivedReason,
+          // Contact info
+          phoneNumber: contracts.phoneNumber,
+          salesRepId: contracts.salesRepId,
+          // Blockchain fields
+          purchasedByShifi: contracts.purchasedByShifi,
+          tokenizationStatus: contracts.tokenizationStatus,
+          tokenId: contracts.tokenId,
+          smartContractAddress: contracts.smartContractAddress,
+          tokenizationError: contracts.tokenizationError,
+          blockchainTransactionHash: contracts.blockchainTransactionHash,
+          blockNumber: contracts.blockNumber,
+          tokenizationDate: contracts.tokenizationDate,
+          tokenMetadata: contracts.tokenMetadata,
+        })
         .from(contracts)
         .where(eq(contracts.id, id));
       
@@ -968,20 +1002,11 @@ export class DatabaseStorage implements IStorage {
           }));
         }
         
-        // Create a normalized contract object with all required fields
+        // Create a complete contract object with all required fields
         const contract = {
-          // Basic fields
-          id: contractData.id,
-          contractNumber: contractData.contractNumber || '',
-          merchantId: contractData.merchantId,
-          customerId: contractData.customerId || null,
-          amount: contractData.amount || 0,
-          interestRate: contractData.interestRate || 0,
-          status: contractData.status || 'pending',
-          
-          // Term fields
-          termMonths: contractData.termMonths || 0,
-          term: contractData.termMonths || 0, // Add term field that maps to termMonths for backwards compatibility
+          ...contractData,
+          // Add the term field that maps to termMonths for backwards compatibility
+          term: contractData.termMonths || 0,
           
           // Dates
           createdAt: contractData.createdAt || null,
@@ -1035,9 +1060,44 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Attempting to fetch contract with contract number: ${contractNumber}`);
       
-      // Simplified approach - get all columns from the contracts table with a where clause
+      // Use explicit column selection, mapping termMonths as term
       const result = await db
-        .select()
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          merchantId: contracts.merchantId,
+          customerId: contracts.customerId,
+          amount: contracts.amount,
+          interestRate: contracts.interestRate,
+          status: contracts.status,
+          // Map termMonths to both termMonths and term
+          termMonths: contracts.termMonths,
+          // Additional dates
+          createdAt: contracts.createdAt,
+          completedAt: contracts.completedAt,
+          // Financial fields
+          downPayment: contracts.downPayment,
+          financedAmount: contracts.financedAmount,
+          monthlyPayment: contracts.monthlyPayment,
+          // Status fields
+          currentStep: contracts.currentStep,
+          archived: contracts.archived,
+          archivedAt: contracts.archivedAt,
+          archivedReason: contracts.archivedReason,
+          // Contact info
+          phoneNumber: contracts.phoneNumber,
+          salesRepId: contracts.salesRepId,
+          // Blockchain fields
+          purchasedByShifi: contracts.purchasedByShifi,
+          tokenizationStatus: contracts.tokenizationStatus,
+          tokenId: contracts.tokenId,
+          smartContractAddress: contracts.smartContractAddress,
+          tokenizationError: contracts.tokenizationError,
+          blockchainTransactionHash: contracts.blockchainTransactionHash,
+          blockNumber: contracts.blockNumber,
+          tokenizationDate: contracts.tokenizationDate,
+          tokenMetadata: contracts.tokenMetadata,
+        })
         .from(contracts)
         .where(eq(contracts.contractNumber, contractNumber));
       
@@ -1047,52 +1107,17 @@ export class DatabaseStorage implements IStorage {
       if (contractData) {
         console.log(`Found contract with contract number: ${contractNumber}, ID: ${contractData.id}`);
         
-        // Create a normalized contract object with all required fields
+        // Create a complete contract object with all required fields
         const contract = {
-          // Basic fields
-          id: contractData.id,
+          ...contractData,
+          // Add the term field that maps to termMonths for backwards compatibility
+          term: contractData.termMonths || 0,
+          // Add fields expected by the frontend that might not be in our database schema
+          updatedAt: null, // We don't have this field in the database
+          startDate: null, // We don't have this field in the database
+          endDate: null, // We don't have this field in the database
+          // Make sure all required fields have default values
           contractNumber: contractData.contractNumber || '',
-          merchantId: contractData.merchantId,
-          customerId: contractData.customerId || null,
-          amount: contractData.amount || 0,
-          interestRate: contractData.interestRate || 0,
-          status: contractData.status || 'pending',
-          
-          // Term fields
-          termMonths: contractData.termMonths || 0,
-          // Dates
-          createdAt: contractData.createdAt || null,
-          updatedAt: contractData.updatedAt || null,
-          startDate: contractData.startDate || null,
-          endDate: contractData.endDate || null,
-          completedAt: contractData.completedAt || null,
-          
-          // Financial fields
-          downPayment: contractData.downPayment || 0,
-          financedAmount: contractData.financedAmount || 0,
-          monthlyPayment: contractData.monthlyPayment || 0,
-          
-          // Status fields
-          currentStep: contractData.currentStep || 'terms',
-          archived: contractData.archived || false,
-          archivedAt: contractData.archivedAt || null,
-          archivedReason: contractData.archivedReason || null,
-          
-          // Contact info
-          phoneNumber: contractData.phoneNumber || null,
-          salesRepId: contractData.salesRepId || null,
-          
-          // Blockchain fields
-          purchasedByShifi: contractData.purchasedByShifi || false,
-          tokenizationStatus: contractData.tokenizationStatus || null,
-          tokenId: contractData.tokenId || null,
-          smartContractAddress: contractData.smartContractAddress || null,
-          tokenizationError: contractData.tokenizationError || null,
-          blockchainTransactionHash: contractData.blockchainTransactionHash || null,
-          blockNumber: contractData.blockNumber || null,
-          tokenizationDate: contractData.tokenizationDate || null,
-          tokenMetadata: contractData.tokenMetadata || null,
-          
           // Additional frontend expected fields
           type: 'custom' // Default contract type
         };
@@ -1112,63 +1137,61 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log("Getting all contracts");
       
-      // Use a simpler approach with regular select to avoid issues
+      // Use explicit column selection, mapping termMonths as term
       const results = await db
-        .select()
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          merchantId: contracts.merchantId,
+          customerId: contracts.customerId,
+          amount: contracts.amount,
+          interestRate: contracts.interestRate,
+          status: contracts.status,
+          // Map termMonths to both termMonths and term
+          termMonths: contracts.termMonths,
+          // Additional dates
+          createdAt: contracts.createdAt,
+          completedAt: contracts.completedAt,
+          // Financial fields
+          downPayment: contracts.downPayment,
+          financedAmount: contracts.financedAmount,
+          monthlyPayment: contracts.monthlyPayment,
+          // Status fields
+          currentStep: contracts.currentStep,
+          archived: contracts.archived,
+          archivedAt: contracts.archivedAt,
+          archivedReason: contracts.archivedReason,
+          // Contact info
+          phoneNumber: contracts.phoneNumber,
+          salesRepId: contracts.salesRepId,
+          // Blockchain fields
+          purchasedByShifi: contracts.purchasedByShifi,
+          tokenizationStatus: contracts.tokenizationStatus,
+          tokenId: contracts.tokenId,
+          smartContractAddress: contracts.smartContractAddress,
+          tokenizationError: contracts.tokenizationError,
+          blockchainTransactionHash: contracts.blockchainTransactionHash,
+          blockNumber: contracts.blockNumber,
+          tokenizationDate: contracts.tokenizationDate,
+          tokenMetadata: contracts.tokenMetadata,
+        })
         .from(contracts)
         .orderBy(desc(contracts.createdAt));
       
       console.log(`Found ${results.length} contracts total`);
       
-      // Map the results to ensure consistent contract structure
+      // Map the results to add any fields expected by the Contract type that weren't in the database query
       const contractsWithDefaults = results.map(contract => {
         return {
-          // Basic fields
-          id: contract.id,
+          ...contract,
+          // Add the term field that maps to termMonths for backwards compatibility
+          term: contract.termMonths || 0,
+          // Add fields expected by the frontend that might not be in our database schema
+          updatedAt: null, // We don't have this field in the database
+          startDate: null, // We don't have this field in the database
+          endDate: null, // We don't have this field in the database
+          // Make sure all required fields have default values
           contractNumber: contract.contractNumber || '',
-          merchantId: contract.merchantId,
-          customerId: contract.customerId || null,
-          amount: contract.amount || 0,
-          interestRate: contract.interestRate || 0,
-          status: contract.status || 'pending',
-          
-          // Term fields
-          termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0, // Add term field that maps to termMonths for backwards compatibility
-          
-          // Dates
-          createdAt: contract.createdAt || null,
-          updatedAt: contract.updatedAt || null,
-          startDate: contract.startDate || null,
-          endDate: contract.endDate || null,
-          completedAt: contract.completedAt || null,
-          
-          // Financial fields
-          downPayment: contract.downPayment || 0,
-          financedAmount: contract.financedAmount || 0,
-          monthlyPayment: contract.monthlyPayment || 0,
-          
-          // Status fields
-          currentStep: contract.currentStep || 'terms',
-          archived: contract.archived || false,
-          archivedAt: contract.archivedAt || null,
-          archivedReason: contract.archivedReason || null,
-          
-          // Contact info
-          phoneNumber: contract.phoneNumber || null,
-          salesRepId: contract.salesRepId || null,
-          
-          // Blockchain fields
-          purchasedByShifi: contract.purchasedByShifi || false,
-          tokenizationStatus: contract.tokenizationStatus || null,
-          tokenId: contract.tokenId || null,
-          smartContractAddress: contract.smartContractAddress || null,
-          tokenizationError: contract.tokenizationError || null,
-          blockchainTransactionHash: contract.blockchainTransactionHash || null,
-          blockNumber: contract.blockNumber || null,
-          tokenizationDate: contract.tokenizationDate || null,
-          tokenMetadata: contract.tokenMetadata || null,
-          
           // Additional frontend expected fields
           type: 'custom' // Default contract type
         };
@@ -1185,64 +1208,81 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts for merchant ID ${merchantId}`);
       
-      // Use a simpler approach with regular select to avoid issues
-      const results = await db
-        .select()
+      // Simplify the query to start - this is a debug fallback
+      console.log("Attempting fallback query with simplified selection");
+      const results = await db.query.contracts.findMany({
+        where: eq(contracts.merchantId, merchantId),
+        orderBy: [desc(contracts.createdAt)]
+      });
+      
+      if (results && results.length > 0) {
+        // Process the results to ensure term and termMonths both exist
+        return results.map(contract => ({
+          ...contract,
+          term: contract.termMonths || 0,
+          updatedAt: null,
+          startDate: null,
+          endDate: null,
+          type: 'custom'
+        }));
+      }
+      
+      console.log("No contracts found with fallback query, will try standard query");
+      
+      // Let's use the full contract selection for merchant ID filtering
+      const detailedResults = await db
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          merchantId: contracts.merchantId,
+          customerId: contracts.customerId,
+          amount: contracts.amount,
+          interestRate: contracts.interestRate,
+          status: contracts.status,
+          // Map termMonths to both termMonths and term
+          termMonths: contracts.termMonths,
+          // Additional dates
+          createdAt: contracts.createdAt,
+          completedAt: contracts.completedAt,
+          // Financial fields
+          downPayment: contracts.downPayment,
+          financedAmount: contracts.financedAmount,
+          monthlyPayment: contracts.monthlyPayment,
+          // Status fields
+          currentStep: contracts.currentStep,
+          archived: contracts.archived,
+          archivedAt: contracts.archivedAt,
+          archivedReason: contracts.archivedReason,
+          // Contact info
+          phoneNumber: contracts.phoneNumber,
+          salesRepId: contracts.salesRepId,
+          // Blockchain fields
+          purchasedByShifi: contracts.purchasedByShifi,
+          tokenizationStatus: contracts.tokenizationStatus,
+          tokenId: contracts.tokenId,
+          smartContractAddress: contracts.smartContractAddress,
+          tokenizationError: contracts.tokenizationError,
+          blockchainTransactionHash: contracts.blockchainTransactionHash,
+          blockNumber: contracts.blockNumber,
+          tokenizationDate: contracts.tokenizationDate,
+          tokenMetadata: contracts.tokenMetadata,
+        })
         .from(contracts)
         .where(eq(contracts.merchantId, merchantId))
         .orderBy(desc(contracts.createdAt));
       
-      console.log(`Found ${results.length} contracts for merchant ID ${merchantId}`);
+      console.log(`Found ${detailedResults.length} contracts for merchant ID ${merchantId}`);
       
-      // Map the results to ensure consistent contract structure
-      const contractsWithDefaults = results.map(contract => {
+      // Map the results to add any fields expected by the Contract type that weren't in the database query
+      const contractsWithDefaults = detailedResults.map(contract => {
         return {
-          // Basic fields
-          id: contract.id,
-          contractNumber: contract.contractNumber || '',
-          merchantId: contract.merchantId,
-          customerId: contract.customerId || null,
-          amount: contract.amount || 0,
-          interestRate: contract.interestRate || 0,
-          status: contract.status || 'pending',
-          
-          // Term fields
-          termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0, // Add term field that maps to termMonths for backwards compatibility
-          
-          // Dates
-          createdAt: contract.createdAt || null,
+          ...contract,
+          // Add the term field that maps to termMonths for backwards compatibility
+          term: contract.termMonths || 0,
+          // Add fields expected by the frontend that might not be in our database schema
           updatedAt: null, // We don't have this field in the database
           startDate: null, // We don't have this field in the database
           endDate: null, // We don't have this field in the database
-          completedAt: contract.completedAt || null,
-          
-          // Financial fields
-          downPayment: contract.downPayment || 0,
-          financedAmount: contract.financedAmount || 0,
-          monthlyPayment: contract.monthlyPayment || 0,
-          
-          // Status fields
-          currentStep: contract.currentStep || 'terms',
-          archived: contract.archived || false,
-          archivedAt: contract.archivedAt || null,
-          archivedReason: contract.archivedReason || null,
-          
-          // Contact info
-          phoneNumber: contract.phoneNumber || null,
-          salesRepId: contract.salesRepId || null,
-          
-          // Blockchain fields
-          purchasedByShifi: contract.purchasedByShifi || false,
-          tokenizationStatus: contract.tokenizationStatus || null,
-          tokenId: contract.tokenId || null,
-          smartContractAddress: contract.smartContractAddress || null,
-          tokenizationError: contract.tokenizationError || null,
-          blockchainTransactionHash: contract.blockchainTransactionHash || null,
-          blockNumber: contract.blockNumber || null,
-          tokenizationDate: contract.tokenizationDate || null,
-          tokenMetadata: contract.tokenMetadata || null,
-          
           // Additional frontend expected fields
           type: 'custom' // Default contract type
         };
@@ -1260,64 +1300,60 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts for customer ID ${customerId}`);
       
-      // Use a simpler approach with regular select to avoid issues
+      // Use explicit column selection, mapping termMonths as term
       const results = await db
-        .select()
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          merchantId: contracts.merchantId,
+          customerId: contracts.customerId,
+          amount: contracts.amount,
+          interestRate: contracts.interestRate,
+          status: contracts.status,
+          // Map termMonths to both termMonths and term
+          termMonths: contracts.termMonths,
+          // Additional dates
+          createdAt: contracts.createdAt,
+          completedAt: contracts.completedAt,
+          // Financial fields
+          downPayment: contracts.downPayment,
+          financedAmount: contracts.financedAmount,
+          monthlyPayment: contracts.monthlyPayment,
+          // Status fields
+          currentStep: contracts.currentStep,
+          archived: contracts.archived,
+          archivedAt: contracts.archivedAt,
+          archivedReason: contracts.archivedReason,
+          // Contact info
+          phoneNumber: contracts.phoneNumber,
+          salesRepId: contracts.salesRepId,
+          // Blockchain fields
+          purchasedByShifi: contracts.purchasedByShifi,
+          tokenizationStatus: contracts.tokenizationStatus,
+          tokenId: contracts.tokenId,
+          smartContractAddress: contracts.smartContractAddress,
+          tokenizationError: contracts.tokenizationError,
+          blockchainTransactionHash: contracts.blockchainTransactionHash,
+          blockNumber: contracts.blockNumber,
+          tokenizationDate: contracts.tokenizationDate,
+          tokenMetadata: contracts.tokenMetadata,
+        })
         .from(contracts)
         .where(eq(contracts.customerId, customerId))
         .orderBy(desc(contracts.createdAt));
       
       console.log(`Found ${results.length} contracts for customer ID ${customerId}`);
       
-      // Map the results to ensure consistent contract structure
+      // Map the results to add any fields expected by the Contract type that weren't in the database query
       const contractsWithDefaults = results.map(contract => {
         return {
-          // Basic fields
-          id: contract.id,
-          contractNumber: contract.contractNumber || '',
-          merchantId: contract.merchantId,
-          customerId: contract.customerId || null,
-          amount: contract.amount || 0,
-          interestRate: contract.interestRate || 0,
-          status: contract.status || 'pending',
-          
-          // Term fields
-          termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0 // Add term field that maps to termMonths for backwards compatibility
-          
-          // Dates
-          createdAt: contract.createdAt || null,
-          updatedAt: contract.updatedAt || null,
-          startDate: contract.startDate || null,
-          endDate: contract.endDate || null,
-          completedAt: contract.completedAt || null,
-          
-          // Financial fields
-          downPayment: contract.downPayment || 0,
-          financedAmount: contract.financedAmount || 0,
-          monthlyPayment: contract.monthlyPayment || 0,
-          
-          // Status fields
-          currentStep: contract.currentStep || 'terms',
-          archived: contract.archived || false,
-          archivedAt: contract.archivedAt || null,
-          archivedReason: contract.archivedReason || null,
-          
-          // Contact info
-          phoneNumber: contract.phoneNumber || null,
-          salesRepId: contract.salesRepId || null,
-          
-          // Blockchain fields
-          purchasedByShifi: contract.purchasedByShifi || false,
-          tokenizationStatus: contract.tokenizationStatus || null,
-          tokenId: contract.tokenId || null,
-          smartContractAddress: contract.smartContractAddress || null,
-          tokenizationError: contract.tokenizationError || null,
-          blockchainTransactionHash: contract.blockchainTransactionHash || null,
-          blockNumber: contract.blockNumber || null,
-          tokenizationDate: contract.tokenizationDate || null,
-          tokenMetadata: contract.tokenMetadata || null,
-          
+          ...contract,
+          // Add the term field that maps to termMonths for backwards compatibility
+          term: contract.termMonths || 0,
+          // Add fields expected by the frontend that might not be in our database schema
+          updatedAt: null, // We don't have this field in the database
+          startDate: null, // We don't have this field in the database
+          endDate: null, // We don't have this field in the database
           // Additional frontend expected fields
           type: 'custom' // Default contract type
         };
@@ -1337,64 +1373,60 @@ export class DatabaseStorage implements IStorage {
       
       console.log(`Getting contracts for phone number ${normalizedPhone}`);
       
-      // Use a simpler approach with regular select to avoid issues
+      // Use explicit column selection, mapping termMonths as term
       const results = await db
-        .select()
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          merchantId: contracts.merchantId,
+          customerId: contracts.customerId,
+          amount: contracts.amount,
+          interestRate: contracts.interestRate,
+          status: contracts.status,
+          // Map termMonths to both termMonths and term
+          termMonths: contracts.termMonths,
+          // Additional dates
+          createdAt: contracts.createdAt,
+          completedAt: contracts.completedAt,
+          // Financial fields
+          downPayment: contracts.downPayment,
+          financedAmount: contracts.financedAmount,
+          monthlyPayment: contracts.monthlyPayment,
+          // Status fields
+          currentStep: contracts.currentStep,
+          archived: contracts.archived,
+          archivedAt: contracts.archivedAt,
+          archivedReason: contracts.archivedReason,
+          // Contact info
+          phoneNumber: contracts.phoneNumber,
+          salesRepId: contracts.salesRepId,
+          // Blockchain fields
+          purchasedByShifi: contracts.purchasedByShifi,
+          tokenizationStatus: contracts.tokenizationStatus,
+          tokenId: contracts.tokenId,
+          smartContractAddress: contracts.smartContractAddress,
+          tokenizationError: contracts.tokenizationError,
+          blockchainTransactionHash: contracts.blockchainTransactionHash,
+          blockNumber: contracts.blockNumber,
+          tokenizationDate: contracts.tokenizationDate,
+          tokenMetadata: contracts.tokenMetadata,
+        })
         .from(contracts)
         .where(eq(contracts.phoneNumber, normalizedPhone))
         .orderBy(desc(contracts.createdAt));
       
       console.log(`Found ${results.length} contracts for phone number ${normalizedPhone}`);
       
-      // Map the results to ensure consistent contract structure
+      // Map the results to add any fields expected by the Contract type that weren't in the database query
       const contractsWithDefaults = results.map(contract => {
         return {
-          // Basic fields
-          id: contract.id,
-          contractNumber: contract.contractNumber || '',
-          merchantId: contract.merchantId,
-          customerId: contract.customerId || null,
-          amount: contract.amount || 0,
-          interestRate: contract.interestRate || 0,
-          status: contract.status || 'pending',
-          
-          // Term fields
-          termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0, // Add term field that maps to termMonths for backwards compatibility
-          
-          // Dates
-          createdAt: contract.createdAt || null,
-          updatedAt: contract.updatedAt || null,
-          startDate: contract.startDate || null,
-          endDate: contract.endDate || null,
-          completedAt: contract.completedAt || null,
-          
-          // Financial fields
-          downPayment: contract.downPayment || 0,
-          financedAmount: contract.financedAmount || 0,
-          monthlyPayment: contract.monthlyPayment || 0,
-          
-          // Status fields
-          currentStep: contract.currentStep || 'terms',
-          archived: contract.archived || false,
-          archivedAt: contract.archivedAt || null,
-          archivedReason: contract.archivedReason || null,
-          
-          // Contact info
-          phoneNumber: contract.phoneNumber || null,
-          salesRepId: contract.salesRepId || null,
-          
-          // Blockchain fields
-          purchasedByShifi: contract.purchasedByShifi || false,
-          tokenizationStatus: contract.tokenizationStatus || null,
-          tokenId: contract.tokenId || null,
-          smartContractAddress: contract.smartContractAddress || null,
-          tokenizationError: contract.tokenizationError || null,
-          blockchainTransactionHash: contract.blockchainTransactionHash || null,
-          blockNumber: contract.blockNumber || null,
-          tokenizationDate: contract.tokenizationDate || null,
-          tokenMetadata: contract.tokenMetadata || null,
-          
+          ...contract,
+          // Add the term field that maps to termMonths for backwards compatibility
+          term: contract.termMonths || 0,
+          // Add fields expected by the frontend that might not be in our database schema
+          updatedAt: null, // We don't have this field in the database
+          startDate: null, // We don't have this field in the database
+          endDate: null, // We don't have this field in the database
           // Additional frontend expected fields
           type: 'custom' // Default contract type
         };
@@ -1628,64 +1660,60 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`Getting contracts with status: ${status}`);
       
-      // Use a simpler approach with regular select to avoid issues
+      // Use explicit column selection, mapping termMonths as term
       const results = await db
-        .select()
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          merchantId: contracts.merchantId,
+          customerId: contracts.customerId,
+          amount: contracts.amount,
+          interestRate: contracts.interestRate,
+          status: contracts.status,
+          // Map termMonths to both termMonths and term
+          termMonths: contracts.termMonths,
+          // Additional dates
+          createdAt: contracts.createdAt,
+          completedAt: contracts.completedAt,
+          // Financial fields
+          downPayment: contracts.downPayment,
+          financedAmount: contracts.financedAmount,
+          monthlyPayment: contracts.monthlyPayment,
+          // Status fields
+          currentStep: contracts.currentStep,
+          archived: contracts.archived,
+          archivedAt: contracts.archivedAt,
+          archivedReason: contracts.archivedReason,
+          // Contact info
+          phoneNumber: contracts.phoneNumber,
+          salesRepId: contracts.salesRepId,
+          // Blockchain fields
+          purchasedByShifi: contracts.purchasedByShifi,
+          tokenizationStatus: contracts.tokenizationStatus,
+          tokenId: contracts.tokenId,
+          smartContractAddress: contracts.smartContractAddress,
+          tokenizationError: contracts.tokenizationError,
+          blockchainTransactionHash: contracts.blockchainTransactionHash,
+          blockNumber: contracts.blockNumber,
+          tokenizationDate: contracts.tokenizationDate,
+          tokenMetadata: contracts.tokenMetadata,
+        })
         .from(contracts)
         .where(eq(contracts.status, status as any))
         .orderBy(desc(contracts.createdAt));
       
       console.log(`Found ${results.length} contracts with status: ${status}`);
       
-      // Map the results to ensure consistent contract structure
+      // Map the results to add any fields expected by the Contract type that weren't in the database query
       const contractsWithDefaults = results.map(contract => {
         return {
-          // Basic fields
-          id: contract.id,
-          contractNumber: contract.contractNumber || '',
-          merchantId: contract.merchantId,
-          customerId: contract.customerId || null,
-          amount: contract.amount || 0,
-          interestRate: contract.interestRate || 0,
-          status: contract.status || 'pending',
-          
-          // Term fields
-          termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0 // Add term field that maps to termMonths for backwards compatibility
-          
-          // Dates
-          createdAt: contract.createdAt || null,
-          updatedAt: contract.updatedAt || null,
-          startDate: contract.startDate || null,
-          endDate: contract.endDate || null,
-          completedAt: contract.completedAt || null,
-          
-          // Financial fields
-          downPayment: contract.downPayment || 0,
-          financedAmount: contract.financedAmount || 0,
-          monthlyPayment: contract.monthlyPayment || 0,
-          
-          // Status fields
-          currentStep: contract.currentStep || 'terms',
-          archived: contract.archived || false,
-          archivedAt: contract.archivedAt || null,
-          archivedReason: contract.archivedReason || null,
-          
-          // Contact info
-          phoneNumber: contract.phoneNumber || null,
-          salesRepId: contract.salesRepId || null,
-          
-          // Blockchain fields
-          purchasedByShifi: contract.purchasedByShifi || false,
-          tokenizationStatus: contract.tokenizationStatus || null,
-          tokenId: contract.tokenId || null,
-          smartContractAddress: contract.smartContractAddress || null,
-          tokenizationError: contract.tokenizationError || null,
-          blockchainTransactionHash: contract.blockchainTransactionHash || null,
-          blockNumber: contract.blockNumber || null,
-          tokenizationDate: contract.tokenizationDate || null,
-          tokenMetadata: contract.tokenMetadata || null,
-          
+          ...contract,
+          // Add the term field that maps to termMonths for backwards compatibility
+          term: contract.termMonths || 0,
+          // Add fields expected by the frontend that might not be in our database schema
+          updatedAt: null, // We don't have this field in the database
+          startDate: null, // We don't have this field in the database
+          endDate: null, // We don't have this field in the database
           // Additional frontend expected fields
           type: 'custom' // Default contract type
         };
