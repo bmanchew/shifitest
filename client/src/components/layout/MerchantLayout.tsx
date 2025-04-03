@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   FileText,
@@ -12,6 +14,8 @@ import {
   X,
   Bell,
   CreditCard,
+  MessageSquare,
+  TicketCheck,
 } from "lucide-react";
 
 interface MerchantLayoutProps {
@@ -22,6 +26,26 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Query to get unread messages count
+  const { data: unreadMessagesData } = useQuery({
+    queryKey: ["/api/communications/merchant/unread-count"],
+    queryFn: async () => {
+      try {
+        const response = await fetch("/api/communications/merchant/unread-count");
+        if (!response.ok) {
+          return { success: false, unreadCount: 0 };
+        }
+        return response.json();
+      } catch (error) {
+        console.error("Error fetching unread messages count:", error);
+        return { success: false, unreadCount: 0 };
+      }
+    },
+    refetchInterval: 60000, // Refetch every minute
+  });
+
+  const unreadCount = unreadMessagesData?.unreadCount || 0;
 
   const navigationItems = [
     {
@@ -47,6 +71,19 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
       href: "/merchant/reports",
       icon: BarChart2,
       current: location === "/merchant/reports",
+    },
+    {
+      name: "Support Tickets",
+      href: "/merchant/support-tickets",
+      icon: TicketCheck,
+      current: location === "/merchant/support-tickets",
+    },
+    {
+      name: "Messages",
+      href: "/merchant/messages",
+      icon: MessageSquare,
+      current: location === "/merchant/messages",
+      badge: unreadCount > 0 ? unreadCount : undefined,
     },
     {
       name: "Settings",
@@ -111,6 +148,11 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
                     } flex-shrink-0 h-6 w-6 mr-3`}
                   />
                   <span className="text-base font-medium">{item.name}</span>
+                  {item.badge !== undefined && (
+                    <Badge variant="default" className="ml-2">
+                      {item.badge}
+                    </Badge>
+                  )}
                 </Link>
               ))}
               <button
@@ -160,7 +202,14 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
                         : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
                     } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                   >
-                    {item.name}
+                    <span className="flex items-center">
+                      {item.name}
+                      {item.badge !== undefined && (
+                        <Badge variant="default" className="ml-2">
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </span>
                   </Link>
                 ))}
               </nav>
