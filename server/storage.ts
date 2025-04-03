@@ -1135,7 +1135,7 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0,  // Provide term from termMonths for backwards compatibility
+
           
           // Dates
           createdAt: contract.createdAt || null,
@@ -1209,13 +1209,12 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0,  // Provide term from termMonths
           
           // Dates
           createdAt: contract.createdAt || null,
-          updatedAt: contract.updatedAt || null,
-          startDate: contract.startDate || null,
-          endDate: contract.endDate || null,
+          updatedAt: null, // We don't have this field in the database
+          startDate: null, // We don't have this field in the database
+          endDate: null, // We don't have this field in the database
           completedAt: contract.completedAt || null,
           
           // Financial fields
@@ -1284,7 +1283,6 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0,  // Provide term from termMonths
           
           // Dates
           createdAt: contract.createdAt || null,
@@ -1361,7 +1359,6 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0,  // Provide term from termMonths
           
           // Dates
           createdAt: contract.createdAt || null,
@@ -1652,7 +1649,6 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
-          term: contract.termMonths || 0,  // Provide term from termMonths
           
           // Dates
           createdAt: contract.createdAt || null,
