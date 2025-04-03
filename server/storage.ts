@@ -943,6 +943,7 @@ export class DatabaseStorage implements IStorage {
 
   // Contract methods
   async getContract(id: number): Promise<Contract | undefined> {
+    // Fix for the term vs termMonths issue
     try {
       console.log(`Attempting to fetch contract with ID: ${id}`);
       
@@ -980,7 +981,6 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contractData.termMonths || 0,
-          term: contractData.termMonths || 0,  // Provide term from termMonths
           
           // Dates
           createdAt: contractData.createdAt || null,
@@ -1059,8 +1059,6 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contractData.termMonths || 0,
-          term: contractData.termMonths || 0,  // Provide term from termMonths
-          
           // Dates
           createdAt: contractData.createdAt || null,
           updatedAt: contractData.updatedAt || null,
