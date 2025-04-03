@@ -219,10 +219,12 @@ export function TicketSubmissionForm({
         ...values,
         merchantId,
         contractId: values.contractId ? Number(values.contractId) : null,
+        // Add createdBy field which is required by the API
+        createdBy: user?.id,
       };
 
-      // Submit ticket to API
-      const response = await fetch("/api/support-tickets", {
+      // Submit ticket to API using the correct endpoint
+      const response = await fetch("/api/communications/tickets", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
