@@ -217,11 +217,12 @@ export function TicketSubmissionForm({
       }
 
       // First get the current user to make sure we have the user ID
-      const userResponse = await fetch("/api/auth/current-user", {
+      const userResponse = await fetch("/api/users/me", {
         credentials: "include"
       });
       
       if (!userResponse.ok) {
+        console.error("Failed to fetch user data:", await userResponse.text());
         throw new Error("Failed to get current user information");
       }
       
@@ -235,6 +236,8 @@ export function TicketSubmissionForm({
         });
         return;
       }
+
+      console.log("User data retrieved:", userData);
 
       // Create form data for submission
       const ticketData = {
@@ -256,13 +259,16 @@ export function TicketSubmissionForm({
         body: JSON.stringify(ticketData),
       });
 
+      const responseText = await response.text();
+      console.log("API Response:", responseText);
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error("Server error response:", errorData);
+        console.error("Server error response status:", response.status);
+        console.error("Server error response:", responseText);
         throw new Error("Failed to submit support ticket");
       }
 
-      const data = await response.json();
+      const data = JSON.parse(responseText);
       
       // Show success message
       toast({
