@@ -1,0 +1,25 @@
+chunk-RPCDYKBN.js?v=97d9cacd:14032 The above error occurred in the <TicketSubmissionForm> component:
+
+    at TicketSubmissionForm (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/forms/TicketSubmissionForm.tsx:61:3)
+    at div
+    at _c9 (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at div
+    at div
+    at MerchantLayout (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/layout/MerchantLayout.tsx:35:42)
+    at CreateSupportTicketPage (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/pages/merchant/CreateSupportTicket.tsx:35:20)
+    at Route (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=97d9cacd:206:16)
+    at Switch (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=97d9cacd:262:17)
+    at Suspense
+    at App (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/App.tsx:112:31)
+    at AuthProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/context/AuthContext.tsx:29:32)
+    at QueryClientProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=97d9cacd:2805:3)
+    at AppWrapper (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/AppWrapper.tsx?v=ZydFnZR7a7pYjHHpakz21:36:3)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+
+chunk-RPCDYKBN.js?v=97d9cacd:9129 Uncaught TypeError: contracts.map is not a function
+    at TicketSubmissionForm (TicketSubmissionForm.tsx:150:39)

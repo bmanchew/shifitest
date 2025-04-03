@@ -82,7 +82,7 @@ export function TicketSubmissionForm({
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
   // Fetch all contracts for this merchant
-  const { data: contracts = [] } = useQuery<Contract[]>({
+  const { data: contractsData } = useQuery<Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
     queryFn: async () => {
       const res = await fetch(`/api/contracts?merchantId=${merchantId}`, {
@@ -95,6 +95,9 @@ export function TicketSubmissionForm({
     },
     enabled: !!merchantId,
   });
+  
+  // Ensure contracts is always an array
+  const contracts = Array.isArray(contractsData) ? contractsData : [];
 
   // Initialize form with default values
   const form = useForm<TicketFormValues>({
@@ -149,12 +152,15 @@ export function TicketSubmissionForm({
   useQuery({
     queryKey: ["customers", contracts.map(c => c.customerId).filter(Boolean)],
     queryFn: async () => {
+      // Get all customer IDs from contracts, filtering out null/undefined values
       const customerIds = contracts
         .map(c => c.customerId)
         .filter((id): id is number => id !== null && id !== undefined);
       
+      // Remove duplicates
       const uniqueIds = [...new Set(customerIds)];
       
+      // Fetch data for each customer ID
       await Promise.all(uniqueIds.map(fetchCustomer));
       return true;
     },
