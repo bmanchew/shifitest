@@ -91,7 +91,9 @@ export function TicketSubmissionForm({
       if (!res.ok) {
         throw new Error("Failed to fetch contracts");
       }
-      return res.json();
+      const data = await res.json();
+      console.log('Contract API Response:', data);
+      return data;
     },
     enabled: !!merchantId,
   });
@@ -214,14 +216,36 @@ export function TicketSubmissionForm({
         return;
       }
 
+      // First get the current user to make sure we have the user ID
+      const userResponse = await fetch("/api/auth/current-user", {
+        credentials: "include"
+      });
+      
+      if (!userResponse.ok) {
+        throw new Error("Failed to get current user information");
+      }
+      
+      const userData = await userResponse.json();
+      
+      if (!userData.id) {
+        toast({
+          title: "Error",
+          description: "User information is missing. Please try again after logging in again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Create form data for submission
       const ticketData = {
         ...values,
         merchantId,
         contractId: values.contractId ? Number(values.contractId) : null,
         // Add createdBy field which is required by the API
-        createdBy: user?.id,
+        createdBy: userData.id,
       };
+
+      console.log("Submitting ticket data:", ticketData);
 
       // Submit ticket to API using the correct endpoint
       const response = await fetch("/api/communications/tickets", {
@@ -233,6 +257,8 @@ export function TicketSubmissionForm({
       });
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error("Server error response:", errorData);
         throw new Error("Failed to submit support ticket");
       }
 
