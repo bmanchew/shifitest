@@ -1,12 +1,11 @@
-import { useState, useEffect, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Send, Calculator } from "lucide-react";
+import { Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import FinancingCalculator from "./FinancingCalculator";
 
 interface SendApplicationProps {
   merchantId?: number;
@@ -39,54 +38,6 @@ export default function SendApplication(props: SendApplicationProps) {
   const [parsedAmount, setParsedAmount] = useState(0);
   const { toast } = useToast();
   const { user } = useAuth();
-
-  // Validates form fields
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      // Get the merchant ID from props or user context
-      const merchantId = props?.merchantId || (user?.merchantId as number);
-
-      // Validate merchantId exists before sending request
-      if (!merchantId) {
-        throw new Error("Merchant ID is required but not available");
-      }
-
-      // Ensure amount is a valid number
-      const parsedAmount = parseFloat(amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        throw new Error("Please enter a valid amount");
-      }
-      
-      // Validate phone number
-      if (!phoneNumber.trim()) {
-        throw new Error("Phone number is required");
-      }
-      
-      // Format the phone number properly for Twilio (E.164 format)
-      const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
-      
-      // Make sure we have at least 10 digits
-      if (formattedPhoneNumber.replace(/\D/g, "").length < 10) {
-        throw new Error("Please enter a valid phone number with at least 10 digits");
-      }
-      
-      // Store parsed amount for calculator
-      setParsedAmount(parsedAmount);
-      
-    } catch (error) {
-      // Create user-friendly error message
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-
-      // Show error toast to user
-      toast({
-        title: "Validation Error",
-        description: errorMessage,
-        variant: "destructive"
-      });
-    }
-  };
   
   // This handles the actual sending of the application after calculator confirmation
   const handleSendApplication = async () => {
@@ -169,15 +120,8 @@ export default function SendApplication(props: SendApplicationProps) {
     }
   };
 
-  // Calculate amount whenever the input changes
-  useEffect(() => {
-    if (amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0) {
-      setParsedAmount(parseFloat(amount));
-    }
-  }, [amount]);
-  
   return (
-    <div className="grid md:grid-cols-2 gap-6">
+    <div className="max-w-lg mx-auto">
       <Card className="shadow">
         <CardHeader className="pb-3">
           <CardTitle className="text-xl flex items-center">
@@ -185,11 +129,61 @@ export default function SendApplication(props: SendApplicationProps) {
             Send Financing Application
           </CardTitle>
           <CardDescription>
-            Send a 24-month 0% APR financing application to your customer via SMS
+            Send a financing application to your customer via SMS
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            
+            // Validate and then immediately send the application
+            try {
+              // Get the merchant ID from props or user context
+              const merchantId = props?.merchantId || (user?.merchantId as number);
+
+              // Validate merchantId exists before sending request
+              if (!merchantId) {
+                throw new Error("Merchant ID is required but not available");
+              }
+
+              // Ensure amount is a valid number
+              const parsedAmount = parseFloat(amount);
+              if (isNaN(parsedAmount) || parsedAmount <= 0) {
+                throw new Error("Please enter a valid amount");
+              }
+              
+              // Validate phone number
+              if (!phoneNumber.trim()) {
+                throw new Error("Phone number is required");
+              }
+              
+              // Format the phone number properly for Twilio (E.164 format)
+              const formattedPhoneNumber = formatPhoneNumberE164(phoneNumber);
+              
+              // Make sure we have at least 10 digits
+              if (formattedPhoneNumber.replace(/\D/g, "").length < 10) {
+                throw new Error("Please enter a valid phone number with at least 10 digits");
+              }
+              
+              // Store parsed amount for sending
+              setParsedAmount(parsedAmount);
+
+              // If validation passes, directly start sending the application
+              handleSendApplication();
+              
+            } catch (error) {
+              // Create user-friendly error message
+              const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+
+              // Show error toast to user
+              toast({
+                title: "Validation Error",
+                description: errorMessage,
+                variant: "destructive"
+              });
+            }
+          }} 
+          className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="phone">Customer Phone Number</Label>
               <Input 
@@ -235,20 +229,11 @@ export default function SendApplication(props: SendApplicationProps) {
               className="w-full"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Validating..." : "Validate & Calculate"}
+              {isSubmitting ? "Sending..." : "Send Application"}
             </Button>
           </form>
         </CardContent>
       </Card>
-      
-      {/* Side-by-side Financing Calculator */}
-      {parsedAmount > 0 && (
-        <FinancingCalculator
-          amount={parsedAmount}
-          onConfirm={handleSendApplication}
-          isSubmitting={isSubmitting}
-        />
-      )}
     </div>
   );
 }
