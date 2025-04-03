@@ -7,7 +7,8 @@ import { logger } from './logger';
 export class OpenAIService {
   private client: OpenAI | null = null;
   private initialized = false;
-  private model = "gpt-3.5-turbo";  // Using GPT-3.5 Turbo model for financial insights
+  private model = "gpt-3.5-turbo";  // Default model
+  private gpt4oModel = "gpt-4o";    // GPT-4o model for code analysis
 
   constructor() {
     this.initialize();
@@ -72,12 +73,112 @@ export class OpenAIService {
   getModel(): string {
     return this.model;
   }
+  
+  /**
+   * Analyze code using GPT-4o
+   * @param code The code to analyze
+   * @param instructions Specific instructions for the analysis
+   * @returns Analysis results as string
+   */
+  async analyzeCode(code: string, instructions: string = "Review this code and provide feedback"): Promise<string> {
+    if (!this.isInitialized()) {
+      logger.warn({
+        message: 'Cannot analyze code: OpenAI service not initialized',
+        category: 'api',
+        source: 'internal'
+      });
+      return "Error: OpenAI service not initialized";
+    }
+
+    try {
+      const prompt = `${instructions}\n\n\`\`\`\n${code}\n\`\`\``;
+      
+      logger.info({
+        message: 'Analyzing code with GPT-4o',
+        category: 'api',
+        source: 'openai'
+      });
+      
+      const response = await this.client!.chat.completions.create({
+        model: this.gpt4oModel,
+        messages: [
+          {
+            role: "system", 
+            content: "You are a senior software engineer specializing in code review and analysis. Provide clear, concise, and actionable feedback."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.3, // Lower temperature for more focused analysis
+        max_tokens: 2000
+      });
+      
+      return response.choices[0].message.content || "No analysis returned";
+    } catch (error) {
+      logger.error({
+        message: `Error analyzing code with GPT-4o: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'openai',
+        metadata: {
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      return `Error analyzing code: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
 
   /**
    * Generate personalized financial insights based on customer data
    * @param customerData Object containing relevant customer financial data
    * @returns Array of personalized financial insights
    */
+  /**
+   * Analyze a file using GPT-4o
+   * @param filePath Path to the file
+   * @param instructions Specific instructions for the analysis
+   * @returns Analysis results as string
+   */
+  async analyzeFile(filePath: string, instructions: string = "Review this file and provide feedback"): Promise<string> {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      
+      // Safety check for path
+      const normalizedPath = path.normalize(filePath);
+      
+      // Check if file exists
+      if (!fs.existsSync(normalizedPath)) {
+        return `Error: File not found at ${normalizedPath}`;
+      }
+      
+      // Read file content
+      const fileContent = fs.readFileSync(normalizedPath, 'utf8');
+      const fileExtension = path.extname(normalizedPath);
+      
+      // Get file name for context
+      const fileName = path.basename(normalizedPath);
+      
+      // Add file metadata to instructions
+      const enhancedInstructions = `${instructions}\n\nFile: ${fileName}\nExtension: ${fileExtension}`;
+      
+      // Use the analyzeCode method
+      return await this.analyzeCode(fileContent, enhancedInstructions);
+    } catch (error) {
+      logger.error({
+        message: `Error analyzing file with GPT-4o: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'openai',
+        metadata: {
+          filePath,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      return `Error analyzing file: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
   async generateFinancialInsights(customerData: any): Promise<any[]> {
     if (!this.isInitialized()) {
       logger.warn({
