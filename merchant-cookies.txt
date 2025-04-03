@@ -1,1 +1,1 @@
-auth_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjg0LCJpYXQiOjE3NDM3MTM4OTIsImV4cCI6MTc0MzgwMDI5Mn0.QIIdz0qyI2g46dLg_6W_TPAZtbrYuJgFTU8mTZde4qQ; Max-Age=86400; Path=/; Expires=Fri, 04 Apr 2025 20:58:12 GMT; HttpOnly; SameSite=Strict
+auth_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsImlhdCI6MTc0MzcxNDM1NCwiZXhwIjoxNzQzODAwNzU0fQ.A5xniYrdHhNpUFJzJi9DE32ebwOxhd2Gf4XC3aEtL0A; Max-Age=86400; Path=/; Expires=Fri, 04 Apr 2025 21:05:54 GMT; HttpOnly; SameSite=Strict

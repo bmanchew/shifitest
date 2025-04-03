@@ -5341,7 +5341,8 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
 
   // Special endpoint to get the current authenticated merchant
   // This must be defined BEFORE mounting the merchantRouter to avoid route conflicts
-  apiRouter.get("/merchants/current", authenticateToken, async (req: Request, res: Response) => {
+  // Create a direct route for current merchant that doesn't use the merchant router
+  apiRouter.get("/current-merchant", authenticateToken, async (req: Request, res: Response) => {
     try {
       // Check if user exists and is authenticated
       if (!req.user) {
@@ -5434,9 +5435,6 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
       });
     }
   });
-    
-  // Mount the merchant router for multi-merchant operations (admin view)
-  apiRouter.use("/merchants", merchantRouter);
   
   // Endpoint for submitting a merchant for MidDesk verification
   apiRouter.post("/merchants/:id/submit-verification", async (req: Request, res: Response) => {

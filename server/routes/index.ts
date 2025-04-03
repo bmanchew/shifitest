@@ -14,6 +14,7 @@ import investorRoutes from './investor';
 import adminRoutes from './admin/index';
 import contractsRoutes from './contracts.routes';
 import supportTicketsRoutes from './support-tickets';
+import currentMerchantRoutes from './current-merchant';
 import { apiRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
@@ -38,6 +39,7 @@ modulesRouter.use('/api/v1/merchants', merchantRoutes);
 modulesRouter.use('/api/v1/admin', adminRoutes);
 modulesRouter.use('/api/v1/contracts', contractsRoutes);
 modulesRouter.use('/api/v1/support-tickets', supportTicketsRoutes);
+modulesRouter.use('/api/v1/current-merchant', currentMerchantRoutes);
 modulesRouter.use('/api/v1/merchant', authenticateToken, (req, res, next) => {
   next();
 }, (req, res, next) => {
@@ -61,6 +63,7 @@ modulesRouter.use('/api/merchants', merchantRoutes);
 modulesRouter.use('/api/admin', adminRoutes);
 modulesRouter.use('/api/contracts', contractsRoutes);
 modulesRouter.use('/api/support-tickets', supportTicketsRoutes);
+modulesRouter.use('/api/current-merchant', currentMerchantRoutes);
 modulesRouter.use('/api/merchant', authenticateToken, (req, res, next) => {
   next();
 }, (req, res, next) => {

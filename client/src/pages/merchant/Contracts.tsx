@@ -43,7 +43,7 @@ export default function Contracts() {
           console.log("Attempting to fetch merchant ID from API...");
           const response = await apiRequest<{ success: boolean; data?: { id: number }; merchant?: { id: number } }>(
             "GET", 
-            "/api/merchants/current"
+            "/api/merchants/current-merchant"
           );
           
           // Handle both response formats - either data.id (current API) or merchant.id (old format)

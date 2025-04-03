@@ -1,0 +1,1 @@
+auth_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsImlhdCI6MTc0MzcxNTE3NiwiZXhwIjoxNzQzODAxNTc2fQ.slHL-fCD3V4L94kbYMeThCw7zXOGnUo4Rfxnum4Ltts; Max-Age=86400; Path=/; Expires=Fri, 04 Apr 2025 21:19:36 GMT; HttpOnly; SameSite=Strict
