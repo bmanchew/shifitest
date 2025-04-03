@@ -981,6 +981,7 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contractData.termMonths || 0,
+          term: contractData.termMonths || 0, // Add term field that maps to termMonths for backwards compatibility
           
           // Dates
           createdAt: contractData.createdAt || null,
@@ -1133,7 +1134,7 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
-
+          term: contract.termMonths || 0, // Add term field that maps to termMonths for backwards compatibility
           
           // Dates
           createdAt: contract.createdAt || null,
@@ -1207,6 +1208,7 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
+          term: contract.termMonths || 0, // Add term field that maps to termMonths for backwards compatibility
           
           // Dates
           createdAt: contract.createdAt || null,
@@ -1281,6 +1283,7 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
+          term: contract.termMonths || 0 // Add term field that maps to termMonths for backwards compatibility
           
           // Dates
           createdAt: contract.createdAt || null,
@@ -1357,6 +1360,7 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
+          term: contract.termMonths || 0, // Add term field that maps to termMonths for backwards compatibility
           
           // Dates
           createdAt: contract.createdAt || null,
@@ -1647,6 +1651,7 @@ export class DatabaseStorage implements IStorage {
           
           // Term fields
           termMonths: contract.termMonths || 0,
+          term: contract.termMonths || 0 // Add term field that maps to termMonths for backwards compatibility
           
           // Dates
           createdAt: contract.createdAt || null,
