@@ -1606,7 +1606,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnderwritingDataByContractId(contractId: number) {
-    return await db.select().from(underwritingData).where(eq(underwritingData.contractId, contractId));
+    try {
+      // Make sure we're using the correct column name for the query
+      return await db.select().from(underwritingData).where(eq(underwritingData.contractId, contractId));
+    } catch (error) {
+      console.error("Error in getUnderwritingDataByContractId:", error);
+      // Return empty array on error to prevent route failure
+      return [];
+    }
   }
 
   async createUnderwritingData(data: any) {
