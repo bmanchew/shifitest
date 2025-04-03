@@ -349,7 +349,23 @@ export async function apiRequest<T = Response>(
       }
       
       // Otherwise, parse as JSON
-      return (await res.json()) as T;
+      const jsonData = await res.json();
+      
+      // Enhanced debugging for specific endpoints
+      if (fullUrl.includes('/api/contracts')) {
+        console.log('Contracts API response details:', {
+          url: fullUrl,
+          status: res.status,
+          dataType: typeof jsonData,
+          isArray: Array.isArray(jsonData),
+          hasSuccess: jsonData && typeof jsonData === 'object' && 'success' in jsonData,
+          hasContracts: jsonData && typeof jsonData === 'object' && 'contracts' in jsonData,
+          contractsCount: jsonData && typeof jsonData === 'object' && 'contracts' in jsonData ? 
+            (Array.isArray(jsonData.contracts) ? jsonData.contracts.length : 'not an array') : 'no contracts field'
+        });
+      }
+      
+      return jsonData as T;
     } catch (error) {
       if (error instanceof TypeError && error.message.includes('network') && retry && attempt <= maxRetries) {
         // Network errors (like connection refused) can benefit from retries

@@ -61,23 +61,50 @@ export default function Contracts() {
     }
   }, [user]);
 
-  const { data: contracts = [] } = useQuery<Contract[]>({
+  // Define a proper type for the API response
+  interface ContractsApiResponse {
+    success: boolean;
+    contracts: Contract[];
+    message?: string;
+  }
+
+  // Query to fetch contracts when merchantId is available
+  const { data: contracts = [], isLoading: isContractsLoading } = useQuery<Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
     queryFn: async () => {
-      // Use apiRequest to ensure authentication headers are sent
       try {
         // Using apiRequest from lib/api.ts to properly handle token auth
-        const response = await apiRequest<{ success: boolean; contracts: Contract[] }>("GET", `/api/contracts?merchantId=${merchantId}`);
+        console.log(`Fetching contracts for merchant ID: ${merchantId}`);
         
-        // Check if the response has the new format with success and contracts fields
-        if (response && response.success && Array.isArray(response.contracts)) {
+        // Make the API request with proper typing
+        const response = await apiRequest<ContractsApiResponse>(
+          "GET", 
+          `/api/contracts?merchantId=${merchantId}`
+        );
+        
+        // Debug output of the response
+        console.log('Contracts API response received:', {
+          success: response.success,
+          hasContracts: 'contracts' in response,
+          contractsCount: response.contracts ? response.contracts.length : 0,
+        });
+        
+        // Ensure we have a valid response with contracts array
+        if (response.success && Array.isArray(response.contracts)) {
+          console.log(`Successfully retrieved ${response.contracts.length} contracts for merchant ID ${merchantId}`);
+          
+          // Log first few contracts for debugging
+          if (response.contracts.length > 0) {
+            console.log('First contract sample:', {
+              id: response.contracts[0].id,
+              contractNumber: response.contracts[0].contractNumber,
+              status: response.contracts[0].status
+            });
+          }
+          
           return response.contracts;
-        } else if (Array.isArray(response)) {
-          // Fallback for backwards compatibility
-          console.warn("API response format unexpected - using direct array response");
-          return response;
         } else {
-          console.error("Unexpected API response format:", response);
+          console.warn('API returned success=true but no contracts array or empty contracts array');
           return [];
         }
       } catch (error) {
@@ -316,18 +343,40 @@ export default function Contracts() {
             <Button variant="outline">Export</Button>
           </div>
 
-          {merchantId ? (
-            <DataTable
-              columns={columns}
-              data={filteredContracts}
-            />
-          ) : (
+          {!merchantId ? (
             <div className="bg-blue-50 p-4 rounded-md mt-4 flex flex-col items-center justify-center">
               <h3 className="text-lg font-medium text-blue-800 mb-2">Loading merchant information...</h3>
               <p className="text-blue-700 text-center mb-4">
                 We're retrieving your merchant profile data to show your contracts.
               </p>
             </div>
+          ) : isContractsLoading ? (
+            <div className="bg-blue-50 p-4 rounded-md mt-4 flex flex-col items-center justify-center">
+              <h3 className="text-lg font-medium text-blue-800 mb-2">Loading contracts...</h3>
+              <p className="text-blue-700 text-center mb-4">
+                We're retrieving your contracts from the server.
+              </p>
+            </div>
+          ) : contracts.length === 0 ? (
+            <div className="bg-yellow-50 p-4 rounded-md mt-4 flex flex-col items-center justify-center">
+              <h3 className="text-lg font-medium text-yellow-800 mb-2">No contracts found</h3>
+              <p className="text-yellow-700 text-center mb-4">
+                We couldn't find any contracts for your merchant account.
+              </p>
+              <div className="text-sm text-gray-600 mt-2">
+                Merchant ID: {merchantId}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-sm text-gray-600 mb-2">
+                Found {contracts.length} contracts
+              </div>
+              <DataTable
+                columns={columns}
+                data={filteredContracts}
+              />
+            </>
           )}
         </div>
       </div>
