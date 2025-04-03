@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+import MerchantLayout from "@/components/layout/MerchantLayout";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

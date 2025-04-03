@@ -23,7 +23,7 @@ import { AlertCircle, Loader2, Plus, Search, Filter } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/use-auth";
 import { getStatusColor, formatDate } from "@/lib/utils";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+import MerchantLayout from "@/components/layout/MerchantLayout";
 
 export default function SupportTicketsList() {
   const { user } = useAuth();

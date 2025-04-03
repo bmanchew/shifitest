@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+import MerchantLayout from "@/components/layout/MerchantLayout";
 import {
   ArrowLeft,
   Send,

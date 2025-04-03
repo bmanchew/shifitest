@@ -13,7 +13,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { TicketSubmissionForm } from "@/components/forms/TicketSubmissionForm";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from "@/hooks/use-search-params";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+import MerchantLayout from "@/components/layout/MerchantLayout";
 
 export default function CreateSupportTicketPage() {
   const { user } = useAuth();
