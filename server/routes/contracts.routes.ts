@@ -238,13 +238,18 @@ router.get('/:id', isAuthenticated, async (req: Request, res: Response) => {
     // Get underwriting details if present
     let underwritingDetails = null;
     if (contract.id) {
-      const underwritingResult = await storage.getUnderwritingByContractId(contract.id);
-      if (underwritingResult) {
+      const underwritingResults = await storage.getUnderwritingDataByContractId(contract.id);
+      if (underwritingResults && underwritingResults.length > 0) {
+        // Use the most recent underwriting data
+        const mostRecent = underwritingResults.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+        
         underwritingDetails = {
-          ...underwritingResult,
+          ...mostRecent,
           // Format dates for consistent API response
-          createdAt: underwritingResult.createdAt ? new Date(underwritingResult.createdAt) : null,
-          updatedAt: underwritingResult.updatedAt ? new Date(underwritingResult.updatedAt) : null,
+          createdAt: mostRecent.createdAt ? new Date(mostRecent.createdAt) : null,
+          updatedAt: mostRecent.updatedAt ? new Date(mostRecent.updatedAt) : null,
         };
       }
     }
@@ -266,6 +271,101 @@ router.get('/:id', isAuthenticated, async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Error fetching contract details:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route GET /api/contracts/:id/underwriting
+ * @desc Get underwriting data for a specific contract
+ * @access Private - Auth required, permission check for contract access
+ */
+router.get('/:id/underwriting', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const contractId = parseInt(req.params.id);
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Unauthorized - User not authenticated' 
+      });
+    }
+
+    // Get the contract to ensure it exists
+    const contract = await storage.getContract(contractId);
+    if (!contract) {
+      return res.status(404).json({
+        success: false,
+        message: 'Contract not found'
+      });
+    }
+    
+    // Check permissions - either the user is admin or the contract belongs to their merchant
+    const isAdmin = req.user?.role === 'admin';
+    
+    if (!isAdmin) {
+      const userMerchant = await storage.getMerchantByUserId(userId);
+      
+      if (!userMerchant || userMerchant.id !== contract.merchantId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden - Not authorized to view this contract'
+        });
+      }
+    }
+    
+    // Get associated underwriting data using the fixed function
+    const underwritingData = await storage.getUnderwritingDataByContractId(contractId);
+
+    // If no data found, return empty result
+    if (!underwritingData || underwritingData.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        message: "No underwriting data available for this contract"
+      });
+    }
+
+    // Filter sensitive data based on role (admin vs others)
+    const filteredData = isAdmin ? underwritingData : underwritingData.map(data => ({
+      id: data.id,
+      userId: data.userId,
+      contractId: data.contractId,
+      creditTier: data.creditTier,
+      creditScore: data.creditScore,
+      totalPoints: data.totalPoints,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      // Including all required fields with null values for non-admin users
+      annualIncome: null,
+      annualIncomePoints: null,
+      employmentHistoryMonths: null,
+      employmentHistoryPoints: null,
+      creditScorePoints: null,
+      dtiRatio: null,
+      dtiRatioPoints: null,
+      housingStatus: null,
+      housingPaymentHistory: null,
+      housingStatusPoints: null,
+      delinquencyHistory: null,
+      delinquencyPoints: null,
+      rawPreFiData: null,
+      rawPlaidData: null
+    }));
+
+    // Return the data
+    res.json({
+      success: true,
+      data: filteredData,
+      count: filteredData.length
+    });
+  } catch (error: any) {
+    console.error('Error fetching underwriting data:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Internal server error',
