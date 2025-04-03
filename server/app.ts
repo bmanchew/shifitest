@@ -8,6 +8,7 @@ import { logger, requestLogger } from "./services/logger";
 import { storage } from "./storage";
 import { setupVite, serveStatic } from "./vite";
 import { registerRoutes } from "./routes/index";
+import { apiProxyMiddleware } from "./middleware/api-proxy-middleware.js";
 
 /**
  * Function to configure and initialize the Express application
@@ -146,6 +147,9 @@ export function createApp(): Express {
   
   // Register all modular routes
   registerRoutes(app);
+  
+  // Add API proxy middleware AFTER routes to catch unhandled API routes
+  app.use(apiProxyMiddleware);
   
   // CSRF error handler
   app.use(csrfErrorHandler);

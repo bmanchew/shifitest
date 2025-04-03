@@ -29,7 +29,7 @@ documentsRouter.get("/contract/:id", async (req: Request, res: Response) => {
     }
     
     // Get the contract to verify ownership
-    const contract = await storage.getContractById(contractId);
+    const contract = await storage.getContract(contractId);
     
     if (!contract) {
       return res.status(404).json({
@@ -125,7 +125,7 @@ documentsRouter.get("/:id", async (req: Request, res: Response) => {
       });
     }
     
-    const contract = await storage.getContractById(parseInt(contractId.toString(), 10));
+    const contract = await storage.getContract(parseInt(contractId.toString(), 10));
     
     if (!contract) {
       return res.status(404).json({

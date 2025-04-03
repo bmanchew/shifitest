@@ -98,7 +98,7 @@ applicationProgressRouter.post("/", async (req: Request, res: Response) => {
       }
       
       // Check if contract belongs to the merchant
-      const contract = await storage.getContractById(contractId);
+      const contract = await storage.getContract(contractId);
       
       if (!contract || contract.merchantId !== merchant.id) {
         return res.status(403).json({
@@ -206,7 +206,7 @@ applicationProgressRouter.get("/kyc/:contractId", async (req: Request, res: Resp
     const { role, id } = req.user || {};
     
     // Get the contract to verify ownership
-    const contract = await storage.getContractById(contractId);
+    const contract = await storage.getContract(contractId);
     
     if (!contract) {
       return res.status(404).json({
