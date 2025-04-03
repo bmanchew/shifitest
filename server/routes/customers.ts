@@ -7,39 +7,85 @@ import { authenticateToken } from '../middleware/auth';
 const router = express.Router();
 
 /**
- * Get customer by ID
+ * Get multiple customers by IDs in a single request
+ * This optimized endpoint returns multiple customers by IDs to reduce API load
  */
-router.get('/:id', async (req, res) => {
+router.get('/batch', authenticateToken, async (req, res) => {
   try {
-    const customerId = parseInt(req.params.id);
+    // Parse the comma-separated IDs from the query parameter
+    const idsParam = req.query.ids as string;
     
-    if (isNaN(customerId)) {
-      return res.status(400).json({ message: 'Invalid customer ID' });
-    }
-    
-    const customer = await storage.getUser(customerId);
-    
-    if (!customer) {
-      logger.warn({
-        message: `Customer not found: ${customerId}`,
-        category: 'api',
-        source: 'internal',
-        metadata: { customerId }
+    if (!idsParam) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Customer IDs are required as a comma-separated list' 
       });
-      return res.status(404).json({ message: 'Customer not found' });
     }
     
-    // Return the customer without sensitive data
-    const { password, ...customerData } = customer;
-    res.json(customerData);
-  } catch (error) {
-    logger.error({
-      message: `Error fetching customer: ${error instanceof Error ? error.message : String(error)}`,
+    // Parse the IDs, filter out invalid ones
+    const customerIds = idsParam
+      .split(',')
+      .map(id => parseInt(id.trim()))
+      .filter(id => !isNaN(id));
+    
+    if (customerIds.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No valid customer IDs provided' 
+      });
+    }
+    
+    logger.info({
+      message: `Batch fetching ${customerIds.length} customers`,
       category: 'api',
       source: 'internal',
+      userId: req.user?.id,
+      metadata: { 
+        customerCount: customerIds.length,
+        firstFewIds: customerIds.slice(0, 5)
+      }
+    });
+    
+    // Fetch all customers in parallel
+    const customerPromises = customerIds.map(async (id) => {
+      try {
+        const customer = await storage.getUser(id);
+        if (!customer) return { id };
+        
+        // Remove sensitive data
+        const { password, ...customerData } = customer;
+        return customerData;
+      } catch (error) {
+        logger.warn({
+          message: `Error fetching customer ${id} in batch: ${error instanceof Error ? error.message : String(error)}`,
+          category: 'api',
+          source: 'internal',
+          userId: req.user?.id,
+          metadata: { customerId: id }
+        });
+        return { id }; // Return minimal customer data if error
+      }
+    });
+    
+    const customers = await Promise.all(customerPromises);
+    
+    // Return the array of customers
+    res.json({ 
+      success: true,
+      customers
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error in batch customer fetch: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'api',
+      source: 'internal',
+      userId: req.user?.id,
       metadata: { error: error instanceof Error ? error.stack : null }
     });
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
   }
 });
 
@@ -78,6 +124,43 @@ router.get('/active-contract', authenticateToken, async (req, res) => {
   } catch (error) {
     logger.error({
       message: `Error fetching active contract: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'api',
+      source: 'internal',
+      metadata: { error: error instanceof Error ? error.stack : null }
+    });
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+/**
+ * Get customer by ID
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    
+    if (isNaN(customerId)) {
+      return res.status(400).json({ message: 'Invalid customer ID' });
+    }
+    
+    const customer = await storage.getUser(customerId);
+    
+    if (!customer) {
+      logger.warn({
+        message: `Customer not found: ${customerId}`,
+        category: 'api',
+        source: 'internal',
+        metadata: { customerId }
+      });
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+    
+    // Return the customer without sensitive data
+    const { password, ...customerData } = customer;
+    res.json(customerData);
+  } catch (error) {
+    logger.error({
+      message: `Error fetching customer: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
       source: 'internal',
       metadata: { error: error instanceof Error ? error.stack : null }

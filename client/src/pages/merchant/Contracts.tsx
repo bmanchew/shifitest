@@ -41,25 +41,55 @@ export default function Contracts() {
       const fetchMerchantId = async () => {
         try {
           console.log("Attempting to fetch merchant ID from API...");
-          const response = await apiRequest<{ success: boolean; data?: { id: number }; merchant?: { id: number } }>(
-            "GET", 
-            "/api/merchants/current-merchant"
-          );
           
-          // Handle both response formats - either data.id (current API) or merchant.id (old format)
-          if (response.success) {
-            if (response.data?.id) {
-              console.log(`Successfully retrieved merchant ID from data.id: ${response.data.id}`);
+          // Try the new current-merchant endpoint first
+          try {
+            const response = await apiRequest<{ success: boolean; data?: { id: number } }>(
+              "GET", 
+              "/api/current-merchant"
+            );
+            
+            if (response.success && response.data?.id) {
+              console.log(`Successfully retrieved merchant ID from current-merchant endpoint: ${response.data.id}`);
               setMerchantId(response.data.id);
-            } else if (response.merchant?.id) {
-              console.log(`Successfully retrieved merchant ID from merchant.id: ${response.merchant.id}`);
-              setMerchantId(response.merchant.id);
-            } else {
-              console.warn("Merchant endpoint returned success but no valid merchant ID found in the response", response);
+              return;
             }
-          } else {
-            console.warn("Merchant endpoint did not return success", response);
+          } catch (err) {
+            console.log("Primary endpoint failed, trying fallback...");
           }
+          
+          // Try the versioned endpoint as fallback
+          try {
+            const v1Response = await apiRequest<{ success: boolean; data?: { id: number } }>(
+              "GET", 
+              "/api/v1/current-merchant"
+            );
+            
+            if (v1Response.success && v1Response.data?.id) {
+              console.log(`Successfully retrieved merchant ID from v1 endpoint: ${v1Response.data.id}`);
+              setMerchantId(v1Response.data.id);
+              return;
+            }
+          } catch (err) {
+            console.log("V1 endpoint failed, trying legacy endpoint...");
+          }
+          
+          // Try the legacy merchant-dashboard endpoint as a last resort
+          try {
+            const dashboardResponse = await apiRequest<{ success: boolean; merchant?: { id: number } }>(
+              "GET", 
+              "/api/merchant-dashboard/current"
+            );
+            
+            if (dashboardResponse.success && dashboardResponse.merchant?.id) {
+              console.log(`Successfully retrieved merchant ID from dashboard endpoint: ${dashboardResponse.merchant.id}`);
+              setMerchantId(dashboardResponse.merchant.id);
+              return;
+            }
+          } catch (err) {
+            console.error("All merchant endpoints failed", err);
+          }
+          
         } catch (error) {
           console.error("Failed to fetch merchant ID:", error);
         }
@@ -151,23 +181,7 @@ export default function Contracts() {
     }).format(amount);
   };
 
-  const fetchCustomer = async (customerId: number) => {
-    if (customerCache[customerId]) {
-      return customerCache[customerId];
-    }
-    
-    try {
-      // Using apiRequest from lib/api.ts to properly handle token auth
-      const customer = await apiRequest<Customer>("GET", `/api/customers/${customerId}`);
-      setCustomerCache(prev => ({ ...prev, [customerId]: customer }));
-      return customer;
-    } catch (error) {
-      console.error(`Error fetching customer ${customerId}:`, error);
-      return { id: customerId };
-    }
-  };
-
-  // Hook to fetch customer data for all contracts
+  // Optimized batch fetching for customer data
   useQuery({
     queryKey: ["customers", contracts.map(c => c.customerId).filter(Boolean)],
     queryFn: async () => {
@@ -175,9 +189,78 @@ export default function Contracts() {
         .map(c => c.customerId)
         .filter((id): id is number => id !== null && id !== undefined);
       
-      const uniqueIds = [...new Set(customerIds)];
+      if (customerIds.length === 0) {
+        return true;
+      }
       
-      await Promise.all(uniqueIds.map(fetchCustomer));
+      // Get only unique ids and filter out any that are already in cache
+      const uniqueIds = [...new Set(customerIds)];
+      const idsToFetch = uniqueIds.filter(id => !customerCache[id]);
+      
+      if (idsToFetch.length === 0) {
+        return true; // All customers already in cache
+      }
+      
+      // Log progress
+      console.log(`Fetching ${idsToFetch.length} unique customers in batch instead of individual requests`);
+      
+      try {
+        // Make a single batch request for all needed customers
+        const response = await apiRequest<{customers: Customer[]}>( 
+          "GET", 
+          `/api/customers/batch?ids=${idsToFetch.join(',')}`,
+        );
+        
+        if (response.customers && Array.isArray(response.customers)) {
+          // Create a new cache object with all the fetched customers
+          const newCache = { ...customerCache };
+          
+          response.customers.forEach(customer => {
+            if (customer && customer.id) {
+              newCache[customer.id] = customer;
+            }
+          });
+          
+          // Update cache state with all fetched customers at once
+          setCustomerCache(newCache);
+          
+          console.log(`Successfully loaded ${response.customers.length} customers in batch`);
+        } else {
+          // Fallback to individual requests if batch request format is unexpected
+          console.warn('Batch customer API returned unexpected format, falling back to individual requests');
+          
+          // Fetch each customer individually as fallback
+          const results = await Promise.all(
+            idsToFetch.map(async id => {
+              try {
+                const customer = await apiRequest<Customer>("GET", `/api/customers/${id}`);
+                return { id, customer };
+              } catch (error) {
+                console.error(`Failed to fetch customer ${id}:`, error);
+                return { id, customer: { id } };
+              }
+            })
+          );
+          
+          // Update the cache with individual results
+          const newCache = { ...customerCache };
+          results.forEach(({ id, customer }) => {
+            newCache[id] = customer;
+          });
+          setCustomerCache(newCache);
+        }
+      } catch (error) {
+        console.error('Batch customer fetch failed:', error);
+        
+        // Fallback to loading placeholders for the customers
+        const placeholders = idsToFetch.reduce((acc, id) => {
+          acc[id] = { id };
+          return acc;
+        }, {} as Record<number, Customer>);
+        
+        setCustomerCache(prev => ({ ...prev, ...placeholders }));
+      }
+      
       return true;
     },
     enabled: contracts.length > 0,
