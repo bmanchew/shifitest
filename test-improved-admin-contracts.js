@@ -5,6 +5,7 @@
 
 import fs from 'fs';
 import axios from 'axios';
+import { URL } from 'url';
 
 // Admin credentials
 const ADMIN_EMAIL = 'admin@shifi.com';
@@ -13,130 +14,154 @@ const ADMIN_PASSWORD = 'admin123';
 // Base URL for API requests
 const API_BASE_URL = 'http://localhost:5000/api';
 
-// Create an axios instance with cookie support
-const api = axios.create({ 
-  withCredentials: true
-});
+// Cookie jar to store cookies between requests
+let cookieJar = {};
 
-// Store cookies
-let cookies = [];
-
-// Save cookies to a file
+// Function to save cookies to file and update cookie jar
 function saveCookies(response) {
   if (response && response.headers && response.headers['set-cookie']) {
-    cookies = response.headers['set-cookie'];
+    const cookies = response.headers['set-cookie'];
+    
+    // Log cookies for debugging
+    console.log('Got cookies:', cookies);
+    
+    // Update cookie jar
+    cookies.forEach(cookie => {
+      const [cookieMain] = cookie.split(';');
+      const [cookieName, cookieValue] = cookieMain.split('=');
+      cookieJar[cookieName] = cookieValue;
+    });
+    
+    // Save to file
     fs.writeFileSync('admin-cookies.txt', cookies.join('\n'));
     console.log('Cookies saved to admin-cookies.txt');
   }
 }
 
-// Load cookies from file
+// Function to load cookies from file
 function loadCookies() {
-  try {
-    if (fs.existsSync('admin-cookies.txt')) {
-      cookies = fs.readFileSync('admin-cookies.txt', 'utf8').split('\n');
-      console.log('Cookies loaded from admin-cookies.txt');
-      
-      // Set up axios to use cookies
-      api.defaults.headers.Cookie = cookies.join('; ');
-    }
-  } catch (error) {
-    console.error('Error loading cookies:', error);
+  if (fs.existsSync('admin-cookies.txt')) {
+    const cookieText = fs.readFileSync('admin-cookies.txt', 'utf8');
+    console.log('Cookies loaded from admin-cookies.txt');
+    
+    // Update cookie jar
+    cookieText.split('\n').forEach(cookie => {
+      if (cookie) {
+        const [cookieMain] = cookie.split(';');
+        const [cookieName, cookieValue] = cookieMain.split('=');
+        cookieJar[cookieName] = cookieValue;
+      }
+    });
+    
+    return cookieText.split('\n');
   }
+  return [];
 }
 
-// Get CSRF token from the server
+// Function to get cookie string from the jar
+function getCookieString() {
+  return Object.entries(cookieJar)
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ');
+}
+
+// Function to get CSRF token
 async function getCsrfToken() {
   console.log('Getting CSRF token...');
   try {
-    // Use the correct CSRF token endpoint
-    const response = await api.get(`${API_BASE_URL}/csrf-token`);
+    const response = await axios.get(`${API_BASE_URL}/csrf-token`, {
+      headers: {
+        'Cookie': getCookieString()
+      },
+      withCredentials: true
+    });
     
+    // Save any cookies
     saveCookies(response);
+    
     return response.data.csrfToken;
   } catch (error) {
-    console.error('Error getting CSRF token:', error.response ? error.response.data : error.message);
-    return null;
+    console.error('Error getting CSRF token:', error.message);
+    throw error;
   }
 }
 
-// Login as admin
+// Function to login as admin
 async function loginAsAdmin() {
-  // Get a CSRF token for login
-  const csrfToken = await getCsrfToken();
-  if (!csrfToken) {
-    console.error('Failed to get CSRF token');
-    return false;
-  }
-  
   console.log('Logging in as admin...');
   try {
-    const response = await api.post(`${API_BASE_URL}/auth/login`, {
-      email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD,
-      userType: 'admin'
-    }, {
-      headers: {
-        'X-CSRF-Token': csrfToken
-      }
-    });
+    // Load existing cookies
+    loadCookies();
     
+    // Get CSRF token
+    const csrfToken = await getCsrfToken();
+    
+    // Login request
+    const response = await axios.post(
+      `${API_BASE_URL}/auth/login`,
+      {
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+        userType: 'admin'
+      },
+      {
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          'Cookie': getCookieString()
+        },
+        withCredentials: true
+      }
+    );
+    
+    // Save cookies from login response
     saveCookies(response);
+    
     console.log('Login successful:', response.data);
-    return true;
+    return response.data;
   } catch (error) {
-    console.error('Login error:', error.response ? error.response.data : error.message);
-    return false;
+    console.error('Login failed:', error.message);
+    if (error.response) {
+      console.error('Error details:', error.response.data);
+    }
+    throw error;
   }
 }
 
-// Test contracts endpoint as admin
+// Function to test contracts API
 async function testContracts() {
-  console.log('\nTesting contracts endpoint as admin...');
-  
+  console.log('Testing contracts endpoint as admin...');
   try {
-    // Get CSRF token
+    // Get CSRF token after login
     const csrfToken = await getCsrfToken();
-    if (!csrfToken) {
-      console.error('Failed to get CSRF token');
-      return;
-    }
     
-    // Get all contracts (admin can see all)
     console.log('Getting all contracts as admin...');
-    const contractsResponse = await api.get(`${API_BASE_URL}/contracts?admin=true`, {
-      headers: {
-        'X-CSRF-Token': csrfToken
+    const response = await axios.get(
+      `${API_BASE_URL}/contracts?admin=true`,
+      {
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          'Cookie': getCookieString()
+        },
+        withCredentials: true
       }
-    });
+    );
     
-    console.log(`Retrieved ${contractsResponse.data.contracts.length} contracts`);
+    // Log number of contracts
+    console.log('Got contracts:', response.data);
+    console.log('Total contracts:', response.data.contracts.length);
     
-    // Test a specific contract by ID
-    if (contractsResponse.data.contracts.length > 0) {
-      const contractId = contractsResponse.data.contracts[0].id;
-      console.log(`\nTesting specific contract endpoint for ID: ${contractId}`);
-      
-      const contractResponse = await api.get(`${API_BASE_URL}/contracts/${contractId}`, {
-        headers: {
-          'X-CSRF-Token': csrfToken
-        }
-      });
-      
-      console.log('Contract details:', JSON.stringify(contractResponse.data.contract, null, 2));
-      
-      // Test underwriting data endpoint
-      console.log(`\nTesting underwriting data endpoint for contract ID: ${contractId}`);
-      const underwritingResponse = await api.get(`${API_BASE_URL}/contracts/${contractId}/underwriting`, {
-        headers: {
-          'X-CSRF-Token': csrfToken
-        }
-      });
-      
-      console.log('Underwriting data response:', JSON.stringify(underwritingResponse.data, null, 2));
+    // Show the first contract details
+    if (response.data.contracts.length > 0) {
+      console.log('First contract:', response.data.contracts[0]);
     }
+    
+    return response.data;
   } catch (error) {
-    console.error('Error testing contracts:', error.response ? error.response.data : error.message);
+    console.error('Error testing contracts:', error.message);
+    if (error.response) {
+      console.error('Error details:', error.response.data);
+    }
+    return error.response?.data;
   }
 }
 
@@ -144,20 +169,15 @@ async function testContracts() {
 async function main() {
   console.log('Starting contract API test as admin...\n');
   
-  // Load existing cookies if available
-  loadCookies();
-  
-  // Login as admin
-  const loggedIn = await loginAsAdmin();
-  
-  if (loggedIn) {
+  try {
+    await loginAsAdmin();
     await testContracts();
-  } else {
-    console.error('Admin login failed. Cannot proceed with tests.');
+  } catch (error) {
+    console.error('Test failed:', error.message);
   }
+  
+  console.log('\nTest completed');
 }
 
-// Run the tests
-main()
-  .then(() => console.log('\nTest completed'))
-  .catch(error => console.error('Test failed:', error));
+// Run the main function
+main();

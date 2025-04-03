@@ -978,7 +978,6 @@ export class DatabaseStorage implements IStorage {
         amount: row.amount,
         interestRate: row.interest_rate,
         status: row.status,
-        cancellationRequestedAt: null, // Field does not exist in DB yet
         // Provide both termMonths and term fields for compatibility
         termMonths: row.term_months,
         term: row.term_months, // For backwards compatibility
@@ -989,7 +988,6 @@ export class DatabaseStorage implements IStorage {
         updatedAt: null, // Not in the query but expected in the interface
         startDate: null, // Not in the query but expected in the interface
         endDate: null, // Not in the query but expected in the interface
-          cancellationRequestedAt: null, // Field does not exist in DB yet
         
         // Financial fields
         downPayment: row.down_payment || 0,
@@ -1018,7 +1016,7 @@ export class DatabaseStorage implements IStorage {
         tokenMetadata: row.token_metadata || null,
         
         // Cancellation fields
-        cancellationRequestedAt: null, // Field does not exist in DB yet
+        cancellationRequestedAt: row.cancellation_requested_at || null,
         
         // Additional frontend expected fields
         type: 'custom' // Default contract type
@@ -1069,7 +1067,6 @@ export class DatabaseStorage implements IStorage {
         customerId: row.customer_id,
         amount: row.amount,
         interestRate: row.interest_rate,
-        cancellationRequestedAt: null, // Field does not exist in DB yet
         status: row.status,
         // Provide both termMonths and term fields for compatibility
         termMonths: row.term_months,
@@ -1081,7 +1078,6 @@ export class DatabaseStorage implements IStorage {
         updatedAt: null, // Not in the query but expected in the interface
         startDate: null, // Not in the query but expected in the interface
         endDate: null, // Not in the query but expected in the interface
-          cancellationRequestedAt: null, // Field does not exist in DB yet
         
         // Financial fields
         downPayment: row.down_payment || 0,
@@ -1110,7 +1106,7 @@ export class DatabaseStorage implements IStorage {
         tokenMetadata: row.token_metadata || null,
         
         // Cancellation fields
-        cancellationRequestedAt: null, // Field does not exist in DB yet
+        cancellationRequestedAt: row.cancellation_requested_at || null,
         
         // Additional frontend expected fields
         type: 'custom' // Default contract type
@@ -1152,7 +1148,6 @@ export class DatabaseStorage implements IStorage {
           merchantId: row.merchant_id,
           customerId: row.customer_id,
           amount: row.amount,
-          cancellationRequestedAt: null, // Field does not exist in DB yet
           interestRate: row.interest_rate,
           status: row.status,
           // Provide both termMonths and term fields for compatibility
@@ -1165,7 +1160,6 @@ export class DatabaseStorage implements IStorage {
           updatedAt: null, // Not in the query but expected in the interface
           startDate: null, // Not in the query but expected in the interface
           endDate: null, // Not in the query but expected in the interface
-          cancellationRequestedAt: null, // Field does not exist in DB yet
           
           // Financial fields
           downPayment: row.down_payment || 0,
@@ -1265,7 +1259,6 @@ export class DatabaseStorage implements IStorage {
           updatedAt: null,
           startDate: null,
           endDate: null,
-          cancellationRequestedAt: null, // Field does not exist in DB yet
           type: 'custom'
         };
       });
@@ -1335,7 +1328,6 @@ export class DatabaseStorage implements IStorage {
           updatedAt: null,
           startDate: null,
           endDate: null,
-          cancellationRequestedAt: null, // Field does not exist in DB yet
           type: 'custom'
         };
       });
@@ -1407,7 +1399,6 @@ export class DatabaseStorage implements IStorage {
           updatedAt: null,
           startDate: null,
           endDate: null,
-          cancellationRequestedAt: null, // Field does not exist in DB yet
           type: 'custom'
         };
       });
@@ -1732,7 +1723,6 @@ export class DatabaseStorage implements IStorage {
           updatedAt: null,
           startDate: null,
           endDate: null,
-          cancellationRequestedAt: null, // Field does not exist in DB yet
           type: 'custom'
         };
       });
