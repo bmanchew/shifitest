@@ -25,6 +25,10 @@ export const merchants = pgTable("merchants", {
   address: text("address"),
   active: boolean("active").default(true),
   archived: boolean("archived").default(false),
+  // Funding provider settings
+  shifiFundingEnabled: boolean("shifi_funding_enabled").default(true),
+  coveredCareFundingEnabled: boolean("covered_care_funding_enabled").default(false),
+  fundingSettings: json("funding_settings"), // Additional funding provider-specific settings
 });
 
 // Merchant business details

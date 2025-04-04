@@ -11,6 +11,7 @@ import merchantsRouter from "./merchants";
 import { logger } from "../../services/logger";
 import contractCancellationsRouter from "./contract-cancellations";
 import { reportsRouter } from "./reports-improved";
+import merchantFundingRouter from "./merchant-funding";
 
 const router = express.Router();
 
@@ -37,6 +38,7 @@ router.use((req, res, next) => {
 router.use("/merchants", merchantsRouter);
 router.use("/cancellation-requests", contractCancellationsRouter);
 router.use("/reports", reportsRouter);
+router.use("/merchant-funding", merchantFundingRouter);
 
 // Merchant Performance routes
 router.get("/merchant-performances", getAllMerchantPerformances);
