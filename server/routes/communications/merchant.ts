@@ -522,6 +522,80 @@ router.get("/unread-count", async (req: Request, res: Response) => {
   }
 });
 
+// Mark individual message as read
+router.post("/messages/:id/read", async (req: Request, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== "merchant") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only merchant users can mark messages as read."
+      });
+    }
+
+    const messageId = parseInt(req.params.id);
+    if (isNaN(messageId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid message ID."
+      });
+    }
+
+    // Get the merchant ID for the logged-in user
+    const merchant = await storage.getMerchantByUserId(req.user.id);
+    
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant profile not found for this user."
+      });
+    }
+
+    // Update the message as read
+    const updatedMessage = await storage.markMessageAsRead(messageId);
+    
+    if (!updatedMessage) {
+      return res.status(404).json({
+        success: false,
+        message: "Message not found or could not be updated."
+      });
+    }
+
+    logger.info({
+      message: `Merchant marked message ${messageId} as read`,
+      category: "communication",
+      source: "merchant",
+      metadata: {
+        merchantId: merchant.id,
+        userId: req.user.id,
+        messageId
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: "Message marked as read successfully."
+    });
+    
+  } catch (error) {
+    logger.error({
+      message: `Error marking message as read: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "communication", 
+      metadata: {
+        userId: req.user?.id,
+        messageId: req.params.id,
+        error: error instanceof Error ? error.stack : null,
+      },
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to mark message as read.",
+      error: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
 // Mark all messages in a conversation as read
 router.post("/:id/read", async (req: Request, res: Response) => {
   try {
