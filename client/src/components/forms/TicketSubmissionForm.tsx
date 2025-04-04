@@ -258,19 +258,8 @@ export function TicketSubmissionForm({
         return;
       }
 
-      // First get the current user to make sure we have the user ID
-      const userResponse = await fetch("/api/users/me", {
-        credentials: "include"
-      });
-      
-      if (!userResponse.ok) {
-        console.error("Failed to fetch user data:", await userResponse.text());
-        throw new Error("Failed to get current user information");
-      }
-      
-      const userData = await userResponse.json();
-      
-      if (!userData.id) {
+      // Check if we have user information from the auth context
+      if (!user || !user.id) {
         toast({
           title: "Error",
           description: "User information is missing. Please try again after logging in again.",
@@ -279,7 +268,7 @@ export function TicketSubmissionForm({
         return;
       }
 
-      console.log("User data retrieved:", userData);
+      console.log("Using authenticated user:", user);
 
       // Create form data for submission
       const ticketData = {
@@ -287,7 +276,7 @@ export function TicketSubmissionForm({
         merchantId,
         contractId: values.contractId ? Number(values.contractId) : null,
         // Add createdBy field which is required by the API
-        createdBy: userData.id,
+        createdBy: user.id,
       };
 
       console.log("Submitting ticket data:", ticketData);
