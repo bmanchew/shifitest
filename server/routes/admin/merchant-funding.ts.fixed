@@ -61,9 +61,6 @@ router.get("/:merchantId", async (req: Request, res: Response) => {
   }
 });
 
-// Removed duplicate route handlers for ShiFi and CoveredCare
-// The better implementations are below
-
 /**
  * Update funding provider settings for a merchant
  */
@@ -245,7 +242,7 @@ router.post("/:merchantId/shifi", async (req: Request, res: Response) => {
     // Log the change
     logger.info({
       message: `ShiFi funding ${enabled ? 'enabled' : 'disabled'} for merchant`,
-      category: "underwriting", // Changed from "system" to a valid specific category
+      category: "system",
       source: "internal",
       userId: req.user?.id,
       metadata: {
@@ -256,14 +253,6 @@ router.post("/:merchantId/shifi", async (req: Request, res: Response) => {
 
     // Return updated merchant
     const updatedMerchant = await storage.getMerchant(merchantId);
-    
-    // Handle case where merchant might be undefined
-    if (!updatedMerchant) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to retrieve updated merchant"
-      });
-    }
     
     return res.status(200).json({
       success: true,
@@ -337,7 +326,7 @@ router.post("/:merchantId/covered-care", async (req: Request, res: Response) => 
     // Log the change
     logger.info({
       message: `CoveredCare funding ${enabled ? 'enabled' : 'disabled'} for merchant`,
-      category: "underwriting", // Changed from "system" to a valid specific category
+      category: "system",
       source: "internal",
       userId: req.user?.id,
       metadata: {
@@ -358,7 +347,7 @@ router.post("/:merchantId/covered-care", async (req: Request, res: Response) => 
           // This would typically be handled by a separate onboarding process
           logger.info({
             message: "Merchant needs to be registered with CoveredCare",
-            category: "underwriting", // Changed from "system" to a valid specific category
+            category: "system",
             source: "internal",
             userId: req.user?.id,
             metadata: {
@@ -370,7 +359,7 @@ router.post("/:merchantId/covered-care", async (req: Request, res: Response) => 
         // Log the error but don't fail the request
         logger.error({
           message: `Error with CoveredCare integration: ${integrationError instanceof Error ? integrationError.message : String(integrationError)}`,
-          category: "external", // Changed from "api" to a more specific category
+          category: "api",
           source: "internal",
           metadata: {
             error: integrationError instanceof Error ? integrationError.stack : null,
@@ -382,14 +371,6 @@ router.post("/:merchantId/covered-care", async (req: Request, res: Response) => 
 
     // Return updated merchant
     const updatedMerchant = await storage.getMerchant(merchantId);
-    
-    // Handle case where merchant might be undefined
-    if (!updatedMerchant) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to retrieve updated merchant"
-      });
-    }
     
     return res.status(200).json({
       success: true,
@@ -482,7 +463,7 @@ router.post("/:merchantId/coveredcare-settings", async (req: Request, res: Respo
     // Log the change
     logger.info({
       message: "Merchant CoveredCare settings updated",
-      category: "underwriting", // Changed from "system" to a valid specific category
+      category: "system",
       source: "internal",
       userId: req.user?.id,
       metadata: {

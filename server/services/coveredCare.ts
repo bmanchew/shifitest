@@ -1,5 +1,6 @@
 import axios from "axios";
 import { logger } from "./logger";
+import crypto from "crypto";
 
 /**
  * Service for interacting with the CoveredCare API

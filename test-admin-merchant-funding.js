@@ -99,8 +99,8 @@ async function testGetMerchantFundingSettings(merchantId, cookies, csrfToken) {
 
     if (response.data.success) {
       console.log('Merchant funding settings:');
-      console.log(JSON.stringify(response.data.merchant, null, 2));
-      return response.data.merchant;
+      console.log(JSON.stringify(response.data, null, 2));
+      return response.data.fundingSettings;
     } else {
       console.error('Failed to get merchant funding settings:', response.data.message);
       return null;
@@ -131,7 +131,7 @@ async function testToggleShifiFunding(merchantId, enabled, cookies, csrfToken) {
 
     if (response.data.success) {
       console.log('ShiFi funding updated successfully:');
-      console.log(JSON.stringify(response.data.merchant, null, 2));
+      console.log(JSON.stringify(response.data, null, 2));
       return response.data.merchant;
     } else {
       console.error('Failed to update ShiFi funding:', response.data.message);
@@ -163,7 +163,7 @@ async function testToggleCoveredCareFunding(merchantId, enabled, cookies, csrfTo
 
     if (response.data.success) {
       console.log('CoveredCare funding updated successfully:');
-      console.log(JSON.stringify(response.data.merchant, null, 2));
+      console.log(JSON.stringify(response.data, null, 2));
       return response.data.merchant;
     } else {
       console.error('Failed to update CoveredCare funding:', response.data.message);
@@ -181,29 +181,18 @@ async function testToggleCoveredCareFunding(merchantId, enabled, cookies, csrfTo
 
 async function runTests() {
   try {
-    // Login as admin and get CSRF token
-    let cookies = await loadCookies();
+    // Login as admin
+    let cookies = await loginAsAdmin();
     if (!cookies) {
-      cookies = await loginAsAdmin();
-      if (!cookies) {
-        console.error('Failed to login. Exiting...');
-        return;
-      }
+      console.error('Failed to login. Exiting...');
+      return;
     }
     
-    const csrfToken = await getCsrfToken(cookies);
+    // Get a fresh CSRF token
+    let csrfToken = await getCsrfToken(cookies);
     if (!csrfToken) {
-      console.error('Failed to get CSRF token. Trying to login again...');
-      cookies = await loginAsAdmin();
-      if (!cookies) {
-        console.error('Login failed. Exiting...');
-        return;
-      }
-      const retryToken = await getCsrfToken(cookies);
-      if (!retryToken) {
-        console.error('Failed to get CSRF token after login retry. Exiting...');
-        return;
-      }
+      console.error('Failed to get CSRF token. Exiting...');
+      return;
     }
 
     // Select a merchant for testing
@@ -216,20 +205,38 @@ async function runTests() {
       return;
     }
 
+    // Get a fresh CSRF token
+    csrfToken = await getCsrfToken(cookies);
+    
     // Toggle ShiFi funding OFF
     await testToggleShifiFunding(merchantId, false, cookies, csrfToken);
+    
+    // Get a fresh CSRF token
+    csrfToken = await getCsrfToken(cookies);
     
     // Toggle CoveredCare funding ON
     await testToggleCoveredCareFunding(merchantId, true, cookies, csrfToken);
     
+    // Get a fresh CSRF token
+    csrfToken = await getCsrfToken(cookies);
+    
     // Get updated merchant funding settings
     const midSettings = await testGetMerchantFundingSettings(merchantId, cookies, csrfToken);
+    
+    // Get a fresh CSRF token
+    csrfToken = await getCsrfToken(cookies);
     
     // Toggle ShiFi funding ON
     await testToggleShifiFunding(merchantId, true, cookies, csrfToken);
     
+    // Get a fresh CSRF token
+    csrfToken = await getCsrfToken(cookies);
+    
     // Toggle CoveredCare funding OFF
     await testToggleCoveredCareFunding(merchantId, false, cookies, csrfToken);
+    
+    // Get a fresh CSRF token
+    csrfToken = await getCsrfToken(cookies);
     
     // Get final merchant funding settings
     const finalSettings = await testGetMerchantFundingSettings(merchantId, cookies, csrfToken);

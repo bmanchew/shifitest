@@ -39,8 +39,8 @@ async function createAdminUser() {
       SELECT id, email FROM users WHERE email = '${ADMIN_EMAIL}'
     `);
     
-    if (checkResult.length > 0) {
-      console.log(`Admin user already exists: ${checkResult[0].email} (ID: ${checkResult[0].id})`);
+    if (checkResult.rows && checkResult.rows.length > 0) {
+      console.log(`Admin user already exists: ${checkResult.rows[0].email} (ID: ${checkResult.rows[0].id})`);
       
       // Update the password
       await db.execute(`
@@ -61,11 +61,8 @@ async function createAdminUser() {
         first_name, 
         last_name, 
         created_at, 
-        is_admin,
-        is_merchant,
-        is_verified,
-        phone_verified,
-        status
+        role,
+        email_verified
       ) 
       VALUES (
         '${ADMIN_EMAIL}', 
@@ -73,16 +70,13 @@ async function createAdminUser() {
         '${ADMIN_FIRST_NAME}', 
         '${ADMIN_LAST_NAME}', 
         NOW(), 
-        true,
-        false,
-        true,
-        true,
-        'active'
+        'admin',
+        true
       )
       RETURNING id, email
     `);
 
-    console.log(`Successfully created admin user: ${insertResult[0].email} (ID: ${insertResult[0].id})`);
+    console.log(`Successfully created admin user: ${insertResult.rows[0].email} (ID: ${insertResult.rows[0].id})`);
   } catch (error) {
     console.error('Error creating admin user:', error);
   } finally {
