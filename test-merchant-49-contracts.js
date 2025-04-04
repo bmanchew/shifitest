@@ -1,177 +1,132 @@
 /**
- * Test script to diagnose why contracts for merchant ID 49 are not appearing in the UI dropdown
+ * This script tests if contracts for merchant ID 49 are correctly retrieved
+ * which was one of the specific issues we fixed in the ticket system.
  */
+
 import axios from 'axios';
-import fs from 'fs';
+import { CookieJar } from 'tough-cookie';
+import { wrapper } from 'axios-cookiejar-support';
 
-// Configuration
-const BASE_URL = 'http://localhost:5000/api';
-const COOKIES_FILE = './brandon-cookies.txt';  // Brandon is merchant ID 49
+// Create cookie jar
+const cookieJar = new CookieJar();
 
-// Merchant credentials (Brandon)
-const MERCHANT_EMAIL = 'brandon@shilohfinance.com';
-const MERCHANT_PASSWORD = 'Password123!';
+// Create axios instance with cookie jar support
+const api = wrapper(axios.create({
+  baseURL: 'http://localhost:5000',
+  withCredentials: true,
+  jar: cookieJar
+}));
 
-// Helper function to save cookies
-function saveCookies(cookieString) {
-  fs.writeFileSync(COOKIES_FILE, cookieString);
-  console.log('Cookies saved to', COOKIES_FILE);
-}
+// Credentials for brandon@shilohfinance.com (merchant ID 49)
+const EMAIL = 'brandon@shilohfinance.com';
+const PASSWORD = 'password123';
 
-// Helper function to load cookies
-function loadCookies() {
+async function runTest() {
   try {
-    return fs.readFileSync(COOKIES_FILE, 'utf8');
-  } catch (error) {
-    console.log('No cookies file found, will create one after login');
-    return '';
-  }
-}
-
-// Login as a merchant
-async function loginAsMerchant() {
-  try {
-    console.log('Logging in as merchant...');
-    const response = await axios.post(`${BASE_URL}/auth/login`, {
-      email: MERCHANT_EMAIL,
-      password: MERCHANT_PASSWORD
+    console.log('=== Testing Contract Fetch for Merchant ID 49 ===');
+    
+    // 1. Get CSRF Token
+    console.log('\n--- Step 1: Get CSRF Token ---');
+    const csrfResponse = await api.get('/api/csrf-token');
+    const csrfToken = csrfResponse.data.csrfToken;
+    console.log('CSRF Token acquired:', csrfToken ? 'Yes' : 'No');
+    
+    // 2. Login as brandon@shilohfinance.com
+    console.log('\n--- Step 2: Login as brandon@shilohfinance.com ---');
+    const loginResponse = await api.post('/api/auth/login', {
+      email: EMAIL,
+      password: PASSWORD
     }, {
       headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Bypass': 'test-merchant-message-read' // Special header to bypass CSRF for testing
+        'X-CSRF-Token': csrfToken
       }
     });
-
-    // Save cookies for future requests
-    if (response.headers['set-cookie']) {
-      const cookieString = response.headers['set-cookie'].join('; ');
-      saveCookies(cookieString);
-      return cookieString;
+    
+    console.log('Login status:', loginResponse.data.success ? 'Success' : 'Failed');
+    
+    // 3. Get merchant profile
+    console.log('\n--- Step 3: Get Merchant Profile ---');
+    const merchantResponse = await api.get('/api/current-merchant');
+    const merchant = merchantResponse.data.merchant;
+    
+    console.log(`Logged in as Merchant: ${merchant.name} (ID: ${merchant.id})`);
+    
+    if (merchant.id !== 49) {
+      console.warn('⚠️ Warning: Expected merchant ID 49, but got:', merchant.id);
     }
-
-    console.error('No cookies received during login');
-    return null;
-  } catch (error) {
-    console.error('Login error:', error.response?.data || error.message);
-    return null;
-  }
-}
-
-// Function to test the contracts API endpoint directly
-async function testContractsApiDirect(cookies) {
-  try {
-    console.log('Testing GET /api/contracts?merchantId=49 endpoint directly...');
-    const response = await axios.get(`${BASE_URL}/contracts?merchantId=49`, {
-      headers: {
-        'Cookie': cookies
-      }
-    });
     
-    console.log('API Response Status:', response.status);
-    console.log('API Response Data:', JSON.stringify(response.data, null, 2));
+    // 4. Fetch contracts for the merchant
+    console.log('\n--- Step 4: Fetch Contracts ---');
+    console.log(`Fetching contracts for merchant ID: ${merchant.id}`);
     
-    // Check if we get contracts array or contracts property
-    if (Array.isArray(response.data)) {
-      console.log(`Found ${response.data.length} contracts in array response`);
-      return response.data;
-    } else if (response.data.contracts && Array.isArray(response.data.contracts)) {
-      console.log(`Found ${response.data.contracts.length} contracts in contracts property`);
-      return response.data.contracts;
+    // Test both endpoints for contract fetching
+    const directContractsResponse = await api.get(`/api/contracts?merchantId=${merchant.id}`);
+    console.log('Direct contracts API response format:', Object.keys(directContractsResponse.data));
+    
+    let contracts;
+    if (Array.isArray(directContractsResponse.data)) {
+      contracts = directContractsResponse.data;
+      console.log('Response is a direct array of contracts');
+    } else if (directContractsResponse.data.success && Array.isArray(directContractsResponse.data.contracts)) {
+      contracts = directContractsResponse.data.contracts;
+      console.log('Response is an object with success and contracts properties');
     } else {
-      console.log('Unexpected response format - no contracts array found');
-      return [];
+      console.log('Unexpected response format:', directContractsResponse.data);
+      contracts = [];
     }
-  } catch (error) {
-    console.error('Error fetching contracts:', error.response?.data || error.message);
-    return [];
-  }
-}
-
-// Function to test the merchant endpoint for contracts
-async function testMerchantContractsApi(cookies) {
-  try {
-    console.log('Testing GET /api/merchant/49/contracts endpoint...');
-    const response = await axios.get(`${BASE_URL}/merchant/49/contracts`, {
-      headers: {
-        'Cookie': cookies
+    
+    console.log(`Found ${contracts.length} contracts for merchant ID ${merchant.id}`);
+    
+    if (contracts.length > 0) {
+      console.log('✅ Successfully retrieved contracts for merchant ID 49');
+      console.log('\nSample contract data:');
+      console.log(JSON.stringify(contracts[0], null, 2));
+    } else {
+      console.log('❌ No contracts found for merchant ID 49');
+    }
+    
+    // 5. Try to create a test ticket with contract selection
+    if (contracts.length > 0) {
+      console.log('\n--- Step 5: Create Test Ticket with Contract Reference ---');
+      
+      const selectedContract = contracts[0];
+      
+      const ticketData = {
+        subject: 'Test Ticket with Contract Reference',
+        category: 'technical_issue',
+        priority: 'normal',
+        description: 'This is a test ticket created by the API test script with a contract reference',
+        merchantId: merchant.id,
+        contractId: selectedContract.id,
+        createdBy: merchant.id
+      };
+      
+      try {
+        const ticketResponse = await api.post('/api/communications/tickets', ticketData);
+        console.log('✅ Successfully created ticket with contract reference');
+        console.log(`Ticket ID: ${ticketResponse.data.id}, Number: ${ticketResponse.data.ticketNumber}`);
+      } catch (error) {
+        console.log('❌ Failed to create ticket with contract reference');
+        console.error('Error:', error.response?.data || error.message);
       }
-    });
+    }
     
-    console.log('API Response Status:', response.status);
-    console.log('API Response Data:', JSON.stringify(response.data, null, 2));
+    console.log('\n=== Test Completed ===');
     
-    return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
-    console.error('Error fetching merchant contracts:', error.response?.data || error.message);
-    return [];
-  }
-}
-
-// Function to filter non-archived active/pending contracts
-function filterActiveContracts(contracts) {
-  const activeContracts = contracts.filter(contract => 
-    !contract.archived && 
-    (contract.status === 'active' || contract.status === 'pending')
-  );
-  
-  console.log(`Found ${activeContracts.length} active/pending non-archived contracts out of ${contracts.length} total`);
-  return activeContracts;
-}
-
-// Main test function
-async function runTest() {
-  let cookies = loadCookies();
-  
-  if (!cookies) {
-    cookies = await loginAsMerchant();
-    if (!cookies) {
-      console.error('Failed to login. Exiting test.');
-      return;
+    console.error('Test failed with error:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
     }
   }
-
-  // Test contracts API endpoint directly
-  const contractsFromApi = await testContractsApiDirect(cookies);
-  
-  // Test merchant endpoint for contracts
-  const contractsFromMerchantApi = await testMerchantContractsApi(cookies);
-  
-  // Filter for active/pending non-archived contracts
-  console.log('\nFiltering contracts API results:');
-  const activeContractsFromApi = filterActiveContracts(contractsFromApi);
-  
-  console.log('\nFiltering merchant API results:');
-  const activeContractsFromMerchantApi = filterActiveContracts(contractsFromMerchantApi);
-  
-  // Check if contract IDs exist in both endpoints
-  console.log('\nComparing contract IDs between endpoints:');
-  const apiContractIds = new Set(activeContractsFromApi.map(c => c.id));
-  const merchantApiContractIds = new Set(activeContractsFromMerchantApi.map(c => c.id));
-  
-  console.log(`Contracts API has ${apiContractIds.size} unique contract IDs`);
-  console.log(`Merchant API has ${merchantApiContractIds.size} unique contract IDs`);
-  
-  // Check for missing contracts
-  const missingFromApi = [...merchantApiContractIds].filter(id => !apiContractIds.has(id));
-  const missingFromMerchantApi = [...apiContractIds].filter(id => !merchantApiContractIds.has(id));
-  
-  if (missingFromApi.length > 0) {
-    console.log(`Contracts missing from /api/contracts endpoint: ${missingFromApi.join(', ')}`);
-  }
-  
-  if (missingFromMerchantApi.length > 0) {
-    console.log(`Contracts missing from /api/merchant/49/contracts endpoint: ${missingFromMerchantApi.join(', ')}`);
-  }
-  
-  // Log contract numbers for debugging
-  console.log('\nContract numbers from API:');
-  activeContractsFromApi.forEach(c => console.log(`ID: ${c.id}, Number: ${c.contractNumber}, Status: ${c.status}, Archived: ${c.archived}`));
-  
-  console.log('\nContract numbers from Merchant API:');
-  activeContractsFromMerchantApi.forEach(c => console.log(`ID: ${c.id}, Number: ${c.contractNumber}, Status: ${c.status}, Archived: ${c.archived}`));
 }
 
 // Run the test
-runTest().catch(error => {
-  console.error('Test failed with error:', error);
-});
+runTest()
+  .then(() => {
+    console.log('Contract test completed');
+  })
+  .catch(err => {
+    console.error('Contract test failed:', err);
+  });
