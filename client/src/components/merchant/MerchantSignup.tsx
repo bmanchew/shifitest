@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { usePlaidLink } from 'react-plaid-link';
-import { CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Clock, Brain, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -770,6 +770,73 @@ export function MerchantSignup() {
                   <p className="font-medium">Verification Status: Rejected</p>
                 </div>
                 <p>Your identity verification was unsuccessful. Please try again or contact support for assistance.</p>
+              </div>
+            )}
+            
+            {/* AI Verification Results Section */}
+            {aiVerificationDetails && (
+              <div className="bg-indigo-50 text-indigo-800 p-4 rounded-md mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain className="h-5 w-5" />
+                  <p className="font-medium">AI Eligibility Analysis</p>
+                </div>
+                <div className="space-y-2">
+                  {verificationMessage && (
+                    <div className="text-sm mb-2 font-medium">{verificationMessage}</div>
+                  )}
+                  
+                  <div className="text-sm border-t border-indigo-200 pt-2 mt-2">
+                    <p className="font-medium mb-1">Analysis Details:</p>
+                    <pre className="text-xs bg-white/50 p-2 rounded overflow-auto max-h-32">
+                      {JSON.stringify(aiVerificationDetails, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Financial Analysis Section */}
+            {financialAnalysis && (
+              <div className="bg-blue-50 text-blue-800 p-4 rounded-md mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 className="h-5 w-5" />
+                  <p className="font-medium">Financial Health Analysis</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {financialAnalysis.monthlyRevenue && (
+                      <div className="p-2 bg-white/50 rounded">
+                        <p className="font-medium">Avg. Monthly Revenue</p>
+                        <p className="text-lg">${Number(financialAnalysis.monthlyRevenue).toLocaleString()}</p>
+                      </div>
+                    )}
+                    {financialAnalysis.stabilityScore && (
+                      <div className="p-2 bg-white/50 rounded">
+                        <p className="font-medium">Stability Score</p>
+                        <p className="text-lg">{financialAnalysis.stabilityScore}/100</p>
+                      </div>
+                    )}
+                    {financialAnalysis.yearsInBusiness && (
+                      <div className="p-2 bg-white/50 rounded">
+                        <p className="font-medium">Years in Business</p>
+                        <p className="text-lg">{financialAnalysis.yearsInBusiness} years</p>
+                      </div>
+                    )}
+                    {financialAnalysis.growthRate && (
+                      <div className="p-2 bg-white/50 rounded">
+                        <p className="font-medium">Growth Rate</p>
+                        <p className="text-lg">{financialAnalysis.growthRate}%</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {financialAnalysis.recommendation && (
+                    <div className="text-sm mt-2">
+                      <p className="font-medium">Recommendation:</p>
+                      <p>{financialAnalysis.recommendation}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             
