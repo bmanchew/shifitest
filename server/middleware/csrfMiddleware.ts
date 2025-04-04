@@ -22,6 +22,7 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     '/api/twilio/webhook',     // Twilio webhook
     '/api/communications/merchant/auto-reply', // Auto-reply webhook
     '/api/communications/merchant', // Merchant-specific communications endpoint
+    '/api/merchant/communications', // Added for merchant-specific communications API
     '/api/conversations/merchant', // Merchant-specific conversations endpoint
     '/api/support-tickets/merchant', // Merchant-specific support tickets endpoint
     '/api/financial-sherpa/realtime', // Financial Sherpa WebSocket initialization
@@ -38,6 +39,9 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     // Specific conversation endpoints
     '/api/conversations/read',      // Endpoint to mark conversations as read
     '/api/conversations/messages',  // Endpoint for messages in all conversations
+    
+    // New endpoint for marking individual messages as read
+    '/api/merchant/communications/', // This covers all merchant communications routes including message read
     
     // Pattern for conversation-specific message endpoints
     // These need special handling to ensure paths like /api/conversations/123/messages work

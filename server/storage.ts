@@ -390,24 +390,21 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
-      // Create a clean data object that matches the database schema (without 'subject')
-      const { subject, ...validData } = normalizedData;
+      // With the updated schema, we now store subject in the database too
+      // If 'subject' was not provided, set it to match 'topic'
+      if (!normalizedData.subject) {
+        normalizedData.subject = normalizedData.topic;
+      }
       
-      console.log("Final conversation data being inserted:", JSON.stringify(validData, null, 2));
+      console.log("Final conversation data being inserted:", JSON.stringify(normalizedData, null, 2));
 
-      // Insert into the database
+      // Insert into the database (including both topic and subject)
       const [newConversation] = await db
         .insert(conversations)
-        .values(validData)
+        .values(normalizedData)
         .returning();
       
-      // For client compatibility, add subject back to the returned object
-      const conversationWithSubject = {
-        ...newConversation,
-        subject: newConversation.topic  // Add subject that matches topic for client compatibility
-      };
-
-      return conversationWithSubject as Conversation;
+      return newConversation;
     } catch (error) {
       console.error(`Error creating conversation:`, error);
       if (error instanceof Error) {

@@ -718,4 +718,104 @@ router.patch("/:id/status", async (req: Request, res: Response) => {
   }
 });
 
+// Mark a specific message as read
+router.patch("/:conversationId/messages/:messageId/read", async (req: Request, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== "merchant") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only merchant users can mark messages as read."
+      });
+    }
+
+    const conversationId = parseInt(req.params.conversationId);
+    const messageId = parseInt(req.params.messageId);
+    
+    if (isNaN(conversationId) || isNaN(messageId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid conversation or message ID."
+      });
+    }
+
+    // Get the merchant ID for the logged-in user
+    const merchant = await storage.getMerchantByUserId(req.user.id);
+    
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant profile not found for this user."
+      });
+    }
+
+    // Get the conversation
+    const conversation = await storage.getConversation(conversationId);
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: "Conversation not found."
+      });
+    }
+
+    // Verify that this conversation belongs to the merchant
+    if (conversation.merchantId !== merchant.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. This conversation doesn't belong to your account."
+      });
+    }
+
+    // Get the message to verify it belongs to the specified conversation
+    const messages = await storage.getMessagesByConversationId(conversationId);
+    const messageToUpdate = messages.find(msg => msg.id === messageId);
+    
+    if (!messageToUpdate) {
+      return res.status(404).json({
+        success: false,
+        message: "Message not found in this conversation."
+      });
+    }
+
+    // Mark the message as read
+    const updatedMessage = await storage.markMessageAsRead(messageId);
+
+    logger.info({
+      message: `Merchant marked message ${messageId} as read in conversation ${conversationId}`,
+      category: "communication",
+      source: "merchant",
+      metadata: {
+        merchantId: merchant.id,
+        userId: req.user.id,
+        conversationId,
+        messageId
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: updatedMessage
+    });
+    
+  } catch (error) {
+    logger.error({
+      message: `Error marking message as read: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "communication", 
+      metadata: {
+        userId: req.user?.id,
+        conversationId: req.params.conversationId,
+        messageId: req.params.messageId,
+        error: error instanceof Error ? error.stack : null,
+      },
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to mark message as read.",
+      error: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
 export default router;

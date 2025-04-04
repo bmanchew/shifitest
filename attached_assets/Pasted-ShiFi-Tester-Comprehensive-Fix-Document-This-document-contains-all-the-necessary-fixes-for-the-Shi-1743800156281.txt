@@ -1,0 +1,1528 @@
+ShiFi Tester - Comprehensive Fix Document
+This document contains all the necessary fixes for the ShiFi Tester application, with a focus on resolving the non-working ticket system. The fixes are organized by priority and include code examples for implementation.
+Critical Ticket System Fixes
+1. Field Name Inconsistency
+Problem: The database schema uses subject field for conversations, but the client code primarily uses topic. This inconsistency causes data to appear and disappear in the UI.
+Fix Option 1: Add topic field to database
+typescript
+// In shared/schemas/communication.schema.ts
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchant_id")
+    .notNull()
+    .references(() => merchants.id),
+  contractId: integer("contract_id").references(() => contracts.id),
+  subject: text("subject").notNull(),
+  topic: text("topic"), // Add topic field for backward compatibility
+  status: conversationStatusEnum("status").notNull().default("active"),
+  // ... other fields
+});
+
+// Run SQL migration
+// ALTER TABLE conversations ADD COLUMN topic TEXT;
+// UPDATE conversations SET topic = subject WHERE topic IS NULL;
+Fix Option 2: Standardize on subject in code
+typescript
+// In client/src/pages/merchant/Messages.tsx
+const newConversationSchema = z.object({
+  subject: z.string().min(1, "Subject is required"), // Use subject instead of topic
+  message: z.string().min(1, "Message is required"),
+  priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+});
+
+// Update form default values
+const form = useForm<z.infer<typeof newConversationSchema>>({
+  resolver: zodResolver(newConversationSchema),
+  defaultValues: {
+    subject: "", // Use subject instead of topic
+    message: "",
+    priority: "normal",
+  },
+});
+2. Missing API Route for Marking Messages as Read
+Problem: The client calls /api/communications/merchant/${conversationId}/read to mark messages as read, but this route is not implemented in the server code.
+Fix:
+typescript
+// Add to server/routes/communications/merchant.ts
+router.post("/:id/read", async (req: Request, res: Response) => {
+  try {
+    if (!req.user || req.user.role !== "merchant") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only merchant users can mark messages as read."
+      });
+    }
+
+    const conversationId = parseInt(req.params.id);
+    if (isNaN(conversationId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid conversation ID."
+      });
+    }
+
+    // Get the merchant ID for the logged-in user
+    const merchant = await storage.getMerchantByUserId(req.user.id);
+    
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant profile not found for this user."
+      });
+    }
+
+    // Get the conversation
+    const conversation = await storage.getConversation(conversationId);
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: "Conversation not found."
+      });
+    }
+
+    // Verify that this conversation belongs to the merchant
+    if (conversation.merchantId !== merchant.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. This conversation doesn't belong to your account."
+      });
+    }
+
+    // Mark all messages as read
+    const updatedCount = await storage.markAllMessagesAsRead(conversationId, req.user.id);
+
+    logger.info({
+      message: `Merchant marked ${updatedCount} messages as read in conversation ${conversationId}`,
+      category: "communication",
+      source: "merchant",
+      metadata: {
+        merchantId: merchant.id,
+        userId: req.user.id,
+        conversationId,
+        updatedCount
+      }
+    });
+
+    return res.json({
+      success: true,
+      count: updatedCount,
+      message: "Messages marked as read."
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error marking messages as read: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "communication", 
+      metadata: {
+        userId: req.user?.id,
+        conversationId: req.params.id,
+        error: error instanceof Error ? error.stack : null,
+      },
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to mark messages as read.",
+      error: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+3. Undefined Variable in Server Code
+Problem: In /server/routes/communications.ts line 489, there's a reference to subjectContent which is not defined anywhere in the file.
+Fix:
+typescript
+// In server/routes/communications.ts line 489
+// Replace:
+message: `Created new conversation with initial message: ${subjectContent}`,
+
+// With:
+message: `Created new conversation with initial message: ${conversationData.topic || conversationData.subject || "New conversation"}`,
+4. Database Connection Configuration
+Problem: The application may have missing or incorrect database environment variables, preventing proper connection to the database.
+Fix:
+typescript
+// In server/db.ts
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import { logger } from './services/logger';
+
+// Validate required environment variables
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  logger.error({
+    message: "DATABASE_URL environment variable is not set",
+    category: "database",
+    source: "startup",
+  });
+  throw new Error("DATABASE_URL environment variable is required");
+}
+
+// Create connection pool with better error handling
+export const pool = new Pool({
+  connectionString: DATABASE_URL,
+  max: 20, // Set appropriate connection pool size
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
+
+// Add connection error handling
+pool.on('error', (err) => {
+  logger.error({
+    message: `Unexpected database pool error: ${err.message}`,
+    category: "database",
+    source: "pool",
+    metadata: {
+      error: err.stack,
+    },
+  });
+});
+
+// Add health check function
+export const checkDatabaseConnection = async () => {
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('SELECT 1');
+    return true;
+  } catch (error) {
+    logger.error({
+      message: `Database connection check failed: ${error instanceof Error ? error.message : String(error)}`,
+      category: "database",
+      source: "health-check",
+      metadata: {
+        error: error instanceof Error ? error.stack : null,
+      },
+    });
+    return false;
+  } finally {
+    if (client) client.release();
+  }
+};
+
+// Initialize Drizzle with the pool
+export const db = drizzle(pool);
+5. Inconsistent API Response Formats
+Problem: The server routes return responses in different formats, forcing the client to use complex fallback logic.
+Fix:
+typescript
+// Add to server/utils/responseFormatter.ts
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    message: string;
+    code?: string;
+    details?: any;
+  };
+  meta?: {
+    count?: number;
+    limit?: number;
+    offset?: number;
+    [key: string]: any;
+  };
+}
+
+export function formatSuccess<T>(data: T, meta?: ApiResponse<T>['meta']): ApiResponse<T> {
+  return {
+    success: true,
+    data,
+    meta
+  };
+}
+
+export function formatError(
+  message: string, 
+  code?: string, 
+  details?: any
+): ApiResponse<never> {
+  return {
+    success: false,
+    error: {
+      message,
+      code,
+      details
+    }
+  };
+}
+
+// Then use in routes:
+// Example usage in a route
+router.get("/", async (req: Request, res: Response) => {
+  try {
+    const data = await storage.getData();
+    return res.json(formatSuccess(data));
+  } catch (error) {
+    return res.status(500).json(formatError(
+      "Failed to fetch data",
+      "DATA_FETCH_ERROR",
+      process.env.NODE_ENV === 'development' ? error.message : undefined
+    ));
+  }
+});
+High Priority Fixes
+1. Fix CSRF Token Handling
+Problem: CSRF token handling is inconsistent and causes unnecessary token refreshes.
+Fix:
+typescript
+// In client/src/lib/api.ts
+export async function apiRequest(method: string, url: string, data?: any) {
+  // Get CSRF token from cookies if available
+  const csrfToken = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('XSRF-TOKEN='))
+    ?.split('=')[1];
+  
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  // Add CSRF token if available
+  if (csrfToken) {
+    headers['X-CSRF-TOKEN'] = csrfToken;
+  }
+  
+  try {
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: 'include', // Include cookies
+    });
+    
+    // Handle CSRF token errors specifically
+    if (response.status === 403 && response.headers.get('X-CSRF-TOKEN-INVALID')) {
+      // Refresh CSRF token and retry the request
+      await refreshCsrfToken();
+      return apiRequest(method, url, data); // Retry with fresh token
+    }
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.message || 
+        `API request failed with status ${response.status}`
+      );
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error(`API request error (${method} ${url}):`, error);
+    throw error;
+  }
+}
+
+// Centralized token refresh function
+let refreshPromise: Promise<void> | null = null;
+
+async function refreshCsrfToken() {
+  // Use a singleton promise to prevent multiple simultaneous refreshes
+  if (!refreshPromise) {
+    refreshPromise = fetch('/api/csrf-token')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Failed to refresh CSRF token');
+        }
+        return response.json();
+      })
+      .then(() => {
+        console.log('CSRF token refreshed');
+      })
+      .catch(error => {
+        console.error('Error refreshing CSRF token:', error);
+        throw error;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  
+  return refreshPromise;
+}
+2. Implement Transaction Handling
+Problem: Related database operations are not performed in transactions, leading to potential data inconsistency.
+Fix:
+typescript
+// In server/storage.ts
+// Add a method for creating a conversation with its initial message in a transaction
+async createConversationWithMessage(
+  conversationData: InsertConversation, 
+  messageData: Omit<InsertMessage, 'conversationId'>
+): Promise<{ conversation: Conversation, message: Message }> {
+  return db.transaction(async (tx) => {
+    // Create the conversation
+    const [conversation] = await tx
+      .insert(conversations)
+      .values(conversationData)
+      .returning();
+    
+    if (!conversation) {
+      throw new Error("Failed to create conversation");
+    }
+    
+    // Create the initial message
+    const [message] = await tx
+      .insert(messages)
+      .values({
+        ...messageData,
+        conversationId: conversation.id,
+      })
+      .returning();
+    
+    if (!message) {
+      throw new Error("Failed to create initial message");
+    }
+    
+    return { conversation, message };
+  });
+}
+3. Improve Error Handling
+Problem: Error handling approaches vary widely across the codebase, making debugging difficult.
+Fix:
+typescript
+// In server/utils/errorHandler.ts
+import { Request, Response, NextFunction } from 'express';
+import { logger } from '../services/logger';
+import { ZodError } from 'zod';
+import { fromZodError } from 'zod-validation-error';
+
+// Custom error classes
+export class ApiError extends Error {
+  statusCode: number;
+  code: string;
+  details?: any;
+  
+  constructor(message: string, statusCode: number, code: string, details?: any) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+    this.details = details;
+    this.name = 'ApiError';
+  }
+}
+
+export class ValidationError extends ApiError {
+  constructor(message: string, details?: any) {
+    super(message, 400, 'VALIDATION_ERROR', details);
+    this.name = 'ValidationError';
+  }
+}
+
+export class NotFoundError extends ApiError {
+  constructor(message: string, details?: any) {
+    super(message, 404, 'NOT_FOUND', details);
+    this.name = 'NotFoundError';
+  }
+}
+
+export class AuthorizationError extends ApiError {
+  constructor(message: string, details?: any) {
+    super(message, 403, 'AUTHORIZATION_ERROR', details);
+    this.name = 'AuthorizationError';
+  }
+}
+
+// Middleware for handling errors
+export function errorHandler(
+  err: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  // Log the error
+  logger.error({
+    message: `API Error: ${err.message}`,
+    category: 'api',
+    source: 'error-handler',
+    metadata: {
+      path: req.path,
+      method: req.method,
+      error: err.stack,
+      userId: req.user?.id,
+    },
+  });
+  
+  // Handle Zod validation errors
+  if (err instanceof ZodError) {
+    const formattedError = fromZodError(err);
+    const errorDetails = err.errors.map(e => ({
+      path: e.path.join('.'),
+      message: e.message,
+      code: e.code,
+    }));
+    
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'Validation error',
+        code: 'VALIDATION_ERROR',
+        details: errorDetails,
+      },
+    });
+  }
+  
+  // Handle custom API errors
+  if (err instanceof ApiError) {
+    return res.status(err.statusCode).json({
+      success: false,
+      error: {
+        message: err.message,
+        code: err.code,
+        details: err.details,
+      },
+    });
+  }
+  
+  // Handle unknown errors
+  return res.status(500).json({
+    success: false,
+    error: {
+      message: 'An unexpected error occurred',
+      code: 'INTERNAL_ERROR',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined,
+    },
+  });
+}
+
+// Register the error handler middleware in server/index.ts
+app.use(errorHandler);
+Authentication and Security Fixes
+1. Standardize Authentication Checks
+Problem: Authentication checks are implemented inconsistently across different routes.
+Fix:
+typescript
+// In server/middleware/auth.ts
+import { Request, Response, NextFunction } from 'express';
+import { logger } from '../services/logger';
+
+export interface AuthenticatedRequest extends Request {
+  user?: {
+    id: number;
+    role: string;
+    email?: string;
+  };
+}
+
+export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    logger.warn({
+      message: "Unauthorized access attempt",
+      category: "security",
+      source: "auth-middleware",
+      metadata: {
+        path: req.path,
+        method: req.method,
+        ip: req.ip,
+      },
+    });
+    
+    return res.status(401).json({
+      success: false,
+      error: {
+        message: "Authentication required",
+        code: "UNAUTHORIZED",
+      },
+    });
+  }
+  
+  next();
+}
+
+export function requireRole(roles: string | string[]) {
+  const allowedRoles = Array.isArray(roles) ? roles : [roles];
+  
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // First check if user is authenticated
+    if (!req.user) {
+      logger.warn({
+        message: "Unauthorized access attempt",
+        category: "security",
+        source: "role-middleware",
+        metadata: {
+          path: req.path,
+          method: req.method,
+          ip: req.ip,
+          requiredRoles: allowedRoles,
+        },
+      });
+      
+      return res.status(401).json({
+        success: false,
+        error: {
+          message: "Authentication required",
+          code: "UNAUTHORIZED",
+        },
+      });
+    }
+    
+    // Then check if user has required role
+    if (!allowedRoles.includes(req.user.role)) {
+      logger.warn({
+        message: "Forbidden access attempt",
+        category: "security",
+        source: "role-middleware",
+        metadata: {
+          path: req.path,
+          method: req.method,
+          ip: req.ip,
+          userId: req.user.id,
+          userRole: req.user.role,
+          requiredRoles: allowedRoles,
+        },
+      });
+      
+      return res.status(403).json({
+        success: false,
+        error: {
+          message: "You don't have permission to access this resource",
+          code: "FORBIDDEN",
+        },
+      });
+    }
+    
+    next();
+  };
+}
+
+// Use the middleware in routes
+// In server/routes/communications/merchant.ts
+import { requireAuth, requireRole } from '../../middleware/auth';
+
+// Apply middleware to all routes in this router
+router.use(requireAuth);
+router.use(requireRole('merchant'));
+
+// Now individual routes don't need to check authentication
+router.get("/", async (req: Request, res: Response) => {
+  try {
+    // Get the merchant ID for the logged-in user
+    const merchant = await storage.getMerchantByUserId(req.user.id);
+    
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant profile not found for this user."
+      });
+    }
+    
+    // Rest of the route handler...
+  } catch (error) {
+    // Error handling...
+  }
+});
+2. Implement Secure Token Storage
+Problem: Authentication tokens are stored insecurely in localStorage.
+Fix:
+typescript
+// In server/routes/auth.ts
+router.post("/login", async (req: Request, res: Response) => {
+  try {
+    // Authentication logic...
+    
+    // Instead of sending token in response body
+    // Set it as an HttpOnly cookie
+    res.cookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    }) ;
+    
+    return res.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        },
+      },
+    });
+  } catch (error) {
+    // Error handling...
+  }
+});
+
+// Add logout endpoint to clear the cookie
+router.post("/logout", (req: Request, res: Response) => {
+  res.clearCookie('auth_token');
+  return res.json({
+    success: true,
+    message: "Logged out successfully",
+  });
+});
+
+// Update client-side auth handling
+// In client/src/lib/auth.ts
+// Remove these functions
+// export const setToken = (token: string) => {
+//   localStorage.setItem('auth_token', token);
+// };
+// 
+// export const getToken = () => {
+//   return localStorage.getItem('auth_token');
+// };
+
+// Instead, use cookies automatically sent with requests
+export const login = async (email: string, password: string) => {
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+      credentials: 'include', // Important for cookies
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Login failed');
+    }
+    
+    const data = await response.json();
+    return data.data.user;
+  } catch (error) {
+    console.error('Login error:', error);
+    throw error;
+  }
+};
+
+export const logout = async () => {
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include', // Important for cookies
+    });
+    
+    // Update application state
+    // e.g., clear user from state management
+  } catch (error) {
+    console.error('Logout error:', error);
+  }
+};
+3. Implement Comprehensive Input Validation
+Problem: Many API endpoints lack proper input validation.
+Fix:
+typescript
+// In server/middleware/validation.ts
+import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
+import { fromZodError } from 'zod-validation-error';
+
+export function validateRequest<T extends z.ZodType>(schema: T) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Validate request body, query, and params
+      const result = schema.safeParse({
+        body: req.body,
+        query: req.query,
+        params: req.params,
+      });
+      
+      if (!result.success) {
+        const validationError = fromZodError(result.error);
+        
+        return res.status(400).json({
+          success: false,
+          error: {
+            message: 'Validation error',
+            code: 'VALIDATION_ERROR',
+            details: result.error.errors.map(err => ({
+              path: err.path.join('.'),
+              message: err.message,
+            })),
+          },
+        });
+      }
+      
+      // Add validated data to request
+      req.validatedData = result.data;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+// Use the validation middleware in routes
+// In server/routes/communications/merchant.ts
+import { validateRequest } from '../../middleware/validation';
+import { z } from 'zod';
+
+// Define validation schema
+const createConversationSchema = z.object({
+  body: z.object({
+    subject: z.string().min(1, "Subject is required"),
+    message: z.string().min(1, "Message is required"),
+    priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+  }),
+});
+
+// Apply validation middleware
+router.post(
+  "/",
+  validateRequest(createConversationSchema),
+  async (req: Request, res: Response) => {
+    try {
+      // Access validated data
+      const { subject, message, priority } = req.validatedData.body;
+      
+      // Rest of the route handler...
+    } catch (error) {
+      // Error handling...
+    }
+  }
+);
+Performance Fixes
+1. Implement Pagination
+Problem: Components fetch more data than needed and don't implement pagination.
+Fix:
+typescript
+// In server/routes/communications/merchant.ts
+router.get("/", async (req: Request, res: Response) => {
+  try {
+    // Parse pagination parameters
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+    const page = req.query.page ? parseInt(req.query.page as string) : 1;
+    const offset = (page - 1) * limit;
+    
+    // Get the merchant ID for the logged-in user
+    const merchant = await storage.getMerchantByUserId(req.user.id);
+    
+    if (!merchant) {
+      return res.status(404).json({
+        success: false,
+        message: "Merchant profile not found for this user."
+      });
+    }
+    
+    // Get conversations with pagination
+    const { conversations, total } = await storage.getConversationsForMerchantPaginated(
+      merchant.id,
+      { limit, offset }
+    );
+    
+    // Map the conversations to include additional data
+    const mappedConversations = await Promise.all(
+      conversations.map(async (conversation) => {
+        // Mapping logic...
+        return {
+          ...conversation,
+          // Additional fields...
+        };
+      })
+    );
+    
+    return res.json({
+      success: true,
+      data: {
+        conversations: mappedConversations,
+        pagination: {
+          total,
+          page,
+          limit,
+          pages: Math.ceil(total / limit),
+        },
+      },
+    });
+  } catch (error) {
+    // Error handling...
+  }
+});
+
+// Add pagination method to storage
+// In server/storage.ts
+async getConversationsForMerchantPaginated(
+  merchantId: number,
+  options: { limit: number; offset: number }
+): Promise<{ conversations: Conversation[]; total: number }> {
+  const { limit, offset } = options;
+  
+  // Get total count
+  const [countResult] = await db
+    .select({ count: sql`count(*)` })
+    .from(conversations)
+    .where(eq(conversations.merchantId, merchantId));
+  
+  const total = Number(countResult?.count || 0);
+  
+  // Get paginated results
+  const results = await db
+    .select()
+    .from(conversations)
+    .where(eq(conversations.merchantId, merchantId))
+    .orderBy(desc(conversations.updatedAt))
+    .limit(limit)
+    .offset(offset);
+  
+  return {
+    conversations: results,
+    total,
+  };
+}
+
+// Update client-side to handle pagination
+// In client/src/pages/merchant/Messages.tsx
+const [page, setPage] = useState(1);
+const [limit, setLimit] = useState(10);
+
+const { 
+  data: conversationsData, 
+  isLoading,
+  error: conversationsError,
+  refetch: refetchConversations 
+} = useQuery({
+  queryKey: ["/api/communications/merchant", page, limit],
+  queryFn: async () => {
+    try {
+      const response = await apiRequest(
+        "GET", 
+        `/api/communications/merchant?page=${page}&limit=${limit}`
+      );
+      return response;
+    } catch (error) {
+      console.error("Error fetching merchant conversations:", error);
+      throw error;
+    }
+  },
+});
+
+// Add pagination UI
+return (
+  <div>
+    {/* Conversations list */}
+    
+    {/* Pagination controls */}
+    <div className="flex items-center justify-between mt-4">
+      <div className="text-sm text-gray-500">
+        Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, conversationsData?.data?.pagination?.total || 0)} of {conversationsData?.data?.pagination?.total || 0} conversations
+      </div>
+      
+      <div className="flex space-x-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setPage(p => Math.max(1, p - 1))}
+          disabled={page === 1 || isLoading}
+        >
+          Previous
+        </Button>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setPage(p => p + 1)}
+          disabled={page >= (conversationsData?.data?.pagination?.pages || 1) || isLoading}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  </div>
+);
+2. Implement Caching
+Problem: The application doesn't implement proper caching for static or rarely changing data.
+Fix:
+typescript
+// In client/src/lib/react-query.ts
+import { QueryClient } from '@tanstack/react-query';
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+      retry: 1,
+      refetchOnWindowFocus: false,
+      refetchOnMount: true,
+    },
+  },
+});
+
+// Add cache headers to API responses
+// In server/routes/static-data.ts
+router.get("/", async (req: Request, res: Response) => {
+  try {
+    const data = await storage.getStaticData();
+    
+    // Set cache headers
+    res.set({
+      'Cache-Control': 'public, max-age=3600', // 1 hour
+      'Expires': new Date(Date.now() + 3600000).toUTCString(),
+    });
+    
+    return res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    // Error handling...
+  }
+});
+3. Optimize Database Queries
+Problem: Database queries are not optimized and may not use proper indexes.
+Fix:
+typescript
+// Add indexes to frequently queried fields
+// In shared/schemas/merchant.schema.ts
+export const merchants = pgTable("merchants", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id)
+    .notNull(),
+  // ... other fields
+}, (table) => {
+  return {
+    userIdIdx: index("merchant_user_id_idx").on(table.userId),
+    // Add other indexes as needed
+  };
+});
+
+// Optimize complex queries
+// In server/storage.ts
+// Before:
+const results = await db
+  .select()
+  .from(transactions)
+  .where(eq(transactions.status, "completed"))
+  .orderBy(desc(transactions.createdAt));
+
+// After:
+const results = await db
+  .select({
+    id: transactions.id,
+    amount: transactions.amount,
+    status: transactions.status,
+    createdAt: transactions.createdAt,
+    // Only select needed fields
+  })
+  .from(transactions)
+  .where(eq(transactions.status, "completed"))
+  .orderBy(desc(transactions.createdAt))
+  .limit(100); // Always limit results
+UI/UX Fixes
+1. Add Proper Loading States
+Problem: Many components don't properly handle loading states.
+Fix:
+typescript
+// In client/src/components/ui/skeleton.tsx
+import { cn } from "@/lib/utils";
+
+function Skeleton({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("animate-pulse rounded-md bg-muted", className)}
+      {...props}
+    />
+  );
+}
+
+export { Skeleton };
+
+// Create skeleton loading states for components
+// In client/src/components/conversation-card-skeleton.tsx
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+
+export function ConversationCardSkeleton() {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <Skeleton className="h-6 w-3/4 mb-2" />
+        <Skeleton className="h-4 w-1/4" />
+      </CardHeader>
+      <CardContent>
+        <Skeleton className="h-4 w-full mb-2" />
+        <Skeleton className="h-4 w-2/3" />
+      </CardContent>
+      <CardFooter>
+        <Skeleton className="h-4 w-1/3" />
+      </CardFooter>
+    </Card>
+  );
+}
+
+// Use skeleton loading states in components
+// In client/src/pages/merchant/Messages.tsx
+return (
+  <MerchantLayout>
+    <div className="container-responsive py-6">
+      {/* Header */}
+      
+      {isLoading ? (
+        <div className="grid-responsive mt-6">
+          {[...Array(6)].map((_, index) => (
+            <ConversationCardSkeleton key={index} />
+          ))}
+        </div>
+      ) : conversationsError ? (
+        <div className="text-center p-8">
+          <p className="text-destructive">Failed to load conversations</p>
+          <Button 
+            variant="outline" 
+            onClick={() => refetchConversations()} 
+            className="mt-4"
+          >
+            Try Again
+          </Button>
+        </div>
+      ) : filteredConversations.length === 0 ? (
+        <div className="text-center p-8">
+          <p className="text-muted-foreground">No conversations found</p>
+          <Button 
+            onClick={() => setCreateDialogOpen(true)} 
+            className="mt-4"
+          >
+            Create New Conversation
+          </Button>
+        </div>
+      ) : (
+        <div className="grid-responsive mt-6">
+          {filteredConversations.map((conversation) => (
+            <ConversationCard key={conversation.id} conversation={conversation} />
+          ))}
+        </div>
+      )}
+    </div>
+  </MerchantLayout>
+);
+2. Improve Responsive Design
+Problem: Some components don't implement proper responsive design for mobile devices.
+Fix:
+typescript
+// In client/src/styles/globals.css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .container-responsive {
+    @apply container mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  .grid-responsive {
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+  }
+  
+  .flex-responsive {
+    @apply flex flex-col sm:flex-row;
+  }
+}
+
+// Use responsive design in components
+// In client/src/pages/merchant/Messages.tsx
+return (
+  <MerchantLayout>
+    <div className="container-responsive py-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+        <h1 className="text-2xl font-bold">Messages</h1>
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          New Message
+        </Button>
+      </div>
+
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as 'active' | 'resolved' | 'archived')}
+        className="w-full"
+      >
+        {/* Tab content */}
+      </Tabs>
+      
+      <div className="grid-responsive mt-6">
+        {filteredConversations.map((conversation) => (
+          <ConversationCard key={conversation.id} conversation={conversation} />
+        ))}
+      </div>
+    </div>
+  </MerchantLayout>
+);
+Testing and Monitoring Fixes
+1. Implement Error Monitoring
+Problem: The application lacks proper error monitoring and reporting.
+Fix:
+typescript
+// In client/src/lib/sentry.ts
+import * as Sentry from '@sentry/react';
+
+export function initSentry() {
+  if (process.env.NODE_ENV === 'production') {
+    Sentry.init({
+      dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      integrations: [
+        new Sentry.BrowserTracing({
+          // Set sampling rate for performance monitoring
+          tracesSampleRate: 0.1,
+        }),
+      ],
+      // Set sampling rate for error monitoring
+      tracesSampleRate: 1.0,
+    });
+  }
+}
+
+export function captureException(error: unknown, context?: Record<string, any>) {
+  if (process.env.NODE_ENV === 'production') {
+    Sentry.captureException(error, {
+      extra: context,
+    });
+  } else {
+    console.error('Error:', error, 'Context:', context);
+  }
+}
+
+// Use error monitoring in API requests
+// In client/src/lib/api.ts
+import { captureException } from './sentry';
+
+export async function apiRequest<T>(method: string, url: string, data?: any): Promise<ApiResponse<T>> {
+  try {
+    // API request implementation...
+  } catch (error) {
+    // Capture exception with context
+    captureException(error, {
+      method,
+      url,
+      data,
+    });
+    
+    // Rethrow for component error handling
+    throw error;
+  }
+}
+2. Add Structured Logging
+Problem: Logging is inconsistent and lacks structured format.
+Fix:
+typescript
+// In server/services/logger.ts
+import winston from 'winston';
+
+// Define log levels
+const levels = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  http: 3,
+  debug: 4,
+};
+
+// Define log colors
+const colors = {
+  error: 'red',
+  warn: 'yellow',
+  info: 'green',
+  http: 'magenta',
+  debug: 'blue',
+};
+
+// Add colors to winston
+winston.addColors(colors) ;
+
+// Create format for development
+const developmentFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
+  winston.format.colorize({ all: true }),
+  winston.format.printf(
+    (info) => `${info.timestamp} ${info.level}: ${info.message} ${info.metadata ? JSON.stringify(info.metadata) : ''}`
+  )
+);
+
+// Create format for production
+const productionFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.json()
+);
+
+// Determine environment
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
+// Create the logger
+export const logger = winston.createLogger({
+  level: isDevelopment ? 'debug' : 'http',
+  levels,
+  format: isDevelopment ? developmentFormat : productionFormat,
+  transports: [
+    // Console transport for all environments
+    new winston.transports.Console() ,
+    
+    // File transport for production
+    ...(isDevelopment
+      ? []
+      : [
+          new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+          new winston.transports.File({ filename: 'logs/combined.log' }),
+        ]),
+  ],
+});
+
+// Export a typed logger interface
+export interface LogMetadata {
+  [key: string]: any;
+}
+
+export interface LogEntry {
+  message: string;
+  category: string;
+  source: string;
+  metadata?: LogMetadata;
+}
+
+// Add type safety to logger methods
+export const typedLogger = {
+  error: (entry: LogEntry) => logger.error(entry.message, { metadata: { ...entry, level: 'error' } }),
+  warn: (entry: LogEntry) => logger.warn(entry.message, { metadata: { ...entry, level: 'warn' } }),
+  info: (entry: LogEntry) => logger.info(entry.message, { metadata: { ...entry, level: 'info' } }),
+  http: (entry: LogEntry)  => logger.http(entry.message, { metadata: { ...entry, level: 'http' } }) ,
+  debug: (entry: LogEntry) => logger.debug(entry.message, { metadata: { ...entry, level: 'debug' } }),
+};
+
+// Export the typed logger as the default
+export default typedLogger;
+Deployment and Configuration Fixes
+1. Improve Environment Configuration
+Problem: The application doesn't properly handle environment-specific configuration.
+Fix:
+typescript
+// In server/config.ts
+import { z } from 'zod';
+import { logger } from './services/logger';
+
+// Define configuration schema
+const configSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.string().transform(Number).default('3000'),
+  DATABASE_URL: z.string(),
+  JWT_SECRET: z.string(),
+  JWT_EXPIRES_IN: z.string().default('7d'),
+  CORS_ORIGIN: z.string().default('*'),
+  SENTRY_DSN: z.string().optional(),
+  LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']) .default('info'),
+});
+
+// Process environment variables
+function validateConfig() {
+  try {
+    // Validate environment variables against schema
+    const config = configSchema.parse(process.env);
+    
+    // Log successful configuration
+    logger.info({
+      message: 'Configuration validated successfully',
+      category: 'startup',
+      source: 'config',
+      metadata: {
+        nodeEnv: config.NODE_ENV,
+        port: config.PORT,
+      },
+    });
+    
+    return config;
+  } catch (error) {
+    // Log validation errors
+    if (error instanceof z.ZodError) {
+      const missingVars = error.errors
+        .filter(e => e.code === 'invalid_type' && e.received === 'undefined')
+        .map(e => e.path.join('.'));
+      
+      const invalidVars = error.errors
+        .filter(e => e.code !== 'invalid_type' || e.received !== 'undefined')
+        .map(e => `${e.path.join('.')}: ${e.message}`);
+      
+      logger.error({
+        message: 'Configuration validation failed',
+        category: 'startup',
+        source: 'config',
+        metadata: {
+          missingVars,
+          invalidVars,
+        },
+      });
+      
+      throw new Error(
+        `Configuration validation failed. Missing: ${missingVars.join(', ')}. Invalid: ${invalidVars.join(', ')}`
+      );
+    }
+    
+    throw error;
+  }
+}
+
+// Export validated config
+export const config = validateConfig();
+2. Add Health Check Endpoints
+Problem: The application doesn't implement proper health check endpoints.
+Fix:
+typescript
+// In server/routes/health.ts
+import { Router, Request, Response } from 'express';
+import { checkDatabaseConnection } from '../db';
+import { logger } from '../services/logger';
+
+const router = Router();
+
+// Simple health check
+router.get('/health', (req: Request, res: Response) => {
+  return res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Detailed health check with dependencies
+router.get('/health/detailed', async (req: Request, res: Response) => {
+  try {
+    // Check database connection
+    const dbStatus = await checkDatabaseConnection();
+    
+    // Check other dependencies as needed
+    // const cacheStatus = await checkCacheConnection();
+    // const storageStatus = await checkStorageConnection();
+    
+    const allHealthy = dbStatus; // && cacheStatus && storageStatus;
+    
+    const status = allHealthy ? 'ok' : 'degraded';
+    const statusCode = allHealthy ? 200 : 503;
+    
+    return res.status(statusCode).json({
+      status,
+      timestamp: new Date().toISOString(),
+      dependencies: {
+        database: dbStatus ? 'ok' : 'error',
+        // cache: cacheStatus ? 'ok' : 'error',
+        // storage: storageStatus ? 'ok' : 'error',
+      },
+    });
+  } catch (error) {
+    logger.error({
+      message: `Health check failed: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'health',
+      source: 'health-check',
+      metadata: {
+        error: error instanceof Error ? error.stack : null,
+      },
+    });
+    
+    return res.status(500).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: 'Health check failed',
+    });
+  }
+});
+
+export default router;
+
+// Register health check routes
+// In server/index.ts
+import healthRoutes from './routes/health';
+
+// Register routes
+app.use('/api', healthRoutes);
+3. Implement Error Recovery
+Problem: The application doesn't implement proper error recovery mechanisms.
+Fix:
+typescript
+// In client/src/lib/api.ts
+import { captureException } from './sentry';
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  backoff = 300
+): Promise<Response> {
+  try {
+    const response = await fetch(url, options);
+    
+    // Only retry on network errors or 5xx server errors
+    if (response.status >= 500 && retries > 0) {
+      console.warn(`Request failed with status ${response.status}. Retrying... (${retries} retries left)`);
+      
+      // Wait with exponential backoff
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      
+      // Retry with increased backoff
+      return fetchWithRetry(url, options, retries - 1, backoff * 2);
+    }
+    
+    return response;
+  } catch (error) {
+    // Retry on network errors
+    if (error instanceof Error && error.name === 'TypeError' && retries > 0) {
+      console.warn(`Network error: ${error.message}. Retrying... (${retries} retries left)`);
+      
+      // Wait with exponential backoff
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      
+      // Retry with increased backoff
+      return fetchWithRetry(url, options, retries - 1, backoff * 2);
+    }
+    
+    throw error;
+  }
+}
+
+export async function apiRequest<T>(method: string, url: string, data?: any): Promise<ApiResponse<T>> {
+  try {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    
+    const options: RequestInit = {
+      method,
+      headers,
+      credentials: 'include',
+      body: data ? JSON.stringify(data) : undefined,
+    };
+    
+    // Use fetch with retry
+    const response = await fetchWithRetry(url, options);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error?.message || 
+        `API request failed with status ${response.status}`
+      );
+    }
+    
+    return response.json();
+  } catch (error) {
+    // Capture exception with context
+    captureException(error, {
+      method,
+      url,
+      data,
+    });
+    
+    // Rethrow for component error handling
+    throw error;
+  }
+}
+Implementation Instructions
+Start by fixing the critical ticket system issues first:
+Field name inconsistency
+Missing API route for marking messages as read
+Undefined variable in server code
+Database connection configuration
+Inconsistent API response formats
+Then address the high priority fixes:
+CSRF token handling
+Transaction handling
+Error handling
+After the ticket system is working, implement the remaining fixes in the following order:
+Authentication and security fixes
+Performance fixes
+UI/UX fixes
+Testing and monitoring fixes
+Deployment and configuration fixes
+Test each fix thoroughly before moving to the next one to ensure no regressions are introduced.
+For each fix, make sure to update both the server and client code as needed to maintain consistency.
+After implementing all fixes, run a comprehensive test of the entire application to ensure everything is working properly.
+This document provides all the necessary code and instructions to fix the ShiFi Tester application, with a focus on resolving the non-working ticket system.

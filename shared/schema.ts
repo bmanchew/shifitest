@@ -932,6 +932,7 @@ export type InsertSalesRepAnalytics = z.infer<typeof insertSalesRepAnalyticsSche
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
   topic: text("topic").notNull(),
+  subject: text("subject"), // Added subject field for backward compatibility
   contractId: integer("contract_id").references(() => contracts.id), // Optional link to a specific contract
   status: conversationStatusEnum("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
