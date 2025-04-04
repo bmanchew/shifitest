@@ -64,6 +64,7 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     'test-middesk-integration', 
     'test-contract-setup',
     'test-financial-sherpa',
+    'test-merchant-message-read',  // For testing the merchant message read endpoint
     'true' // For the X-Testing-Only header
   ];
   const hasBypassHeader = 
