@@ -1,6 +1,10 @@
 /**
- * This script tests if contracts for merchant ID 49 are correctly retrieved
- * which was one of the specific issues we fixed in the ticket system.
+ * Test script for fetching contracts for merchant ID 49 (brandon@shilohfinance.com)
+ * This script will:
+ * 1. Login as brandon@shilohfinance.com
+ * 2. Get the merchant profile
+ * 3. Fetch contracts
+ * 4. Create a test ticket if contracts are available
  */
 
 import axios from 'axios';
