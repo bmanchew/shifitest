@@ -248,8 +248,13 @@ export function TicketSubmissionForm({
 
   const onSubmit = async (values: TicketFormValues) => {
     try {
+      console.log("Form submission started with values:", values);
+      console.log("Current user from useAuth():", user);
+      console.log("Merchant ID:", merchantId);
+      
       // If no merchantId is provided, show error
       if (!merchantId) {
+        console.error("No merchant ID available");
         toast({
           title: "Error",
           description: "Merchant information is missing. Please try again later.",
@@ -258,17 +263,47 @@ export function TicketSubmissionForm({
         return;
       }
 
-      // Check if we have user information from the auth context
-      if (!user || !user.id) {
+      // Try a backup approach for getting user ID
+      let submitterId = null;
+      
+      // First check if user is available from auth context
+      if (user && user.id) {
+        console.log("Using user ID from auth context:", user.id);
+        submitterId = user.id;
+      } else {
+        console.log("No user in auth context, fetching from API");
+        
+        // Fallback to API if auth context doesn't have user
+        try {
+          const userResponse = await fetch("/api/users/me", {
+            credentials: "include"
+          });
+          
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            console.log("User data from API:", userData);
+            if (userData.id) {
+              submitterId = userData.id;
+              console.log("Using user ID from API:", submitterId);
+            }
+          } else {
+            console.error("Failed to fetch user data:", await userResponse.text());
+          }
+        } catch (error) {
+          console.error("Error fetching user:", error);
+        }
+      }
+      
+      // Final check for user ID
+      if (!submitterId) {
+        console.error("No user ID available after all attempts");
         toast({
           title: "Error",
-          description: "User information is missing. Please try again after logging in again.",
+          description: "Could not determine your user information. Please try logging out and back in.",
           variant: "destructive",
         });
         return;
       }
-
-      console.log("Using authenticated user:", user);
 
       // Create form data for submission
       const ticketData = {
@@ -276,7 +311,7 @@ export function TicketSubmissionForm({
         merchantId,
         contractId: values.contractId ? Number(values.contractId) : null,
         // Add createdBy field which is required by the API
-        createdBy: user.id,
+        createdBy: submitterId,
       };
 
       console.log("Submitting ticket data:", ticketData);
