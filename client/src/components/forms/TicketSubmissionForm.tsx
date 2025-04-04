@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, AlertTriangle, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -74,6 +74,10 @@ export function TicketSubmissionForm({
   initialValues,
   contractId,
 }: TicketSubmissionFormProps) {
+  // Helper to convert null to undefined for type compatibility
+  const nullToUndefined = <T,>(value: T | null): T | undefined => 
+    value === null ? undefined : value;
+    
   const { toast } = useToast();
   const { user } = useAuth();
   const [contractSearchTerm, setContractSearchTerm] = useState("");
@@ -82,28 +86,62 @@ export function TicketSubmissionForm({
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
   // Fetch all contracts for this merchant
-  const { data: contractsData } = useQuery<{ success: boolean, contracts: Contract[] } | Contract[]>({
+  const { 
+    data: contractsData,
+    isLoading: isLoadingContracts,
+    isError: isContractsError,
+    refetch: refetchContracts,
+    error: contractsError
+  } = useQuery<{ success: boolean, contracts: Contract[] } | Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
     queryFn: async () => {
-      const res = await fetch(`/api/contracts?merchantId=${merchantId}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error("Failed to fetch contracts");
+      try {
+        console.log('Fetching contracts for merchant ID:', merchantId);
+        const res = await fetch(`/api/contracts?merchantId=${merchantId}`, {
+          credentials: "include",
+        });
+        
+        if (!res.ok) {
+          console.error('Contracts API error:', res.status, await res.text());
+          throw new Error(`Failed to fetch contracts: ${res.status}`);
+        }
+        
+        const data = await res.json();
+        console.log('Contract API Response:', data);
+        return data;
+      } catch (error) {
+        console.error('Contract fetch error:', error);
+        throw error;
       }
-      const data = await res.json();
-      console.log('Contract API Response:', data);
-      return data;
     },
     enabled: !!merchantId,
+    retry: 3, // Retry up to 3 times
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
+    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
+    refetchOnWindowFocus: true, // Refresh when tab gets focus
   });
+  
+  // Retry contracts fetch if it fails
+  useEffect(() => {
+    if (isContractsError && merchantId) {
+      console.log('Error fetching contracts, will retry in 2 seconds');
+      const retryTimer = setTimeout(() => {
+        console.log('Retrying contracts fetch...');
+        refetchContracts();
+      }, 2000);
+      
+      return () => clearTimeout(retryTimer);
+    }
+  }, [isContractsError, merchantId, refetchContracts]);
   
   // Handle both response formats:
   // 1. Direct array of contracts (old format)
   // 2. Object with { success: boolean, contracts: Contract[] } (new format)
-  const contracts = Array.isArray(contractsData) 
-    ? contractsData 
-    : (contractsData?.contracts || []);
+  const contracts = useMemo(() => {
+    return Array.isArray(contractsData) 
+      ? contractsData 
+      : (contractsData?.contracts || []);
+  }, [contractsData]);
 
   // Initialize form with default values
   const form = useForm<TicketFormValues>({
@@ -121,7 +159,7 @@ export function TicketSubmissionForm({
   // If contractId prop is provided, find that contract
   useEffect(() => {
     if (contractId && contracts.length > 0) {
-      const foundContract = contracts.find(c => c.id === contractId);
+      const foundContract = contracts.find((c: Contract) => c.id === contractId);
       if (foundContract) {
         setSelectedContract(foundContract);
       }
@@ -156,18 +194,18 @@ export function TicketSubmissionForm({
 
   // Hook to fetch customer data for all contracts
   useQuery({
-    queryKey: ["customers", contracts.map(c => c.customerId).filter(Boolean)],
+    queryKey: ["customers", contracts.map((c: Contract) => c.customerId).filter(Boolean)],
     queryFn: async () => {
       // Get all customer IDs from contracts, filtering out null/undefined values
       const customerIds = contracts
-        .map(c => c.customerId)
+        .map((c: Contract) => c.customerId)
         .filter((id): id is number => id !== null && id !== undefined);
       
       // Remove duplicates
       const uniqueIds = [...new Set(customerIds)];
       
       // Fetch data for each customer ID
-      await Promise.all(uniqueIds.map(fetchCustomer));
+      await Promise.all(uniqueIds.map((id: number) => fetchCustomer(id)));
       return true;
     },
     enabled: contracts.length > 0,
@@ -192,7 +230,7 @@ export function TicketSubmissionForm({
 
   // Function to format contract ID and customer info for display
   const formatContractInfo = (contract: Contract) => {
-    return `#${contract.contractNumber} - ${getCustomerName(contract.customerId)}`;
+    return `#${contract.contractNumber} - ${getCustomerName(nullToUndefined(contract.customerId))}`;
   };
 
   // Handler for contract selection
@@ -203,9 +241,9 @@ export function TicketSubmissionForm({
   };
 
   // Filter contracts based on search term
-  const filteredContracts = contracts.filter(contract => 
+  const filteredContracts = contracts.filter((contract: Contract) => 
     contract.contractNumber?.toLowerCase().includes(contractSearchTerm.toLowerCase()) ||
-    getCustomerName(contract.customerId)?.toLowerCase().includes(contractSearchTerm.toLowerCase())
+    getCustomerName(nullToUndefined(contract.customerId))?.toLowerCase().includes(contractSearchTerm.toLowerCase())
   );
 
   const onSubmit = async (values: TicketFormValues) => {
@@ -419,12 +457,28 @@ export function TicketSubmissionForm({
                         role="combobox"
                         aria-expanded={contractSearchOpen}
                         className="w-full justify-between"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || isLoadingContracts}
                       >
-                        {selectedContract 
-                          ? formatContractInfo(selectedContract)
-                          : "Select a contract..."}
-                        <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        {isLoadingContracts ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading contracts...
+                          </>
+                        ) : selectedContract ? (
+                          formatContractInfo(selectedContract)
+                        ) : isContractsError ? (
+                          "Error loading contracts - Click to retry"
+                        ) : (
+                          "Select a contract..."
+                        )}
+                        {!isLoadingContracts && !isContractsError && (
+                          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        )}
+                        {isContractsError && (
+                          <RefreshCw className="ml-2 h-4 w-4 shrink-0 opacity-50" onClick={(e) => {
+                            e.stopPropagation();
+                            refetchContracts();
+                          }} />
+                        )}
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
@@ -434,43 +488,70 @@ export function TicketSubmissionForm({
                         placeholder="Search contracts or customers..." 
                         value={contractSearchTerm}
                         onValueChange={setContractSearchTerm}
+                        disabled={isLoadingContracts}
                       />
                       <CommandList>
-                        <CommandEmpty>No contracts found.</CommandEmpty>
-                        <CommandGroup heading="Contracts">
-                          {filteredContracts.map((contract) => (
-                            <CommandItem
-                              key={contract.id}
-                              value={String(contract.id)}
-                              onSelect={() => handleContractSelect(contract)}
+                        {isLoadingContracts ? (
+                          <div className="flex flex-col items-center justify-center py-6">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                            <p className="mt-2 text-sm text-muted-foreground">Loading contracts...</p>
+                          </div>
+                        ) : isContractsError ? (
+                          <div className="flex flex-col items-center justify-center py-6">
+                            <AlertTriangle className="h-6 w-6 text-destructive" />
+                            <p className="mt-2 text-sm text-muted-foreground">Failed to load contracts</p>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="mt-2"
+                              onClick={() => refetchContracts()}
                             >
-                              <div className="flex flex-col">
-                                <div className="flex items-center">
-                                  <span className="font-medium">#{contract.contractNumber}</span>
-                                  <Badge 
-                                    variant={
-                                      contract.status === 'active' ? 'success' : 
-                                      contract.status === 'pending' ? 'warning' : 
-                                      contract.status === 'completed' ? 'default' : 'destructive'
-                                    }
-                                    className="ml-2"
-                                  >
-                                    {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
-                                  </Badge>
+                              <RefreshCw className="mr-2 h-4 w-4" /> Retry
+                            </Button>
+                          </div>
+                        ) : filteredContracts.length === 0 ? (
+                          <CommandEmpty>No contracts found.</CommandEmpty>
+                        ) : (
+                          <CommandGroup heading={`Contracts (${filteredContracts.length})`}>
+                            {filteredContracts.map((contract) => (
+                              <CommandItem
+                                key={contract.id}
+                                value={String(contract.id)}
+                                onSelect={() => handleContractSelect(contract)}
+                              >
+                                <div className="flex flex-col">
+                                  <div className="flex items-center">
+                                    <span className="font-medium">#{contract.contractNumber}</span>
+                                    <Badge 
+                                      variant={
+                                        contract.status === 'active' ? 'success' : 
+                                        contract.status === 'pending' ? 'warning' : 
+                                        contract.status === 'completed' ? 'default' : 'destructive'
+                                      }
+                                      className="ml-2"
+                                    >
+                                      {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
+                                    </Badge>
+                                  </div>
+                                  <span className="text-sm text-muted-foreground">
+                                    {getCustomerName(nullToUndefined(contract.customerId))}
+                                  </span>
                                 </div>
-                                <span className="text-sm text-muted-foreground">
-                                  {getCustomerName(contract.customerId)}
-                                </span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
                       </CommandList>
                     </Command>
                   </PopoverContent>
                 </Popover>
                 <FormDescription>
                   If your issue relates to a specific contract, select it from the list
+                  {isContractsError && (
+                    <span className="ml-1 text-destructive">
+                      (Error loading contracts. <Button variant="link" className="p-0 h-auto" onClick={() => refetchContracts()}>Retry</Button>)
+                    </span>
+                  )}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
