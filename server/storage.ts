@@ -143,6 +143,7 @@ export interface IStorage {
   getMerchant(id: number): Promise<Merchant | undefined>;
   getMerchantByUserId(userId: number): Promise<Merchant | undefined>;
   getAllMerchants(): Promise<Merchant[]>;
+  getAllMerchantsWithDetails(): Promise<(Merchant & { businessDetails?: MerchantBusinessDetails })[]>;
   createMerchant(merchant: InsertMerchant): Promise<Merchant>;
 
   // Plaid Platform Merchant operations
@@ -934,6 +935,20 @@ export class DatabaseStorage implements IStorage {
 
   async getAllMerchants(): Promise<Merchant[]> {
     return await db.select().from(merchants);
+  }
+  
+  async getAllMerchantsWithDetails(): Promise<(Merchant & { businessDetails?: MerchantBusinessDetail })[]> {
+    const results = await db.select({
+      merchant: merchants,
+      businessDetails: merchantBusinessDetails
+    })
+    .from(merchants)
+    .leftJoin(merchantBusinessDetails, eq(merchants.id, merchantBusinessDetails.merchantId));
+    
+    return results.map(({ merchant, businessDetails }) => ({
+      ...merchant,
+      businessDetails: businessDetails || undefined
+    }));
   }
 
   async createMerchant(merchant: InsertMerchant): Promise<Merchant> {
