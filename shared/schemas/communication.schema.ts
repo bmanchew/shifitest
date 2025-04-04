@@ -30,6 +30,7 @@ export const conversations = pgTable("conversations", {
     .references(() => merchants.id),
   contractId: integer("contract_id").references(() => contracts.id),
   subject: text("subject").notNull(),
+  topic: text("topic"), // Adding topic field for interoperability with schema.ts
   status: conversationStatusEnum("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
