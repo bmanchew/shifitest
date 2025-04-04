@@ -82,7 +82,7 @@ export function TicketSubmissionForm({
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
 
   // Fetch all contracts for this merchant
-  const { data: contractsData } = useQuery<Contract[]>({
+  const { data: contractsData } = useQuery<{ success: boolean, contracts: Contract[] } | Contract[]>({
     queryKey: ["/api/contracts", { merchantId }],
     queryFn: async () => {
       const res = await fetch(`/api/contracts?merchantId=${merchantId}`, {
@@ -98,8 +98,12 @@ export function TicketSubmissionForm({
     enabled: !!merchantId,
   });
   
-  // Ensure contracts is always an array
-  const contracts = Array.isArray(contractsData) ? contractsData : [];
+  // Handle both response formats:
+  // 1. Direct array of contracts (old format)
+  // 2. Object with { success: boolean, contracts: Contract[] } (new format)
+  const contracts = Array.isArray(contractsData) 
+    ? contractsData 
+    : (contractsData?.contracts || []);
 
   // Initialize form with default values
   const form = useForm<TicketFormValues>({
