@@ -33,6 +33,9 @@ export const verificationStatusEnum = pgEnum("verification_status", [
   "pending",
   "verified",
   "failed",
+  "ai_pending",
+  "ai_approved",
+  "ai_rejected",
 ]);
 
 // Support ticket related enums
@@ -567,6 +570,17 @@ export const merchantBusinessDetails = pgTable("merchant_business_details", {
   middeskBusinessId: text("middesk_business_id"), // ID assigned by MidDesk for this business verification
   verificationStatus: verificationStatusEnum("verification_status").default("not_started"), // Status of the verification with MidDesk
   verificationData: text("verification_data"), // JSON stringified data from MidDesk
+  
+  // AI-powered verification fields
+  aiVerificationStatus: text("ai_verification_status"), // AI verification status: 'pending', 'approved', 'rejected'
+  aiVerificationScore: integer("ai_verification_score"), // Score from 0-100 indicating eligibility
+  aiVerificationDetails: text("ai_verification_details"), // JSON stringified details of verification
+  aiVerificationRecommendations: text("ai_verification_recommendations"), // JSON stringified recommendations
+  aiVerificationDate: timestamp("ai_verification_date"), // When AI verification was performed
+  adminReviewNotes: text("admin_review_notes"), // Notes from admin review of AI verification
+  adminReviewedAt: timestamp("admin_reviewed_at"), // When admin reviewed the verification
+  adminReviewedBy: integer("admin_reviewed_by").references(() => users.id), // Admin who reviewed the verification
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });
