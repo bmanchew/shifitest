@@ -91,6 +91,7 @@ import underwritingRouter from "./routes/underwriting";
 import merchantRouter from "./routes/merchant";
 import merchantDashboardRouter from "./routes/merchant-dashboard";
 import merchantFundingRouter from "./routes/merchant-funding";
+import merchantVerificationRouter from "./routes/merchantVerification.routes"; // Import merchant verification routes
 import notificationRouter from "./routes/notification";
 import paymentRouter from "./routes/payments";
 import healthRouter from "./routes/health"; // Import health routes
@@ -3961,25 +3962,151 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
             }
           });
           
-          // Return success with merchant bank information and KYC session details
-          res.json({
-            success: true,
-            message: "Bank account connected successfully",
-            merchant_id: merchantId,
-            accounts: authData.accounts.map(account => ({
-              id: account.account_id,
-              name: account.name,
-              mask: account.mask,
-              type: account.type,
-              subtype: account.subtype,
-              balance: account.balances.current,
-              currency: account.balances.iso_currency_code
-            })),
-            verification_status: "pending",
-            verification_message: "Your bank account is being verified. We're analyzing your transaction history to confirm your business meets our revenue requirements.",
-            kycSessionId: kycSession.session_id,
-            kycSessionUrl: kycSession.session_url
+          // Let's analyze the merchant's eligibility using GPT-4.5 AI
+          // First, wait a moment for the asset report to be ready (in a real app, you would use webhooks)
+          logger.info({
+            message: "Starting AI-based eligibility verification",
+            category: "api",
+            source: "openai",
+            metadata: { 
+              merchantId,
+              assetReportId: assetReportResponse.assetReportId
+            }
           });
+          
+          // Short wait to allow the asset report to be processed
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          try {
+            // Get the merchant business info
+            const businessInfo = {
+              businessName: businessInfo?.businessName || "Unknown Business",
+              businessType: businessInfo?.businessType || "Unknown",
+              yearsInBusiness: parseFloat(businessInfo?.yearsInBusiness || "0"),
+              monthlyRevenue: parseFloat(businessInfo?.monthlyRevenue || "0"),
+              location: businessInfo?.city && businessInfo?.state ? `${businessInfo.city}, ${businessInfo.state}` : ""
+            };
+            
+            // In a real app, we'd wait for the asset report to be ready via webhook
+            // For now, just estimate eligibility based on the available data
+            
+            // Analyze the merchant's financial data
+            let financialData;
+            let plaidData = {};
+            let aiVerificationResult = null;
+            
+            try {
+              // Try to get and analyze the asset report for financial verification
+              const assetReport = await plaidService.getAssetReport(assetReportResponse.assetReportToken);
+              
+              // Analyze the financial data
+              financialData = await plaidService.analyzeMerchantFinancials(assetReportResponse.assetReportToken);
+              
+              // Get account data for AI analysis
+              plaidData = {
+                accounts: authData.accounts,
+                hasRequiredHistory: financialData.hasRequiredHistory,
+                totalInflows: financialData.totalMonthlyRevenue,
+                totalOutflows: 0, // Not available in this simplified implementation
+                monthlyAvgRevenue: financialData.avgMonthlyRevenue,
+                transactionSummary: {
+                  totalTransactions: financialData.monthsWithData * 100, // Estimate
+                  monthsWithData: financialData.monthsWithData
+                }
+              };
+              
+              // Use the OpenAI service to analyze eligibility
+              const { openaiService } = await import('./services');
+              
+              if (openaiService && openaiService.isInitialized()) {
+                logger.info({
+                  message: "Starting GPT-4.5 merchant eligibility verification",
+                  category: "api",
+                  source: "openai",
+                  metadata: { merchantId }
+                });
+                
+                // Prepare merchant data for AI analysis
+                const merchantData = {
+                  businessInfo,
+                  financialData: {
+                    monthlyRevenue: financialData.avgMonthlyRevenue,
+                    annualRevenue: financialData.avgMonthlyRevenue * 12,
+                    profitMargin: 0.2, // Default estimate
+                    outstandingLoans: 0,
+                    cashReserves: authData.accounts.reduce((sum, acc) => 
+                      sum + (acc.balances.available || acc.balances.current || 0), 0),
+                    monthsWithSufficientRevenue: financialData.monthsWithSufficientRevenue,
+                    totalMonths: financialData.monthsWithData
+                  },
+                  plaidData
+                };
+                
+                // Get AI verification result
+                aiVerificationResult = await openaiService.verifyMerchantEligibility(merchantData);
+                
+                logger.info({
+                  message: `AI verification completed: ${aiVerificationResult.eligible ? 'Approved' : 'Rejected'}`,
+                  category: "api",
+                  source: "openai",
+                  metadata: { 
+                    merchantId,
+                    eligible: aiVerificationResult.eligible,
+                    score: aiVerificationResult.score
+                  }
+                });
+              } else {
+                logger.warn({
+                  message: "OpenAI service not initialized for merchant verification",
+                  category: "api",
+                  source: "openai",
+                  metadata: { merchantId }
+                });
+              }
+            } catch (analyzeError) {
+              logger.error({
+                message: `Error analyzing merchant financials: ${analyzeError instanceof Error ? analyzeError.message : String(analyzeError)}`,
+                category: "api",
+                source: "plaid",
+                metadata: {
+                  merchantId,
+                  error: analyzeError instanceof Error ? analyzeError.stack : String(analyzeError)
+                }
+              });
+            }
+            
+            // Return success with merchant bank information, KYC session details, and AI verification results
+            res.json({
+              success: true,
+              message: "Bank account connected successfully",
+              merchant_id: merchantId,
+              accounts: authData.accounts.map(account => ({
+                id: account.account_id,
+                name: account.name,
+                mask: account.mask,
+                type: account.type,
+                subtype: account.subtype,
+                balance: account.balances.current,
+                currency: account.balances.iso_currency_code
+              })),
+              verification_status: aiVerificationResult ? (aiVerificationResult.eligible ? "approved" : "rejected") : "pending",
+              verification_message: aiVerificationResult 
+                ? (aiVerificationResult.eligible 
+                  ? "Your business meets our eligibility criteria! You can proceed with the verification process." 
+                  : "Our AI analysis indicates your business may not meet our eligibility criteria. You can still continue, but approval may require additional review.")
+                : "Your bank account is being verified. We're analyzing your transaction history to confirm your business meets our revenue requirements.",
+              ai_verification_details: aiVerificationResult,
+              financial_analysis: financialData ? {
+                avgMonthlyRevenue: financialData.avgMonthlyRevenue,
+                hasRequiredHistory: financialData.hasRequiredHistory,
+                hasRequiredRevenue: financialData.hasRequiredRevenue,
+                consistentRevenue: financialData.consistentRevenue,
+                monthsWithData: financialData.monthsWithData,
+                monthsWithSufficientRevenue: financialData.monthsWithSufficientRevenue
+              } : null,
+              kycSessionId: kycSession.session_id,
+              kycSessionUrl: kycSession.session_url
+            });
         } catch (kycError) {
           logger.error({
             message: `Failed to create DiDit verification session: ${kycError instanceof Error ? kycError.message : String(kycError)}`,
@@ -5655,6 +5782,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // This path is for the currently logged-in merchant to access their own dashboard
   apiRouter.use("/merchant-dashboard", merchantDashboardRouter);
   apiRouter.use("/merchant-funding", merchantFundingRouter);
+  apiRouter.use("/merchant-verification", merchantVerificationRouter);
   
   // Mount the notification router
   apiRouter.use("/notifications", notificationRouter);

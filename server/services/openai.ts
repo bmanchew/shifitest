@@ -9,6 +9,7 @@ export class OpenAIService {
   private initialized = false;
   private model = "gpt-3.5-turbo";  // Default model
   private gpt4oModel = "gpt-4o";    // GPT-4o model for code analysis
+  private gpt45Model = "gpt-4.5-turbo";  // GPT-4.5 model for advanced analysis
 
   constructor() {
     this.initialize();
@@ -426,6 +427,217 @@ Account Balances: ${JSON.stringify(accountSummary)}
 Cash Flow: ${JSON.stringify(cashFlowData)}
 Upcoming Bills Count: ${upcomingBills.length}
 Recent Transactions Count: ${recentTransactions.length}
+`;
+  }
+
+  /**
+   * Analyze merchant data and verify eligibility using GPT-4.5
+   * @param merchantData Object containing merchant information including business details and financial data
+   * @returns Merchant verification result including eligibility, score, and recommendations
+   */
+  async verifyMerchantEligibility(merchantData: any): Promise<{
+    eligible: boolean;
+    score: number;
+    recommendations: string[];
+    verificationDetails: {
+      financialStability: number;
+      businessRisk: number;
+      industryOutlook: number;
+      cashFlowAnalysis: number;
+      explanation: string;
+    };
+  }> {
+    if (!this.isInitialized()) {
+      logger.warn({
+        message: 'Cannot verify merchant: OpenAI service not initialized',
+        category: 'api',
+        source: 'internal'
+      });
+      
+      // Return default ineligible result
+      return {
+        eligible: false,
+        score: 0,
+        recommendations: ['OpenAI service not initialized. Cannot verify merchant.'],
+        verificationDetails: {
+          financialStability: 0,
+          businessRisk: 0,
+          industryOutlook: 0,
+          cashFlowAnalysis: 0,
+          explanation: 'AI verification service unavailable. Please contact support.'
+        }
+      };
+    }
+
+    try {
+      // Create a prompt that describes the task and includes relevant merchant data
+      const prompt = this.createMerchantVerificationPrompt(merchantData);
+
+      logger.info({
+        message: 'Verifying merchant eligibility with GPT-4.5',
+        category: 'api',
+        source: 'openai',
+        metadata: {
+          model: this.gpt45Model,
+          businessName: merchantData.businessInfo?.businessName || 'Unknown Business'
+        }
+      });
+
+      const completion = await this.client!.chat.completions.create({
+        model: this.gpt45Model,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert financial underwriter specializing in merchant financing and risk assessment. You analyze business financial data to determine eligibility for financing solutions.",
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.2, // Lower temperature for more consistent risk assessment
+        max_tokens: 1500,
+        response_format: { type: "json_object" }
+      });
+
+      const response = completion.choices[0].message.content;
+      
+      if (!response) {
+        throw new Error('Empty response from OpenAI API');
+      }
+
+      // Parse the JSON response
+      const parsedResponse = JSON.parse(response);
+      
+      logger.info({
+        message: 'Successfully verified merchant eligibility using GPT-4.5',
+        category: 'api',
+        source: 'openai',
+        metadata: {
+          eligible: parsedResponse.eligible,
+          score: parsedResponse.score,
+          businessName: merchantData.businessInfo?.businessName || 'Unknown Business'
+        }
+      });
+
+      return {
+        eligible: parsedResponse.eligible || false,
+        score: parsedResponse.score || 0,
+        recommendations: parsedResponse.recommendations || [],
+        verificationDetails: parsedResponse.verificationDetails || {
+          financialStability: 0,
+          businessRisk: 0,
+          industryOutlook: 0,
+          cashFlowAnalysis: 0,
+          explanation: 'No detailed verification data available.'
+        }
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to verify merchant eligibility: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'openai',
+        metadata: {
+          error: error instanceof Error ? error.stack : null,
+          merchantData: {
+            businessName: merchantData.businessInfo?.businessName || 'Unknown Business',
+            businessType: merchantData.businessInfo?.businessType || 'Unknown Type'
+          }
+        }
+      });
+      
+      // Return default ineligible result with error information
+      return {
+        eligible: false,
+        score: 0,
+        recommendations: [`Error verifying merchant: ${error instanceof Error ? error.message : String(error)}`],
+        verificationDetails: {
+          financialStability: 0,
+          businessRisk: 0,
+          industryOutlook: 0,
+          cashFlowAnalysis: 0,
+          explanation: 'An error occurred during AI verification. Please try again later.'
+        }
+      };
+    }
+  }
+
+  /**
+   * Create a prompt for merchant eligibility verification
+   * @param merchantData Object containing merchant information
+   * @returns String prompt for the AI model
+   */
+  private createMerchantVerificationPrompt(merchantData: any): string {
+    // Extract relevant data for merchant verification
+    const {
+      businessInfo = {},
+      financialData = {},
+      plaidData = {}
+    } = merchantData;
+
+    // Business information
+    const businessDetails = {
+      name: businessInfo.businessName || '',
+      type: businessInfo.businessType || '',
+      industry: businessInfo.industry || '',
+      yearsInBusiness: businessInfo.yearsInBusiness || 0,
+      employees: businessInfo.employees || 0,
+      location: businessInfo.city && businessInfo.state ? `${businessInfo.city}, ${businessInfo.state}` : '',
+      website: businessInfo.website || ''
+    };
+
+    // Financial information
+    const financialDetails = {
+      monthlyRevenue: financialData.monthlyRevenue || 0,
+      annualRevenue: financialData.annualRevenue || financialData.monthlyRevenue * 12 || 0,
+      profitMargin: financialData.profitMargin || 0,
+      outstandingLoans: financialData.outstandingLoans || 0,
+      cashReserves: financialData.cashReserves || 0,
+      creditScore: financialData.creditScore || 0
+    };
+
+    // Plaid data (if available)
+    const plaidSummary = {
+      accountBalances: plaidData.accounts?.map((a: any) => ({
+        type: a.type,
+        subtype: a.subtype,
+        balance: a.balances?.available || a.balances?.current || 0
+      })) || [],
+      transactionSummary: plaidData.transactionSummary || {
+        totalInflows: plaidData.totalInflows || 0,
+        totalOutflows: plaidData.totalOutflows || 0,
+        categorizedTransactions: plaidData.categorizedTransactions || []
+      },
+      hasRequiredHistory: plaidData.hasRequiredHistory || false,
+      monthlyAvgRevenue: plaidData.monthlyAvgRevenue || 0
+    };
+
+    // Format the prompt with this data
+    return `
+Analyze the following merchant data and determine if they are eligible for our financing program.
+Our minimum requirements are:
+1. At least $100,000 in monthly revenue
+2. At least 2 years in business
+3. Stable cash flow demonstrated in bank transactions
+4. Business in a viable industry (not high-risk)
+
+Return your analysis as a JSON object with the following fields:
+- "eligible": boolean (true/false)
+- "score": number (0-100)
+- "recommendations": string[] (list of actionable recommendations)
+- "verificationDetails": object with:
+  * "financialStability": number (0-100)
+  * "businessRisk": number (0-100)
+  * "industryOutlook": number (0-100)
+  * "cashFlowAnalysis": number (0-100)
+  * "explanation": string (detailed explanation of the assessment)
+
+MERCHANT DATA:
+Business Information: ${JSON.stringify(businessDetails)}
+Financial Information: ${JSON.stringify(financialDetails)}
+Plaid Bank Data: ${JSON.stringify(plaidSummary)}
+
+Provide a fair and comprehensive assessment. If the merchant does not meet our criteria, explain why and provide specific recommendations for how they could qualify in the future.
 `;
   }
 }

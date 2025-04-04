@@ -109,6 +109,9 @@ export function MerchantSignup() {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [kycSessionUrl, setKycSessionUrl] = useState<string>("");
   const [kycSessionId, setKycSessionId] = useState<string>("");
+  const [aiVerificationDetails, setAiVerificationDetails] = useState<any>(null);
+  const [verificationMessage, setVerificationMessage] = useState<string>("");
+  const [financialAnalysis, setFinancialAnalysis] = useState<any>(null);
   
   const { toast } = useToast();
   
@@ -202,12 +205,37 @@ export function MerchantSignup() {
           setKycSessionId(data.kycSessionId || "");
         }
         
+        // Store AI verification results if available
+        if (data.ai_verification_details) {
+          setAiVerificationDetails(data.ai_verification_details);
+          setVerificationMessage(data.verification_message || "");
+        }
+        
+        // Store financial analysis if available
+        if (data.financial_analysis) {
+          setFinancialAnalysis(data.financial_analysis);
+        }
+        
         setCurrentStep(SignupStep.IdentityVerification);
         
-        toast({
-          title: "Success",
-          description: "Bank account connected successfully!",
-        });
+        // Determine appropriate toast message based on verification status
+        if (data.verification_status === "approved") {
+          toast({
+            title: "Approved!",
+            description: data.verification_message || "Our AI has verified your business eligibility. You can proceed to the next step.",
+          });
+        } else if (data.verification_status === "rejected") {
+          toast({
+            title: "Verification Issue",
+            description: data.verification_message || "Your business may not meet our eligibility criteria at this time.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Success",
+            description: "Bank account connected successfully!",
+          });
+        }
       } else {
         setErrorMessage(data.message || "Failed to connect bank account");
         toast({

@@ -620,5 +620,279 @@ export const plaidService = {
    */
   async checkPlatformPaymentStatus(transferId: string) {
     return plaidTransferService.checkPlatformPaymentStatus(transferId);
+  },
+
+  /**
+   * Exchange a public token for an access token
+   * @param publicToken Public token from Plaid Link
+   * @returns Object with access token and item ID
+   */
+  async exchangePublicToken(publicToken: string) {
+    try {
+      const response = await plaidClient.itemPublicTokenExchange({
+        public_token: publicToken
+      });
+      
+      return {
+        accessToken: response.data.access_token,
+        itemId: response.data.item_id
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error exchanging public token: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+      
+      throw error;
+    }
+  },
+  
+  /**
+   * Get auth data (account and routing numbers)
+   * @param accessToken Plaid access token
+   * @returns Object with accounts and account numbers
+   */
+  async getAuth(accessToken: string) {
+    try {
+      const authResponse = await plaidClient.authGet({
+        access_token: accessToken
+      });
+      
+      return {
+        accounts: authResponse.data.accounts,
+        numbers: authResponse.data.numbers
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error getting auth data: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+      
+      throw error;
+    }
+  },
+  
+  /**
+   * Create an asset report for analyzing financial data
+   * @param accessToken Plaid access token
+   * @param daysRequested Number of days of data to request
+   * @param options Additional options for the asset report
+   * @returns Object with asset report ID and token
+   */
+  async createAssetReport(accessToken: string, daysRequested: number, options: any = {}) {
+    try {
+      const assetReportResponse = await plaidClient.assetReportCreate({
+        access_tokens: [accessToken],
+        days_requested: daysRequested,
+        options: options
+      });
+      
+      return {
+        assetReportId: assetReportResponse.data.asset_report_id,
+        assetReportToken: assetReportResponse.data.asset_report_token
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error creating asset report: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          daysRequested
+        }
+      });
+      
+      throw error;
+    }
+  },
+
+  /**
+   * Get an asset report to analyze merchant financial data
+   * @param assetReportToken Asset report token
+   * @returns Asset report data
+   */
+  async getAssetReport(assetReportToken: string) {
+    try {
+      const assetReportResponse = await plaidClient.assetReportGet({
+        asset_report_token: assetReportToken,
+        include_insights: true
+      });
+      
+      return assetReportResponse.data.report;
+    } catch (error) {
+      logger.error({
+        message: `Error getting asset report: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+      
+      throw error;
+    }
+  },
+
+  /**
+   * Analyze financial data from asset report for merchant verification
+   * @param assetReportToken Asset report token
+   * @returns Analyzed financial data
+   */
+  async analyzeMerchantFinancials(assetReportToken: string) {
+    try {
+      // Get the asset report
+      const assetReport = await this.getAssetReport(assetReportToken);
+      
+      // Extract reports for each item
+      const items = assetReport.items || [];
+      let totalMonthlyRevenue = 0;
+      let monthsWithSufficientRevenue = 0;
+      let totalMonths = 0;
+      const requiredMonthlyRevenue = 100000; // $100k/month minimum
+      
+      // Process each item (bank connection)
+      for (const item of items) {
+        // Process accounts for this item
+        const accounts = item.accounts || [];
+        
+        // Find deposit accounts (checking, savings)
+        const depositAccounts = accounts.filter(account => 
+          account.type === 'depository' && 
+          (account.subtype === 'checking' || account.subtype === 'savings')
+        );
+        
+        // Process transactions for each deposit account
+        for (const account of depositAccounts) {
+          const transactions = account.transactions || [];
+          
+          // Group transactions by month
+          const transactionsByMonth: Record<string, Array<any>> = {};
+          
+          for (const transaction of transactions) {
+            const date = new Date(transaction.date);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            
+            if (!transactionsByMonth[monthKey]) {
+              transactionsByMonth[monthKey] = [];
+            }
+            
+            transactionsByMonth[monthKey].push(transaction);
+          }
+          
+          // Calculate income/revenue for each month
+          for (const [month, monthTransactions] of Object.entries(transactionsByMonth)) {
+            totalMonths++;
+            
+            // Sum deposits (credits)
+            const monthlyDeposits = monthTransactions
+              .filter(t => t.amount < 0) // In Plaid, negative amounts are deposits
+              .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+            
+            // Track months with sufficient revenue
+            if (monthlyDeposits >= requiredMonthlyRevenue) {
+              monthsWithSufficientRevenue++;
+            }
+            
+            // Add to total (for average)
+            totalMonthlyRevenue += monthlyDeposits;
+          }
+        }
+      }
+      
+      // Calculate average monthly revenue
+      const avgMonthlyRevenue = totalMonths > 0 ? totalMonthlyRevenue / totalMonths : 0;
+      
+      // Determine eligibility based on criteria
+      const hasRequiredHistory = totalMonths >= 24; // 2 years minimum
+      const hasRequiredRevenue = avgMonthlyRevenue >= requiredMonthlyRevenue;
+      const consistentRevenue = hasRequiredHistory && (monthsWithSufficientRevenue / totalMonths) >= 0.75; // At least 75% of months meet criteria
+      
+      return {
+        avgMonthlyRevenue,
+        totalMonthlyRevenue,
+        monthsWithData: totalMonths,
+        monthsWithSufficientRevenue,
+        hasRequiredHistory,
+        hasRequiredRevenue,
+        consistentRevenue,
+        eligible: hasRequiredHistory && hasRequiredRevenue && consistentRevenue,
+        accounts: items.flatMap(item => item.accounts || [])
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error analyzing merchant financials: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+      
+      throw error;
+    }
+  },
+
+  /**
+   * Check if Plaid service is initialized
+   * @returns Boolean indicating if Plaid is ready
+   */
+  isInitialized() {
+    return !!plaidClient && !!process.env.PLAID_CLIENT_ID && !!process.env.PLAID_SECRET;
+  },
+
+  /**
+   * Create an asset report based on customer phone number
+   * @param accessToken Plaid access token  
+   * @param phoneNumber Customer phone number
+   * @param daysRequested Number of days of data to request
+   * @param options Additional options for the asset report
+   * @returns Object with asset report ID and token
+   */
+  async createAssetReportByPhone(accessToken: string, phoneNumber: string, daysRequested: number, options: any = {}) {
+    try {
+      // First create a regular asset report
+      const assetReport = await this.createAssetReport(accessToken, daysRequested, options);
+      
+      // Log the creation with the phone reference
+      logger.info({
+        message: `Created asset report for customer with phone: ${phoneNumber}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          phoneNumber,
+          assetReportId: assetReport.assetReportId,
+          daysRequested
+        }
+      });
+      
+      return assetReport;
+    } catch (error) {
+      logger.error({
+        message: `Error creating asset report by phone: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "plaid",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          phoneNumber,
+          daysRequested
+        }
+      });
+      
+      throw error;
+    }
   }
 };
