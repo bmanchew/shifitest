@@ -1,0 +1,228 @@
+. CSRF Token Handling
+Issue: The application still has some inconsistencies in CSRF token handling, with multiple approaches used across different components.
+Recommendation:
+typescript
+// Create a centralized CSRF token management utility in /client/src/lib/csrf.ts
+export const refreshCsrfToken = async (): Promise<void> => {
+  try {
+    const response = await fetch('/api/csrf-token');
+    if (!response.ok) {
+      throw new Error('Failed to refresh CSRF token');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error refreshing CSRF token:', error);
+    throw error;
+  }
+};
+
+// Use this utility consistently across all components
+// For example, in MessageDetail.tsx:
+import { refreshCsrfToken } from '@/lib/csrf';
+
+// Before sending a message
+await refreshCsrfToken();
+2. Inconsistent API Client Usage
+Issue: The codebase uses both apiRequest from @/lib/queryClient and apiRequest from @/lib/api in different components.
+Recommendation:
+typescript
+// Standardize on a single API client implementation in /client/src/lib/api.ts
+import { refreshCsrfToken } from './csrf';
+
+export async function apiRequest<T>(method: string, url: string, data?: any): Promise<T> {
+  try {
+    // Get CSRF token from cookies
+    const csrfToken = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('XSRF-TOKEN='))
+      ?.split('=')[1];
+    
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Add CSRF token if available
+    if (csrfToken) {
+      headers['X-CSRF-TOKEN'] = csrfToken;
+    }
+    
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: 'include', // Include cookies
+    });
+    
+    // Handle CSRF token errors
+    if (response.status === 403 && response.headers.get('X-CSRF-TOKEN-INVALID')) {
+      await refreshCsrfToken();
+      return apiRequest(method, url, data); // Retry with fresh token
+    }
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error?.message || 
+        errorData?.message || 
+        `API request failed with status ${response.status}`
+      );
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error(`API request error (${method} ${url}):`, error);
+    throw error;
+  }
+}
+
+// Then update all imports to use this single implementation
+3. Potential Race Condition in Message Marking
+Issue: In MessageDetail.tsx, messages are marked as read when the component loads, but this could happen before all messages are loaded.
+Recommendation:
+typescript
+// In MessageDetail.tsx, update the useEffect to ensure messages are loaded first
+useEffect(() => {
+  if (conversationId && !isLoadingMessages && messagesData && messagesData.messages?.length > 0) {
+    // Only mark as read when we have actual messages
+    markAsReadMutation.mutate();
+  }
+}, [conversationId, isLoadingMessages, messagesData]);
+4. Improved Error Boundary Implementation
+Issue: The application handles errors at the component level but lacks global error boundaries.
+Recommendation:
+tsx
+// Create an ErrorBoundary component in /client/src/components/ErrorBoundary.tsx
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
+
+interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+}
+
+class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false
+  };
+
+  public static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+  
+  public render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="p-6 bg-red-50 rounded-lg">
+          <h2 className="text-xl font-bold text-red-800 mb-2">Something went wrong</h2>
+          <p className="text-red-600 mb-4">
+            {this.state.error?.message || "An unexpected error occurred"}
+          </p>
+          <Button 
+            onClick={() => this.setState({ hasError: false })}
+            variant="outline"
+          >
+            Try again
+          </Button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+export default ErrorBoundary;
+
+// Use it in App.tsx or layout components
+<ErrorBoundary>
+  <Routes />
+</ErrorBoundary>
+5. Database Connection Pooling
+Issue: The database connection configuration doesn't implement proper connection pooling.
+Recommendation:
+typescript
+// In server/db.ts
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import { logger } from './services/logger';
+
+// Create a connection pool with appropriate settings
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20, // Maximum number of clients
+  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+  connectionTimeoutMillis: 5000, // Return an error after 5 seconds if connection not established
+});
+
+// Add error handling for the pool
+pool.on('error', (err) => {
+  logger.error({
+    message: `Unexpected database pool error: ${err.message}`,
+    category: "database",
+    source: "pool",
+    metadata: {
+      error: err.stack,
+    },
+  });
+});
+
+// Export the drizzle instance
+export const db = drizzle(pool);
+
+// Add a health check function
+export const checkDatabaseConnection = async () => {
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('SELECT 1');
+    return true;
+  } catch (error) {
+    logger.error({
+      message: `Database connection check failed: ${error instanceof Error ? error.message : String(error)}`,
+      category: "database",
+      source: "health-check",
+      metadata: {
+        error: error instanceof Error ? error.stack : null,
+      },
+    });
+    return false;
+  } finally {
+    if (client) client.release();
+  }
+};
+6. Improved Loading States
+Issue: Some components have loading states but don't handle partial loading scenarios well.
+Recommendation:
+tsx
+// Create reusable loading components in /client/src/components/ui/loading.tsx
+export const LoadingSpinner = ({ size = 'medium' }: { size?: 'small' | 'medium' | 'large' }) => {
+  const sizeClasses = {
+    small: 'h-4 w-4',
+    medium: 'h-8 w-8',
+    large: 'h-12 w-12',
+  };
+  
+  return (
+    <div className={`animate-spin rounded-full border-b-2 border-t-2 border-primary ${sizeClasses[size]}`} />
+  );
+};
+
+export const LoadingOverlay = ({ message = 'Loading...' }: { message?: string }) => {
+  return (
+    <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center z-50">
+      <LoadingSpinner size="large" />
+      <p className="mt-4 text-gray-600">{message}</p>
+    </div>
+  );
+};
+
+// Use these components consistently throughout the application
