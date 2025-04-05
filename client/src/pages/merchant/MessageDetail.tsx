@@ -73,6 +73,22 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+// Define response interfaces for API calls
+interface ConversationResponse {
+  conversation?: Conversation;
+  success?: boolean;
+  message?: string;
+  [key: string]: any; // Allow for additional properties
+}
+
+interface MessagesResponse {
+  messages?: Message[];
+  data?: Message[];
+  success?: boolean;
+  message?: string;
+  [key: string]: any;
+}
+
 export default function MessageDetail() {
   const { id } = useParams();
   const [, navigate] = useLocation();
@@ -95,7 +111,7 @@ export default function MessageDetail() {
     isLoading: isLoadingConversation,
     error: conversationError,
     refetch: refetchConversation,
-  } = useQuery({
+  } = useQuery<ConversationResponse>({
     queryKey: [`/api/communications/merchant/${conversationId}`],
     queryFn: async () => {
       return apiRequest("GET", `/api/communications/merchant/${conversationId}`);
@@ -108,7 +124,7 @@ export default function MessageDetail() {
     isLoading: isLoadingMessages,
     error: messagesError,
     refetch: refetchMessages,
-  } = useQuery({
+  } = useQuery<MessagesResponse>({
     queryKey: [`/api/communications/merchant/${conversationId}/messages`],
     queryFn: async () => {
       return apiRequest("GET", `/api/communications/merchant/${conversationId}/messages`);
@@ -271,7 +287,14 @@ export default function MessageDetail() {
   // Mark messages as read when viewing conversation
   useEffect(() => {
     if (conversationId && !isLoadingMessages && messagesData) {
-      markAsReadMutation.mutate();
+      // Check if messagesData has any messages before marking as read
+      const hasMessages = 
+        Array.isArray(messagesData.messages) && messagesData.messages.length > 0 ||
+        Array.isArray(messagesData) && messagesData.length > 0;
+        
+      if (hasMessages) {
+        markAsReadMutation.mutate();
+      }
     }
   }, [conversationId, isLoadingMessages, messagesData]);
 

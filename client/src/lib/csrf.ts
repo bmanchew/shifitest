@@ -14,6 +14,22 @@ let tokenFetchTime: number | null = null;
 const TOKEN_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
+ * Refresh the CSRF token
+ * This is the recommended method for components to call when they need to ensure they have a fresh token
+ */
+export const refreshCsrfToken = async (): Promise<{ csrfToken: string }> => {
+  try {
+    // Force a new token fetch by clearing the current one
+    clearCsrfToken();
+    const token = await fetchCsrfToken();
+    return { csrfToken: token };
+  } catch (error) {
+    console.error('Error refreshing CSRF token:', error);
+    throw error;
+  }
+};
+
+/**
  * Fetch a CSRF token from the server with retry logic
  */
 export const fetchCsrfToken = async (): Promise<string> => {
