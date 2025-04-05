@@ -46,6 +46,7 @@ export const ticketStatusEnum = pgEnum("ticket_status", [
   "pending_customer",
   "resolved",
   "closed",
+  "under_review", // Added for automated assignment
 ]);
 
 export const ticketPriorityEnum = pgEnum("ticket_priority", [
@@ -59,7 +60,26 @@ export const ticketCategoryEnum = pgEnum("ticket_category", [
   "accounting",
   "customer_issue",
   "technical_issue",
+  "payment_processing",
+  "contract_management",
+  "funding",
+  "api_integration",
+  "security",
   "other",
+]);
+
+// Knowledge base article types
+export const kbArticleStatusEnum = pgEnum("kb_article_status", [
+  "draft",
+  "published",
+  "archived",
+]);
+
+// SLA status enums
+export const slaStatusEnum = pgEnum("sla_status", [
+  "within_target",
+  "at_risk",
+  "breached",
 ]);
 export const contractStatusEnum = pgEnum("contract_status", [
   "pending",
@@ -973,8 +993,14 @@ export const supportTickets = pgTable("support_tickets", {
   conversationId: integer("conversation_id").references(() => conversations.id), // Associated conversation for ongoing communication
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
+  firstResponseAt: timestamp("first_response_at"), // When the ticket received its first response
   resolvedAt: timestamp("resolved_at"),
   closedAt: timestamp("closed_at"),
+  slaStatus: slaStatusEnum("sla_status").default("within_target"), // SLA status tracking
+  dueBy: timestamp("due_by"), // When the ticket is due by according to SLA
+  tags: text("tags").array(), // Tags for categorizing tickets
+  kbArticleIds: integer("kb_article_ids").array(), // Related knowledge base articles
+  relatedTickets: integer("related_tickets").array(), // IDs of related tickets
   metadata: text("metadata"), // JSON stringified additional data
 });
 
@@ -1092,6 +1118,192 @@ export type InsertTicketAttachment = z.infer<typeof insertTicketAttachmentSchema
 
 export type TicketActivityLog = typeof ticketActivityLog.$inferSelect;
 export type InsertTicketActivityLog = z.infer<typeof insertTicketActivityLogSchema>;
+
+// Support Agent tables for intelligent routing
+export const supportAgents = pgTable("support_agents", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull().unique(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  specialties: text("specialties").array(), // Specialities like "accounting", "technical", etc.
+  currentWorkload: integer("current_workload").default(0), // Number of active tickets assigned
+  maxWorkload: integer("max_workload").default(10), // Maximum workload capacity
+  isAvailable: boolean("is_available").default(true), // Whether agent is available for new assignments
+  lastAssignedAt: timestamp("last_assigned_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  metadata: text("metadata"), // JSON stringified additional data
+});
+
+export const supportAgentPerformance = pgTable("support_agent_performance", {
+  id: serial("id").primaryKey(),
+  agentId: integer("agent_id").references(() => supportAgents.id).notNull(),
+  period: text("period").notNull(), // "daily", "weekly", "monthly"
+  date: timestamp("date").notNull(), // The date this performance record is for
+  ticketsAssigned: integer("tickets_assigned").default(0),
+  ticketsResolved: integer("tickets_resolved").default(0),
+  averageResolutionTimeHours: doublePrecision("average_resolution_time_hours"),
+  averageResponseTimeHours: doublePrecision("average_response_time_hours"),
+  customerSatisfactionScore: doublePrecision("customer_satisfaction_score"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// SLA configuration for tickets
+export const ticketSlaConfigs = pgTable("ticket_sla_configs", {
+  id: serial("id").primaryKey(),
+  priority: ticketPriorityEnum("priority").notNull(),
+  category: ticketCategoryEnum("category"), // If null, applies to all categories
+  firstResponseTimeHours: integer("first_response_time_hours").notNull(),
+  resolutionTimeHours: integer("resolution_time_hours").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  createdBy: integer("created_by").references(() => users.id),
+});
+
+// Knowledge Base Categories for organizing KB articles
+export const knowledgeCategories = pgTable("knowledge_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  icon: text("icon"),
+  parentId: integer("parent_id").references(() => knowledgeCategories.id),
+  order: integer("order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  metadata: text("metadata"),
+});
+
+// Knowledge Tags for tagging KB articles
+export const knowledgeTags = pgTable("knowledge_tags", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+// Knowledge Base for self-service and internal documentation
+export const knowledgeBaseArticles = pgTable("knowledge_base_articles", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  slug: text("slug").notNull().unique(),
+  content: text("content").notNull(),
+  summary: text("summary"),
+  categoryId: integer("category_id").references(() => knowledgeCategories.id),
+  legacyCategory: ticketCategoryEnum("legacy_category"), // For backwards compatibility
+  subcategory: text("subcategory"),
+  status: kbArticleStatusEnum("status").notNull().default("draft"),
+  authorId: integer("author_id").references(() => users.id).notNull(),
+  views: integer("views").default(0),
+  helpful: integer("helpful").default(0),
+  notHelpful: integer("not_helpful").default(0),
+  tags: text("tags").array(),
+  relatedArticleIds: integer("related_article_ids").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  publishedAt: timestamp("published_at"),
+  searchKeywords: text("search_keywords"), // Additional keywords for search optimization
+  metadata: text("metadata"), // JSON stringified additional data
+});
+
+// Article Tags for many-to-many relationship between articles and tags
+export const articleTags = pgTable("article_tags", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id").references(() => knowledgeBaseArticles.id).notNull(),
+  tagId: integer("tag_id").references(() => knowledgeTags.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Article Feedback for tracking user feedback on KB articles
+export const articleFeedback = pgTable("article_feedback", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id").references(() => knowledgeBaseArticles.id).notNull(),
+  userId: integer("user_id").references(() => users.id),
+  merchantId: integer("merchant_id").references(() => merchants.id),
+  isHelpful: boolean("is_helpful"),
+  comment: text("comment"),
+  createdAt: timestamp("created_at").defaultNow(),
+  metadata: text("metadata"),
+});
+
+// Insert schemas for new tables
+export const insertSupportAgentSchema = createInsertSchema(supportAgents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastAssignedAt: true,
+});
+
+export const insertSupportAgentPerformanceSchema = createInsertSchema(supportAgentPerformance).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTicketSlaConfigSchema = createInsertSchema(ticketSlaConfigs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertKnowledgeCategorySchema = createInsertSchema(knowledgeCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertKnowledgeTagSchema = createInsertSchema(knowledgeTags).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertKnowledgeBaseArticleSchema = createInsertSchema(knowledgeBaseArticles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+  views: true,
+  helpful: true,
+  notHelpful: true,
+});
+
+export const insertArticleTagSchema = createInsertSchema(articleTags).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertArticleFeedbackSchema = createInsertSchema(articleFeedback).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Support agent types
+export type SupportAgent = typeof supportAgents.$inferSelect;
+export type InsertSupportAgent = z.infer<typeof insertSupportAgentSchema>;
+
+export type SupportAgentPerformance = typeof supportAgentPerformance.$inferSelect;
+export type InsertSupportAgentPerformance = z.infer<typeof insertSupportAgentPerformanceSchema>;
+
+export type TicketSlaConfig = typeof ticketSlaConfigs.$inferSelect;
+export type InsertTicketSlaConfig = z.infer<typeof insertTicketSlaConfigSchema>;
+
+// Knowledge base types
+export type KnowledgeCategory = typeof knowledgeCategories.$inferSelect;
+export type InsertKnowledgeCategory = z.infer<typeof insertKnowledgeCategorySchema>;
+
+export type KnowledgeTag = typeof knowledgeTags.$inferSelect;
+export type InsertKnowledgeTag = z.infer<typeof insertKnowledgeTagSchema>;
+
+export type KnowledgeBaseArticle = typeof knowledgeBaseArticles.$inferSelect;
+export type InsertKnowledgeBaseArticle = z.infer<typeof insertKnowledgeBaseArticleSchema>;
+
+export type ArticleTag = typeof articleTags.$inferSelect;
+export type InsertArticleTag = z.infer<typeof insertArticleTagSchema>;
+
+export type ArticleFeedback = typeof articleFeedback.$inferSelect;
+export type InsertArticleFeedback = z.infer<typeof insertArticleFeedbackSchema>;
 
 // Email verification tokens
 export const emailVerificationTokens = pgTable("email_verification_tokens", {

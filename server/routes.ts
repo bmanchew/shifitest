@@ -103,6 +103,7 @@ import registerSesameAIRoutes from "./routes/sesameAI"; // Import SesameAI route
 import registerFinancialSherpaRoutes from "./routes/financialSherpa"; // Import Financial Sherpa routes
 import authRouter from "./routes/auth.routes"; // Import auth routes
 import investorRouter from "./routes/investor"; // Import investor portal routes
+import knowledgeBaseRouter from "./routes/knowledge-base"; // Import knowledge base routes
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available

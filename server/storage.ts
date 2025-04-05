@@ -34,6 +34,18 @@ import {
   ticketActivityLog, TicketActivityLog, InsertTicketActivityLog,
   notifications, Notification, InsertNotification,
   logs, Log, InsertLog,
+
+  // Support agent related schemas
+  supportAgents, SupportAgent, InsertSupportAgent,
+  supportAgentPerformance, SupportAgentPerformance, InsertSupportAgentPerformance,
+  ticketSlaConfigs, TicketSlaConfig, InsertTicketSlaConfig,
+  
+  // Knowledge base related schemas
+  knowledgeBaseArticles, KnowledgeBaseArticle, InsertKnowledgeBaseArticle,
+  knowledgeCategories, KnowledgeCategory, InsertKnowledgeCategory,
+  knowledgeTags, KnowledgeTag, InsertKnowledgeTag,
+  articleTags, ArticleTag, InsertArticleTag,
+  articleFeedback, ArticleFeedback, InsertArticleFeedback,
   
   // Integration related schemas and types
   assetReports, AssetReport, InsertAssetReport,
@@ -331,6 +343,62 @@ export interface IStorage {
   // Ticket Activity Log operations
   createTicketActivityLog(activity: InsertTicketActivityLog): Promise<TicketActivityLog>;
   getTicketActivityLogsByTicketId(ticketId: number): Promise<TicketActivityLog[]>;
+  
+  // Support Agent operations
+  createSupportAgent(agent: InsertSupportAgent): Promise<SupportAgent>;
+  getSupportAgent(id: number): Promise<SupportAgent | undefined>;
+  getSupportAgentByUserId(userId: number): Promise<SupportAgent | undefined>;
+  getAllSupportAgents(): Promise<SupportAgent[]>;
+  getActiveSupportAgents(): Promise<SupportAgent[]>;
+  updateSupportAgent(id: number, data: Partial<SupportAgent>): Promise<SupportAgent | undefined>;
+  getSupportAgentsBySpecialty(specialty: string): Promise<SupportAgent[]>;
+  
+  // Support Agent Performance operations
+  createSupportAgentPerformance(performance: InsertSupportAgentPerformance): Promise<SupportAgentPerformance>;
+  getSupportAgentPerformance(id: number): Promise<SupportAgentPerformance | undefined>;
+  getSupportAgentPerformanceByAgentId(agentId: number): Promise<SupportAgentPerformance[]>;
+  getPerformanceByDateRange(agentId: number, startDate: Date, endDate: Date): Promise<SupportAgentPerformance[]>;
+  updateSupportAgentPerformance(id: number, data: Partial<SupportAgentPerformance>): Promise<SupportAgentPerformance | undefined>;
+  
+  // SLA Configuration operations
+  createTicketSlaConfig(config: InsertTicketSlaConfig): Promise<TicketSlaConfig>;
+  getTicketSlaConfig(id: number): Promise<TicketSlaConfig | undefined>;
+  getTicketSlaConfigByCategory(category: string): Promise<TicketSlaConfig | undefined>;
+  getTicketSlaConfigByPriority(priority: string): Promise<TicketSlaConfig | undefined>;
+  getAllTicketSlaConfigs(): Promise<TicketSlaConfig[]>;
+  updateTicketSlaConfig(id: number, data: Partial<TicketSlaConfig>): Promise<TicketSlaConfig | undefined>;
+  
+  // Knowledge Base operations
+  createKnowledgeBaseArticle(article: InsertKnowledgeBaseArticle): Promise<KnowledgeBaseArticle>;
+  getKnowledgeBaseArticle(id: number): Promise<KnowledgeBaseArticle | undefined>;
+  getKnowledgeBaseArticlesByCategory(category: string): Promise<KnowledgeBaseArticle[]>;
+  getKnowledgeBaseArticlesByTag(tag: string): Promise<KnowledgeBaseArticle[]>;
+  searchKnowledgeBase(query: string): Promise<KnowledgeBaseArticle[]>;
+  getAllKnowledgeBaseArticles(options?: { limit?: number, offset?: number, status?: string }): Promise<KnowledgeBaseArticle[]>;
+  updateKnowledgeBaseArticle(id: number, data: Partial<KnowledgeBaseArticle>): Promise<KnowledgeBaseArticle | undefined>;
+  getSuggestedKnowledgeBaseArticles(ticketId: number): Promise<KnowledgeBaseArticle[]>;
+  
+  // Knowledge Category operations
+  createKnowledgeCategory(category: InsertKnowledgeCategory): Promise<KnowledgeCategory>;
+  getKnowledgeCategory(id: number): Promise<KnowledgeCategory | undefined>;
+  getAllKnowledgeCategories(): Promise<KnowledgeCategory[]>;
+  updateKnowledgeCategory(id: number, data: Partial<KnowledgeCategory>): Promise<KnowledgeCategory | undefined>;
+  
+  // Knowledge Tag operations
+  createKnowledgeTag(tag: InsertKnowledgeTag): Promise<KnowledgeTag>;
+  getKnowledgeTag(id: number): Promise<KnowledgeTag | undefined>;
+  getAllKnowledgeTags(): Promise<KnowledgeTag[]>;
+  updateKnowledgeTag(id: number, data: Partial<KnowledgeTag>): Promise<KnowledgeTag | undefined>;
+  
+  // Article Tag operations
+  createArticleTag(tag: InsertArticleTag): Promise<ArticleTag>;
+  getArticleTagsByArticleId(articleId: number): Promise<ArticleTag[]>;
+  deleteArticleTag(id: number): Promise<void>;
+  
+  // Article Feedback operations
+  createArticleFeedback(feedback: InsertArticleFeedback): Promise<ArticleFeedback>;
+  getArticleFeedbackByArticleId(articleId: number): Promise<ArticleFeedback[]>;
+  getArticleFeedbackStats(articleId: number): Promise<{ helpful: number, notHelpful: number }>;
   
 }
 
@@ -4180,6 +4248,352 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error updating document library item ${id}:`, error);
       return undefined;
+    }
+  }
+
+  // Knowledge Base operations
+  async createKnowledgeBaseArticle(article: InsertKnowledgeBaseArticle): Promise<KnowledgeBaseArticle> {
+    try {
+      const [newArticle] = await db.insert(knowledgeBaseArticles).values(article).returning();
+      return newArticle;
+    } catch (error) {
+      console.error('Error creating knowledge base article:', error);
+      throw new Error(`Failed to create knowledge base article: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getKnowledgeBaseArticle(id: number): Promise<KnowledgeBaseArticle | undefined> {
+    try {
+      const [article] = await db.select().from(knowledgeBaseArticles).where(eq(knowledgeBaseArticles.id, id));
+      return article;
+    } catch (error) {
+      console.error(`Error retrieving knowledge base article ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getKnowledgeBaseArticlesByCategory(category: string): Promise<KnowledgeBaseArticle[]> {
+    try {
+      // First, find the category by slug
+      const [categoryRecord] = await db.select().from(knowledgeCategories).where(eq(knowledgeCategories.slug, category));
+      
+      if (!categoryRecord) {
+        return [];
+      }
+      
+      // Then get all articles in that category
+      return await db.select().from(knowledgeBaseArticles)
+        .where(eq(knowledgeBaseArticles.categoryId, categoryRecord.id))
+        .orderBy(desc(knowledgeBaseArticles.createdAt));
+    } catch (error) {
+      console.error(`Error retrieving knowledge base articles for category ${category}:`, error);
+      return [];
+    }
+  }
+
+  async getKnowledgeBaseArticlesByTag(tag: string): Promise<KnowledgeBaseArticle[]> {
+    try {
+      // First, find the tag by slug
+      const [tagRecord] = await db.select().from(knowledgeTags).where(eq(knowledgeTags.slug, tag));
+      
+      if (!tagRecord) {
+        return [];
+      }
+      
+      // Then find all articleTag records for this tag
+      const articleTags = await db.select().from(articleTags).where(eq(articleTags.tagId, tagRecord.id));
+      
+      if (articleTags.length === 0) {
+        return [];
+      }
+      
+      // Get all articles with these IDs
+      const articleIds = articleTags.map(articleTag => articleTag.articleId);
+      return await db.select().from(knowledgeBaseArticles)
+        .where(inArray(knowledgeBaseArticles.id, articleIds))
+        .orderBy(desc(knowledgeBaseArticles.createdAt));
+    } catch (error) {
+      console.error(`Error retrieving knowledge base articles for tag ${tag}:`, error);
+      return [];
+    }
+  }
+
+  async searchKnowledgeBase(query: string): Promise<KnowledgeBaseArticle[]> {
+    try {
+      // Simple search implementation - look for query in title or content
+      return await db.select().from(knowledgeBaseArticles)
+        .where(
+          or(
+            like(knowledgeBaseArticles.title, `%${query}%`),
+            like(knowledgeBaseArticles.content, `%${query}%`)
+          )
+        )
+        .orderBy(desc(knowledgeBaseArticles.createdAt));
+    } catch (error) {
+      console.error(`Error searching knowledge base for "${query}":`, error);
+      return [];
+    }
+  }
+
+  async getAllKnowledgeBaseArticles(options?: { limit?: number, offset?: number, status?: string }): Promise<KnowledgeBaseArticle[]> {
+    try {
+      let query = db.select().from(knowledgeBaseArticles);
+      
+      // Apply status filter if provided
+      if (options?.status) {
+        if (options.status === 'published') {
+          query = query.where(eq(knowledgeBaseArticles.isPublished, true));
+        } else if (options.status === 'draft') {
+          query = query.where(eq(knowledgeBaseArticles.isPublished, false));
+        }
+      }
+      
+      // Apply sorting
+      query = query.orderBy(desc(knowledgeBaseArticles.createdAt));
+      
+      // Apply pagination if provided
+      if (options?.limit !== undefined) {
+        query = query.limit(options.limit);
+        
+        if (options?.offset !== undefined) {
+          query = query.offset(options.offset);
+        }
+      }
+      
+      return await query;
+    } catch (error) {
+      console.error('Error retrieving all knowledge base articles:', error);
+      return [];
+    }
+  }
+
+  async updateKnowledgeBaseArticle(id: number, data: Partial<KnowledgeBaseArticle>): Promise<KnowledgeBaseArticle | undefined> {
+    try {
+      const [updatedArticle] = await db.update(knowledgeBaseArticles)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(knowledgeBaseArticles.id, id))
+        .returning();
+      
+      return updatedArticle;
+    } catch (error) {
+      console.error(`Error updating knowledge base article ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSuggestedKnowledgeBaseArticles(ticketId: number): Promise<KnowledgeBaseArticle[]> {
+    try {
+      // Get the ticket details
+      const ticket = await this.getSupportTicket(ticketId);
+      if (!ticket) {
+        return [];
+      }
+      
+      // Extract keywords from ticket title and description
+      const keywords = extractKeywords(`${ticket.title} ${ticket.description}`);
+      
+      if (keywords.length === 0) {
+        // If no meaningful keywords, return some general articles
+        return await db.select().from(knowledgeBaseArticles)
+          .where(eq(knowledgeBaseArticles.isPublished, true))
+          .orderBy(desc(knowledgeBaseArticles.viewCount))
+          .limit(5);
+      }
+      
+      // Search for articles matching these keywords
+      const searchQueries = keywords.map(keyword => 
+        or(
+          like(knowledgeBaseArticles.title, `%${keyword}%`),
+          like(knowledgeBaseArticles.content, `%${keyword}%`)
+        )
+      );
+      
+      return await db.select().from(knowledgeBaseArticles)
+        .where(
+          and(
+            eq(knowledgeBaseArticles.isPublished, true),
+            or(...searchQueries)
+          )
+        )
+        .orderBy(desc(knowledgeBaseArticles.viewCount))
+        .limit(5);
+    } catch (error) {
+      console.error(`Error getting suggested articles for ticket ${ticketId}:`, error);
+      return [];
+    }
+  }
+  
+  // Helper function to extract meaningful keywords
+  // This is a simple implementation - in production, you'd want a more sophisticated approach
+  private extractKeywords(text: string): string[] {
+    if (!text) return [];
+    
+    // Remove common words and keep only significant terms
+    const commonWords = ['a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'about', 'as'];
+    const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/);
+    
+    // Filter out common words and short words
+    const keywords = words.filter(word => word.length > 3 && !commonWords.includes(word));
+    
+    // Get unique keywords
+    return [...new Set(keywords)];
+  }
+
+  // Knowledge Category operations
+  async createKnowledgeCategory(category: InsertKnowledgeCategory): Promise<KnowledgeCategory> {
+    try {
+      const [newCategory] = await db.insert(knowledgeCategories).values(category).returning();
+      return newCategory;
+    } catch (error) {
+      console.error('Error creating knowledge category:', error);
+      throw new Error(`Failed to create knowledge category: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getKnowledgeCategory(id: number): Promise<KnowledgeCategory | undefined> {
+    try {
+      const [category] = await db.select().from(knowledgeCategories).where(eq(knowledgeCategories.id, id));
+      return category;
+    } catch (error) {
+      console.error(`Error retrieving knowledge category ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getAllKnowledgeCategories(): Promise<KnowledgeCategory[]> {
+    try {
+      return await db.select().from(knowledgeCategories).orderBy(knowledgeCategories.order);
+    } catch (error) {
+      console.error('Error retrieving all knowledge categories:', error);
+      return [];
+    }
+  }
+
+  async updateKnowledgeCategory(id: number, data: Partial<KnowledgeCategory>): Promise<KnowledgeCategory | undefined> {
+    try {
+      const [updatedCategory] = await db.update(knowledgeCategories)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(knowledgeCategories.id, id))
+        .returning();
+      
+      return updatedCategory;
+    } catch (error) {
+      console.error(`Error updating knowledge category ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  // Knowledge Tag operations
+  async createKnowledgeTag(tag: InsertKnowledgeTag): Promise<KnowledgeTag> {
+    try {
+      const [newTag] = await db.insert(knowledgeTags).values(tag).returning();
+      return newTag;
+    } catch (error) {
+      console.error('Error creating knowledge tag:', error);
+      throw new Error(`Failed to create knowledge tag: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getKnowledgeTag(id: number): Promise<KnowledgeTag | undefined> {
+    try {
+      const [tag] = await db.select().from(knowledgeTags).where(eq(knowledgeTags.id, id));
+      return tag;
+    } catch (error) {
+      console.error(`Error retrieving knowledge tag ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getAllKnowledgeTags(): Promise<KnowledgeTag[]> {
+    try {
+      return await db.select().from(knowledgeTags).orderBy(knowledgeTags.name);
+    } catch (error) {
+      console.error('Error retrieving all knowledge tags:', error);
+      return [];
+    }
+  }
+
+  async updateKnowledgeTag(id: number, data: Partial<KnowledgeTag>): Promise<KnowledgeTag | undefined> {
+    try {
+      const [updatedTag] = await db.update(knowledgeTags)
+        .set(data)
+        .where(eq(knowledgeTags.id, id))
+        .returning();
+      
+      return updatedTag;
+    } catch (error) {
+      console.error(`Error updating knowledge tag ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  // Article Tag operations
+  async createArticleTag(tag: InsertArticleTag): Promise<ArticleTag> {
+    try {
+      const [newArticleTag] = await db.insert(articleTags).values(tag).returning();
+      return newArticleTag;
+    } catch (error) {
+      console.error('Error creating article tag association:', error);
+      throw new Error(`Failed to create article tag association: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getArticleTagsByArticleId(articleId: number): Promise<ArticleTag[]> {
+    try {
+      return await db.select().from(articleTags).where(eq(articleTags.articleId, articleId));
+    } catch (error) {
+      console.error(`Error retrieving tags for article ${articleId}:`, error);
+      return [];
+    }
+  }
+
+  async deleteArticleTag(id: number): Promise<void> {
+    try {
+      await db.delete(articleTags).where(eq(articleTags.id, id));
+    } catch (error) {
+      console.error(`Error deleting article tag association ${id}:`, error);
+      throw new Error(`Failed to delete article tag association: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  // Article Feedback operations
+  async createArticleFeedback(feedback: InsertArticleFeedback): Promise<ArticleFeedback> {
+    try {
+      const [newFeedback] = await db.insert(articleFeedback).values(feedback).returning();
+      return newFeedback;
+    } catch (error) {
+      console.error('Error creating article feedback:', error);
+      throw new Error(`Failed to create article feedback: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getArticleFeedbackByArticleId(articleId: number): Promise<ArticleFeedback[]> {
+    try {
+      return await db.select().from(articleFeedback)
+        .where(eq(articleFeedback.articleId, articleId))
+        .orderBy(desc(articleFeedback.createdAt));
+    } catch (error) {
+      console.error(`Error retrieving feedback for article ${articleId}:`, error);
+      return [];
+    }
+  }
+
+  async getArticleFeedbackStats(articleId: number): Promise<{ helpful: number, notHelpful: number }> {
+    try {
+      const allFeedback = await db.select().from(articleFeedback)
+        .where(eq(articleFeedback.articleId, articleId));
+      
+      // Count helpful and not helpful feedback
+      const helpfulCount = allFeedback.filter(feedback => feedback.isHelpful === true).length;
+      const notHelpfulCount = allFeedback.filter(feedback => feedback.isHelpful === false).length;
+      
+      return {
+        helpful: helpfulCount,
+        notHelpful: notHelpfulCount
+      };
+    } catch (error) {
+      console.error(`Error calculating feedback stats for article ${articleId}:`, error);
+      return { helpful: 0, notHelpful: 0 };
     }
   }
 }
