@@ -1,0 +1,2542 @@
+New Feature Suggestions for ShiFi Tester Ticket System
+Based on a thorough analysis of the ShiFi Tester codebase, particularly the ticket system components, I've identified several valuable features that could enhance functionality, improve user experience, and add business value. This document outlines these feature suggestions with implementation details.
+1. Ticket Analytics Dashboard
+Description
+Create a comprehensive analytics dashboard for both merchants and administrators to visualize ticket data, identify trends, and make data-driven decisions.
+Implementation Details
+Backend Requirements
+typescript
+// File: /server/routes/analytics.ts
+import { Router, Request, Response } from 'express';
+import { authenticateToken } from '../middleware/auth';
+import { storage } from '../storage';
+import { logger } from '../services/logger';
+
+const router = Router();
+
+// Apply authentication to all routes
+router.use(authenticateToken);
+
+/**
+ * Get ticket analytics data
+ */
+router.get("/tickets", async (req: Request, res: Response) => {
+  try {
+    const { merchantId, startDate, endDate, groupBy } = req.query;
+    
+    // Validate query parameters
+    const parsedMerchantId = merchantId ? parseInt(merchantId as string) : undefined;
+    const parsedStartDate = startDate ? new Date(startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default to last 30 days
+    const parsedEndDate = endDate ? new Date(endDate as string) : new Date();
+    const parsedGroupBy = (groupBy as string) || 'day'; // Default to daily grouping
+    
+    // Get all tickets within date range
+    let tickets = await storage.getAllSupportTickets();
+    
+    // Filter by date range
+    tickets = tickets.filter(ticket => {
+      const ticketDate = new Date(ticket.createdAt);
+      return ticketDate >= parsedStartDate && ticketDate <= parsedEndDate;
+    });
+    
+    // Filter by merchant if specified
+    if (parsedMerchantId) {
+      tickets = tickets.filter(ticket => ticket.merchantId === parsedMerchantId);
+    }
+    
+    // Calculate analytics data
+    const analytics = {
+      totalTickets: tickets.length,
+      ticketsByStatus: calculateTicketsByStatus(tickets),
+      ticketsByCategory: calculateTicketsByCategory(tickets),
+      ticketsByPriority: calculateTicketsByPriority(tickets),
+      responseTimeAverage: calculateAverageResponseTime(tickets),
+      resolutionTimeAverage: calculateAverageResolutionTime(tickets),
+      ticketsOverTime: groupTicketsOverTime(tickets, parsedGroupBy),
+    };
+    
+    res.json({
+      success: true,
+      analytics,
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving ticket analytics: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "analytics",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve ticket analytics"
+    });
+  }
+});
+
+// Helper functions for analytics calculations
+function calculateTicketsByStatus(tickets) {
+  const statusCounts = {};
+  tickets.forEach(ticket => {
+    statusCounts[ticket.status] = (statusCounts[ticket.status] || 0) + 1;
+  });
+  return statusCounts;
+}
+
+function calculateTicketsByCategory(tickets) {
+  const categoryCounts = {};
+  tickets.forEach(ticket => {
+    categoryCounts[ticket.category] = (categoryCounts[ticket.category] || 0) + 1;
+  });
+  return categoryCounts;
+}
+
+function calculateTicketsByPriority(tickets) {
+  const priorityCounts = {};
+  tickets.forEach(ticket => {
+    priorityCounts[ticket.priority] = (priorityCounts[ticket.priority] || 0) + 1;
+  });
+  return priorityCounts;
+}
+
+function calculateAverageResponseTime(tickets) {
+  // Calculate average time between ticket creation and first response
+  const ticketsWithResponses = tickets.filter(ticket => ticket.firstResponseAt);
+  if (ticketsWithResponses.length === 0) return null;
+  
+  const totalResponseTime = ticketsWithResponses.reduce((sum, ticket) => {
+    const createdAt = new Date(ticket.createdAt).getTime();
+    const firstResponseAt = new Date(ticket.firstResponseAt).getTime();
+    return sum + (firstResponseAt - createdAt);
+  }, 0);
+  
+  return totalResponseTime / ticketsWithResponses.length / (60 * 60 * 1000); // Convert to hours
+}
+
+function calculateAverageResolutionTime(tickets) {
+  // Calculate average time between ticket creation and resolution
+  const resolvedTickets = tickets.filter(ticket => 
+    ticket.status === 'resolved' || ticket.status === 'closed'
+  );
+  if (resolvedTickets.length === 0) return null;
+  
+  const totalResolutionTime = resolvedTickets.reduce((sum, ticket) => {
+    const createdAt = new Date(ticket.createdAt).getTime();
+    const resolvedAt = new Date(ticket.resolvedAt || ticket.updatedAt).getTime();
+    return sum + (resolvedAt - createdAt);
+  }, 0);
+  
+  return totalResolutionTime / resolvedTickets.length / (60 * 60 * 1000); // Convert to hours
+}
+
+function groupTicketsOverTime(tickets, groupBy) {
+  const timeGroups = {};
+  
+  tickets.forEach(ticket => {
+    const date = new Date(ticket.createdAt);
+    let groupKey;
+    
+    switch(groupBy) {
+      case 'hour':
+        groupKey = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()} ${date.getHours()}:00`;
+        break;
+      case 'day':
+        groupKey = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`;
+        break;
+      case 'week':
+        // Get the first day of the week (Sunday)
+        const firstDay = new Date(date);
+        const day = date.getDay();
+        const diff = date.getDate() - day;
+        firstDay.setDate(diff);
+        groupKey = `Week of ${firstDay.getFullYear()}-${firstDay.getMonth()+1}-${firstDay.getDate()}`;
+        break;
+      case 'month':
+        groupKey = `${date.getFullYear()}-${date.getMonth()+1}`;
+        break;
+      default:
+        groupKey = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`;
+    }
+    
+    timeGroups[groupKey] = (timeGroups[groupKey] || 0) + 1;
+  });
+  
+  // Convert to array format for charting
+  return Object.entries(timeGroups).map(([label, count]) => ({
+    label,
+    count
+  })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+export default router;
+Frontend Implementation
+tsx
+// File: /client/src/pages/merchant/TicketAnalytics.tsx
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import MerchantLayout from "@/components/layout/MerchantLayout";
+import { useAuth } from "@/hooks/use-auth";
+import { BarChart, PieChart, LineChart } from "@/components/charts";
+
+export default function TicketAnalytics() {
+  const { user } = useAuth();
+  const [dateRange, setDateRange] = useState({
+    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    to: new Date(),
+  });
+  const [groupBy, setGroupBy] = useState("day");
+  
+  // Fetch analytics data
+  const { data, isLoading, isError } = useQuery({
+    queryKey: [
+      "/api/analytics/tickets", 
+      user?.merchantId, 
+      dateRange.from.toISOString(), 
+      dateRange.to.toISOString(), 
+      groupBy
+    ],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/analytics/tickets?merchantId=${user?.merchantId}&startDate=${dateRange.from.toISOString()}&endDate=${dateRange.to.toISOString()}&groupBy=${groupBy}`
+      );
+      if (!response.ok) throw new Error("Failed to fetch analytics");
+      return response.json();
+    },
+    enabled: !!user?.merchantId,
+  });
+  
+  const analytics = data?.analytics || {};
+  
+  // Format data for charts
+  const statusChartData = analytics.ticketsByStatus 
+    ? Object.entries(analytics.ticketsByStatus).map(([status, count]) => ({
+        name: status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+        value: count,
+      }))
+    : [];
+    
+  const categoryChartData = analytics.ticketsByCategory
+    ? Object.entries(analytics.ticketsByCategory).map(([category, count]) => ({
+        name: category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+        value: count,
+      }))
+    : [];
+    
+  const priorityChartData = analytics.ticketsByPriority
+    ? Object.entries(analytics.ticketsByPriority).map(([priority, count]) => ({
+        name: priority.charAt(0).toUpperCase() + priority.slice(1),
+        value: count,
+      }))
+    : [];
+    
+  const timeSeriesData = analytics.ticketsOverTime || [];
+  
+  // Loading state
+  if (isLoading) {
+    return (
+      <MerchantLayout>
+        <div className="container py-8 flex justify-center items-center min-h-[50vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </MerchantLayout>
+    );
+  }
+  
+  // Error state
+  if (isError) {
+    return (
+      <MerchantLayout>
+        <div className="container py-8">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              Failed to load analytics data. Please try again later.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </MerchantLayout>
+    );
+  }
+  
+  return (
+    <MerchantLayout>
+      <div className="container py-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">Support Ticket Analytics</h1>
+            <p className="text-muted-foreground mt-1">
+              View insights and trends from your support tickets
+            </p>
+          </div>
+        </div>
+        
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Date Range</label>
+                <DateRangePicker
+                  value={dateRange}
+                  onChange={setDateRange}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Group By</label>
+                <Select value={groupBy} onValueChange={setGroupBy}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Group by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">Daily</SelectItem>
+                    <SelectItem value="week">Weekly</SelectItem>
+                    <SelectItem value="month">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Total Tickets</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{analytics.totalTickets || 0}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Avg. Response Time</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">
+                {analytics.responseTimeAverage 
+                  ? `${analytics.responseTimeAverage.toFixed(1)} hours` 
+                  : 'N/A'}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Avg. Resolution Time</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">
+                {analytics.resolutionTimeAverage 
+                  ? `${analytics.resolutionTimeAverage.toFixed(1)} hours` 
+                  : 'N/A'}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tickets by Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <PieChart data={statusChartData} />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Tickets by Category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <PieChart data={categoryChartData} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Tickets Over Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <LineChart 
+                data={timeSeriesData} 
+                xKey="label" 
+                yKey="count" 
+                xLabel="Time Period" 
+                yLabel="Number of Tickets" 
+              />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Tickets by Priority</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <BarChart 
+                data={priorityChartData} 
+                xKey="name" 
+                yKey="value" 
+                xLabel="Priority" 
+                yLabel="Number of Tickets" 
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </MerchantLayout>
+  );
+}
+Benefits
+Provides merchants with insights into their support ticket patterns
+Helps administrators identify trends and optimize support resources
+Enables data-driven decisions for improving customer service
+Visualizes key metrics like response time and resolution time
+2. Automated Ticket Assignment and Routing
+Description
+Implement an intelligent ticket assignment system that automatically routes tickets to the appropriate support staff based on category, priority, and workload balancing.
+Implementation Details
+Backend Implementation
+typescript
+// File: /server/services/ticketAssignment.ts
+import { storage } from '../storage';
+import { logger } from './logger';
+
+interface SupportAgent {
+  id: number;
+  name: string;
+  email: string;
+  specialties: string[];
+  currentWorkload: number;
+  isAvailable: boolean;
+}
+
+/**
+ * Automatically assign a ticket to the most appropriate support agent
+ */
+export async function assignTicket(ticketId: number): Promise<number | null> {
+  try {
+    // Get ticket details
+    const ticket = await storage.getSupportTicket(ticketId);
+    if (!ticket) {
+      logger.error({
+        message: `Cannot assign ticket: Ticket ${ticketId} not found`,
+        category: 'ticket-assignment',
+        source: 'internal',
+      });
+      return null;
+    }
+    
+    // Get all available support agents
+    const agents = await storage.getSupportAgents();
+    if (!agents || agents.length === 0) {
+      logger.warn({
+        message: 'No support agents available for assignment',
+        category: 'ticket-assignment',
+        source: 'internal',
+      });
+      return null;
+    }
+    
+    // Filter out unavailable agents
+    const availableAgents = agents.filter(agent => agent.isAvailable);
+    if (availableAgents.length === 0) {
+      logger.warn({
+        message: 'No available support agents for assignment',
+        category: 'ticket-assignment',
+        source: 'internal',
+      });
+      return null;
+    }
+    
+    // Calculate assignment score for each agent
+    const agentScores = availableAgents.map(agent => {
+      let score = 0;
+      
+      // Specialty match (highest priority)
+      if (agent.specialties.includes(ticket.category)) {
+        score += 50;
+      }
+      
+      // Workload factor (lower is better)
+      score -= agent.currentWorkload * 5;
+      
+      // Priority factor (assign high priority tickets to agents with lower workload)
+      if (ticket.priority === 'urgent' || ticket.priority === 'high') {
+        score -= agent.currentWorkload * 3;
+      }
+      
+      return {
+        agentId: agent.id,
+        score,
+      };
+    });
+    
+    // Sort by score (highest first)
+    agentScores.sort((a, b) => b.score - a.score);
+    
+    // Get the best agent
+    const bestAgent = agentScores[0];
+    
+    // Assign the ticket
+    await storage.assignTicket(ticketId, bestAgent.agentId);
+    
+    // Update agent workload
+    await storage.incrementAgentWorkload(bestAgent.agentId);
+    
+    logger.info({
+      message: `Ticket ${ticketId} assigned to agent ${bestAgent.agentId}`,
+      category: 'ticket-assignment',
+      source: 'internal',
+      metadata: {
+        ticketId,
+        agentId: bestAgent.agentId,
+        score: bestAgent.score,
+      },
+    });
+    
+    return bestAgent.agentId;
+  } catch (error) {
+    logger.error({
+      message: `Error assigning ticket: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'ticket-assignment',
+      source: 'internal',
+      metadata: {
+        ticketId,
+        error: error instanceof Error ? error.stack : String(error),
+      },
+    });
+    
+    return null;
+  }
+}
+
+/**
+ * Reassign tickets when an agent becomes unavailable
+ */
+export async function reassignAgentTickets(agentId: number): Promise<void> {
+  try {
+    // Get all tickets assigned to this agent that are not resolved/closed
+    const tickets = await storage.getTicketsByAssignee(agentId, ['new', 'in_progress', 'pending_merchant', 'pending_customer']);
+    
+    logger.info({
+      message: `Reassigning ${tickets.length} tickets from agent ${agentId}`,
+      category: 'ticket-assignment',
+      source: 'internal',
+    });
+    
+    // Reassign each ticket
+    for (const ticket of tickets) {
+      await assignTicket(ticket.id);
+    }
+  } catch (error) {
+    logger.error({
+      message: `Error reassigning tickets: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'ticket-assignment',
+      source: 'internal',
+      metadata: {
+        agentId,
+        error: error instanceof Error ? error.stack : String(error),
+      },
+    });
+  }
+}
+Integration with Ticket Creation
+typescript
+// File: /server/routes/support-tickets.ts (add to existing file)
+
+// Import the ticket assignment service
+import { assignTicket } from '../services/ticketAssignment';
+
+// Add to the POST route for creating tickets
+router.post("/", async (req: Request, res: Response) => {
+  try {
+    // ... existing ticket creation code ...
+    
+    // After creating the ticket, assign it automatically
+    const assignedTo = await assignTicket(newTicket.id);
+    
+    if (assignedTo) {
+      // Update the ticket with assignment info
+      await storage.updateTicket(newTicket.id, {
+        assignedTo,
+        status: 'in_progress',
+      });
+      
+      // Log the assignment
+      logger.info({
+        message: `New ticket ${newTicket.ticketNumber} automatically assigned to agent ${assignedTo}`,
+        category: 'api',
+        source: 'support-tickets',
+      });
+    }
+    
+    // ... rest of the existing code ...
+  } catch (error) {
+    // ... existing error handling ...
+  }
+});
+Admin Interface for Assignment Rules
+tsx
+// File: /client/src/pages/admin/AssignmentRules.tsx
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import AdminLayout from "@/components/layout/AdminLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { DataTable } from "@/components/ui/data-table";
+import { ColumnDef } from "@tanstack/react-table";
+
+// Interface for support agents
+interface SupportAgent {
+  id: number;
+  name: string;
+  email: string;
+  specialties: string[];
+  currentWorkload: number;
+  isAvailable: boolean;
+}
+
+export default function AssignmentRules() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [newAgent, setNewAgent] = useState({
+    name: "",
+    email: "",
+    specialties: [] as string[],
+    isAvailable: true,
+  });
+  
+  // Fetch support agents
+  const { data: agents = [], isLoading } = useQuery({
+    queryKey: ["/api/support-agents"],
+    queryFn: async () => {
+      const response = await fetch("/api/support-agents");
+      if (!response.ok) throw new Error("Failed to fetch support agents");
+      return response.json();
+    },
+  });
+  
+  // Add new agent mutation
+  const addAgentMutation = useMutation({
+    mutationFn: async (agent) => {
+      const response = await fetch("/api/support-agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(agent),
+      });
+      if (!response.ok) throw new Error("Failed to add support agent");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/support-agents"] });
+      toast({
+        title: "Agent Added",
+        description: "The support agent has been added successfully.",
+      });
+      setNewAgent({
+        name: "",
+        email: "",
+        specialties: [],
+        isAvailable: true,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add support agent. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Update agent availability mutation
+  const updateAgentMutation = useMutation({
+    mutationFn: async ({ id, isAvailable }) => {
+      const response = await fetch(`/api/support-agents/${id}/availability`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isAvailable }),
+      });
+      if (!response.ok) throw new Error("Failed to update agent availability");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/support-agents"] });
+      toast({
+        title: "Agent Updated",
+        description: "The agent's availability has been updated.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update agent availability. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Handle form submission
+  const handleAddAgent = (e: React.FormEvent) => {
+    e.preventDefault();
+    addAgentMutation.mutate(newAgent);
+  };
+  
+  // Handle specialty selection
+  const handleSpecialtyChange = (specialty: string) => {
+    setNewAgent(prev => {
+      const specialties = prev.specialties.includes(specialty)
+        ? prev.specialties.filter(s => s !== specialty)
+        : [...prev.specialties, specialty];
+      return { ...prev, specialties };
+    });
+  };
+  
+  // Handle availability toggle
+  const handleAvailabilityChange = (id: number, isAvailable: boolean) => {
+    updateAgentMutation.mutate({ id, isAvailable });
+  };
+  
+  // Column definitions for the DataTable
+  const columns: ColumnDef<SupportAgent>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+    },
+    {
+      accessorKey: "specialties",
+      header: "Specialties",
+      cell: ({ row }) => {
+        const specialties = row.original.specialties;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {specialties.map(specialty => (
+              <span key={specialty} className="px-2 py-1 bg-muted rounded-full text-xs">
+                {specialty.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+              </span>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "currentWorkload",
+      header: "Current Workload",
+      cell: ({ row }) => `${row.original.currentWorkload} tickets`,
+    },
+    {
+      accessorKey: "isAvailable",
+      header: "Available",
+      cell: ({ row }) => {
+        const isAvailable = row.original.isAvailable;
+        return (
+          <div className="flex items-center">
+            <Switch
+              checked={isAvailable}
+              onCheckedChange={(checked) => handleAvailabilityChange(row.original.id, checked)}
+            />
+            <span className="ml-2">{isAvailable ? "Yes" : "No"}</span>
+          </div>
+        );
+      },
+    },
+  ];
+  
+  return (
+    <AdminLayout>
+      <div className="container mx-auto py-6">
+        <h1 className="text-3xl font-bold tracking-tight mb-6">Ticket Assignment Rules</h1>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Add New Agent */}
+          <Card className="md:col-span-1">
+            <CardHeader>
+              <CardTitle>Add Support Agent</CardTitle>
+              <CardDescription>
+                Create a new support agent with specialties
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAddAgent} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    value={newAgent.name}
+                    onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newAgent.email}
+                    onChange={(e) => setNewAgent({ ...newAgent, email: e.target.value })}
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Specialties</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {["accounting", "customer_issue", "technical_issue", "other"].map(specialty => (
+                      <div key={specialty} className="flex items-center space-x-2">
+                        <Switch
+                          id={`specialty-${specialty}`}
+                          checked={newAgent.specialties.includes(specialty)}
+                          onCheckedChange={() => handleSpecialtyChange(specialty)}
+                        />
+                        <Label htmlFor={`specialty-${specialty}`}>
+                          {specialty.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="available"
+                    checked={newAgent.isAvailable}
+                    onCheckedChange={(checked) => setNewAgent({ ...newAgent, isAvailable: checked })}
+                  />
+                  <Label htmlFor="available">Available for assignments</Label>
+                </div>
+              </form>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                onClick={handleAddAgent} 
+                disabled={addAgentMutation.isPending}
+                className="w-full"
+              >
+                {addAgentMutation.isPending ? "Adding..." : "Add Agent"}
+              </Button>
+            </CardFooter>
+          </Card>
+          
+          {/* Support Agents List */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle>Support Agents</CardTitle>
+              <CardDescription>
+                Manage support agents and their availability
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={columns}
+                data={agents}
+                isLoading={isLoading}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </AdminLayout>
+  );
+}
+Benefits
+Reduces response time by automatically assigning tickets
+Ensures balanced workload distribution among support staff
+Routes tickets to agents with relevant expertise
+Provides flexibility for manual overrides when needed
+Improves overall support efficiency
+3. Knowledge Base and Self-Service Portal
+Description
+Create a searchable knowledge base that allows merchants to find answers to common questions and resolve issues without creating support tickets.
+Implementation Details
+Database Schema
+typescript
+// File: /shared/schemas/knowledgeBase.schema.ts
+import { pgTable, serial, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { merchants } from "./merchant.schema";
+
+export const knowledgeCategories = pgTable("knowledge_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  icon: text("icon"),
+  parentId: integer("parent_id").references(() => knowledgeCategories.id),
+  order: integer("order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const knowledgeArticles = pgTable("knowledge_articles", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  slug: text("slug").notNull().unique(),
+  content: text("content").notNull(),
+  excerpt: text("excerpt"),
+  categoryId: integer("category_id").references(() => knowledgeCategories.id).notNull(),
+  authorId: integer("author_id").references(() => merchants.id),
+  isPublished: boolean("is_published").default(true),
+  viewCount: integer("view_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  publishedAt: timestamp("published_at"),
+});
+
+export const knowledgeTags = pgTable("knowledge_tags", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+});
+
+export const articleTags = pgTable("article_tags", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id").references(() => knowledgeArticles.id).notNull(),
+  tagId: integer("tag_id").references(() => knowledgeTags.id).notNull(),
+});
+
+export const articleFeedback = pgTable("article_feedback", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id").references(() => knowledgeArticles.id).notNull(),
+  merchantId: integer("merchant_id").references(() => merchants.id),
+  isHelpful: boolean("is_helpful"),
+  comment: text("comment"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+Backend API Routes
+typescript
+// File: /server/routes/knowledge-base.ts
+import { Router, Request, Response } from 'express';
+import { authenticateToken } from '../middleware/auth';
+import { storage } from '../storage';
+import { logger } from '../services/logger';
+
+const router = Router();
+
+// Public routes (no authentication required)
+/**
+ * Get all knowledge categories
+ */
+router.get("/categories", async (req: Request, res: Response) => {
+  try {
+    const categories = await storage.getAllKnowledgeCategories();
+    
+    res.json({
+      success: true,
+      categories,
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving knowledge categories: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "knowledge-base",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve knowledge categories"
+    });
+  }
+});
+
+/**
+ * Get articles by category
+ */
+router.get("/categories/:slug/articles", async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const articles = await storage.getKnowledgeArticlesByCategory(slug);
+    
+    res.json({
+      success: true,
+      articles,
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving articles by category: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "knowledge-base",
+      metadata: {
+        categorySlug: req.params.slug,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve articles"
+    });
+  }
+});
+
+/**
+ * Get article by slug
+ */
+router.get("/articles/:slug", async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const article = await storage.getKnowledgeArticleBySlug(slug);
+    
+    if (!article) {
+      return res.status(404).json({
+        success: false,
+        message: "Article not found"
+      });
+    }
+    
+    // Increment view count
+    await storage.incrementArticleViewCount(article.id);
+    
+    res.json({
+      success: true,
+      article,
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving article: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "knowledge-base",
+      metadata: {
+        articleSlug: req.params.slug,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve article"
+    });
+  }
+});
+
+/**
+ * Search articles
+ */
+router.get("/search", async (req: Request, res: Response) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: "Search query is required"
+      });
+    }
+    
+    const articles = await storage.searchKnowledgeArticles(query);
+    
+    res.json({
+      success: true,
+      articles,
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error searching articles: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "knowledge-base",
+      metadata: {
+        query: req.query.query,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to search articles"
+    });
+  }
+});
+
+// Protected routes (authentication required)
+router.use(authenticateToken);
+
+/**
+ * Submit article feedback
+ */
+router.post("/articles/:id/feedback", async (req: Request, res: Response) => {
+  try {
+    const articleId = parseInt(req.params.id);
+    const { isHelpful, comment } = req.body;
+    const merchantId = req.user?.merchantId;
+    
+    if (isNaN(articleId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid article ID"
+      });
+    }
+    
+    if (typeof isHelpful !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: "isHelpful field is required and must be a boolean"
+      });
+    }
+    
+    await storage.addArticleFeedback({
+      articleId,
+      merchantId,
+      isHelpful,
+      comment,
+    });
+    
+    res.json({
+      success: true,
+      message: "Feedback submitted successfully"
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error submitting article feedback: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "knowledge-base",
+      metadata: {
+        articleId: req.params.id,
+        merchantId: req.user?.merchantId,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to submit feedback"
+    });
+  }
+});
+
+// Admin routes (admin authentication required)
+router.use((req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: "Admin access required"
+    });
+  }
+  next();
+});
+
+/**
+ * Create a new article
+ */
+router.post("/articles", async (req: Request, res: Response) => {
+  try {
+    const { title, content, excerpt, categoryId, tags, isPublished } = req.body;
+    
+    // Validate required fields
+    if (!title || !content || !categoryId) {
+      return res.status(400).json({
+        success: false,
+        message: "Title, content, and categoryId are required"
+      });
+    }
+    
+    // Create slug from title
+    const slug = title
+      .toLowerCase()
+      .replace(/[^\w\s]/gi, '')
+      .replace(/\s+/g, '-');
+    
+    // Check if slug already exists
+    const existingArticle = await storage.getKnowledgeArticleBySlug(slug);
+    if (existingArticle) {
+      return res.status(400).json({
+        success: false,
+        message: "An article with a similar title already exists"
+      });
+    }
+    
+    // Create the article
+    const article = await storage.createKnowledgeArticle({
+      title,
+      slug,
+      content,
+      excerpt,
+      categoryId,
+      authorId: req.user?.id,
+      isPublished: isPublished ?? true,
+      publishedAt: isPublished ? new Date() : null,
+    });
+    
+    // Add tags if provided
+    if (tags && Array.isArray(tags) && tags.length > 0) {
+      await storage.addArticleTags(article.id, tags);
+    }
+    
+    res.status(201).json({
+      success: true,
+      article,
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error creating article: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "knowledge-base",
+      metadata: {
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to create article"
+    });
+  }
+});
+
+/**
+ * Update an article
+ */
+router.put("/articles/:id", async (req: Request, res: Response) => {
+  try {
+    const articleId = parseInt(req.params.id);
+    const { title, content, excerpt, categoryId, tags, isPublished } = req.body;
+    
+    if (isNaN(articleId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid article ID"
+      });
+    }
+    
+    // Check if article exists
+    const existingArticle = await storage.getKnowledgeArticle(articleId);
+    if (!existingArticle) {
+      return res.status(404).json({
+        success: false,
+        message: "Article not found"
+      });
+    }
+    
+    // Update the article
+    const updatedArticle = await storage.updateKnowledgeArticle(articleId, {
+      title,
+      content,
+      excerpt,
+      categoryId,
+      isPublished,
+      publishedAt: isPublished && !existingArticle.publishedAt ? new Date() : existingArticle.publishedAt,
+      updatedAt: new Date(),
+    });
+    
+    // Update tags if provided
+    if (tags && Array.isArray(tags)) {
+      await storage.updateArticleTags(articleId, tags);
+    }
+    
+    res.json({
+      success: true,
+      article: updatedArticle,
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error updating article: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      source: "knowledge-base",
+      metadata: {
+        articleId: req.params.id,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to update article"
+    });
+  }
+});
+
+export default router;
+Frontend Implementation
+tsx
+// File: /client/src/pages/merchant/KnowledgeBase.tsx
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useLocation } from "wouter";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Search, Book, FileText, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import MerchantLayout from "@/components/layout/MerchantLayout";
+
+interface KnowledgeCategory {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  icon: string;
+  parentId: number | null;
+}
+
+interface KnowledgeArticle {
+  id: number;
+  title: string;
+  slug: string;
+  excerpt: string;
+  categoryId: number;
+  viewCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export default function KnowledgeBase() {
+  const [, setLocation] = useLocation();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<KnowledgeArticle[]>([]);
+  
+  // Fetch knowledge categories
+  const { 
+    data: categoriesData, 
+    isLoading: isLoadingCategories,
+    isError: isCategoriesError,
+  } = useQuery({
+    queryKey: ["/api/knowledge-base/categories"],
+    queryFn: async () => {
+      const response = await fetch("/api/knowledge-base/categories");
+      if (!response.ok) throw new Error("Failed to fetch categories");
+      return response.json();
+    },
+  });
+  
+  const categories = categoriesData?.categories || [];
+  
+  // Handle search
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!searchQuery.trim()) return;
+    
+    setIsSearching(true);
+    
+    try {
+      const response = await fetch(`/api/knowledge-base/search?query=${encodeURIComponent(searchQuery)}`);
+      if (!response.ok) throw new Error("Search failed");
+      
+      const data = await response.json();
+      setSearchResults(data.articles || []);
+    } catch (error) {
+      console.error("Search error:", error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+  
+  // Navigate to article
+  const navigateToArticle = (slug: string) => {
+    setLocation(`/merchant/knowledge-base/articles/${slug}`);
+  };
+  
+  // Navigate to category
+  const navigateToCategory = (slug: string) => {
+    setLocation(`/merchant/knowledge-base/categories/${slug}`);
+  };
+  
+  // Loading state
+  if (isLoadingCategories) {
+    return (
+      <MerchantLayout>
+        <div className="container py-8 flex justify-center items-center min-h-[50vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </MerchantLayout>
+    );
+  }
+  
+  // Error state
+  if (isCategoriesError) {
+    return (
+      <MerchantLayout>
+        <div className="container py-8">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              Failed to load knowledge base. Please try again later.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </MerchantLayout>
+    );
+  }
+  
+  return (
+    <MerchantLayout>
+      <div className="container py-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">Knowledge Base</h1>
+            <p className="text-muted-foreground mt-1">
+              Find answers to common questions and learn how to use our platform
+            </p>
+          </div>
+          <Link href="/merchant/support-tickets/create">
+            <Button variant="outline" className="mt-4 md:mt-0">
+              Can't find what you need? Create a support ticket
+            </Button>
+          </Link>
+        </div>
+        
+        {/* Search */}
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search the knowledge base..."
+                  className="pl-8"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <Button type="submit" disabled={isSearching}>
+                {isSearching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Search
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+        
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold mb-4">Search Results</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {searchResults.map((article) => (
+                <Card 
+                  key={article.id}
+                  className="cursor-pointer hover:bg-accent/10 transition-colors"
+                  onClick={() => navigateToArticle(article.slug)}
+                >
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-3">
+                      <FileText className="h-5 w-5 text-primary mt-0.5" />
+                      <div>
+                        <h3 className="font-medium">{article.title}</h3>
+                        {article.excerpt && (
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                            {article.excerpt}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Categories */}
+        <h2 className="text-xl font-semibold mb-4">Browse by Category</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {categories.map((category) => (
+            <Card 
+              key={category.id}
+              className="cursor-pointer hover:bg-accent/10 transition-colors"
+              onClick={() => navigateToCategory(category.slug)}
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 rounded-full bg-primary/10">
+                    <Book className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="font-medium">{category.name}</h3>
+                </div>
+                {category.description && (
+                  <p className="text-sm text-muted-foreground">
+                    {category.description}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </MerchantLayout>
+  );
+}
+Benefits
+Reduces support ticket volume by providing self-service options
+Empowers merchants to find answers quickly without waiting for support
+Creates a centralized repository of information for consistent support
+Provides valuable insights into common issues through article analytics
+Improves overall customer satisfaction and reduces support costs
+4. Real-time Chat Integration
+Description
+Enhance the ticket system with real-time chat capabilities, allowing merchants to have live conversations with support agents for urgent issues.
+Implementation Details
+WebSocket Service
+typescript
+// File: /server/services/chatService.ts
+import WebSocket from 'ws';
+import http from 'http';
+import { v4 as uuidv4 } from 'uuid';
+import { storage } from '../storage';
+import { logger } from './logger';
+import { verifyToken } from '../middleware/auth';
+
+interface ChatMessage {
+  id: string;
+  senderId: number;
+  senderType: 'merchant' | 'agent';
+  senderName: string;
+  content: string;
+  timestamp: string;
+  ticketId?: number;
+  attachments?: string[];
+}
+
+interface ChatClient {
+  id: string;
+  ws: WebSocket;
+  userId: number;
+  userType: 'merchant' | 'agent';
+  ticketId?: number;
+}
+
+export class ChatService {
+  private wss: WebSocket.Server;
+  private clients: Map<string, ChatClient> = new Map() ;
+  private ticketRooms: Map<number, Set<string>> = new Map();
+  
+  constructor(server: http.Server)  {
+    this.wss = new WebSocket.Server({ server, path: '/ws/chat' });
+    this.initialize();
+    
+    logger.info({
+      message: 'Chat WebSocket service initialized',
+      category: 'websocket',
+      source: 'chat-service',
+    });
+  }
+  
+  private initialize() {
+    this.wss.on('connection', async (ws: WebSocket, req: http.IncomingMessage)  => {
+      try {
+        // Extract token from query parameters
+        const url = new URL(req.url || '', `http://${req.headers.host}`) ;
+        const token = url.searchParams.get('token');
+        const ticketId = url.searchParams.get('ticketId');
+        
+        if (!token) {
+          ws.close(4001, 'Authentication required');
+          return;
+        }
+        
+        // Verify token and get user info
+        const user = await verifyToken(token);
+        if (!user) {
+          ws.close(4003, 'Invalid or expired token');
+          return;
+        }
+        
+        // Create client object
+        const clientId = uuidv4();
+        const client: ChatClient = {
+          id: clientId,
+          ws,
+          userId: user.id,
+          userType: user.role === 'admin' ? 'agent' : 'merchant',
+        };
+        
+        // If ticketId is provided, join that ticket's room
+        if (ticketId) {
+          const parsedTicketId = parseInt(ticketId);
+          if (!isNaN(parsedTicketId)) {
+            client.ticketId = parsedTicketId;
+            this.joinTicketRoom(clientId, parsedTicketId);
+          }
+        }
+        
+        // Store client
+        this.clients.set(clientId, client);
+        
+        logger.info({
+          message: `Client connected to chat: ${clientId}`,
+          category: 'websocket',
+          source: 'chat-service',
+          metadata: {
+            clientId,
+            userId: user.id,
+            userType: client.userType,
+            ticketId: client.ticketId,
+          },
+        });
+        
+        // Send connection confirmation
+        this.sendToClient(clientId, {
+          type: 'connection_established',
+          clientId,
+          userId: user.id,
+          userType: client.userType,
+        });
+        
+        // If connected to a ticket, send recent messages
+        if (client.ticketId) {
+          const recentMessages = await storage.getChatMessagesByTicketId(client.ticketId);
+          this.sendToClient(clientId, {
+            type: 'recent_messages',
+            ticketId: client.ticketId,
+            messages: recentMessages,
+          });
+          
+          // Notify others in the room that this user joined
+          this.broadcastToTicketRoom(client.ticketId, {
+            type: 'user_joined',
+            userId: user.id,
+            userType: client.userType,
+            userName: user.name || `User ${user.id}`,
+          }, clientId); // Exclude the client who just joined
+        }
+        
+        // Set up message handler
+        ws.on('message', (message: string) => this.handleMessage(clientId, message));
+        
+        // Set up close handler
+        ws.on('close', () => this.handleDisconnect(clientId));
+      } catch (error) {
+        logger.error({
+          message: `Error in WebSocket connection: ${error instanceof Error ? error.message : String(error)}`,
+          category: 'websocket',
+          source: 'chat-service',
+          metadata: {
+            error: error instanceof Error ? error.stack : String(error),
+          },
+        });
+        
+        ws.close(4500, 'Internal server error');
+      }
+    });
+  }
+  
+  private async handleMessage(clientId: string, rawMessage: string) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+    
+    try {
+      const message = JSON.parse(rawMessage);
+      
+      switch (message.type) {
+        case 'chat_message':
+          await this.handleChatMessage(client, message);
+          break;
+          
+        case 'join_ticket':
+          if (message.ticketId) {
+            const ticketId = parseInt(message.ticketId);
+            if (!isNaN(ticketId)) {
+              client.ticketId = ticketId;
+              this.joinTicketRoom(clientId, ticketId);
+              
+              // Send recent messages
+              const recentMessages = await storage.getChatMessagesByTicketId(ticketId);
+              this.sendToClient(clientId, {
+                type: 'recent_messages',
+                ticketId,
+                messages: recentMessages,
+              });
+              
+              // Notify others in the room
+              this.broadcastToTicketRoom(ticketId, {
+                type: 'user_joined',
+                userId: client.userId,
+                userType: client.userType,
+                userName: message.userName || `User ${client.userId}`,
+              }, clientId);
+            }
+          }
+          break;
+          
+        case 'leave_ticket':
+          if (client.ticketId) {
+            this.leaveTicketRoom(clientId, client.ticketId);
+            client.ticketId = undefined;
+          }
+          break;
+          
+        case 'typing_indicator':
+          if (client.ticketId && message.isTyping !== undefined) {
+            this.broadcastToTicketRoom(client.ticketId, {
+              type: 'typing_indicator',
+              userId: client.userId,
+              userType: client.userType,
+              isTyping: message.isTyping,
+            }, clientId);
+          }
+          break;
+      }
+    } catch (error) {
+      logger.error({
+        message: `Error handling WebSocket message: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'websocket',
+        source: 'chat-service',
+        metadata: {
+          clientId,
+          userId: client.userId,
+          error: error instanceof Error ? error.stack : String(error),
+        },
+      });
+      
+      this.sendToClient(clientId, {
+        type: 'error',
+        message: 'Failed to process message',
+      });
+    }
+  }
+  
+  private async handleChatMessage(client: ChatClient, message: any) {
+    if (!client.ticketId || !message.content) return;
+    
+    // Get user info for the message
+    const user = await storage.getUserById(client.userId);
+    if (!user) return;
+    
+    // Create chat message
+    const chatMessage: ChatMessage = {
+      id: uuidv4(),
+      senderId: client.userId,
+      senderType: client.userType,
+      senderName: user.name || `User ${client.userId}`,
+      content: message.content,
+      timestamp: new Date().toISOString(),
+      ticketId: client.ticketId,
+      attachments: message.attachments,
+    };
+    
+    // Store message in database
+    await storage.saveChatMessage(chatMessage);
+    
+    // Broadcast to all clients in the ticket room
+    this.broadcastToTicketRoom(client.ticketId, {
+      type: 'chat_message',
+      message: chatMessage,
+    });
+    
+    // Update ticket status if needed
+    if (client.userType === 'agent') {
+      await storage.updateTicketStatus(client.ticketId, 'pending_merchant');
+    } else {
+      await storage.updateTicketStatus(client.ticketId, 'pending_agent');
+    }
+    
+    logger.info({
+      message: `Chat message sent in ticket ${client.ticketId}`,
+      category: 'websocket',
+      source: 'chat-service',
+      metadata: {
+        ticketId: client.ticketId,
+        messageId: chatMessage.id,
+        senderId: client.userId,
+        senderType: client.userType,
+      },
+    });
+  }
+  
+  private handleDisconnect(clientId: string) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+    
+    // If client was in a ticket room, leave it
+    if (client.ticketId) {
+      this.leaveTicketRoom(clientId, client.ticketId);
+      
+      // Notify others in the room
+      this.broadcastToTicketRoom(client.ticketId, {
+        type: 'user_left',
+        userId: client.userId,
+        userType: client.userType,
+      });
+    }
+    
+    // Remove client
+    this.clients.delete(clientId);
+    
+    logger.info({
+      message: `Client disconnected from chat: ${clientId}`,
+      category: 'websocket',
+      source: 'chat-service',
+      metadata: {
+        clientId,
+        userId: client.userId,
+      },
+    });
+  }
+  
+  private joinTicketRoom(clientId: string, ticketId: number) {
+    if (!this.ticketRooms.has(ticketId)) {
+      this.ticketRooms.set(ticketId, new Set());
+    }
+    
+    this.ticketRooms.get(ticketId)?.add(clientId);
+    
+    logger.debug({
+      message: `Client ${clientId} joined ticket room ${ticketId}`,
+      category: 'websocket',
+      source: 'chat-service',
+    });
+  }
+  
+  private leaveTicketRoom(clientId: string, ticketId: number) {
+    const room = this.ticketRooms.get(ticketId);
+    if (room) {
+      room.delete(clientId);
+      
+      // If room is empty, remove it
+      if (room.size === 0) {
+        this.ticketRooms.delete(ticketId);
+      }
+    }
+    
+    logger.debug({
+      message: `Client ${clientId} left ticket room ${ticketId}`,
+      category: 'websocket',
+      source: 'chat-service',
+    });
+  }
+  
+  private sendToClient(clientId: string, data: any) {
+    const client = this.clients.get(clientId);
+    if (client && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(JSON.stringify(data));
+    }
+  }
+  
+  private broadcastToTicketRoom(ticketId: number, data: any, excludeClientId?: string) {
+    const room = this.ticketRooms.get(ticketId);
+    if (!room) return;
+    
+    room.forEach(clientId => {
+      if (excludeClientId && clientId === excludeClientId) return;
+      this.sendToClient(clientId, data);
+    });
+  }
+}
+Frontend Chat Component
+tsx
+// File: /client/src/components/chat/LiveChat.tsx
+import React, { useState, useEffect, useRef } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Loader2, Send, PaperclipIcon, SmileIcon } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+interface ChatMessage {
+  id: string;
+  senderId: number;
+  senderType: 'merchant' | 'agent';
+  senderName: string;
+  content: string;
+  timestamp: string;
+  ticketId?: number;
+  attachments?: string[];
+}
+
+interface LiveChatProps {
+  ticketId: number;
+  ticketNumber: string;
+}
+
+export function LiveChat({ ticketId, ticketNumber }: LiveChatProps) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(true);
+  const [typingUsers, setTypingUsers] = useState<{[key: number]: boolean}>({});
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Connect to WebSocket
+  useEffect(() => {
+    if (!user?.id || !ticketId) return;
+    
+    // Get auth token
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      toast({
+        title: "Authentication Error",
+        description: "You need to be logged in to use live chat.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Create WebSocket connection
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/chat?token=${token}&ticketId=${ticketId}`;
+    const ws = new WebSocket(wsUrl) ;
+    wsRef.current = ws;
+    
+    // Connection opened
+    ws.addEventListener('open', () => {
+      setIsConnected(true);
+      setIsConnecting(false);
+      
+      // Join ticket room
+      ws.send(JSON.stringify({
+        type: 'join_ticket',
+        ticketId,
+        userName: user.name || `User ${user.id}`,
+      }));
+    });
+    
+    // Listen for messages
+    ws.addEventListener('message', (event) => {
+      const data = JSON.parse(event.data);
+      
+      switch (data.type) {
+        case 'connection_established':
+          console.log('Connected to chat server', data);
+          break;
+          
+        case 'recent_messages':
+          if (data.ticketId === ticketId) {
+            setMessages(data.messages || []);
+            // Scroll to bottom after messages load
+            setTimeout(() => {
+              scrollToBottom();
+            }, 100);
+          }
+          break;
+          
+        case 'chat_message':
+          if (data.message && data.message.ticketId === ticketId) {
+            setMessages(prev => [...prev, data.message]);
+            // Scroll to bottom when new message arrives
+            setTimeout(() => {
+              scrollToBottom();
+            }, 100);
+          }
+          break;
+          
+        case 'typing_indicator':
+          setTypingUsers(prev => ({
+            ...prev,
+            [data.userId]: data.isTyping,
+          }));
+          break;
+          
+        case 'user_joined':
+          toast({
+            title: "User Joined",
+            description: `${data.userName} has joined the chat.`,
+          });
+          break;
+          
+        case 'user_left':
+          toast({
+            description: `${data.userType === 'agent' ? 'Support agent' : 'Merchant'} has left the chat.`,
+          });
+          
+          // Remove from typing users
+          setTypingUsers(prev => {
+            const newTypingUsers = { ...prev };
+            delete newTypingUsers[data.userId];
+            return newTypingUsers;
+          });
+          break;
+          
+        case 'error':
+          toast({
+            title: "Chat Error",
+            description: data.message || "An error occurred in the chat.",
+            variant: "destructive",
+          });
+          break;
+      }
+    });
+    
+    // Connection closed
+    ws.addEventListener('close', (event) => {
+      setIsConnected(false);
+      
+      if (event.code !== 1000) { // Normal closure
+        toast({
+          title: "Connection Lost",
+          description: "Chat connection was lost. Please refresh the page.",
+          variant: "destructive",
+        });
+      }
+    });
+    
+    // Connection error
+    ws.addEventListener('error', () => {
+      setIsConnected(false);
+      setIsConnecting(false);
+      
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to chat server. Please try again later.",
+        variant: "destructive",
+      });
+    });
+    
+    // Cleanup on unmount
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'leave_ticket',
+          ticketId,
+        }));
+        ws.close();
+      }
+    };
+  }, [user?.id, ticketId, toast]);
+  
+  // Handle typing indicator
+  useEffect(() => {
+    if (!isConnected || !wsRef.current) return;
+    
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Send typing indicator if user is typing
+    if (newMessage.length > 0 && !isTyping) {
+      setIsTyping(true);
+      wsRef.current.send(JSON.stringify({
+        type: 'typing_indicator',
+        isTyping: true,
+      }));
+    }
+    
+    // Set timeout to clear typing indicator
+    typingTimeoutRef.current = setTimeout(() => {
+      if (isTyping) {
+        setIsTyping(false);
+        wsRef.current?.send(JSON.stringify({
+          type: 'typing_indicator',
+          isTyping: false,
+        }));
+      }
+    }, 2000);
+    
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, [newMessage, isTyping, isConnected]);
+  
+  // Scroll to bottom of messages
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+  
+  // Send message
+  const sendMessage = () => {
+    if (!newMessage.trim() || !isConnected || !wsRef.current) return;
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'chat_message',
+      content: newMessage.trim(),
+    }));
+    
+    setNewMessage("");
+  };
+  
+  // Handle key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+  
+  // Format timestamp
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  
+  // Check if any user is typing
+  const isAnyoneTyping = Object.values(typingUsers).some(Boolean);
+  
+  return (
+    <div className="flex flex-col h-[600px] border rounded-md">
+      {/* Chat header */}
+      <div className="p-4 border-b bg-muted/30">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium">Live Chat - Ticket #{ticketNumber}</h3>
+            <p className="text-sm text-muted-foreground">
+              {isConnecting ? 'Connecting...' : isConnected ? 'Connected' : 'Disconnected'}
+            </p>
+          </div>
+          <div className="flex items-center">
+            {isConnecting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+          </div>
+        </div>
+      </div>
+      
+      {/* Chat messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            No messages yet. Start the conversation!
+          </div>
+        ) : (
+          messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.senderType === 'merchant' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div className={`flex ${message.senderType === 'merchant' ? 'flex-row-reverse' : 'flex-row'} items-start gap-2 max-w-[80%]`}>
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback>
+                    {message.senderName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <div className={`px-4 py-2 rounded-lg ${
+                    message.senderType === 'merchant' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-muted'
+                  }`}>
+                    <div className="text-xs font-medium mb-1">
+                      {message.senderName}
+                    </div>
+                    <div className="whitespace-pre-wrap break-words">
+                      {message.content}
+                    </div>
+                    {message.attachments && message.attachments.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {message.attachments.map((attachment, index) => (
+                          <a
+                            key={index}
+                            href={attachment}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs underline flex items-center"
+                          >
+                            <PaperclipIcon className="h-3 w-3 mr-1" />
+                            Attachment {index + 1}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className={`text-xs text-muted-foreground mt-1 ${
+                    message.senderType === 'merchant' ? 'text-right' : 'text-left'
+                  }`}>
+                    {formatTimestamp(message.timestamp)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+        
+        {/* Typing indicator */}
+        {isAnyoneTyping && (
+          <div className="flex items-center text-xs text-muted-foreground">
+            <div className="flex space-x-1 mr-2">
+              <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            Someone is typing...
+          </div>
+        )}
+        
+        {/* Scroll anchor */}
+        <div ref={messagesEndRef} />
+      </div>
+      
+      {/* Chat input */}
+      <div className="p-4 border-t">
+        <div className="flex gap-2">
+          <Textarea
+            placeholder="Type your message..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={handleKeyPress}
+            className="resize-none"
+            disabled={!isConnected}
+          />
+          <div className="flex flex-col gap-2">
+            <Button
+              size="icon"
+              onClick={sendMessage}
+              disabled={!isConnected || !newMessage.trim()}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              type="button"
+              disabled={!isConnected}
+            >
+              <SmileIcon className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+Benefits
+Provides immediate assistance for urgent issues
+Reduces resolution time for complex problems
+Improves customer satisfaction through real-time interaction
+Creates a more personal support experience
+Allows support agents to handle multiple conversations simultaneously
+5. Automated Ticket Categorization with AI
+Description
+Implement AI-powered ticket categorization to automatically classify incoming tickets based on their content, reducing manual categorization effort and improving routing efficiency.
+Implementation Details
+Backend Implementation
+typescript
+// File: /server/services/aiCategorization.ts
+import { Configuration, OpenAIApi } from 'openai';
+import { logger } from './logger';
+
+// Configure OpenAI API
+const configuration = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+const openai = new OpenAIApi(configuration);
+
+interface CategorizationResult {
+  category: string;
+  priority: string;
+  confidence: number;
+}
+
+/**
+ * Categorize ticket content using AI
+ */
+export async function categorizeTicket(subject: string, description: string): Promise<CategorizationResult | null> {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      logger.warn({
+        message: 'OpenAI API key not configured, skipping AI categorization',
+        category: 'ai',
+        source: 'categorization',
+      });
+      return null;
+    }
+    
+    // Prepare prompt for the AI
+    const prompt = `
+      Analyze the following support ticket and categorize it:
+      
+      Subject: ${subject}
+      
+      Description: ${description}
+      
+      Categorize this ticket into exactly one of the following categories:
+      - accounting (for billing, payment, or financial issues)
+      - customer_issue (for problems related to customers or customer relationships)
+      - technical_issue (for software bugs, technical problems, or system errors)
+      - other (for anything that doesn't fit the above categories)
+      
+      Also assign a priority level from the following options:
+      - low (for minor issues with no immediate impact)
+      - normal (for standard issues that need attention but aren't urgent)
+      - high (for important issues that significantly impact operations)
+      - urgent (for critical issues requiring immediate attention)
+      
+      Respond in JSON format with category, priority, and confidence level (0-1):
+      {
+        "category": "category_name",
+        "priority": "priority_level",
+        "confidence": confidence_score
+      }
+    `;
+    
+    // Call OpenAI API
+    const response = await openai.createChatCompletion({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        { role: 'system', content: 'You are a support ticket categorization assistant.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3, // Lower temperature for more consistent results
+      max_tokens: 150,
+    });
+    
+    // Extract and parse the response
+    const content = response.data.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('No response from AI service');
+    }
+    
+    // Extract JSON from the response (it might be wrapped in markdown code blocks)
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Could not extract JSON from AI response');
+    }
+    
+    const result = JSON.parse(jsonMatch[0]) as CategorizationResult;
+    
+    // Validate the result
+    if (!result.category || !result.priority) {
+      throw new Error('Invalid AI categorization result');
+    }
+    
+    // Log the result
+    logger.info({
+      message: 'AI categorization completed',
+      category: 'ai',
+      source: 'categorization',
+      metadata: {
+        subject,
+        result,
+      },
+    });
+    
+    return result;
+  } catch (error) {
+    logger.error({
+      message: `Error in AI categorization: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'ai',
+      source: 'categorization',
+      metadata: {
+        subject,
+        error: error instanceof Error ? error.stack : String(error),
+      },
+    });
+    
+    return null;
+  }
+}
+Integration with Ticket Creation
+typescript
+// File: /server/routes/support-tickets.ts (add to existing file)
+
+// Import the AI categorization service
+import { categorizeTicket } from '../services/aiCategorization';
+
+// Add to the POST route for creating tickets
+router.post("/", async (req: Request, res: Response) => {
+  try {
+    const { subject, description, priority, category, merchantId, contractId } = req.body;
+    
+    // Validate required fields
+    if (!subject || !description || !merchantId) {
+      return res.status(400).json({
+        success: false,
+        message: "Subject, description, and merchantId are required"
+      });
+    }
+    
+    // Use AI to categorize if category or priority is not provided
+    let finalCategory = category;
+    let finalPriority = priority;
+    
+    if (!category || !priority) {
+      const aiResult = await categorizeTicket(subject, description);
+      
+      if (aiResult) {
+        // Use AI category if not provided by user
+        if (!category && aiResult.confidence > 0.7) {
+          finalCategory = aiResult.category;
+        }
+        
+        // Use AI priority if not provided by user
+        if (!priority && aiResult.confidence > 0.7) {
+          finalPriority = aiResult.priority;
+        }
+        
+        logger.info({
+          message: 'Using AI categorization for ticket',
+          category: 'api',
+          source: 'support-tickets',
+          metadata: {
+            userCategory: category,
+            userPriority: priority,
+            aiCategory: aiResult.category,
+            aiPriority: aiResult.priority,
+            confidence: aiResult.confidence,
+            finalCategory,
+            finalPriority,
+          },
+        });
+      }
+    }
+    
+    // Use defaults if still not set
+    finalCategory = finalCategory || 'other';
+    finalPriority = finalPriority || 'normal';
+    
+    // Create the ticket
+    const ticketNumber = generateTicketNumber();
+    const newTicket = await storage.createSupportTicket({
+      ticketNumber,
+      subject,
+      description,
+      category: finalCategory,
+      priority: finalPriority,
+      status: 'new',
+      merchantId,
+      contractId,
+    });
+    
+    // ... rest of the existing code ...
+  } catch (error) {
+    // ... existing error handling ...
+  }
+});
+Frontend Integration
+tsx
+// File: /client/src/components/forms/TicketSubmissionForm.tsx (modify existing file)
+
+// Add AI categorization indicator
+const [isAiCategorizing, setIsAiCategorizing] = useState(false);
+const [aiSuggestion, setAiSuggestion] = useState<{
+  category?: string;
+  priority?: string;
+} | null>(null);
+
+// Add debounced function to get AI suggestions
+const debouncedGetAiSuggestions = useCallback(
+  debounce(async (subject: string, description: string) => {
+    if (subject.length < 10 || description.length < 20) return;
+    
+    try {
+      setIsAiCategorizing(true);
+      
+      const response = await fetch('/api/support-tickets/ai-categorize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ subject, description }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to get AI suggestions');
+      
+      const data = await response.json();
+      
+      if (data.success && data.suggestion) {
+        setAiSuggestion(data.suggestion);
+        
+        // Update form values if user hasn't selected anything yet
+        const currentCategory = form.getValues('category');
+        const currentPriority = form.getValues('priority');
+        
+        if (currentCategory === 'technical_issue' && data.suggestion.category) {
+          form.setValue('category', data.suggestion.category);
+        }
+        
+        if (currentPriority === 'normal' && data.suggestion.priority) {
+          form.setValue('priority', data.suggestion.priority);
+        }
+      }
+    } catch (error) {
+      console.error('Error getting AI suggestions:', error);
+    } finally {
+      setIsAiCategorizing(false);
+    }
+  }, 1000),
+  []
+);
+
+// Watch form values to trigger AI suggestions
+const watchSubject = form.watch('subject');
+const watchDescription = form.watch('description');
+
+useEffect(() => {
+  if (watchSubject && watchDescription) {
+    debouncedGetAiSuggestions(watchSubject, watchDescription);
+  }
+}, [watchSubject, watchDescription, debouncedGetAiSuggestions]);
+
+// Add AI suggestion indicator to the form
+// Inside the category FormField
+{aiSuggestion?.category && (
+  <div className="text-xs text-muted-foreground mt-1 flex items-center">
+    <SparklesIcon className="h-3 w-3 mr-1 text-primary" />
+    AI suggested: {aiSuggestion.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+  </div>
+)}
+
+// Inside the priority FormField
+{aiSuggestion?.priority && (
+  <div className="text-xs text-muted-foreground mt-1 flex items-center">
+    <SparklesIcon className="h-3 w-3 mr-1 text-primary" />
+    AI suggested: {aiSuggestion.priority.charAt(0).toUpperCase() + aiSuggestion.priority.slice(1)}
+  </div>
+)}
+Benefits
+Reduces manual categorization effort
+Improves routing accuracy and speed
+Ensures consistent categorization across tickets
+Helps prioritize tickets appropriately
+Provides suggestions to users while maintaining human oversight
+These feature suggestions provide a comprehensive enhancement to the ShiFi Tester ticket system, addressing various aspects from analytics and automation to self-service and real-time communication. Each feature includes detailed implementation examples that can be directly integrated into the existing codebase.
