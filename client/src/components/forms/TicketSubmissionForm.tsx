@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Contract } from "@shared/schema";
+import { TicketCategorizationSuggestion } from "@/components/TicketCategorizationSuggestion";
 
 // Define form schema with validation
 const ticketFormSchema = z.object({
@@ -475,6 +476,17 @@ export function TicketSubmissionForm({
             </FormItem>
           )}
         />
+
+        {/* AI Ticket Categorization Suggestions */}
+        <div className="mt-1 mb-4">
+          <TicketCategorizationSuggestion
+            subject={form.watch('subject')}
+            description={form.watch('description')}
+            onSelectCategory={(category) => form.setValue('category', category)}
+            onSelectPriority={(priority) => form.setValue('priority', priority)}
+            enabled={form.watch('subject').length > 5 && form.watch('description').length > 10}
+          />
+        </div>
 
         {/* Enhanced Contract Selection */}
         {!contractId && (
