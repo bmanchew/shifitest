@@ -4,6 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import App from "./App";
 import { createContext, useContext, useEffect } from "react";
 import { APP_DOMAIN, API_URL } from './env';
+import IntercomProvider from "./components/IntercomProvider";
 
 // Create app configuration context
 interface AppConfig {
@@ -55,7 +56,9 @@ export default function AppWrapper() {
     <AppConfigContext.Provider value={{ apiBaseUrl: API_URL, appDomain: APP_DOMAIN }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <App />
+          <IntercomProvider>
+            <App />
+          </IntercomProvider>
         </AuthProvider>
       </QueryClientProvider>
     </AppConfigContext.Provider>
