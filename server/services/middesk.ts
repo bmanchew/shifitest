@@ -364,7 +364,93 @@ class MiddeskService {
       return null;
     }
   }
+  /**
+   * Get business details with formatted verification status
+   * @param businessId The ID of the business in MidDesk
+   * @returns Formatted business details or null on failure
+   */
+  async getBusinessDetails(businessId: string): Promise<any | null> {
+    try {
+      const verification = await this.getBusinessVerificationStatus(businessId);
+      
+      if (!verification) {
+        return null;
+      }
+      
+      return {
+        status: verification.status,
+        isVerified: this.isBusinessVerified(verification),
+        lastUpdated: verification.updated_at,
+        details: {
+          name: verification.name,
+          tax_id: verification.tax_id ? `${verification.tax_id.substring(0, 2)}...` : null, // Partial for privacy
+          website: verification.website,
+          phone: verification.phone,
+          formation_state: verification.formation_state,
+          formation_date: verification.formation_date,
+          addresses: verification.addresses,
+          subscriptions: verification.subscriptions,
+          created_at: verification.created_at,
+          updated_at: verification.updated_at
+        }
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to get business details: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'middesk',
+        metadata: {
+          businessId,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Initiate business verification process
+   * @param businessData Business data from merchant profile
+   * @returns Response with businessId if successful
+   */
+  async initiateBusinessVerification(businessData: any): Promise<{ businessId: string } | null> {
+    try {
+      // Format the business data for verification
+      const verificationData: BusinessVerificationData = {
+        legalName: businessData.legalName || '',
+        ein: businessData.ein || '',
+        addressLine1: businessData.address?.line1 || '',
+        addressLine2: businessData.address?.line2 || '',
+        city: businessData.address?.city || '',
+        state: businessData.address?.state || '',
+        zipCode: businessData.address?.zip || '',
+        phoneNumber: businessData.phone || '',
+        website: businessData.website || ''
+      };
+      
+      // Submit for verification
+      const result = await this.submitBusinessVerification(verificationData);
+      
+      if (!result || !result.id) {
+        return null;
+      }
+      
+      return {
+        businessId: result.id
+      };
+    } catch (error) {
+      logger.error({
+        message: `Failed to initiate business verification: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'middesk',
+        metadata: {
+          businessName: businessData.legalName,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      return null;
+    }
+  }
 }
 
-// Export a singleton instance
 export const middeskService = new MiddeskService();

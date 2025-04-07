@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import axios from 'axios';
+import PlaidAssetReport from './reports/PlaidAssetReport';
+import MidDeskReport from './reports/MidDeskReport';
 
 interface MerchantDetailProps {
   merchantId: number;
@@ -425,6 +427,30 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
           </div>
         </>
       )}
+      
+      {/* Business Verification Report */}
+      {businessDetails && businessDetails.middeskBusinessId && (
+        <div className="mt-8 mb-8">
+          <div className="px-4 py-5 sm:px-6 border-t border-gray-200">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Business Verification Report</h3>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">Detailed business verification from MidDesk</p>
+          </div>
+          <MidDeskReport 
+            merchantId={merchantId} 
+            businessDetails={businessDetails}
+            onRefresh={fetchMerchantDetail}
+          />
+        </div>
+      )}
+      
+      {/* Plaid Asset Report */}
+      <div className="mt-8 mb-8">
+        <div className="px-4 py-5 sm:px-6 border-t border-gray-200">
+          <h3 className="text-lg leading-6 font-medium text-gray-900">Financial Asset Reports</h3>
+          <p className="mt-1 max-w-2xl text-sm text-gray-500">Plaid asset reports for this merchant</p>
+        </div>
+        <PlaidAssetReport merchantId={merchantId} />
+      </div>
     </div>
   );
 }

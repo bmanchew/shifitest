@@ -12,6 +12,7 @@ import { logger } from "../../services/logger";
 import contractCancellationsRouter from "./contract-cancellations";
 import { reportsRouter } from "./reports-improved";
 import merchantFundingRouter from "./merchant-funding";
+import merchantReportsRouter from "./merchant-reports";
 
 const router = express.Router();
 
@@ -39,6 +40,7 @@ router.use("/merchants", merchantsRouter);
 router.use("/cancellation-requests", contractCancellationsRouter);
 router.use("/reports", reportsRouter);
 router.use("/merchant-funding", merchantFundingRouter);
+router.use("/merchant-reports", merchantReportsRouter);
 
 // Merchant Performance routes
 router.get("/merchant-performances", getAllMerchantPerformances);
