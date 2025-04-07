@@ -137,6 +137,7 @@ function App() {
               <Route path="/admin" component={AdminDashboard} />
               <Route path="/admin/dashboard" component={AdminDashboard} />
               <Route path="/admin/merchants" component={AdminMerchants} />
+              <Route path="/admin/merchants/:id" component={lazy(() => import("@/pages/admin/MerchantDetailPage"))} />
               <Route path="/admin/contracts" component={AdminContracts} />
               <Route path="/admin/logs" component={AdminLogs} />
               <Route path="/admin/settings" component={AdminSettings} />
