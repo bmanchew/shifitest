@@ -5807,6 +5807,10 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Mount Intercom chat integration
   apiRouter.use("/chat", intercomChatRouter);
   
+  // Import and mount Intercom API routes
+  import intercomRouter from "./routes/intercom.js";
+  apiRouter.use("/intercom", intercomRouter);
+  
   // Mount the SesameAI router for voice generation
   registerSesameAIRoutes(apiRouter);
   registerFinancialSherpaRoutes(apiRouter);

@@ -1032,40 +1032,38 @@ export class DatabaseStorage implements IStorage {
   
   async getAllMerchantsWithDetails(): Promise<(Merchant & { businessDetails?: MerchantBusinessDetails })[]> {
     try {
-      // Explicitly select only the columns we know exist in the database
-      // This avoids issues with missing columns like ai_verification_status
-      const results = await db.select({
-        merchant: merchants,
-        businessDetails: {
-          id: merchantBusinessDetails.id,
-          merchantId: merchantBusinessDetails.merchantId,
-          businessName: merchantBusinessDetails.businessName,
-          businessType: merchantBusinessDetails.businessType,
-          businessAddress: merchantBusinessDetails.businessAddress,
-          businessCity: merchantBusinessDetails.businessCity,
-          businessState: merchantBusinessDetails.businessState,
-          businessZip: merchantBusinessDetails.businessZip,
-          businessPhone: merchantBusinessDetails.businessPhone,
-          businessEmail: merchantBusinessDetails.businessEmail,
-          businessWebsite: merchantBusinessDetails.businessWebsite,
-          businessTaxId: merchantBusinessDetails.businessTaxId,
-          businessLicenseNumber: merchantBusinessDetails.businessLicenseNumber,
-          incorporationDate: merchantBusinessDetails.incorporationDate,
-          annualRevenue: merchantBusinessDetails.annualRevenue,
-          numberOfEmployees: merchantBusinessDetails.numberOfEmployees,
-          businessDescription: merchantBusinessDetails.businessDescription,
-          createdAt: merchantBusinessDetails.createdAt,
-          updatedAt: merchantBusinessDetails.updatedAt,
-          // Omit ai_verification_status which doesn't exist in the database
-        }
-      })
-      .from(merchants)
-      .leftJoin(merchantBusinessDetails, eq(merchants.id, merchantBusinessDetails.merchantId));
+      // Use a simpler approach with basic select and join rather than complex field selection
+      // This avoids issues with the field mapping
+      const merchantResults = await db.select().from(merchants);
       
-      return results.map(({ merchant, businessDetails }) => ({
-        ...merchant,
-        businessDetails: businessDetails || undefined
+      // Map over the merchants and find their business details
+      const merchantsWithDetails = await Promise.all(merchantResults.map(async (merchant) => {
+        try {
+          // Get business details for this merchant
+          const businessDetailsResults = await db
+            .select()
+            .from(merchantBusinessDetails)
+            .where(eq(merchantBusinessDetails.merchantId, merchant.id))
+            .limit(1);
+          
+          const businessDetails = businessDetailsResults.length > 0 ? businessDetailsResults[0] : undefined;
+          
+          // Return merchant with business details
+          return {
+            ...merchant,
+            businessDetails
+          };
+        } catch (detailsError) {
+          console.error(`Error fetching business details for merchant ${merchant.id}:`, detailsError);
+          // Return merchant without business details
+          return {
+            ...merchant,
+            businessDetails: undefined
+          };
+        }
       }));
+      
+      return merchantsWithDetails;
     } catch (error) {
       console.error("Error in getAllMerchantsWithDetails:", error);
       // Return an empty array instead of throwing to prevent route handler crashes
