@@ -258,7 +258,24 @@ router.get("/:id", async (req: Request, res: Response) => {
 
     // Get additional merchant details such as Plaid information and business details
     const plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
-    const businessDetails = await storage.getMerchantBusinessDetailsByMerchantId(merchantId);
+    
+    // Try to get business details, but handle errors gracefully
+    let businessDetails = null;
+    try {
+      businessDetails = await storage.getMerchantBusinessDetailsByMerchantId(merchantId);
+    } catch (detailsError) {
+      logger.warn({
+        message: `Could not fetch business details for merchant ${merchantId}: ${detailsError instanceof Error ? detailsError.message : String(detailsError)}`,
+        category: "api",
+        userId: req.user?.id,
+        source: "internal",
+        metadata: {
+          merchantId,
+          error: detailsError instanceof Error ? detailsError.message : String(detailsError)
+        }
+      });
+      // Continue without business details
+    }
     
     res.json({
       success: true,

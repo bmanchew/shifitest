@@ -5,7 +5,7 @@
 
 import express from 'express';
 import { isAuthenticated } from '../middleware/auth.js';
-import intercomService from '../services/intercom.service.js';
+import intercomService from '../services/intercom.service';
 import logger from '../lib/logger.js';
 
 const router = express.Router();

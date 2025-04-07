@@ -4,7 +4,7 @@
  */
 
 import axios from 'axios';
-import logger from '../lib/logger.js';
+import logger from '../lib/logger';
 
 class IntercomService {
   private apiKey: string;
