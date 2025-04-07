@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import intercomRouter from './intercom.js';
+import intercomRouter from './intercom';
 
 const router = express.Router();
 

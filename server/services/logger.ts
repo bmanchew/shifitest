@@ -24,7 +24,8 @@ export type LogCategory =
   | "underwriting"
   | "blockchain"
   | "plaid"
-  | "external";
+  | "external"
+  | "intercom";
 
 // Log sources
 export type LogSource = 
@@ -43,7 +44,9 @@ export type LogSource =
   | "thanksroger"
   | "prefi"
   | "nlpearl"
-  | "cfpb";
+  | "cfpb"
+  | "intercom"
+  | "storage";
 
 // Base log interface
 interface BaseLog {

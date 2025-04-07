@@ -20,6 +20,8 @@ import documentsRouter from './documents';
 import analyticsRoutes from './analytics';
 import { ticketAssignmentRouter } from './ticket-assignment';
 import ticketCategorizationRouter from './ticket-categorization';
+import intercomRouter from './intercom';
+import intercomChatRouter from './intercom-chat';
 import { apiRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
@@ -49,6 +51,8 @@ modulesRouter.use('/api/v1/application-progress', applicationProgressRouter);
 modulesRouter.use('/api/v1/documents', documentsRouter);
 modulesRouter.use('/api/v1/analytics', analyticsRoutes);
 modulesRouter.use('/api/v1/ticket-assignment', ticketAssignmentRouter);
+modulesRouter.use('/api/v1/intercom', intercomRouter);
+modulesRouter.use('/api/v1/chat', intercomChatRouter);
 modulesRouter.use('/api/v1', ticketCategorizationRouter);
 modulesRouter.use('/api/v1/merchant', authenticateToken, (req, res, next) => {
   next();
@@ -78,6 +82,8 @@ modulesRouter.use('/api/application-progress', applicationProgressRouter);
 modulesRouter.use('/api/documents', documentsRouter);
 modulesRouter.use('/api/analytics', analyticsRoutes);
 modulesRouter.use('/api/ticket-assignment', ticketAssignmentRouter);
+modulesRouter.use('/api/intercom', intercomRouter);
+modulesRouter.use('/api/chat', intercomChatRouter);
 modulesRouter.use('/', ticketCategorizationRouter);
 modulesRouter.use('/api/merchant', authenticateToken, (req, res, next) => {
   next();

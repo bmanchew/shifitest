@@ -4,11 +4,22 @@
  */
 
 import express from 'express';
-import { isAuthenticated } from '../middleware/auth.js';
+import { isAuthenticated } from '../middleware/auth';
 import intercomService from '../services/intercom.service';
-import logger from '../lib/logger.js';
+import { logger } from '../services/logger';
 
 const router = express.Router();
+
+/**
+ * GET /api/intercom/test
+ * Simple test route to verify the router is registered
+ */
+router.get('/test', (req, res) => {
+  return res.json({
+    success: true,
+    message: 'Intercom router is working'
+  });
+});
 
 /**
  * GET /api/intercom/config
