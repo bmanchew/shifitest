@@ -30,6 +30,7 @@ export const ticketStatusEnum = pgEnum("ticket_status", [
   "in_progress",
   "pending_merchant",
   "pending_customer",
+  "escalated",
   "resolved",
   "closed",
 ]);

@@ -22,7 +22,7 @@ import {
 import { storage } from "../storage";
 import { logger } from "../services/logger";
 import { notificationService } from "../services/index";
-import { NotificationType } from "../services/notification";
+import { NotificationType, NotificationChannel } from "../services/notification";
 import crypto from "crypto";
 import { authenticateToken, isAuthenticated } from "../middleware/auth";
 
@@ -1616,7 +1616,7 @@ router.patch("/tickets/:id", async (req: Request, res: Response) => {
     
     // Only include valid fields in the update
     if (status) {
-      if (!["new", "in_progress", "pending_merchant", "pending_customer", "resolved", "closed"].includes(status)) {
+      if (!["new", "in_progress", "pending_merchant", "pending_customer", "resolved", "closed", "under_review", "escalated"].includes(status)) {
         return res.status(400).json({
           success: false,
           message: "Invalid status value"
@@ -1692,6 +1692,75 @@ router.patch("/tickets/:id", async (req: Request, res: Response) => {
         userId: req.body.updatedBy || null, // We expect the client to provide who updated it
         actionDetails: activityDetails
       });
+    }
+    
+    // Send SMS notifications for escalated tickets
+    if (updateData.status === 'escalated' && ticket.status !== 'escalated') {
+      try {
+        // Get merchant information
+        const merchant = await storage.getMerchant(ticket.merchantId);
+        if (merchant) {
+          // Get merchant user to send SMS
+          const merchantUser = await storage.getUserByMerchantId(ticket.merchantId);
+          if (merchantUser && merchantUser.phone) {
+            // Send SMS to merchant
+            await notificationService.sendNotification({
+              userId: merchantUser.id,
+              title: "Ticket Escalated",
+              message: `Your support ticket #${ticket.ticketNumber} has been escalated and will receive priority attention.`,
+              type: NotificationType.SYSTEM_ALERT,
+              channels: [NotificationChannel.SMS],
+            });
+            
+            logger.info({
+              message: `Sent escalation SMS notification to merchant ${merchantUser.id}`,
+              category: "notification", 
+              source: "twilio",
+              userId: merchantUser.id,
+              metadata: {
+                ticketId: id,
+                ticketNumber: ticket.ticketNumber
+              }
+            });
+          }
+        }
+        
+        // Send SMS to assigned support rep if there is one
+        if (ticket.assignedTo) {
+          const supportRep = await storage.getUser(ticket.assignedTo);
+          if (supportRep && supportRep.phone) {
+            await notificationService.sendNotification({
+              userId: supportRep.id,
+              title: "Ticket Escalated",
+              message: `Support ticket #${ticket.ticketNumber} has been escalated and requires immediate attention.`,
+              type: NotificationType.SYSTEM_ALERT,
+              channels: [NotificationChannel.SMS],
+            });
+            
+            logger.info({
+              message: `Sent escalation SMS notification to support rep ${supportRep.id}`,
+              category: "notification",
+              source: "twilio",
+              userId: supportRep.id,
+              metadata: {
+                ticketId: id,
+                ticketNumber: ticket.ticketNumber
+              }
+            });
+          }
+        }
+      } catch (error) {
+        // Log the notification error but don't fail the ticket update
+        logger.error({
+          message: `Error sending escalation notifications: ${error instanceof Error ? error.message : String(error)}`,
+          category: "notification",
+          source: "twilio",
+          metadata: {
+            ticketId: id,
+            error: error instanceof Error ? error.stack : String(error)
+          }
+        });
+      }
     }
     
     logger.info({

@@ -1,5 +1,6 @@
 import { logger } from './logger';
 import { DatabaseStorage } from '../storage';
+import { twilioService, TwilioMessage } from './twilio';
 
 /**
  * Notification types that can be sent in the system
@@ -321,14 +322,67 @@ export class NotificationService implements INotificationService {
           break;
           
         case NotificationChannel.SMS:
-          // Here we would integrate with an SMS service like Twilio
-          // For now, we'll just log it
-          logger.info({
-            message: `[SMS] Would send SMS to user ${userId}: ${data.title}`,
-            category: "notification",
-            userId,
-            source: "internal"
-          });
+          // Integrate with Twilio for SMS notifications
+          try {
+            // Retrieve user info to get phone number
+            const user = await this.storage.getUser(userId);
+            if (!user || !user.phone) {
+              logger.warn({
+                message: `Cannot send SMS to user ${userId}: Missing phone number`,
+                category: "notification",
+                userId,
+                source: "twilio",
+                metadata: {
+                  hasUser: !!user,
+                  hasPhone: !!(user && user.phone)
+                }
+              });
+              break;
+            }
+            
+            // Prepare message with title and content
+            const smsMessage = `${data.title}: ${data.message}`;
+            
+            // Send SMS via Twilio service
+            const result = await twilioService.sendSMS({
+              to: user.phone,
+              body: smsMessage
+            });
+            
+            if (result.success) {
+              logger.info({
+                message: `SMS sent successfully to user ${userId} (${user.phone})`,
+                category: "notification",
+                userId,
+                source: "twilio",
+                metadata: {
+                  messageId: result.messageId,
+                  isSimulated: result.isSimulated
+                }
+              });
+            } else {
+              logger.error({
+                message: `Failed to send SMS to user ${userId}: ${result.error}`,
+                category: "notification",
+                userId,
+                source: "twilio",
+                metadata: {
+                  error: result.error,
+                  phone: user.phone
+                }
+              });
+            }
+          } catch (error) {
+            logger.error({
+              message: `Error sending SMS notification: ${error instanceof Error ? error.message : String(error)}`,
+              category: "notification",
+              userId,
+              source: "twilio",
+              metadata: {
+                error: error instanceof Error ? error.stack : String(error)
+              }
+            });
+          }
           break;
           
         case NotificationChannel.PUSH:

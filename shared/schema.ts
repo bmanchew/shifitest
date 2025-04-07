@@ -48,6 +48,7 @@ export const ticketStatusEnum = pgEnum("ticket_status", [
   "resolved",
   "closed",
   "under_review", // Added for automated assignment
+  "escalated", // Added for escalation tickets that require immediate attention
 ]);
 
 export const ticketPriorityEnum = pgEnum("ticket_priority", [

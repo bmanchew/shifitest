@@ -82,6 +82,7 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByPhone(phone: string): Promise<User | undefined>;
+  getUserByMerchantId(merchantId: number): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
   findOrCreateUserByPhone(phone: string): Promise<User>;
@@ -949,6 +950,23 @@ export class DatabaseStorage implements IStorage {
       return updatedUser;
     } catch (error) {
       console.error(`Error updating user ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getUserByMerchantId(merchantId: number): Promise<User | undefined> {
+    try {
+      // Get the merchant first
+      const merchant = await this.getMerchant(merchantId);
+      if (!merchant || !merchant.userId) {
+        console.warn(`No merchant found with ID ${merchantId} or merchant has no associated user ID`);
+        return undefined;
+      }
+      
+      // Get the user associated with the merchant
+      return await this.getUser(merchant.userId);
+    } catch (error) {
+      console.error(`Error getting user for merchant with ID ${merchantId}:`, error);
       return undefined;
     }
   }
