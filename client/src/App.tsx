@@ -16,6 +16,7 @@ const AdminLogs = lazy(() => import("@/pages/admin/Logs"));
 const AdminSettings = lazy(() => import("@/pages/admin/Settings"));
 const AdminBlockchain = lazy(() => import("@/pages/admin/Blockchain"));
 const AdminSupportTickets = lazy(() => import("@/pages/admin/SupportTickets"));
+const AdminSupportTicket = lazy(() => import("@/pages/admin/SupportTicket"));
 const AdminMessages = lazy(() => import("@/pages/admin/Messages"));
 const AdminMessageDetail = lazy(() => import("@/pages/admin/MessageDetail"));
 const AdminKnowledgeBase = lazy(() => import("@/pages/admin/KnowledgeBase"));
@@ -146,6 +147,7 @@ function App() {
                 <Route path="/admin/portfolio" component={Portfolio} />
                 <Route path="/admin/blockchain" component={AdminBlockchain} />
                 <Route path="/admin/support-tickets" component={AdminSupportTickets} />
+                <Route path="/admin/support-tickets/:id" component={AdminSupportTicket} />
                 <Route path="/admin/messages" component={AdminMessages} />
                 <Route path="/admin/messages/:id" component={AdminMessageDetail} />
                 <Route path="/admin/knowledge-base" component={AdminKnowledgeBase} />

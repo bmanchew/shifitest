@@ -200,7 +200,7 @@ export default function SupportTickets() {
       accessorKey: "ticketNumber",
       header: "Ticket #",
       cell: ({ row }) => (
-        <Link href={`/admin/messages?ticketId=${row.original.id}`} className="font-medium text-blue-600 hover:underline">
+        <Link href={`/admin/support-tickets/${row.original.id}`} className="font-medium text-blue-600 hover:underline">
           {row.original.ticketNumber}
         </Link>
       ),
@@ -284,11 +284,11 @@ export default function SupportTickets() {
             >
               <MessageSquare className="h-4 w-4" />
             </Button>
-            <Link href={`/admin/messages?ticketId=${ticket.id}`}>
+            <Link href={`/admin/support-tickets/${ticket.id}`}>
               <Button
                 variant="outline"
                 size="icon"
-                title="View Conversation"
+                title="View Ticket"
               >
                 <FileText className="h-4 w-4" />
               </Button>
