@@ -1,56 +1,93 @@
+/**
+ * This script generates a due diligence report for a specific merchant
+ * It uses the OpenAI-powered dueDiligence service to analyze merchant data
+ */
+
 const { dueDiligenceService } = require('./server/services/dueDiligence');
 const { storage } = require('./server/storage');
+const axios = require('axios');
 
-async function generateTestDueDiligenceReport() {
+async function generateDueDiligenceReport() {
   try {
-    console.log('Starting due diligence report test generation...');
+    console.log('Starting due diligence report generation...');
     
-    // Check if the OpenAI service is initialized
+    // Check if OpenAI is properly configured
     if (!dueDiligenceService.isInitialized()) {
       console.error('Due diligence service is not initialized. Please ensure the OPENAI_API_KEY environment variable is set.');
       return;
     }
     
-    // Get a merchant to test with - using merchantId 49 as mentioned in notes or 
-    // fallback to any available merchant
-    let merchantId = 49; // Default to merchant ID 49 (Brandon)
-    const merchant = await storage.getMerchant(merchantId);
+    // Try to fetch a specific merchant (using ID 28 or 49 as mentioned in logs)
+    const merchantIds = [28, 49]; // Try these IDs first
+    let merchant = null;
+    let merchantId = null;
     
-    if (!merchant) {
-      console.error(`Merchant with ID ${merchantId} not found. Trying to find another merchant...`);
-      
-      // Fallback: Get any available merchant
-      const merchants = await storage.getMerchants({});
-      if (merchants.length === 0) {
-        console.error('No merchants found in the system.');
-        return;
+    for (const id of merchantIds) {
+      console.log(`Trying to fetch merchant with ID ${id}...`);
+      const foundMerchant = await storage.getMerchant(id);
+      if (foundMerchant) {
+        merchant = foundMerchant;
+        merchantId = id;
+        break;
       }
-      
-      merchantId = merchants[0].id;
-      console.log(`Found fallback merchant with ID: ${merchantId}`);
-    } else {
-      console.log(`Using merchant: ${merchant.name} (ID: ${merchantId})`);
     }
     
-    // Get merchant verification information if available
-    const verificationInfo = await storage.getMerchantVerificationInfo(merchantId);
+    // If we still don't have a merchant, try to get any available merchant
+    if (!merchant) {
+      console.log('Specific merchants not found, looking for any available merchant...');
+      const merchants = await storage.getMerchants({});
+      if (merchants && merchants.length > 0) {
+        merchant = merchants[0];
+        merchantId = merchant.id;
+      } else {
+        console.error('No merchants found in the system. Cannot generate report.');
+        return;
+      }
+    }
     
-    // Get contract info
+    console.log(`Using merchant: ${merchant.name} (ID: ${merchantId})`);
+    
+    // Get additional merchant data to enrich the report
+    const verificationInfo = await storage.getMerchantVerificationInfo(merchantId);
+    const businessDetails = await storage.getMerchantBusinessDetailsByMerchantId(merchantId);
     const contracts = await storage.getContractsByMerchantId(merchantId);
     
-    // Enrich merchant data with additional information for report
+    console.log('Merchant verification status:', verificationInfo?.status || 'unknown');
+    console.log('Active contracts:', contracts.filter(c => c.status === 'active').length);
+    
+    // Determine a risk score based on available data
+    const riskScore = determineRiskScore(merchant, contracts, verificationInfo);
+    console.log('Calculated risk score:', riskScore);
+    
+    // Enrich merchant data with all available information
     const enrichedMerchantData = {
       ...merchant,
+      ...businessDetails,
       verificationStatus: verificationInfo?.status || 'unverified',
       middeskBusinessId: verificationInfo?.middeskBusinessId || null,
       activeContractsCount: contracts.filter(c => c.status === 'active').length,
       totalContractsValue: contracts
         .filter(c => c.status === 'active')
         .reduce((sum, contract) => sum + (contract.amount || 0), 0),
-      riskScore: determineRiskScore(merchant, contracts, verificationInfo)
+      riskScore: riskScore,
+      // If business details available, add them
+      industry: businessDetails?.industry || 'Financial Services',
+      businessType: businessDetails?.businessType || 'LLC',
+      yearFounded: businessDetails?.yearFounded || 2020,
+      annualRevenue: businessDetails?.annualRevenue || 1000000,
+      description: businessDetails?.description || `${merchant.name} is a financial services company.`
     };
     
-    console.log('Generating due diligence report...');
+    console.log('Generating due diligence report with merchant data...');
+    console.log('Merchant data summary:', JSON.stringify({
+      id: enrichedMerchantData.id,
+      name: enrichedMerchantData.name,
+      verificationStatus: enrichedMerchantData.verificationStatus,
+      activeContractsCount: enrichedMerchantData.activeContractsCount,
+      riskScore: enrichedMerchantData.riskScore
+    }, null, 2));
+    
+    // Generate the report using the service
     const reportResult = await dueDiligenceService.generateDueDiligenceReport(enrichedMerchantData);
     
     if (!reportResult.success) {
@@ -58,37 +95,39 @@ async function generateTestDueDiligenceReport() {
       return;
     }
     
-    console.log('----------------------------------------------');
+    console.log('\n-----------------------------------------------------');
     console.log('DUE DILIGENCE REPORT GENERATED SUCCESSFULLY');
-    console.log('----------------------------------------------');
-    console.log(`Report length: ${reportResult.report.length} characters`);
+    console.log('-----------------------------------------------------');
     console.log(`Generated at: ${reportResult.generatedAt}`);
-    console.log('----------------------------------------------');
-    console.log('REPORT PREVIEW (first 500 characters):');
-    console.log('----------------------------------------------');
-    console.log(reportResult.report.substring(0, 500) + '...');
-    console.log('----------------------------------------------');
+    console.log(`Report length: ${reportResult.report.length} characters`);
+    console.log('-----------------------------------------------------');
+    console.log('REPORT PREVIEW:');
+    console.log('-----------------------------------------------------');
+    console.log(reportResult.report.substring(0, 1000) + '...');
+    console.log('-----------------------------------------------------');
     
-    // Save the report in the database
+    // Save the report to the database
     const savedReport = await storage.saveDueDiligenceReport({
       merchantId: merchantId,
       report: reportResult.report,
       generatedAt: reportResult.generatedAt,
-      generatedBy: 2, // Admin user ID (Brandon's ID)
+      generatedBy: 1, // Admin user ID
       status: 'completed'
     });
     
     console.log(`Report saved with ID: ${savedReport.id}`);
-    console.log('Test completed successfully!');
+    console.log('\nYou can view the report in the UI at:');
+    console.log(`/admin/merchants/${merchantId}`);
+    
+    return savedReport;
     
   } catch (error) {
-    console.error('Error in test script:', error);
+    console.error('Error generating due diligence report:', error);
   }
 }
 
-// Helper function to determine a merchant's risk score
+// Helper function to determine merchant risk score
 function determineRiskScore(merchant, contracts, verificationInfo) {
-  // Basic risk assessment heuristics
   let riskFactors = 0;
   
   // Verification status
@@ -97,12 +136,12 @@ function determineRiskScore(merchant, contracts, verificationInfo) {
   }
   
   // Contract history
-  if (contracts.length === 0) {
+  if (!contracts || contracts.length === 0) {
     riskFactors += 1; // Moderate risk for no contract history
   }
   
-  // Contract payment history
-  const hasLatePayments = contracts.some(c => c.paymentStatus === 'late');
+  // Contract payment history (if available)
+  const hasLatePayments = contracts?.some(c => c.paymentStatus === 'late');
   if (hasLatePayments) {
     riskFactors += 2; // High risk for late payments
   }
@@ -125,5 +164,7 @@ function determineRiskScore(merchant, contracts, verificationInfo) {
   }
 }
 
-// Run the test
-generateTestDueDiligenceReport();
+// Run the report generation
+generateDueDiligenceReport()
+  .then(() => console.log('Script completed.'))
+  .catch(err => console.error('Script failed:', err));

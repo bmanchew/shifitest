@@ -3,6 +3,7 @@ import { Link } from 'wouter';
 import axios from 'axios';
 import PlaidAssetReport from './reports/PlaidAssetReport';
 import MidDeskReport from './reports/MidDeskReport';
+import DueDiligenceReport from './reports/DueDiligenceReport';
 
 interface MerchantDetailProps {
   merchantId: number;
@@ -444,12 +445,18 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
       )}
       
       {/* Plaid Asset Report */}
+      {/* Financial Asset Reports Section */}
       <div className="mt-8 mb-8">
         <div className="px-4 py-5 sm:px-6 border-t border-gray-200">
           <h3 className="text-lg leading-6 font-medium text-gray-900">Financial Asset Reports</h3>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">Plaid asset reports for this merchant</p>
         </div>
         <PlaidAssetReport merchantId={merchantId} />
+      </div>
+
+      {/* Due Diligence Report Section */}
+      <div className="mt-8 mb-8">
+        <DueDiligenceReport merchantId={merchantId} triggerRefresh={fetchMerchantDetail} />
       </div>
     </div>
   );
