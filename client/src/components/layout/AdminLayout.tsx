@@ -15,7 +15,7 @@ import {
   BarChart,
   Link2,
   TicketIcon,
-  MessageSquare,
+  // MessageSquare, // Removing Messages section
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -27,7 +27,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navigationItems = [
+  // Define the navigation item type to match merchant layout
+  type NavigationItem = {
+    name: string;
+    href: string;
+    icon: typeof LayoutDashboard;
+    current: boolean;
+  };
+
+  const navigationItems: NavigationItem[] = [
     {
       name: "Dashboard",
       href: "/admin/dashboard",
@@ -60,12 +68,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       href: "/admin/support-tickets",
       icon: TicketIcon,
       current: location === "/admin/support-tickets",
-    },
-    {
-      name: "Messages",
-      href: "/admin/messages",
-      icon: MessageSquare,
-      current: location === "/admin/messages",
     },
     {
       name: "Blockchain",
