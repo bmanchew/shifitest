@@ -40,6 +40,16 @@ interface BusinessDetails {
   annualRevenue: number | null;
   createdAt: string;
   updatedAt: string | null;
+  middeskBusinessId?: string | null;
+  verificationStatus?: 'not_started' | 'pending' | 'verified' | 'failed' | null;
+  verificationData?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  phone?: string | null;
+  websiteUrl?: string | null;
 }
 
 function MerchantDetail({ merchantId }: MerchantDetailProps) {
@@ -49,6 +59,7 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [syncingStatus, setSyncingStatus] = useState<boolean>(false);
+  const [verifyingBusiness, setVerifyingBusiness] = useState<boolean>(false);
 
   const fetchMerchantDetail = async () => {
     try {
@@ -92,6 +103,44 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
       setError("Error syncing Plaid status: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setSyncingStatus(false);
+    }
+  };
+  
+  // Function to initiate business verification
+  const initiateBusinessVerification = async () => {
+    if (!businessDetails) {
+      setError("No business details available for verification");
+      return;
+    }
+    
+    if (businessDetails.verificationStatus === 'verified') {
+      setError("Business is already verified");
+      return;
+    }
+    
+    if (businessDetails.verificationStatus === 'pending') {
+      setError("Business verification is already in progress");
+      return;
+    }
+    
+    try {
+      setVerifyingBusiness(true);
+      setError(null);
+      
+      const response = await axios.post(`/api/admin/merchants/${merchantId}/verify-business`, {
+        businessId: businessDetails.id
+      });
+      
+      if (response.data.success) {
+        // Refresh merchant details
+        fetchMerchantDetail();
+      } else {
+        setError("Failed to initiate business verification: " + response.data.message);
+      }
+    } catch (err) {
+      setError("Error initiating business verification: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setVerifyingBusiness(false);
     }
   };
 
@@ -274,6 +323,101 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
                   <dt className="text-sm font-medium text-gray-500">Annual Revenue</dt>
                   <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                     ${businessDetails.annualRevenue.toLocaleString()}
+                  </dd>
+                </div>
+              )}
+              {businessDetails.websiteUrl && (
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Website</dt>
+                  <dd className="mt-1 text-sm text-blue-600 sm:mt-0 sm:col-span-2">
+                    <a href={businessDetails.websiteUrl.startsWith('http') ? businessDetails.websiteUrl : `https://${businessDetails.websiteUrl}`} 
+                       target="_blank" rel="noopener noreferrer" className="hover:underline">
+                      {businessDetails.websiteUrl}
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {(businessDetails.addressLine1 || businessDetails.city || businessDetails.state) && (
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Business Address</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                    {businessDetails.addressLine1 && <div>{businessDetails.addressLine1}</div>}
+                    {businessDetails.addressLine2 && <div>{businessDetails.addressLine2}</div>}
+                    {(businessDetails.city || businessDetails.state || businessDetails.zipCode) && (
+                      <div>
+                        {businessDetails.city && `${businessDetails.city}`}
+                        {businessDetails.city && businessDetails.state && ', '}
+                        {businessDetails.state && `${businessDetails.state}`}
+                        {(businessDetails.city || businessDetails.state) && businessDetails.zipCode && ' '}
+                        {businessDetails.zipCode && businessDetails.zipCode}
+                      </div>
+                    )}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </div>
+          
+          {/* KYC Verification Section */}
+          <div className="px-4 py-5 sm:px-6 border-t border-gray-200 flex justify-between items-center">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Business Verification Status</h3>
+            {(!businessDetails.verificationStatus || 
+              businessDetails.verificationStatus === 'not_started' || 
+              businessDetails.verificationStatus === 'failed') && (
+              <button
+                onClick={initiateBusinessVerification}
+                disabled={verifyingBusiness}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300"
+              >
+                {verifyingBusiness ? "Verifying..." : "Verify Business"}
+              </button>
+            )}
+          </div>
+          
+          <div className="border-t border-gray-200 px-4 py-5 sm:p-0">
+            <dl className="sm:divide-y sm:divide-gray-200">
+              <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                <dt className="text-sm font-medium text-gray-500">Verification Status</dt>
+                <dd className="mt-1 text-sm sm:mt-0 sm:col-span-2">
+                  {businessDetails.verificationStatus ? (
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                      ${businessDetails.verificationStatus === 'verified' ? 'bg-green-100 text-green-800' : 
+                        businessDetails.verificationStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                        businessDetails.verificationStatus === 'failed' ? 'bg-red-100 text-red-800' : 
+                        'bg-gray-100 text-gray-800'}`}
+                    >
+                      {businessDetails.verificationStatus.replace(/_/g, ' ').toUpperCase()}
+                    </span>
+                  ) : (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                      NOT STARTED
+                    </span>
+                  )}
+                </dd>
+              </div>
+              
+              {businessDetails.middeskBusinessId && (
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">MidDesk Business ID</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                    {businessDetails.middeskBusinessId}
+                  </dd>
+                </div>
+              )}
+              
+              {businessDetails.verificationData && (
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Verification Details</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                    <pre className="whitespace-pre-wrap bg-gray-50 p-2 rounded text-xs overflow-auto max-h-40">
+                      {(() => {
+                        try {
+                          return JSON.stringify(JSON.parse(businessDetails.verificationData), null, 2);
+                        } catch (error) {
+                          return businessDetails.verificationData;
+                        }
+                      })()}
+                    </pre>
                   </dd>
                 </div>
               )}
