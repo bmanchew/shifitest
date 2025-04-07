@@ -1753,3 +1753,42 @@ export const insertThirdPartyVerificationRequestSchema = createInsertSchema(
 
 export type ThirdPartyVerificationRequest = typeof thirdPartyVerificationRequests.$inferSelect;
 export type InsertThirdPartyVerificationRequest = z.infer<typeof insertThirdPartyVerificationRequestSchema>;
+
+// Due diligence report status enum
+export const dueDiligenceReportStatusEnum = pgEnum("due_diligence_report_status", [
+  "pending",
+  "processing",
+  "completed",
+  "failed"
+]);
+
+// Due diligence reports for merchant compliance and risk analysis
+export const dueDiligenceReports = pgTable("due_diligence_reports", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchant_id")
+    .references(() => merchants.id)
+    .notNull(),
+  report: text("report").notNull(), // Full text of the report
+  generatedAt: timestamp("generated_at").defaultNow(),
+  generatedBy: integer("generated_by")
+    .references(() => users.id)
+    .notNull(),
+  status: dueDiligenceReportStatusEnum("status").notNull().default("completed"),
+  riskScore: text("risk_score"), // Low, Medium, High risk assessment
+  investmentRating: text("investment_rating"), // Investment suitability rating
+  complianceStatus: text("compliance_status"), // Compliance assessment
+  summary: text("summary"), // Executive summary of the report
+  reportVersion: text("report_version").default("1.0"), // Version of the report format
+  lastReviewed: timestamp("last_reviewed"),
+  lastReviewedBy: integer("last_reviewed_by").references(() => users.id),
+  reviewNotes: text("review_notes"),
+  archived: boolean("archived").default(false),
+});
+
+export const insertDueDiligenceReportSchema = createInsertSchema(dueDiligenceReports).omit({
+  id: true,
+  lastReviewed: true,
+});
+
+export type DueDiligenceReport = typeof dueDiligenceReports.$inferSelect;
+export type InsertDueDiligenceReport = z.infer<typeof insertDueDiligenceReportSchema>;

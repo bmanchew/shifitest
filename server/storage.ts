@@ -9,7 +9,7 @@ import {
   
   // Merchant related schemas and types
   merchants, Merchant, InsertMerchant,
-  merchantBusinessDetails, MerchantBusinessDetail, InsertMerchantBusinessDetail,
+  merchantBusinessDetails, MerchantBusinessDetails, InsertMerchantBusinessDetails,
   merchantDocuments, MerchantDocument, InsertMerchantDocument,
   applicationProgress, ApplicationProgress, InsertApplicationProgress,
   plaidMerchants, PlaidMerchant, InsertPlaidMerchant,
@@ -23,6 +23,9 @@ import {
   // Investment related schemas and types
   investorProfiles, InvestorProfile, InsertInvestorProfile,
   investmentOfferings, InvestmentOffering, InsertInvestmentOffering,
+  
+  // Due Diligence related schemas and types
+  dueDiligenceReports, DueDiligenceReport, InsertDueDiligenceReport,
   investments, Investment, InsertInvestment,
   documentLibrary, DocumentLibrary, InsertDocumentLibrary,
   
@@ -123,6 +126,14 @@ export interface IStorage {
   getPendingContractCancellationRequests(): Promise<ContractCancellationRequest[]>;
   updateContractCancellationRequest(id: number, data: Partial<ContractCancellationRequest>): Promise<ContractCancellationRequest | undefined>;
   updateContractCancellationRequestStatus(id: number, status: string, adminId?: number): Promise<ContractCancellationRequest | undefined>;
+  
+  // Due Diligence Report operations
+  saveDueDiligenceReport(report: InsertDueDiligenceReport): Promise<DueDiligenceReport>;
+  getDueDiligenceReportById(id: number): Promise<DueDiligenceReport | undefined>;
+  getDueDiligenceReportsByMerchantId(merchantId: number): Promise<DueDiligenceReport[]>;
+  updateDueDiligenceReport(id: number, data: Partial<DueDiligenceReport>): Promise<DueDiligenceReport | undefined>;
+  deleteDueDiligenceReport(id: number): Promise<void>;
+  getMerchantVerificationInfo(merchantId: number): Promise<any>;
   
   // Conversation operations
   createConversation(conversation: InsertConversation): Promise<Conversation>;
@@ -4630,6 +4641,94 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Failed to create knowledge category: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+  
+  // Due Diligence Report operations
+  async saveDueDiligenceReport(report: InsertDueDiligenceReport): Promise<DueDiligenceReport> {
+    try {
+      const [newReport] = await db.insert(dueDiligenceReports).values(report).returning();
+      return newReport;
+    } catch (error) {
+      console.error('Failed to save due diligence report:', error);
+      throw error;
+    }
+  }
+  
+  async getDueDiligenceReportById(id: number): Promise<DueDiligenceReport | undefined> {
+    try {
+      const [report] = await db.select().from(dueDiligenceReports).where(eq(dueDiligenceReports.id, id));
+      return report;
+    } catch (error) {
+      console.error(`Failed to get due diligence report ${id}:`, error);
+      return undefined;
+    }
+  }
+  
+  async getDueDiligenceReportsByMerchantId(merchantId: number): Promise<DueDiligenceReport[]> {
+    try {
+      const reports = await db
+        .select()
+        .from(dueDiligenceReports)
+        .where(eq(dueDiligenceReports.merchantId, merchantId))
+        .orderBy(desc(dueDiligenceReports.generatedAt));
+      return reports;
+    } catch (error) {
+      console.error(`Failed to get due diligence reports for merchant ${merchantId}:`, error);
+      return [];
+    }
+  }
+  
+  async updateDueDiligenceReport(id: number, data: Partial<DueDiligenceReport>): Promise<DueDiligenceReport | undefined> {
+    try {
+      const [updatedReport] = await db
+        .update(dueDiligenceReports)
+        .set(data)
+        .where(eq(dueDiligenceReports.id, id))
+        .returning();
+      return updatedReport;
+    } catch (error) {
+      console.error(`Failed to update due diligence report ${id}:`, error);
+      return undefined;
+    }
+  }
+  
+  async deleteDueDiligenceReport(id: number): Promise<void> {
+    try {
+      await db.delete(dueDiligenceReports).where(eq(dueDiligenceReports.id, id));
+    } catch (error) {
+      console.error(`Failed to delete due diligence report ${id}:`, error);
+      throw error;
+    }
+  }
+  
+  async getMerchantVerificationInfo(merchantId: number): Promise<any> {
+    try {
+      // Get the merchant
+      const merchant = await this.getMerchant(merchantId);
+      if (!merchant) return null;
+      
+      // Get business details
+      const businessDetails = await this.getMerchantBusinessDetailsByMerchantId(merchantId);
+      
+      // Get all contracts for the merchant
+      const contracts = await this.getContractsByMerchantId(merchantId);
+      
+      // Combine information for verification
+      return {
+        merchantId,
+        name: merchant.name,
+        middeskBusinessId: businessDetails?.middeskBusinessId,
+        plaidAssetReportId: businessDetails?.plaidAssetReportId,
+        verificationStatus: businessDetails?.verificationStatus || 'unverified',
+        verificationDate: businessDetails?.verifiedAt,
+        kycStatus: businessDetails?.kycStatus,
+        contractCount: contracts.length,
+        activeContractCount: contracts.filter(c => c.status === 'active').length
+      };
+    } catch (error) {
+      console.error(`Failed to get merchant verification info for merchant ${merchantId}:`, error);
+      return null;
+    }
+  }
 
   async getKnowledgeCategory(id: number): Promise<KnowledgeCategory | undefined> {
     try {
@@ -4661,6 +4760,94 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error updating knowledge category ${id}:`, error);
       return undefined;
+    }
+  }
+
+  // Due Diligence Report operations
+  async saveDueDiligenceReport(report: InsertDueDiligenceReport): Promise<DueDiligenceReport> {
+    try {
+      const [newReport] = await db.insert(dueDiligenceReports).values(report).returning();
+      return newReport;
+    } catch (error) {
+      console.error('Failed to save due diligence report:', error);
+      throw error;
+    }
+  }
+  
+  async getDueDiligenceReportById(id: number): Promise<DueDiligenceReport | undefined> {
+    try {
+      const [report] = await db.select().from(dueDiligenceReports).where(eq(dueDiligenceReports.id, id));
+      return report;
+    } catch (error) {
+      console.error(`Failed to get due diligence report ${id}:`, error);
+      return undefined;
+    }
+  }
+  
+  async getDueDiligenceReportsByMerchantId(merchantId: number): Promise<DueDiligenceReport[]> {
+    try {
+      const reports = await db
+        .select()
+        .from(dueDiligenceReports)
+        .where(eq(dueDiligenceReports.merchantId, merchantId))
+        .orderBy(desc(dueDiligenceReports.generatedAt));
+      return reports;
+    } catch (error) {
+      console.error(`Failed to get due diligence reports for merchant ${merchantId}:`, error);
+      return [];
+    }
+  }
+  
+  async updateDueDiligenceReport(id: number, data: Partial<DueDiligenceReport>): Promise<DueDiligenceReport | undefined> {
+    try {
+      const [updatedReport] = await db
+        .update(dueDiligenceReports)
+        .set(data)
+        .where(eq(dueDiligenceReports.id, id))
+        .returning();
+      return updatedReport;
+    } catch (error) {
+      console.error(`Failed to update due diligence report ${id}:`, error);
+      return undefined;
+    }
+  }
+  
+  async deleteDueDiligenceReport(id: number): Promise<void> {
+    try {
+      await db.delete(dueDiligenceReports).where(eq(dueDiligenceReports.id, id));
+    } catch (error) {
+      console.error(`Failed to delete due diligence report ${id}:`, error);
+      throw error;
+    }
+  }
+  
+  async getMerchantVerificationInfo(merchantId: number): Promise<any> {
+    try {
+      // Get the merchant
+      const merchant = await this.getMerchant(merchantId);
+      if (!merchant) return null;
+      
+      // Get business details
+      const businessDetails = await this.getMerchantBusinessDetailsByMerchantId(merchantId);
+      
+      // Get all contracts for the merchant
+      const contracts = await this.getContractsByMerchantId(merchantId);
+      
+      // Combine information for verification
+      return {
+        merchantId,
+        name: merchant.name,
+        middeskBusinessId: businessDetails?.middeskBusinessId,
+        plaidAssetReportId: businessDetails?.plaidAssetReportId,
+        verificationStatus: businessDetails?.verificationStatus || 'unverified',
+        verificationDate: businessDetails?.verifiedAt,
+        kycStatus: businessDetails?.kycStatus,
+        contractCount: contracts.length,
+        activeContractCount: contracts.filter(c => c.status === 'active').length
+      };
+    } catch (error) {
+      console.error(`Failed to get merchant verification info for merchant ${merchantId}:`, error);
+      return null;
     }
   }
 
