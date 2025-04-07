@@ -32,11 +32,66 @@ router.get("/", async (req: Request, res: Response) => {
       });
     }
     
-    let tickets = await storage.getAllSupportTickets();
+    // Check user authorization
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
     
-    // Apply filters if provided
-    if (parsedMerchantId) {
-      tickets = tickets.filter(ticket => ticket.merchantId === parsedMerchantId);
+    // Get all tickets first
+    let tickets = await storage.getAllSupportTickets();
+
+    // For merchants, enforce that they can only see their own tickets
+    if (req.user.role === 'merchant') {
+      // If no merchantId was provided, get it from the user's merchant record
+      const userMerchantId = req.merchant?.id;
+      
+      if (!userMerchantId) {
+        logger.warn({
+          message: `User ${req.user.id} has merchant role but no merchant record`,
+          category: "security",
+          source: "internal",
+          userId: req.user.id,
+          metadata: { path: req.path }
+        });
+        
+        return res.status(400).json({
+          success: false,
+          message: "Merchant record not found"
+        });
+      }
+      
+      // If merchantId parameter was provided, ensure it matches the user's merchant ID
+      if (parsedMerchantId && parsedMerchantId !== userMerchantId) {
+        logger.warn({
+          message: `User ${req.user.id} attempted to access tickets for merchant ${parsedMerchantId} but is associated with merchant ${userMerchantId}`,
+          category: "security",
+          source: "internal",
+          userId: req.user.id,
+          metadata: { path: req.path, requestedMerchantId: parsedMerchantId, userMerchantId }
+        });
+        
+        return res.status(403).json({
+          success: false,
+          message: "You can only access tickets for your merchant account"
+        });
+      }
+      
+      // Always filter by the user's merchant ID
+      tickets = tickets.filter(ticket => ticket.merchantId === userMerchantId);
+    } else if (req.user.role === 'admin') {
+      // For admins, use the query parameter if provided
+      if (parsedMerchantId) {
+        tickets = tickets.filter(ticket => ticket.merchantId === parsedMerchantId);
+      }
+    } else {
+      // For other roles (non-admins, non-merchants), forbid access
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient permission to access tickets"
+      });
     }
     
     if (status) {
@@ -100,12 +155,61 @@ router.get("/:id", async (req: Request, res: Response) => {
       });
     }
     
+    // Check user authorization
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+    
     const ticket = await storage.getSupportTicket(id);
     if (!ticket) {
       return res.status(404).json({
         success: false,
         message: "Support ticket not found"
       });
+    }
+    
+    // For merchant users, verify that the ticket belongs to their merchant account
+    if (req.user.role === 'merchant') {
+      const userMerchantId = req.merchant?.id;
+      
+      if (!userMerchantId) {
+        logger.warn({
+          message: `User ${req.user.id} has merchant role but no merchant record`,
+          category: "security",
+          source: "internal",
+          userId: req.user.id,
+          metadata: { path: req.path }
+        });
+        
+        return res.status(400).json({
+          success: false,
+          message: "Merchant record not found"
+        });
+      }
+      
+      // Check if ticket belongs to the merchant
+      if (ticket.merchantId !== userMerchantId) {
+        logger.warn({
+          message: `User ${req.user.id} attempted to access ticket ${id} belonging to merchant ${ticket.merchantId} but is associated with merchant ${userMerchantId}`,
+          category: "security",
+          source: "internal",
+          userId: req.user.id,
+          metadata: { 
+            path: req.path, 
+            ticketId: id,
+            ticketMerchantId: ticket.merchantId,
+            userMerchantId 
+          }
+        });
+        
+        return res.status(403).json({
+          success: false,
+          message: "You can only access tickets for your merchant account"
+        });
+      }
     }
     
     // Get attachments for the ticket

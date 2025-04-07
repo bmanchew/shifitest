@@ -36,15 +36,21 @@ export default function SupportTicketsList() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["support-tickets"],
     queryFn: async () => {
-      if (!user?.id || user.role !== "merchant") return { tickets: [] };
+      if (!user?.id || user.role !== "merchant") {
+        return { tickets: [] };
+      }
       
-      const response = await fetch(`/api/support-tickets?merchantId=${user.merchantId}`);
+      // We don't need to pass merchantId as query param anymore
+      // The backend will automatically use the merchant ID from the authenticated user
+      const response = await fetch(`/api/support-tickets`);
+      
       if (!response.ok) {
+        console.error("Failed to fetch tickets:", response.statusText);
         throw new Error("Failed to fetch tickets");
       }
       return response.json();
     },
-    enabled: !!user?.merchantId && user.role === "merchant",
+    enabled: !!user?.id && user.role === "merchant",
   });
   
   // Extract tickets array from the response
