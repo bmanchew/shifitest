@@ -17,6 +17,8 @@ const AdminBlockchain = lazy(() => import("@/pages/admin/Blockchain"));
 const AdminSupportTickets = lazy(() => import("@/pages/admin/SupportTickets"));
 const AdminMessages = lazy(() => import("@/pages/admin/Messages"));
 const AdminMessageDetail = lazy(() => import("@/pages/admin/MessageDetail"));
+const AdminKnowledgeBase = lazy(() => import("@/pages/admin/KnowledgeBase"));
+const AdminTicketAnalytics = lazy(() => import("@/pages/admin/TicketAnalytics"));
 
 // Merchant pages
 const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
@@ -26,6 +28,8 @@ const MerchantReports = lazy(() => import("@/pages/merchant/Reports"));
 const MerchantSettings = lazy(() => import("@/pages/merchant/Settings"));
 const MerchantSupportTicketsList = lazy(() => import("@/pages/merchant/SupportTicketsList"));
 const MerchantCreateSupportTicket = lazy(() => import("@/pages/merchant/CreateSupportTicket"));
+const MerchantKnowledgeBase = lazy(() => import("@/pages/merchant/KnowledgeBase"));
+const MerchantTicketAnalytics = lazy(() => import("@/pages/merchant/TicketAnalytics"));
 
 // Investor pages
 const InvestorDashboard = lazy(() => import("@/components/investor/InvestorDashboard"));
@@ -141,6 +145,8 @@ function App() {
               <Route path="/admin/support-tickets" component={AdminSupportTickets} />
               <Route path="/admin/messages" component={AdminMessages} />
               <Route path="/admin/messages/:id" component={AdminMessageDetail} />
+              <Route path="/admin/knowledge-base" component={AdminKnowledgeBase} />
+              <Route path="/admin/ticket-analytics" component={AdminTicketAnalytics} />
             </>
           )}
 
@@ -160,6 +166,8 @@ function App() {
               <Route path="/merchant/support-tickets/:id" component={MerchantSupportTicket} />
               <Route path="/merchant/messages" component={MerchantMessages} />
               <Route path="/merchant/messages/:id" component={MerchantMessageDetail} />
+              <Route path="/merchant/knowledge-base" component={MerchantKnowledgeBase} />
+              <Route path="/merchant/ticket-analytics" component={MerchantTicketAnalytics} />
             </>
           )}
           

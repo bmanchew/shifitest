@@ -5797,6 +5797,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   apiRouter.use("/sales-reps", salesRepRouter);
   apiRouter.use("/communications", communicationsRouter);
   apiRouter.use("/investor", investorRouter);
+  apiRouter.use("/knowledge-base", knowledgeBaseRouter);
   // Also mount the conversations endpoint at /conversations for backward compatibility
   apiRouter.use("/conversations", communicationsRouter);
   // Also mount the support-tickets endpoint for backward compatibility

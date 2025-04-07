@@ -51,7 +51,7 @@ import {
   assetReports, AssetReport, InsertAssetReport,
   portfolioMonitoring, PortfolioMonitoring, InsertPortfolioMonitoring,
   complaintsData, ComplaintsData, InsertComplaintsData,
-} from "@shared/schemas";
+} from "@shared/schema";
 
 // Import salesrep related schemas
 import {
@@ -4390,7 +4390,7 @@ export class DatabaseStorage implements IStorage {
       }
       
       // Extract keywords from ticket title and description
-      const keywords = extractKeywords(`${ticket.title} ${ticket.description}`);
+      const keywords = this.extractKeywords(`${ticket.title} ${ticket.description}`);
       
       if (keywords.length === 0) {
         // If no meaningful keywords, return some general articles
@@ -4594,6 +4594,264 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error calculating feedback stats for article ${articleId}:`, error);
       return { helpful: 0, notHelpful: 0 };
+    }
+  }
+
+  // =========================================================================
+  // Support Agent Methods
+  // =========================================================================
+
+  async createSupportAgent(agent: InsertSupportAgent): Promise<SupportAgent> {
+    try {
+      const [newAgent] = await db.insert(supportAgents).values(agent).returning();
+      return newAgent;
+    } catch (error) {
+      logger.error('Error creating support agent:', error);
+      throw error;
+    }
+  }
+
+  async getSupportAgent(id: number): Promise<SupportAgent | undefined> {
+    try {
+      const [agent] = await db.select().from(supportAgents).where(eq(supportAgents.id, id));
+      return agent;
+    } catch (error) {
+      logger.error(`Error getting support agent with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSupportAgentByUserId(userId: number): Promise<SupportAgent | undefined> {
+    try {
+      const [agent] = await db.select().from(supportAgents).where(eq(supportAgents.userId, userId));
+      return agent;
+    } catch (error) {
+      logger.error(`Error getting support agent for user ${userId}:`, error);
+      return undefined;
+    }
+  }
+
+  async getAllSupportAgents(): Promise<SupportAgent[]> {
+    try {
+      return await db.select().from(supportAgents);
+    } catch (error) {
+      logger.error('Error getting all support agents:', error);
+      return [];
+    }
+  }
+
+  async getActiveSupportAgents(): Promise<SupportAgent[]> {
+    try {
+      return await db.select().from(supportAgents)
+        .where(eq(supportAgents.isAvailable, true));
+    } catch (error) {
+      logger.error('Error getting active support agents:', error);
+      return [];
+    }
+  }
+
+  async updateSupportAgent(id: number, data: Partial<SupportAgent>): Promise<SupportAgent | undefined> {
+    try {
+      const [updatedAgent] = await db.update(supportAgents)
+        .set({ 
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(eq(supportAgents.id, id))
+        .returning();
+      return updatedAgent;
+    } catch (error) {
+      logger.error(`Error updating support agent ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSupportAgentsBySpecialty(specialty: string): Promise<SupportAgent[]> {
+    try {
+      // Using a raw SQL query to check if the specialty is in the specialties array
+      const query = `
+        SELECT * FROM support_agents 
+        WHERE $1 = ANY(specialties) 
+        AND is_available = true
+      `;
+      
+      const result = await pool.query(query, [specialty]);
+      return result.rows;
+    } catch (error) {
+      logger.error(`Error getting support agents with specialty ${specialty}:`, error);
+      return [];
+    }
+  }
+
+  async getTicketsByAgentId(agentId: number): Promise<SupportTicket[]> {
+    try {
+      return await db.select().from(supportTickets)
+        .where(and(
+          eq(supportTickets.assignedAgentId, agentId),
+          not(inArray(supportTickets.status, ['closed', 'resolved']))
+        ));
+    } catch (error) {
+      logger.error(`Error getting tickets for agent ${agentId}:`, error);
+      return [];
+    }
+  }
+
+  // =========================================================================
+  // Support Agent Performance Methods
+  // =========================================================================
+
+  async createSupportAgentPerformance(performance: InsertSupportAgentPerformance): Promise<SupportAgentPerformance> {
+    try {
+      const [newPerformance] = await db.insert(supportAgentPerformance).values(performance).returning();
+      return newPerformance;
+    } catch (error) {
+      logger.error('Error creating support agent performance record:', error);
+      throw error;
+    }
+  }
+
+  async getSupportAgentPerformance(id: number): Promise<SupportAgentPerformance | undefined> {
+    try {
+      const [performance] = await db.select().from(supportAgentPerformance)
+        .where(eq(supportAgentPerformance.id, id));
+      return performance;
+    } catch (error) {
+      logger.error(`Error getting performance record ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getSupportAgentPerformanceByAgentId(agentId: number): Promise<SupportAgentPerformance[]> {
+    try {
+      return await db.select().from(supportAgentPerformance)
+        .where(eq(supportAgentPerformance.agentId, agentId))
+        .orderBy(desc(supportAgentPerformance.date));
+    } catch (error) {
+      logger.error(`Error getting performance records for agent ${agentId}:`, error);
+      return [];
+    }
+  }
+
+  async getPerformanceByDateRange(agentId: number, startDate: Date, endDate: Date): Promise<SupportAgentPerformance[]> {
+    try {
+      return await db.select().from(supportAgentPerformance)
+        .where(and(
+          eq(supportAgentPerformance.agentId, agentId),
+          // Using >= for startDate and <= for endDate to include both boundaries
+          gte(supportAgentPerformance.date, startDate),
+          lte(supportAgentPerformance.date, endDate)
+        ))
+        .orderBy(supportAgentPerformance.date);
+    } catch (error) {
+      logger.error(`Error getting performance records for agent ${agentId} in date range:`, error);
+      return [];
+    }
+  }
+
+  async updateSupportAgentPerformance(id: number, data: Partial<SupportAgentPerformance>): Promise<SupportAgentPerformance | undefined> {
+    try {
+      const [updatedPerformance] = await db.update(supportAgentPerformance)
+        .set(data)
+        .where(eq(supportAgentPerformance.id, id))
+        .returning();
+      return updatedPerformance;
+    } catch (error) {
+      logger.error(`Error updating performance record ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  // =========================================================================
+  // SLA Configuration Methods
+  // =========================================================================
+
+  async createTicketSlaConfig(config: InsertTicketSlaConfig): Promise<TicketSlaConfig> {
+    try {
+      const [newConfig] = await db.insert(ticketSlaConfigs).values(config).returning();
+      return newConfig;
+    } catch (error) {
+      logger.error('Error creating SLA config:', error);
+      throw error;
+    }
+  }
+
+  async getTicketSlaConfig(id: number): Promise<TicketSlaConfig | undefined> {
+    try {
+      const [config] = await db.select().from(ticketSlaConfigs).where(eq(ticketSlaConfigs.id, id));
+      return config;
+    } catch (error) {
+      logger.error(`Error getting SLA config ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getActiveSlaConfigs(): Promise<TicketSlaConfig[]> {
+    try {
+      return await db.select().from(ticketSlaConfigs).where(eq(ticketSlaConfigs.isActive, true));
+    } catch (error) {
+      logger.error('Error getting active SLA configs:', error);
+      return [];
+    }
+  }
+
+  async getSlaConfigForTicket(priority: string, category?: string): Promise<TicketSlaConfig | undefined> {
+    try {
+      // First, try to find a specific config for this priority and category
+      if (category) {
+        const [specificConfig] = await db.select().from(ticketSlaConfigs)
+          .where(and(
+            eq(ticketSlaConfigs.priority, priority),
+            eq(ticketSlaConfigs.category, category),
+            eq(ticketSlaConfigs.isActive, true)
+          ));
+        
+        if (specificConfig) return specificConfig;
+      }
+
+      // If no specific config, get the default one for this priority (with null category)
+      const [defaultConfig] = await db.select().from(ticketSlaConfigs)
+        .where(and(
+          eq(ticketSlaConfigs.priority, priority),
+          eq(ticketSlaConfigs.isActive, true),
+          isNull(ticketSlaConfigs.category)
+        ));
+      
+      return defaultConfig;
+    } catch (error) {
+      logger.error(`Error getting SLA config for ticket (priority: ${priority}, category: ${category}):`, error);
+      return undefined;
+    }
+  }
+
+  async updateTicketSlaConfig(id: number, data: Partial<TicketSlaConfig>): Promise<TicketSlaConfig | undefined> {
+    try {
+      const [updatedConfig] = await db.update(ticketSlaConfigs)
+        .set({
+          ...data,
+          updatedAt: new Date()
+        })
+        .where(eq(ticketSlaConfigs.id, id))
+        .returning();
+      return updatedConfig;
+    } catch (error) {
+      logger.error(`Error updating SLA config ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async disableSlaConfig(id: number): Promise<TicketSlaConfig | undefined> {
+    try {
+      const [disabledConfig] = await db.update(ticketSlaConfigs)
+        .set({
+          isActive: false,
+          updatedAt: new Date()
+        })
+        .where(eq(ticketSlaConfigs.id, id))
+        .returning();
+      return disabledConfig;
+    } catch (error) {
+      logger.error(`Error disabling SLA config ${id}:`, error);
+      return undefined;
     }
   }
 }

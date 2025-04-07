@@ -17,6 +17,7 @@ import supportTicketsRoutes from './support-tickets';
 import currentMerchantRoutes from './current-merchant';
 import applicationProgressRouter from './application-progress';
 import documentsRouter from './documents';
+import analyticsRoutes from './analytics';
 import { apiRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
@@ -44,6 +45,7 @@ modulesRouter.use('/api/v1/support-tickets', supportTicketsRoutes);
 modulesRouter.use('/api/v1/current-merchant', currentMerchantRoutes);
 modulesRouter.use('/api/v1/application-progress', applicationProgressRouter);
 modulesRouter.use('/api/v1/documents', documentsRouter);
+modulesRouter.use('/api/v1/analytics', analyticsRoutes);
 modulesRouter.use('/api/v1/merchant', authenticateToken, (req, res, next) => {
   next();
 }, (req, res, next) => {
@@ -70,6 +72,7 @@ modulesRouter.use('/api/support-tickets', supportTicketsRoutes);
 modulesRouter.use('/api/current-merchant', currentMerchantRoutes);
 modulesRouter.use('/api/application-progress', applicationProgressRouter);
 modulesRouter.use('/api/documents', documentsRouter);
+modulesRouter.use('/api/analytics', analyticsRoutes);
 modulesRouter.use('/api/merchant', authenticateToken, (req, res, next) => {
   next();
 }, (req, res, next) => {
