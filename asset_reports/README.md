@@ -24,7 +24,7 @@ This script will:
 
 ### 2. Generate Asset Reports
 
-The `generate-asset-reports.ts` script creates new Plaid asset reports for all merchants with completed Plaid integrations.
+The `generate-asset-reports.ts` script creates new Plaid asset reports for all merchants with completed Plaid integrations using access tokens.
 
 ```bash
 npx tsx generate-asset-reports.ts
@@ -36,7 +36,22 @@ This script will:
 - Store the asset report tokens in the database
 - Display a summary of successful and failed report generations
 
-### 3. Example Usage
+### 3. Generate Asset Reports with Merchant API Keys
+
+The `generate-merchant-reports.ts` script creates new Plaid asset reports for merchants using their individual Plaid API credentials.
+
+```bash
+npx tsx generate-merchant-reports.ts
+```
+
+This script will:
+- Find all merchants with completed Plaid integrations
+- Create a merchant-specific Plaid client using their client ID
+- Generate an asset report using the merchant's Plaid credentials
+- Store the asset report tokens in the database
+- Display a summary of successful and failed report generations
+
+### 4. Example Usage
 
 The `example-usage.ts` script demonstrates how to use both utilities together in a workflow.
 
@@ -49,12 +64,36 @@ This script will:
 2. Generate new asset reports
 3. Check updated status after generation
 
-### 4. Schedule Asset Reports
+### 5. Schedule Asset Reports
 
 The `schedule-asset-reports.ts` script is designed to be run on a regular schedule (e.g., weekly) to automatically generate new asset reports.
 
 ```bash
 npx tsx schedule-asset-reports.ts
+```
+
+## Using the Utility Script
+
+For convenience, we provide a shell script to run any of these utilities:
+
+```bash
+# Check asset report status
+./asset-reports-util.sh check
+
+# Generate asset reports using access tokens
+./asset-reports-util.sh generate
+
+# Generate asset reports using merchant-specific API keys
+./asset-reports-util.sh merchant
+
+# Run the scheduled asset report generator
+./asset-reports-util.sh schedule
+
+# Run the example workflow
+./asset-reports-util.sh example
+
+# Display help
+./asset-reports-util.sh help
 ```
 
 ## Asset Report Workflow
@@ -75,6 +114,7 @@ npx tsx schedule-asset-reports.ts
 ## Common Issues
 
 - **No Access Token**: If a merchant shows "No access token available", they may need to re-authenticate with Plaid or complete their onboarding process.
+- **No Plaid Client ID**: If a merchant has no Plaid client ID, they won't be able to use the merchant-specific API generation method.
 - **Pending Reports**: Reports may stay in "pending" status for several minutes while Plaid processes them.
 - **Error Reports**: If a report has an error status, check the error message for troubleshooting.
 

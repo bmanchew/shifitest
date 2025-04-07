@@ -15,7 +15,8 @@ show_help() {
   echo
   echo "Commands:"
   echo "  check       Check status of all asset reports"
-  echo "  generate    Generate new asset reports for all merchants"
+  echo "  generate    Generate new asset reports for all merchants using access tokens"
+  echo "  merchant    Generate new asset reports using merchant-specific API keys"
   echo "  schedule    Run the scheduled asset report generator"
   echo "  example     Run the example usage script"
   echo "  help        Display this help message"
@@ -23,6 +24,7 @@ show_help() {
   echo "Examples:"
   echo "  ./asset-reports-util.sh check"
   echo "  ./asset-reports-util.sh generate"
+  echo "  ./asset-reports-util.sh merchant"
   echo
 }
 
@@ -39,8 +41,12 @@ case "$1" in
     npx tsx asset_reports/check-asset-reports.ts
     ;;
   "generate")
-    echo "Generating asset reports..."
+    echo "Generating asset reports using access tokens..."
     npx tsx asset_reports/generate-asset-reports.ts
+    ;;
+  "merchant")
+    echo "Generating asset reports using merchant-specific API keys..."
+    npx tsx asset_reports/generate-merchant-reports.ts
     ;;
   "schedule")
     echo "Running scheduled asset report generation..."
