@@ -222,4 +222,71 @@ router.post("/:id/review-verification", async (req: Request, res: Response) => {
   }
 });
 
+// Get single merchant by ID with details
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const merchantId = parseInt(req.params.id);
+    
+    if (isNaN(merchantId)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid merchant ID format" 
+      });
+    }
+    
+    logger.info({
+      message: `Admin requesting merchant details for ID ${merchantId}`,
+      category: "api",
+      userId: req.user?.id,
+      source: "internal",
+      metadata: {
+        merchantId,
+        path: req.path,
+        method: req.method
+      }
+    });
+    
+    // Get the basic merchant information
+    const merchant = await storage.getMerchant(merchantId);
+    
+    if (!merchant) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Merchant not found" 
+      });
+    }
+
+    // Get additional merchant details such as Plaid information and business details
+    const plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
+    const businessDetails = await storage.getMerchantBusinessDetailsByMerchantId(merchantId);
+    
+    res.json({
+      success: true,
+      merchant,
+      plaidMerchant: plaidMerchant || null,
+      businessDetails: businessDetails || null
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error fetching merchant details: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      userId: req.user?.id,
+      source: "internal",
+      metadata: {
+        merchantId: req.params.id,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
+      }
+    });
+    
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch merchant details",
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 export default router;
