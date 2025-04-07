@@ -512,6 +512,8 @@ export function TicketSubmissionForm({
                           </>
                         ) : selectedContract ? (
                           formatContractInfo(selectedContract)
+                        ) : field.value === "" && contractSearchTerm === "" ? (
+                          "Not Contract Related"
                         ) : isContractsError ? (
                           "Error loading contracts - Click to retry"
                         ) : (
@@ -559,41 +561,58 @@ export function TicketSubmissionForm({
                         ) : filteredContracts.length === 0 ? (
                           <CommandEmpty>No contracts found.</CommandEmpty>
                         ) : (
-                          <CommandGroup heading={`Contracts (${filteredContracts.length})`}>
-                            {filteredContracts.map((contract) => (
-                              <CommandItem
-                                key={contract.id}
-                                value={String(contract.id)}
-                                onSelect={() => handleContractSelect(contract)}
-                              >
-                                <div className="flex flex-col">
-                                  <div className="flex items-center">
-                                    <span className="font-medium">#{contract.contractNumber}</span>
-                                    <Badge 
-                                      variant={
-                                        contract.status === 'active' ? 'success' : 
-                                        contract.status === 'pending' ? 'warning' : 
-                                        contract.status === 'completed' ? 'default' : 'destructive'
-                                      }
-                                      className="ml-2"
-                                    >
-                                      {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
-                                    </Badge>
+                          <>
+                            <CommandGroup heading={`Contracts (${filteredContracts.length})`}>
+                              {filteredContracts.map((contract) => (
+                                <CommandItem
+                                  key={contract.id}
+                                  value={String(contract.id)}
+                                  onSelect={() => handleContractSelect(contract)}
+                                >
+                                  <div className="flex flex-col">
+                                    <div className="flex items-center">
+                                      <span className="font-medium">#{contract.contractNumber}</span>
+                                      <Badge 
+                                        variant={
+                                          contract.status === 'active' ? 'success' : 
+                                          contract.status === 'pending' ? 'warning' : 
+                                          contract.status === 'completed' ? 'default' : 'destructive'
+                                        }
+                                        className="ml-2"
+                                      >
+                                        {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
+                                      </Badge>
+                                    </div>
+                                    <span className="text-sm text-muted-foreground">
+                                      {getCustomerName(nullToUndefined(contract.customerId))}
+                                    </span>
                                   </div>
-                                  <span className="text-sm text-muted-foreground">
-                                    {getCustomerName(nullToUndefined(contract.customerId))}
-                                  </span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                            <CommandGroup heading="Other">
+                              <CommandItem
+                                value="no-contract"
+                                onSelect={() => {
+                                  setSelectedContract(null);
+                                  form.setValue("contractId", "");
+                                  setContractSearchOpen(false);
+                                }}
+                              >
+                                <div className="flex items-center">
+                                  <span className="font-medium">Not Contract Related</span>
+                                  <Badge variant="outline" className="ml-2">General Issue</Badge>
                                 </div>
                               </CommandItem>
-                            ))}
-                          </CommandGroup>
+                            </CommandGroup>
+                          </>
                         )}
                       </CommandList>
                     </Command>
                   </PopoverContent>
                 </Popover>
                 <FormDescription>
-                  If your issue relates to a specific contract, select it from the list
+                  If your issue relates to a specific contract, select it from the list. If not, select "Not Contract Related"
                   {isContractsError && (
                     <span className="ml-1 text-destructive">
                       (Error loading contracts. <Button variant="link" className="p-0 h-auto" onClick={() => refetchContracts()}>Retry</Button>)

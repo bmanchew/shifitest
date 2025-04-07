@@ -1360,9 +1360,10 @@ router.post("/tickets", async (req: Request, res: Response) => {
       ticketNumber
     };
     
-    // Create a custom validation schema that overrides the priority field
+    // Create a custom validation schema that overrides the priority field and allows contractId
     const customTicketSchema = insertSupportTicketSchema.extend({
-      priority: z.enum(["low", "normal", "high", "urgent"]).default("normal")
+      priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+      contractId: z.number().nullable().optional()
     });
     
     // Now parse with the updated Zod schema
@@ -1386,6 +1387,37 @@ router.post("/tickets", async (req: Request, res: Response) => {
       });
     }
     
+    // If contractId is provided, verify that the contract exists and belongs to the merchant
+    if (ticketData.contractId) {
+      const contract = await storage.getContract(ticketData.contractId);
+      if (!contract) {
+        return res.status(404).json({
+          success: false,
+          message: "Referenced contract not found"
+        });
+      }
+      
+      // Verify the contract belongs to this merchant
+      if (contract.merchantId !== ticketData.merchantId) {
+        logger.warn({
+          message: `Contract ownership mismatch in ticket creation`,
+          category: "security",
+          source: "internal",
+          userId: ticketData.createdBy,
+          metadata: {
+            contractId: ticketData.contractId,
+            contractMerchantId: contract.merchantId,
+            requestMerchantId: ticketData.merchantId
+          }
+        });
+        
+        return res.status(403).json({
+          success: false,
+          message: "The specified contract does not belong to this merchant"
+        });
+      }
+    }
+    
     const newTicket = await storage.createSupportTicket(ticketData);
     
     // Log the ticket creation in the activity log
@@ -1404,6 +1436,7 @@ router.post("/tickets", async (req: Request, res: Response) => {
       metadata: {
         ticketId: newTicket.id,
         merchantId: ticketData.merchantId,
+        contractId: ticketData.contractId,
         category: ticketData.category,
         priority: ticketData.priority
       }
@@ -1454,7 +1487,8 @@ router.post("/merchant-support", async (req: Request, res: Response) => {
       subject, 
       description, 
       priority = "normal",
-      contactInfo = {} 
+      contactInfo = {},
+      contractId = null
     } = req.body;
     
     // Create the ticket data object
@@ -1468,6 +1502,7 @@ router.post("/merchant-support", async (req: Request, res: Response) => {
       description,
       priority,
       status: "new",
+      contractId: contractId ? Number(contractId) : null,
       metadata: JSON.stringify({
         contactInfo,
         submittedVia: "merchant-portal"
@@ -1478,7 +1513,8 @@ router.post("/merchant-support", async (req: Request, res: Response) => {
     const merchantPortalTicketSchema = insertSupportTicketSchema.extend({
       priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
       subcategory: z.string().optional(),
-      metadata: z.string().optional()
+      metadata: z.string().optional(),
+      contractId: z.number().nullable().optional()
     });
     
     // Validate the data
@@ -1500,6 +1536,37 @@ router.post("/merchant-support", async (req: Request, res: Response) => {
         success: false,
         message: "Creator user not found"
       });
+    }
+    
+    // If contractId is provided, verify that the contract exists and belongs to the merchant
+    if (ticketData.contractId) {
+      const contract = await storage.getContract(ticketData.contractId);
+      if (!contract) {
+        return res.status(404).json({
+          success: false,
+          message: "Referenced contract not found"
+        });
+      }
+      
+      // Verify the contract belongs to this merchant
+      if (contract.merchantId !== ticketData.merchantId) {
+        logger.warn({
+          message: `Contract ownership mismatch in merchant ticket creation`,
+          category: "security",
+          source: "internal",
+          userId: ticketData.createdBy,
+          metadata: {
+            contractId: ticketData.contractId,
+            contractMerchantId: contract.merchantId,
+            requestMerchantId: ticketData.merchantId
+          }
+        });
+        
+        return res.status(403).json({
+          success: false,
+          message: "The specified contract does not belong to this merchant"
+        });
+      }
     }
     
     // Create the support ticket
@@ -1549,7 +1616,8 @@ router.post("/merchant-support", async (req: Request, res: Response) => {
           merchantId: merchant.id,
           merchantName: merchant.name,
           category: newTicket.category,
-          priority: newTicket.priority
+          priority: newTicket.priority,
+          contractId: newTicket.contractId
         }
       });
     }
@@ -1562,6 +1630,7 @@ router.post("/merchant-support", async (req: Request, res: Response) => {
       metadata: {
         ticketId: newTicket.id,
         merchantId: ticketData.merchantId,
+        contractId: ticketData.contractId,
         category: ticketData.category,
         subcategory: ticketData.subcategory,
         priority: ticketData.priority,

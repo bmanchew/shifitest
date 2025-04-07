@@ -996,6 +996,7 @@ export const supportTickets = pgTable("support_tickets", {
   id: serial("id").primaryKey(),
   ticketNumber: text("ticket_number").notNull().unique(), // Formatted like "TICKET-12345"
   merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  contractId: integer("contract_id").references(() => contracts.id), // Associated contract (can be null for non-contract issues)
   createdBy: integer("created_by").references(() => users.id).notNull(), // User who created the ticket
   category: ticketCategoryEnum("category").notNull(),
   subcategory: text("subcategory"), // This will be populated based on the category selection
