@@ -14,6 +14,7 @@ import { reportsRouter } from "./reports-improved";
 import merchantFundingRouter from "./merchant-funding";
 import merchantReportsRouter from "./merchant-reports";
 import dueDiligenceRouter from "./due-diligence";
+import plaidUnderwritingRouter from "./plaid-underwriting";
 
 const router = express.Router();
 
@@ -43,6 +44,7 @@ router.use("/reports", reportsRouter);
 router.use("/merchant-funding", merchantFundingRouter);
 router.use("/merchant-reports", merchantReportsRouter);
 router.use("/due-diligence", dueDiligenceRouter);
+router.use("/", plaidUnderwritingRouter);
 
 // Merchant Performance routes
 router.get("/merchant-performances", getAllMerchantPerformances);
