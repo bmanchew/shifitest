@@ -44,7 +44,7 @@ router.use("/reports", reportsRouter);
 router.use("/merchant-funding", merchantFundingRouter);
 router.use("/merchant-reports", merchantReportsRouter);
 router.use("/due-diligence", dueDiligenceRouter);
-router.use("/", plaidUnderwritingRouter);
+router.use("/plaid-underwriting", plaidUnderwritingRouter);
 
 // Merchant Performance routes
 router.get("/merchant-performances", getAllMerchantPerformances);

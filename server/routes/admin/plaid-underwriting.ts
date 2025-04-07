@@ -11,7 +11,7 @@ const plaidUnderwritingService = new PlaidUnderwritingService(storage);
 /**
  * Get the latest underwriting analysis for a merchant
  */
-router.get("/merchants/:merchantId/latest-underwriting-analysis", authenticateAdmin, async (req, res) => {
+router.get("/:merchantId/latest-analysis", authenticateAdmin, async (req, res) => {
   try {
     const merchantId = parseInt(req.params.merchantId);
     
@@ -92,7 +92,7 @@ router.get("/merchants/:merchantId/latest-underwriting-analysis", authenticateAd
 /**
  * Get underwriting analysis for a specific asset report
  */
-router.get("/merchants/:merchantId/underwriting-analysis/:assetReportId", authenticateAdmin, async (req, res) => {
+router.get("/:merchantId/analysis/:assetReportId", authenticateAdmin, async (req, res) => {
   try {
     const merchantId = parseInt(req.params.merchantId);
     const assetReportId = req.params.assetReportId;
@@ -169,7 +169,7 @@ router.get("/merchants/:merchantId/underwriting-analysis/:assetReportId", authen
 /**
  * Generate a new underwriting analysis for an asset report
  */
-router.post("/merchants/:merchantId/generate-underwriting-analysis/:assetReportId", authenticateAdmin, async (req, res) => {
+router.post("/:merchantId/generate-analysis/:assetReportId", authenticateAdmin, async (req, res) => {
   try {
     const merchantId = parseInt(req.params.merchantId);
     const assetReportId = req.params.assetReportId;

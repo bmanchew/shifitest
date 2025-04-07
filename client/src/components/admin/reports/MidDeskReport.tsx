@@ -39,7 +39,7 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, businessDetai
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`/api/merchants/${merchantId}/business-verification`);
+      const response = await axios.get(`/api/admin/merchant-reports/${merchantId}/business-verification`);
       
       if (response.data.success) {
         setVerificationDetails(response.data);
@@ -57,7 +57,7 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, businessDetai
     try {
       setInitiatingVerification(true);
       setError(null);
-      const response = await axios.post(`/api/admin/merchants/${merchantId}/verify-business`);
+      const response = await axios.post(`/api/admin/merchant-reports/${merchantId}/verify-business`);
       
       if (response.data.success) {
         // Refresh merchant details to get updated middeskBusinessId

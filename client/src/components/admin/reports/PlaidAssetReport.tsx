@@ -69,7 +69,7 @@ const PlaidAssetReport: React.FC<PlaidAssetReportProps> = ({ merchantId }) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`/api/admin/merchants/${merchantId}/asset-reports`);
+      const response = await axios.get(`/api/admin/merchant-reports/${merchantId}/asset-reports`);
       
       if (response.data.success) {
         setAssetReports(response.data.assetReports || []);
@@ -94,7 +94,7 @@ const PlaidAssetReport: React.FC<PlaidAssetReportProps> = ({ merchantId }) => {
   const fetchReportDetails = async (reportId: string) => {
     try {
       setDetailsLoading(true);
-      const response = await axios.get(`/api/plaid/asset-report/${reportId}`);
+      const response = await axios.get(`/api/admin/merchant-reports/asset-report/${reportId}`);
       
       if (response.data.success) {
         setSelectedReportDetails(response.data.assetReport);
@@ -160,7 +160,7 @@ const PlaidAssetReport: React.FC<PlaidAssetReportProps> = ({ merchantId }) => {
         <CardFooter>
           <Button 
             className="w-full" 
-            onClick={() => window.open(`/admin/merchants/${merchantId}/create-asset-report`, '_blank')}
+            onClick={() => window.open(`/admin/merchant-reports/${merchantId}/create-asset-report`, '_blank')}
           >
             Create New Asset Report
           </Button>
@@ -305,7 +305,7 @@ const PlaidAssetReport: React.FC<PlaidAssetReportProps> = ({ merchantId }) => {
       <CardFooter className="border-t">
         <Button 
           className="w-full" 
-          onClick={() => window.open(`/admin/merchants/${merchantId}/create-asset-report`, '_blank')}
+          onClick={() => window.open(`/admin/merchant-reports/${merchantId}/create-asset-report`, '_blank')}
         >
           Create New Asset Report
         </Button>

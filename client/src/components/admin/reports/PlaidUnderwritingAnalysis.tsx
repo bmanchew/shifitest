@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import {
   LineChart,
@@ -95,6 +96,7 @@ const PlaidUnderwritingAnalysis: React.FC<PlaidUnderwritingAnalysisProps> = ({ m
   const [analysis, setAnalysis] = useState<UnderwritingAnalysis | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('overview');
 
   const fetchAnalysis = async () => {
@@ -103,8 +105,8 @@ const PlaidUnderwritingAnalysis: React.FC<PlaidUnderwritingAnalysisProps> = ({ m
       setError(null);
       
       const endpoint = assetReportId 
-        ? `/api/admin/merchants/${merchantId}/underwriting-analysis/${assetReportId}`
-        : `/api/admin/merchants/${merchantId}/latest-underwriting-analysis`;
+        ? `/api/admin/plaid-underwriting/${merchantId}/analysis/${assetReportId}`
+        : `/api/admin/plaid-underwriting/${merchantId}/latest-analysis`;
       
       const response = await axios.get(endpoint);
       
@@ -117,6 +119,31 @@ const PlaidUnderwritingAnalysis: React.FC<PlaidUnderwritingAnalysisProps> = ({ m
       setError("Error fetching analysis: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const generateNewAnalysis = async () => {
+    if (!assetReportId) {
+      setError("No asset report ID provided for analysis generation");
+      return;
+    }
+    
+    try {
+      setGenerating(true);
+      setError(null);
+      
+      const endpoint = `/api/admin/plaid-underwriting/${merchantId}/generate-analysis/${assetReportId}`;
+      const response = await axios.post(endpoint);
+      
+      if (response.data.success) {
+        setAnalysis(response.data.analysis);
+      } else {
+        setError(response.data.message || "Failed to generate new underwriting analysis");
+      }
+    } catch (err) {
+      setError("Error generating analysis: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -204,13 +231,50 @@ const PlaidUnderwritingAnalysis: React.FC<PlaidUnderwritingAnalysisProps> = ({ m
   if (error) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Plaid Underwriting Analysis</CardTitle>
-          <CardDescription>Financial health and risk assessment</CardDescription>
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
+          <div>
+            <CardTitle>Plaid Underwriting Analysis</CardTitle>
+            <CardDescription>Financial health and risk assessment</CardDescription>
+          </div>
+          {assetReportId && (
+            <Button 
+              onClick={generateNewAnalysis} 
+              variant="outline" 
+              size="sm" 
+              className="mt-2 sm:mt-0"
+              disabled={generating}
+            >
+              {generating ? (
+                <>
+                  <span className="mr-2">
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </span>
+                  Generating...
+                </>
+              ) : (
+                <>Generate New Analysis</>
+              )}
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="text-center py-6 text-red-500">
             {error}
+            {assetReportId && (
+              <div className="mt-4">
+                <Button 
+                  onClick={generateNewAnalysis} 
+                  variant="secondary" 
+                  disabled={generating}
+                  className="mx-auto"
+                >
+                  Try Again
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -221,14 +285,58 @@ const PlaidUnderwritingAnalysis: React.FC<PlaidUnderwritingAnalysisProps> = ({ m
   if (!analysis) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Plaid Underwriting Analysis</CardTitle>
-          <CardDescription>Financial health and risk assessment</CardDescription>
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
+          <div>
+            <CardTitle>Plaid Underwriting Analysis</CardTitle>
+            <CardDescription>Financial health and risk assessment</CardDescription>
+          </div>
+          {assetReportId && (
+            <Button 
+              onClick={generateNewAnalysis} 
+              variant="outline" 
+              size="sm" 
+              className="mt-2 sm:mt-0"
+              disabled={generating}
+            >
+              {generating ? (
+                <>
+                  <span className="mr-2">
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </span>
+                  Generating...
+                </>
+              ) : (
+                <>Generate Analysis</>
+              )}
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="text-center py-6 text-muted-foreground">
             <p>No underwriting analysis available for this merchant</p>
             <p className="text-sm mt-2">Run an asset report analysis to generate underwriting metrics</p>
+            
+            {assetReportId && !generating && (
+              <Button 
+                onClick={generateNewAnalysis} 
+                className="mt-4"
+              >
+                Generate Analysis
+              </Button>
+            )}
+            
+            {generating && (
+              <div className="flex justify-center items-center mt-4 text-primary">
+                <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generating analysis...
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -238,11 +346,36 @@ const PlaidUnderwritingAnalysis: React.FC<PlaidUnderwritingAnalysisProps> = ({ m
   // Render the full analysis
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Plaid Underwriting Analysis</CardTitle>
-        <CardDescription>
-          Financial health assessment based on Plaid data - Last updated {format(new Date(analysis.updatedAt), "PPpp")}
-        </CardDescription>
+      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
+        <div>
+          <CardTitle>Plaid Underwriting Analysis</CardTitle>
+          <CardDescription>
+            Financial health assessment based on Plaid data - Last updated {format(new Date(analysis.updatedAt), "PPpp")}
+          </CardDescription>
+        </div>
+        {assetReportId && (
+          <Button 
+            onClick={generateNewAnalysis} 
+            variant="outline" 
+            size="sm" 
+            className="mt-2 sm:mt-0"
+            disabled={generating}
+          >
+            {generating ? (
+              <>
+                <span className="mr-2">
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </span>
+                Generating...
+              </>
+            ) : (
+              <>Generate New Analysis</>
+            )}
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="p-0">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
