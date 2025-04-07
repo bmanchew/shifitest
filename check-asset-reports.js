@@ -14,73 +14,99 @@ const { storage } = require('./server/storage');
  */
 async function checkAssetReportStatus() {
   try {
-    console.log('Checking status of merchant asset reports...');
+    console.log('Checking status of recent asset reports...');
     
-    // Get list of merchants with completed Plaid integrations
-    const completedMerchants = await storage.getPlaidMerchantsByStatus('completed');
-    console.log(`Found ${completedMerchants.length} merchants with completed Plaid integration.`);
+    // Get all pending asset reports from the last 24 hours
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1); 
     
-    // Collect all asset reports for these merchants
-    const assetReports = [];
+    const pendingReports = await storage.getAssetReportsByStatus('pending', oneDayAgo);
     
-    for (const merchant of completedMerchants) {
-      // Get asset reports for this merchant's user ID (matching the merchant ID)
-      const merchantReports = await storage.getAssetReportsByUserId(merchant.merchantId);
-      if (merchantReports && merchantReports.length > 0) {
-        assetReports.push(...merchantReports);
-      }
+    console.log(`Found ${pendingReports.length} pending asset reports from the last 24 hours.`);
+    
+    if (pendingReports.length === 0) {
+      console.log('No pending reports to check.');
+      return;
     }
     
-    console.log(`Found ${assetReports.length} total asset reports for merchants.`);
-    
-    // Group reports by status
-    const reportsByStatus = {
-      pending: [],
+    // Keep track of results
+    const results = {
       ready: [],
-      error: []
+      pending: [],
+      failed: []
     };
     
-    // Process each report
-    assetReports.forEach(report => {
-      if (report.status === 'ready') {
-        reportsByStatus.ready.push(report);
-      } else if (report.status === 'error') {
-        reportsByStatus.error.push(report);
-      } else {
-        reportsByStatus.pending.push(report);
+    // Check each report
+    for (const report of pendingReports) {
+      try {
+        console.log(`Checking asset report with ID: ${report.assetReportId}`);
+        
+        // Get the report from Plaid
+        const reportStatus = await plaidService.getAssetReportStatus(report.assetReportToken);
+        
+        if (reportStatus.status === 'READY') {
+          console.log(`Asset report ${report.assetReportId} is ready!`);
+          
+          // Update the status in our database
+          await storage.updateAssetReportStatus(report.id, 'ready');
+          
+          results.ready.push({
+            id: report.id,
+            assetReportId: report.assetReportId
+          });
+        } else if (reportStatus.status === 'FAILED' || reportStatus.status === 'ERROR') {
+          console.log(`Asset report ${report.assetReportId} failed: ${reportStatus.error || 'Unknown error'}`);
+          
+          // Update the status in our database
+          await storage.updateAssetReportStatus(report.id, 'failed', reportStatus.error);
+          
+          results.failed.push({
+            id: report.id,
+            assetReportId: report.assetReportId,
+            error: reportStatus.error
+          });
+        } else {
+          console.log(`Asset report ${report.assetReportId} is still pending.`);
+          results.pending.push({
+            id: report.id,
+            assetReportId: report.assetReportId
+          });
+        }
+        
+        // Add a small delay between requests
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error(`Error checking asset report ${report.assetReportId}:`, error.message);
+        results.failed.push({
+          id: report.id,
+          assetReportId: report.assetReportId,
+          error: error.message
+        });
       }
-    });
+    }
     
     // Print summary
     console.log('\n--- ASSET REPORT STATUS SUMMARY ---');
-    console.log(`Total reports: ${assetReports.length}`);
-    console.log(`Pending reports: ${reportsByStatus.pending.length}`);
-    console.log(`Ready reports: ${reportsByStatus.ready.length}`);
-    console.log(`Error reports: ${reportsByStatus.error.length}`);
+    console.log(`Total reports checked: ${pendingReports.length}`);
+    console.log(`Ready reports: ${results.ready.length}`);
+    console.log(`Still pending: ${results.pending.length}`);
+    console.log(`Failed reports: ${results.failed.length}`);
     
-    if (reportsByStatus.pending.length > 0) {
-      console.log('\nPending reports:');
-      reportsByStatus.pending.forEach(report => {
-        console.log(`  - Report ID: ${report.assetReportId}, Created: ${report.createdAt}`);
+    if (results.ready.length > 0) {
+      console.log('\nReady asset reports:');
+      results.ready.forEach(item => {
+        console.log(`  - ID: ${item.id}, Asset Report ID: ${item.assetReportId}`);
       });
     }
     
-    if (reportsByStatus.ready.length > 0) {
-      console.log('\nReady reports:');
-      reportsByStatus.ready.forEach(report => {
-        console.log(`  - Report ID: ${report.assetReportId}, Created: ${report.createdAt}`);
+    if (results.failed.length > 0) {
+      console.log('\nFailed asset reports:');
+      results.failed.forEach(item => {
+        console.log(`  - ID: ${item.id}, Asset Report ID: ${item.assetReportId}, Error: ${item.error}`);
       });
     }
     
-    if (reportsByStatus.error.length > 0) {
-      console.log('\nError reports:');
-      reportsByStatus.error.forEach(report => {
-        console.log(`  - Report ID: ${report.assetReportId}, Error: ${report.error || 'Unknown error'}`);
-      });
-    }
-    
-    console.log('\nReport status check complete.');
-    return reportsByStatus;
+    return results;
   } catch (error) {
     console.error('Error checking asset report status:', error);
     throw error;
@@ -95,7 +121,7 @@ async function checkAssetReportStatus() {
 if (require.main === module) {
   checkAssetReportStatus()
     .then(() => {
-      console.log('Script execution completed.');
+      console.log('Asset report status check completed.');
       process.exit(0);
     })
     .catch(error => {

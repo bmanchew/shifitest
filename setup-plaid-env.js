@@ -5,86 +5,111 @@
  * Usage: node setup-plaid-env.js <clientId> <secret> <environment> <publicUrl>
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 function setupPlaidEnvironment() {
-  try {
-    // Get command line arguments
-    const clientId = process.argv[2];
-    const secret = process.argv[3];
-    const environment = process.argv[4] || 'sandbox';
-    const publicUrl = process.argv[5] || 'https://shilohfinance.com';
-    
-    // Validate input
-    if (!clientId || !secret) {
-      console.error('Usage: node setup-plaid-env.js <clientId> <secret> [environment] [publicUrl]');
-      console.error('  environment defaults to "sandbox" if not provided');
-      console.error('  publicUrl defaults to "https://shilohfinance.com" if not provided');
-      process.exit(1);
-    }
-    
-    // Validate environment
-    const validEnvironments = ['sandbox', 'development', 'production'];
-    if (!validEnvironments.includes(environment)) {
-      console.error(`Error: Environment must be one of: ${validEnvironments.join(', ')}`);
-      process.exit(1);
-    }
-    
-    console.log('Setting up Plaid environment variables...');
-    
-    // Path to .env file
-    const envPath = path.join(__dirname, '.env');
-    
-    // Read existing .env file if it exists
-    let envContent = '';
-    try {
-      if (fs.existsSync(envPath)) {
-        envContent = fs.readFileSync(envPath, 'utf8');
-      }
-    } catch (readError) {
-      console.warn('Warning: Could not read existing .env file:', readError.message);
-    }
-    
-    // Parse existing environment variables
-    const envVars = {};
-    if (envContent) {
-      const lines = envContent.split('\n');
-      for (const line of lines) {
-        if (line.trim() && !line.startsWith('#')) {
-          const match = line.match(/^([^=]+)=(.*)$/);
-          if (match) {
-            envVars[match[1]] = match[2];
-          }
-        }
-      }
-    }
-    
-    // Set/update Plaid variables
-    envVars.PLAID_CLIENT_ID = clientId;
-    envVars.PLAID_SECRET = secret;
-    envVars.PLAID_ENVIRONMENT = environment;
-    envVars.PUBLIC_URL = publicUrl;
-    
-    // Generate new .env content
-    const newEnvContent = Object.entries(envVars)
-      .map(([key, value]) => `${key}=${value}`)
-      .join('\n');
-    
-    // Write to .env file
-    fs.writeFileSync(envPath, newEnvContent);
-    
-    console.log('Plaid environment variables set successfully:');
-    console.log(`- PLAID_CLIENT_ID: ${clientId}`);
-    console.log(`- PLAID_SECRET: ${secret.substring(0, 3)}...${secret.substring(secret.length - 3)}`);
-    console.log(`- PLAID_ENVIRONMENT: ${environment}`);
-    console.log(`- PUBLIC_URL: ${publicUrl}`);
-    
-  } catch (error) {
-    console.error('Error setting up Plaid environment:', error);
+  // Get command line arguments
+  const clientId = process.argv[2];
+  const secret = process.argv[3];
+  const environment = process.argv[4] || 'sandbox'; // Default to sandbox if not provided
+  const publicUrl = process.argv[5] || process.env.PUBLIC_URL;
+
+  if (!clientId || !secret) {
+    console.error(`
+Usage: node setup-plaid-env.js <clientId> <secret> [environment] [publicUrl]
+
+Required:
+  - clientId: Your Plaid client ID
+  - secret: Your Plaid secret for the given environment
+
+Optional:
+  - environment: The Plaid environment (default: sandbox)
+                 Valid options: sandbox, development, production
+  - publicUrl: Your application's public URL for webhooks
+               (defaults to PUBLIC_URL env var if set)
+    `);
     process.exit(1);
+  }
+
+  // Environment validation
+  if (!['sandbox', 'development', 'production'].includes(environment)) {
+    console.error(`Invalid environment: ${environment}`);
+    console.error('Valid options: sandbox, development, production');
+    process.exit(1);
+  }
+
+  // Prepare the environment variable updates
+  const envUpdates = {
+    PLAID_CLIENT_ID: clientId,
+    PLAID_SECRET: secret,
+    PLAID_ENV: environment
+  };
+
+  if (publicUrl) {
+    envUpdates.PLAID_WEBHOOK_URL = `${publicUrl}/api/plaid/webhook`;
+  }
+
+  // Read the current .env file
+  const envFilePath = path.resolve('.env');
+  let envFileContent = '';
+  
+  try {
+    if (fs.existsSync(envFilePath)) {
+      envFileContent = fs.readFileSync(envFilePath, 'utf-8');
+    }
+  } catch (error) {
+    console.warn('Unable to read existing .env file. Creating new file.');
+  }
+
+  // Update or add the Plaid environment variables
+  const envLines = envFileContent.split('\n');
+  const updatedLines = [];
+  const updatedKeys = new Set();
+
+  // Process existing lines
+  for (const line of envLines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.startsWith('#')) {
+      updatedLines.push(line);
+      continue;
+    }
+
+    const match = trimmedLine.match(/^([^=]+)=(.*)$/);
+    if (match) {
+      const key = match[1].trim();
+      if (key in envUpdates) {
+        updatedLines.push(`${key}=${envUpdates[key]}`);
+        updatedKeys.add(key);
+      } else {
+        updatedLines.push(line);
+      }
+    } else {
+      updatedLines.push(line);
+    }
+  }
+
+  // Add any new keys that weren't in the file
+  for (const [key, value] of Object.entries(envUpdates)) {
+    if (!updatedKeys.has(key)) {
+      updatedLines.push(`${key}=${value}`);
+    }
+  }
+
+  // Write the updated .env file
+  fs.writeFileSync(envFilePath, updatedLines.join('\n'));
+
+  console.log('✅ Plaid environment variables have been set up successfully:');
+  for (const [key, value] of Object.entries(envUpdates)) {
+    if (key === 'PLAID_SECRET') {
+      console.log(`- ${key}=****${value.slice(-4)}`);
+    } else {
+      console.log(`- ${key}=${value}`);
+    }
   }
 }
 
-// Run the script
 setupPlaidEnvironment();

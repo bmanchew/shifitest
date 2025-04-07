@@ -538,7 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let plaidMerchant = await storage.getPlaidMerchantByMerchantId(merchantId);
       
       // Extract the fields to update
-      const { clientId, defaultFundingAccount } = req.body;
+      const { clientId, accessToken, defaultFundingAccount } = req.body;
       
       let updatedPlaidMerchant;
       
@@ -546,6 +546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update existing record
         updatedPlaidMerchant = await storage.updatePlaidMerchant(plaidMerchant.id, {
           clientId,
+          accessToken,
           defaultFundingAccount
         });
 
@@ -563,6 +564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedPlaidMerchant = await storage.createPlaidMerchant({
           merchantId,
           clientId,
+          accessToken,
           defaultFundingAccount,
           onboardingStatus: 'pending'
         });

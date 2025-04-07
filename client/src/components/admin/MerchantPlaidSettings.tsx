@@ -17,6 +17,7 @@ interface PlaidSettings {
   id: number;
   merchantId: number;
   clientId: string | null;
+  accessToken: string | null;
   originatorId: string | null;
   onboardingStatus: string;
   defaultFundingAccount: string | null;
@@ -27,6 +28,7 @@ interface PlaidSettings {
 export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps) {
   const [formData, setFormData] = useState({
     clientId: '',
+    accessToken: '',
     defaultFundingAccount: ''
   });
   const [isEditing, setIsEditing] = useState(false);
@@ -104,6 +106,7 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
     if (plaidSettings) {
       setFormData({
         clientId: plaidSettings.clientId || '',
+        accessToken: plaidSettings.accessToken || '',
         defaultFundingAccount: plaidSettings.defaultFundingAccount || ''
       });
     }
@@ -203,6 +206,25 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
                 This is the unique client identifier assigned by Plaid for this merchant.
               </p>
             </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="accessToken">Plaid Access Token</Label>
+              <div className="flex">
+                <Input
+                  id="accessToken"
+                  name="accessToken"
+                  value={formData.accessToken}
+                  onChange={handleChange}
+                  disabled={!isEditing || isUpdating}
+                  placeholder="Access Token for Plaid API"
+                  className="flex-1"
+                  type="password"
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                The Plaid API access token for generating asset reports and accessing financial data.
+              </p>
+            </div>
             
             <div className="grid gap-2">
               <Label htmlFor="defaultFundingAccount">Default Funding Account</Label>
@@ -244,6 +266,7 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
                 if (plaidSettings) {
                   setFormData({
                     clientId: plaidSettings.clientId || '',
+                    accessToken: plaidSettings.accessToken || '',
                     defaultFundingAccount: plaidSettings.defaultFundingAccount || ''
                   });
                 }

@@ -5,7 +5,7 @@
  * Usage: node generate-asset-reports.js
  */
 
-const { db } = require('./server/db');
+const { db } = require('./server/db.cjs');
 const { plaidService } = require('./server/services/plaid');
 const { storage } = require('./server/storage');
 const { plaidMerchants } = require('./shared/schema');
