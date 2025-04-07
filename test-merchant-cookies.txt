@@ -1,1 +1,3 @@
-_csrf=XxCDg031yg65yaTrAnI5mdh3
+[
+  "_csrf=QCM5z7yzCdmIPZJqGk6DFoH_; Path=/"
+]
