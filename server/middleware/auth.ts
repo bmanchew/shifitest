@@ -596,8 +596,122 @@ export const isSalesRep = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-// For backward compatibility with existing code
-export const authenticateToken = isAuthenticated;
+/**
+ * Enhanced authentication middleware that:
+ * 1. Checks if the user is authenticated
+ * 2. For merchant users, also attaches the merchant data to the request
+ * 
+ * This provides backward compatibility with existing code while ensuring
+ * merchant data is available when needed.
+ */
+export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // First check if user is authenticated
+    if (!req.user) {
+      logger.warn({
+        message: 'Authentication required but no user found on request',
+        category: 'security',
+        source: 'internal',
+        metadata: {
+          path: req.path,
+          method: req.method,
+        }
+      });
+      
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    // If user is a merchant, also fetch and attach merchant data
+    if (req.user.role === 'merchant') {
+      try {
+        // Get the merchant record for this user
+        const merchantRecords = await db.select()
+          .from(merchants)
+          .where(eq(merchants.userId, req.user.id))
+          .limit(1);
+        
+        if (merchantRecords.length > 0) {
+          // Create a merchant record with the correct type structure
+          const merchantRecord = {
+            id: merchantRecords[0].id,
+            name: merchantRecords[0].name,
+            contactName: merchantRecords[0].contactName,
+            email: merchantRecords[0].email,
+            phone: merchantRecords[0].phone,
+            address: merchantRecords[0].address || undefined,
+            active: merchantRecords[0].active ?? undefined,
+            archived: merchantRecords[0].archived ?? undefined,
+            createdAt: merchantRecords[0].createdAt || undefined,
+            userId: merchantRecords[0].userId || undefined
+          };
+          
+          // Attach merchant to request
+          req.merchant = merchantRecord as Express.Request['merchant'];
+          
+          logger.debug({
+            message: `Merchant record attached in authenticateToken: ${merchantRecord.id} for user ${req.user.id}`,
+            category: 'security',
+            userId: req.user.id,
+            source: 'internal',
+            metadata: {
+              merchantId: merchantRecord.id,
+              path: req.path
+            }
+          });
+        } else {
+          logger.warn({
+            message: `User ${req.user.email} (${req.user.id}) has merchant role but no merchant record found`,
+            category: 'security',
+            userId: req.user.id,
+            source: 'internal',
+            metadata: {
+              path: req.path,
+              method: req.method
+            }
+          });
+          // We don't return an error here to maintain backward compatibility
+          // The route handlers will check if req.merchant exists when needed
+        }
+      } catch (dbError) {
+        // Log the error but don't block the request to maintain backward compatibility
+        logger.error({
+          message: `Error fetching merchant data in authenticateToken: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+          category: 'database',
+          userId: req.user.id,
+          source: 'internal',
+          metadata: {
+            error: dbError instanceof Error ? dbError.message : String(dbError),
+            stack: dbError instanceof Error ? dbError.stack : undefined,
+            path: req.path,
+            method: req.method
+          }
+        });
+      }
+    }
+    
+    next();
+  } catch (error) {
+    logger.error({
+      message: `Authentication error: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'security',
+      source: 'internal',
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred during authentication'
+    });
+  }
+};
 
 /**
  * Middleware to authenticate admin users for the admin API

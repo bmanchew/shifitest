@@ -1,0 +1,154 @@
+/**
+ * Test script to verify merchant authentication and retrieval
+ */
+
+import fetch from 'node-fetch';
+import fs from 'fs';
+
+// Configuration
+const API_BASE_URL = 'https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/api';
+const cookiesFile = './brandon-cookies.txt';
+
+// Function to load cookies from file
+function loadCookies() {
+  try {
+    return fs.readFileSync(cookiesFile, 'utf8');
+  } catch (error) {
+    return '';
+  }
+}
+
+// Function to save cookies to file
+function saveCookies(cookieString) {
+  fs.writeFileSync(cookiesFile, cookieString);
+  console.log('Cookies saved to', cookiesFile);
+}
+
+// Function to extract CSRF token from cookies
+function extractCsrfToken(cookies) {
+  const match = cookies.match(/XSRF-TOKEN=([^;]+)/);
+  return match ? match[1] : null;
+}
+
+// Login as Brandon (merchant user)
+async function login() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: 'brandon@shilohfinance.com',
+        password: 'Password123!'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Login failed: ${response.status} ${response.statusText}`);
+    }
+
+    // Get and save cookies
+    const cookies = response.headers.get('set-cookie');
+    if (cookies) {
+      saveCookies(cookies);
+    }
+
+    const data = await response.json();
+    console.log('Login successful:', data);
+    
+    return { cookies, csrfToken: extractCsrfToken(cookies) };
+  } catch (error) {
+    console.error('Login error:', error);
+    throw error;
+  }
+}
+
+// Get current merchant data
+async function getCurrentMerchant(cookies, csrfToken) {
+  try {
+    console.log('Getting current merchant data...');
+    const response = await fetch(`${API_BASE_URL}/current-merchant`, {
+      method: 'GET',
+      headers: {
+        'Cookie': cookies,
+        'X-XSRF-TOKEN': csrfToken
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Get current merchant failed: ${response.status} ${response.statusText} - ${error}`);
+    }
+
+    const data = await response.json();
+    console.log('Current merchant data:', data);
+    return data;
+  } catch (error) {
+    console.error('Get current merchant error:', error);
+    throw error;
+  }
+}
+
+// Get contracts (to verify merchant authentication and data retrieval)
+async function getContracts(cookies, csrfToken) {
+  try {
+    console.log('Getting merchant contracts...');
+    const response = await fetch(`${API_BASE_URL}/contracts`, {
+      method: 'GET',
+      headers: {
+        'Cookie': cookies,
+        'X-XSRF-TOKEN': csrfToken
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Get contracts failed: ${response.status} ${response.statusText} - ${error}`);
+    }
+
+    const data = await response.json();
+    console.log('Contracts retrieved successfully.');
+    console.log(`Total contracts: ${data?.contracts?.length || 0}`);
+    return data;
+  } catch (error) {
+    console.error('Get contracts error:', error);
+    throw error;
+  }
+}
+
+// Main test function
+async function runTests() {
+  let cookies = loadCookies();
+  let csrfToken = extractCsrfToken(cookies);
+  
+  try {
+    // Login if no cookies or csrf token
+    if (!cookies || !csrfToken) {
+      const loginResult = await login();
+      cookies = loginResult.cookies;
+      csrfToken = loginResult.csrfToken;
+    }
+
+    // Get current merchant
+    const merchantData = await getCurrentMerchant(cookies, csrfToken);
+    
+    // Verify we have merchant data
+    if (!merchantData.success || !merchantData.data || !merchantData.data.id) {
+      throw new Error('Failed to get merchant data');
+    }
+    
+    const merchantId = merchantData.data.id;
+    console.log(`Using merchant ID: ${merchantId}`);
+
+    // Get contracts
+    await getContracts(cookies, csrfToken);
+    
+    console.log('All tests completed successfully!');
+  } catch (error) {
+    console.error('Test execution failed:', error);
+  }
+}
+
+// Run the tests
+runTests();
