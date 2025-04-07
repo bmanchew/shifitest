@@ -14,6 +14,7 @@ This documentation is organized into several sections:
 - [Components](components.md): UI component documentation
 - [Utilities](utils.md): Utility functions documentation
 - [Workflow](workflow.md): Development workflows and processes
+- [Support Ticket Contract Integration](ticket-contract-integration.txt): Documentation for the support ticket contract integration feature
 
 ## Getting Started
 
@@ -66,12 +67,20 @@ The platform supports multiple user roles:
 - Sales Representatives: Business development
 
 ### Secure Communication Channels
-
 Integrated communication features include:
 - In-app notifications
 - Email notifications
 - SMS alerts
 - Structured messaging system
+
+### Support Ticket System
+- Support ticket creation and management
+- Ticket categorization with AI
+- Knowledge base integration
+- Support agent assignment and routing
+- Real-time chat via Intercom
+- Contract-specific ticket association
+- Analytics dashboard for support performance
 
 ## Development Guidelines
 

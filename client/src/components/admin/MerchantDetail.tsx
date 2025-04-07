@@ -42,7 +42,7 @@ interface BusinessDetails {
   updatedAt: string | null;
 }
 
-export function MerchantDetail({ merchantId }: MerchantDetailProps) {
+function MerchantDetail({ merchantId }: MerchantDetailProps) {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [plaidMerchant, setPlaidMerchant] = useState<PlaidMerchant | null>(null);
   const [businessDetails, setBusinessDetails] = useState<BusinessDetails | null>(null);

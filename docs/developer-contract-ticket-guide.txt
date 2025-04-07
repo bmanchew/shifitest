@@ -1,0 +1,135 @@
+# ShiFi Tester: Developer Guide to Contract-Ticket Integration
+
+## Technical Overview
+
+This guide outlines the technical implementation of the contract integration feature for the support ticket system. Developers maintaining or extending this feature should understand how tickets and contracts are connected throughout the system.
+
+## Database Schema
+
+The relationship between tickets and contracts is established through the following schema:
+
+```typescript
+// In shared/schema.ts
+export const supportTickets = pgTable("supportTickets", {
+  id: serial("id").primaryKey(),
+  // ... other fields ...
+  contractId: integer("contract_id").references(() => contracts.id, { onDelete: "set null" }).nullable(),
+  // ... other fields ...
+});
+```
+
+Key points:
+- The `contractId` field is nullable, allowing tickets to exist without a contract relationship
+- A foreign key constraint ensures data integrity with the contracts table
+- The `onDelete: "set null"` ensures tickets remain even if a contract is deleted
+
+## API Endpoints
+
+The contract integration affects the following API endpoints:
+
+### Create Ticket Endpoint
+
+```typescript
+// POST /api/communications/merchant/support-ticket
+router.post("/merchant/support-ticket", authenticateToken, validateCsrf, async (req, res) => {
+  // ... validation and processing ...
+  // contractId handling
+  const ticketData = {
+    // ... other fields ...
+    contractId: req.body.contractId ? parseInt(req.body.contractId, 10) : null,
+    // ... other fields ...
+  };
+  // ... create ticket in database ...
+});
+```
+
+### Get Ticket Endpoint
+
+```typescript
+// GET /api/communications/merchant/support-ticket/:id
+router.get("/merchant/support-ticket/:id", authenticateToken, async (req, res) => {
+  // ... fetch ticket ...
+  // If contractId exists, fetch and include contract details
+  if (ticket.contractId) {
+    const contract = await db.query.contracts.findFirst({
+      where: eq(contracts.id, ticket.contractId)
+    });
+    // ... add contract to response ...
+  }
+  // ... return response ...
+});
+```
+
+### Admin Endpoints
+
+Similar contract handling logic exists in the admin-facing endpoints:
+- GET /api/communications/admin/support-tickets
+- GET /api/communications/admin/support-ticket/:id
+- POST /api/communications/admin/update-ticket
+
+## Frontend Components
+
+### TicketSubmissionForm
+
+The `TicketSubmissionForm.tsx` component handles the UI for selecting a contract or choosing "Not Contract Related":
+
+Key aspects:
+- Uses `useQuery` to fetch the merchant's contracts
+- Implements contract search functionality
+- Provides a "Not Contract Related" option in the dropdown
+- Sets `contractId` to empty string/null when "Not Contract Related" is selected
+
+### Ticket Display Components
+
+Both merchant and admin ticket viewing components display contract information based on the ticket's `contractId`:
+- If `contractId` exists, contract details are displayed
+- If `contractId` is null, "Not Contract Related" is shown
+
+## Notification System
+
+Contract details are included in notifications:
+
+```typescript
+// In notification service
+const notificationData = {
+  // ... other data ...
+  contractInfo: ticket.contractId 
+    ? `Contract #${contract.contractNumber}` 
+    : "Not Contract Related",
+  // ... other data ...
+};
+```
+
+## SMS Integration
+
+SMS notifications include contract information when relevant:
+
+```typescript
+// In Twilio service
+const messageBody = ticket.contractId
+  ? `New support ticket for Contract #${contract.contractNumber}: ${ticket.subject}`
+  : `New general support ticket: ${ticket.subject}`;
+```
+
+## Testing Considerations
+
+When testing the contract integration:
+1. Test creation of tickets with valid contract IDs
+2. Test creation of tickets with "Not Contract Related" (null contractId)
+3. Test filtering and searching tickets by contract status
+4. Test notifications to ensure contract details appear properly
+5. Verify that contract deletion doesn't delete associated tickets
+
+## Edge Cases and Error Handling
+
+- If a non-existent contract ID is provided, validation catches and rejects it
+- If a contract is later deleted, tickets remain with null contractId
+- Contract permissions are checked to ensure merchants can only associate tickets with their own contracts
+
+## Future Enhancements
+
+Possible enhancements to consider:
+1. Allow changing contract association after ticket creation
+2. Add bulk-update functionality for contract associations
+3. Implement more sophisticated reporting on contract-ticket relationships
+4. Add contract-specific ticket templates

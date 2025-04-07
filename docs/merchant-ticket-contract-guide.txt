@@ -1,0 +1,62 @@
+# ShiFi Tester: Merchant Quick Guide to Support Tickets
+
+## Creating Support Tickets
+
+### When to Link a Ticket to a Contract
+
+Link your support ticket to a specific contract when:
+- The issue is directly related to a specific customer contract
+- You need help with a payment, term, or other aspect of a specific contract
+- The problem involves contract documents, financing, or contractual terms
+
+Select "Not Contract Related" when:
+- You have general account questions
+- You're experiencing technical issues with the platform
+- You need help with merchant settings or information
+- You have billing questions about your merchant account
+- You're requesting general information about ShiFi services
+
+### How to Submit a Contract-Related Ticket
+
+1. Click "Submit New Ticket" from your merchant dashboard
+2. Fill in the ticket subject and description
+3. Under "Select Contract", choose the specific contract from the dropdown list
+   - Contracts are listed by contract number with customer name
+   - You can search by contract number or customer name
+4. Select the appropriate category and priority
+5. Click "Submit Ticket"
+
+### How to Submit a General (Non-Contract) Ticket
+
+1. Click "Submit New Ticket" from your merchant dashboard
+2. Fill in the ticket subject and description
+3. Under "Select Contract", choose "Not Contract Related" from the dropdown
+4. Select the appropriate category and priority
+5. Click "Submit Ticket"
+
+## Viewing Your Tickets
+
+The ticket dashboard now shows:
+- Contract-associated tickets with the contract number clearly displayed
+- General tickets marked as "Not Contract Related"
+
+You can filter your tickets to view:
+- All tickets
+- Only contract-related tickets
+- Only general tickets
+
+## Benefits of Contract Integration
+
+- **Faster Support**: Support agents can immediately see contract details for context
+- **Better Communication**: Responses will be tailored to your specific contract situation
+- **Consistent Follow-up**: All communications about a specific contract stay organized together
+- **Improved Resolution**: Contract-specific expertise can be applied to your issue
+
+## Tips for Best Results
+
+1. Always select the correct contract when submitting a ticket
+2. Provide specific details about your issue in the description
+3. For contract issues, mention specific aspects of the contract that relate to your problem
+4. For general platform issues, select "Not Contract Related" to ensure proper routing
+
+If you have questions about using the ticket system, please contact our support team.

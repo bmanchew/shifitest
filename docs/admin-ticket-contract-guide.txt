@@ -1,0 +1,71 @@
+# ShiFi Tester: Admin Guide to Contract-Integrated Support Tickets
+
+## Overview
+
+This guide explains how to effectively manage support tickets with the new contract integration feature as an administrator. The contract integration allows you to see whether a ticket is associated with a specific contract or is a general, non-contract related issue.
+
+## Viewing Tickets
+
+### Dashboard View
+
+In the admin dashboard, support tickets are now clearly labeled with their contract status:
+
+- **Contract-Associated Tickets**: Display the contract number and a link to view the contract details
+- **General Tickets**: Marked as "Not Contract Related" 
+
+The support ticket list can be filtered to show:
+- All tickets
+- Only contract-related tickets 
+- Only general (non-contract) tickets
+
+### Individual Ticket View
+
+When viewing an individual ticket, contract information (if applicable) is displayed in the ticket header. This includes:
+
+1. Contract number
+2. Contract status 
+3. Customer name
+4. Quick link to view the complete contract details
+
+For tickets marked as "Not Contract Related," you'll see a clear indicator in place of contract details.
+
+## Analytics and Reporting
+
+The Analytics Dashboard has been enhanced to show:
+
+1. Distribution of tickets between contract-related and general issues
+2. Most common contracts generating support tickets
+3. Trends in ticket types by contract status
+4. Resolution times comparing contract vs. non-contract tickets
+
+## Assignment and Workflow
+
+### Automatic Assignment
+
+The automated assignment system now considers contract expertise when assigning tickets:
+
+- Agents with knowledge of specific contracts get priority for contract-related tickets
+- General tickets are assigned based on topic expertise and workload balancing
+
+### Manual Assignment
+
+When manually assigning tickets, you can view agent expertise in relation to contracts. The agent selection interface highlights:
+
+- Agents who have previously worked with the specific contract
+- Agents with expertise in the contract's financial product type
+- Current workload distribution
+
+## Best Practices
+
+1. **Use Contract Context**: When responding to contract-related tickets, always review the contract details first
+2. **Appropriate Categorization**: Ensure tickets are properly categorized as contract-related or general
+3. **Cross-Reference Issues**: Look for patterns of issues across similar contracts
+4. **Update Knowledge Base**: Create separate knowledge base articles for contract-specific and general issues
+5. **Training Focus**: Train support agents on both contract-specific troubleshooting and general merchant support
+
+## Technical Notes
+
+- Contract integration is fully reflected in the ticket notification system
+- SMS alerts include contract details when relevant
+- The ticket-to-contract association is stored in the database and cannot be changed after ticket creation
+- All ticket exports and reports include the contract association status

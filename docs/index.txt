@@ -1,0 +1,30 @@
+# ShiFi Tester Documentation: Support Ticket Contract Integration
+
+## Available Documentation
+
+1. **General Documentation**
+   - [Support Ticket Contract Integration Overview](./ticket-contract-integration.txt)
+
+2. **User Guides**
+   - [Admin Guide to Contract-Integrated Support Tickets](./admin-ticket-contract-guide.txt)
+   - [Merchant Quick Guide to Support Tickets](./merchant-ticket-contract-guide.txt)
+
+3. **Technical Documentation**
+   - [Developer Guide to Contract-Ticket Integration](./developer-contract-ticket-guide.txt)
+
+## Implementation Summary
+
+The Support Ticket Contract Integration feature enhances the ShiFi Tester support system by connecting support tickets to specific contracts when applicable. This allows for better organization, more targeted support, and improved analytics.
+
+Key features include:
+- Option to associate tickets with specific contracts
+- "Not Contract Related" option for general issues
+- Enhanced ticket display showing contract information
+- Improved analytics and reporting based on contract relationships
+- Contract-aware notifications and SMS alerts
+
+## How to Access Documentation
+
+These documentation files are located in the `/docs` directory of the ShiFi Tester codebase. They are provided in plain text format for maximum compatibility.
+
+For more information or to suggest documentation improvements, please contact the development team.

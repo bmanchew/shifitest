@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
-import { MerchantDetail } from '@/components/admin/MerchantDetail';
+import MerchantDetail from '@/components/admin/MerchantDetail';
 
 export default function MerchantDetailPage() {
   const { id } = useParams();

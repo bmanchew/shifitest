@@ -1,12 +1,20 @@
 import AdminLayout from "@/components/layout/AdminLayout";
 import MerchantDetail from "@/components/admin/MerchantDetail";
+import { useParams } from 'wouter';
 
 export default function MerchantDetailPage() {
+  const { id } = useParams();
+  const merchantId = id ? parseInt(id) : 0;
+
   return (
     <AdminLayout>
       <div className="py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-          <MerchantDetail />
+          {merchantId ? (
+            <MerchantDetail merchantId={merchantId} />
+          ) : (
+            <div className="text-center py-8 text-red-600">Invalid merchant ID</div>
+          )}
         </div>
       </div>
     </AdminLayout>
