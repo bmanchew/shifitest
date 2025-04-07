@@ -200,7 +200,7 @@ export default function SupportTickets() {
       accessorKey: "ticketNumber",
       header: "Ticket #",
       cell: ({ row }) => (
-        <Link href={`/admin/support-tickets/${row.original.id}`} className="font-medium text-blue-600 hover:underline">
+        <Link to={`/admin/support-tickets/${row.original.id}`} className="font-medium text-blue-600 hover:underline">
           {row.original.ticketNumber}
         </Link>
       ),
@@ -284,7 +284,7 @@ export default function SupportTickets() {
             >
               <MessageSquare className="h-4 w-4" />
             </Button>
-            <Link href={`/admin/support-tickets/${ticket.id}`}>
+            <Link to={`/admin/support-tickets/${ticket.id}`}>
               <Button
                 variant="outline"
                 size="icon"
@@ -304,7 +304,7 @@ export default function SupportTickets() {
       <div className="container mx-auto py-6">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight">Support Tickets</h1>
-          <Link href="/admin/messages">
+          <Link to="/admin/messages">
             <Button>
               <MessageSquare className="mr-2 h-4 w-4" />
               All Messages
