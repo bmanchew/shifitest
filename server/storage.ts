@@ -34,6 +34,8 @@ import {
   ticketActivityLog, TicketActivityLog, InsertTicketActivityLog,
   notifications, Notification, InsertNotification,
   logs, Log, InsertLog,
+  chatSessions, ChatSession, InsertChatSession,
+  chatMessages, ChatMessage, InsertChatMessage,
 
   // Support agent related schemas
   supportAgents, SupportAgent, InsertSupportAgent,
@@ -344,6 +346,12 @@ export interface IStorage {
   createTicketActivityLog(activity: InsertTicketActivityLog): Promise<TicketActivityLog>;
   getTicketActivityLogsByTicketId(ticketId: number): Promise<TicketActivityLog[]>;
   
+  // Advanced ticket management methods
+  getActiveTickets(): Promise<SupportTicket[]>;
+  getActiveTicketsByAgentId(agentId: number): Promise<SupportTicket[]>;
+  getResolvedTicketsByAgentId(agentId: number): Promise<SupportTicket[]>;
+  getTicketSlaConfigs(): Promise<TicketSlaConfig[]>;
+  
   // Support Agent operations
   createSupportAgent(agent: InsertSupportAgent): Promise<SupportAgent>;
   getSupportAgent(id: number): Promise<SupportAgent | undefined>;
@@ -389,6 +397,25 @@ export interface IStorage {
   getKnowledgeTag(id: number): Promise<KnowledgeTag | undefined>;
   getAllKnowledgeTags(): Promise<KnowledgeTag[]>;
   updateKnowledgeTag(id: number, data: Partial<KnowledgeTag>): Promise<KnowledgeTag | undefined>;
+  
+  // Chat Session operations
+  createChatSession(session: InsertChatSession): Promise<ChatSession>;
+  getChatSession(id: number): Promise<ChatSession | undefined>;
+  getChatSessionsByMerchantId(merchantId: number): Promise<ChatSession[]>;
+  getChatSessionsByAgentId(agentId: number): Promise<ChatSession[]>;
+  getChatSessionsByTicketId(ticketId: number): Promise<ChatSession | undefined>;
+  updateChatSession(id: number, data: Partial<ChatSession>): Promise<ChatSession | undefined>;
+  updateChatSessionStatus(id: number, status: string): Promise<ChatSession | undefined>;
+  closeChatSession(id: number, satisfaction?: number, feedback?: string): Promise<ChatSession | undefined>;
+  transferChatSession(id: number, newAgentId: number, transferReason?: string): Promise<ChatSession | undefined>;
+  
+  // Chat Message operations
+  createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  getChatMessagesBySessionId(sessionId: number, options?: { limit?: number, offset?: number }): Promise<ChatMessage[]>;
+  markChatMessageAsRead(id: number): Promise<ChatMessage | undefined>;
+  markAllChatMessagesAsRead(sessionId: number, userId: number): Promise<number>; // Returns count of messages updated
+  getUnreadChatMessageCountForMerchant(merchantId: number): Promise<number>;
+  getUnreadChatMessageCountForAgent(agentId: number): Promise<number>;
   
   // Article Tag operations
   createArticleTag(tag: InsertArticleTag): Promise<ArticleTag>;
@@ -4692,6 +4719,114 @@ export class DatabaseStorage implements IStorage {
         ));
     } catch (error) {
       logger.error(`Error getting tickets for agent ${agentId}:`, error);
+      return [];
+    }
+  }
+  
+  async getActiveTickets(): Promise<SupportTicket[]> {
+    try {
+      // Get all tickets that are not in a closed or resolved status
+      return await db
+        .select()
+        .from(supportTickets)
+        .where(
+          and(
+            not(inArray(
+              supportTickets.status,
+              ['closed', 'resolved']
+            )),
+            eq(supportTickets.isDeleted, false)
+          )
+        )
+        .orderBy(desc(supportTickets.priority), desc(supportTickets.createdAt));
+    } catch (error) {
+      logger.error({
+        message: `Error getting active tickets: ${error instanceof Error ? error.message : String(error)}`,
+        category: "database",
+        source: "storage",
+        metadata: {
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      return [];
+    }
+  }
+  
+  async getActiveTicketsByAgentId(agentId: number): Promise<SupportTicket[]> {
+    try {
+      // Get all active tickets assigned to a specific agent
+      return await db
+        .select()
+        .from(supportTickets)
+        .where(
+          and(
+            eq(supportTickets.assignedAgentId, agentId),
+            not(inArray(
+              supportTickets.status,
+              ['closed', 'resolved']
+            )),
+            eq(supportTickets.isDeleted, false)
+          )
+        )
+        .orderBy(desc(supportTickets.priority), desc(supportTickets.createdAt));
+    } catch (error) {
+      logger.error({
+        message: `Error getting active tickets for agent ${agentId}: ${error instanceof Error ? error.message : String(error)}`,
+        category: "database",
+        source: "storage",
+        metadata: {
+          agentId,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      return [];
+    }
+  }
+  
+  async getResolvedTicketsByAgentId(agentId: number): Promise<SupportTicket[]> {
+    try {
+      // Get all resolved tickets assigned to a specific agent
+      return await db
+        .select()
+        .from(supportTickets)
+        .where(
+          and(
+            eq(supportTickets.assignedAgentId, agentId),
+            inArray(
+              supportTickets.status,
+              ['closed', 'resolved']
+            ),
+            eq(supportTickets.isDeleted, false)
+          )
+        )
+        .orderBy(desc(supportTickets.resolvedAt));
+    } catch (error) {
+      logger.error({
+        message: `Error getting resolved tickets for agent ${agentId}: ${error instanceof Error ? error.message : String(error)}`,
+        category: "database",
+        source: "storage",
+        metadata: {
+          agentId,
+          error: error instanceof Error ? error.stack : null
+        }
+      });
+      return [];
+    }
+  }
+  
+  async getTicketSlaConfigs(): Promise<TicketSlaConfig[]> {
+    try {
+      // Get all active SLA configurations
+      return await this.getActiveSlaConfigs();
+    } catch (error) {
+      logger.error({
+        message: `Error getting ticket SLA configs: ${error instanceof Error ? error.message : String(error)}`,
+        category: "database",
+        source: "storage",
+        metadata: {
+          error: error instanceof Error ? error.stack : null
+        }
+      });
       return [];
     }
   }

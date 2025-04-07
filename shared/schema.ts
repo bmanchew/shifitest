@@ -8,6 +8,7 @@ import {
   doublePrecision,
   pgEnum,
   json,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -80,6 +81,18 @@ export const slaStatusEnum = pgEnum("sla_status", [
   "within_target",
   "at_risk",
   "breached",
+]);
+
+// Chat message type enum
+export const chatMessageTypeEnum = pgEnum("chat_message_type", [
+  "text",
+  "system",
+  "file",
+  "image",
+  "automated",
+  "transfer",
+  "join",
+  "leave",
 ]);
 export const contractStatusEnum = pgEnum("contract_status", [
   "pending",
@@ -1130,6 +1143,8 @@ export const supportAgents = pgTable("support_agents", {
   maxWorkload: integer("max_workload").default(10), // Maximum workload capacity
   isAvailable: boolean("is_available").default(true), // Whether agent is available for new assignments
   lastAssignedAt: timestamp("last_assigned_at"),
+  isOnline: boolean("is_online").default(false), // Whether agent is currently online for chat
+  lastSeenAt: timestamp("last_seen_at"), // Last time the agent was active
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
   metadata: text("metadata"), // JSON stringified additional data
@@ -1279,6 +1294,61 @@ export const insertArticleFeedbackSchema = createInsertSchema(articleFeedback).o
   createdAt: true,
 });
 
+// Chat Session for real-time chat between merchants and support agents
+export const chatSessions = pgTable("chat_sessions", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").references(() => supportTickets.id), // Optional link to a support ticket
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  agentId: integer("agent_id").references(() => supportAgents.id), // Null until assigned
+  status: text("status").notNull().default("pending"), // pending, active, closed
+  subject: text("subject").notNull(),
+  startedAt: timestamp("started_at").defaultNow(),
+  endedAt: timestamp("ended_at"),
+  waitingTimeSeconds: integer("waiting_time_seconds"), // Time spent in queue before agent response
+  transferredFrom: integer("transferred_from").references(() => supportAgents.id), // If chat was transferred
+  transferReason: text("transfer_reason"),
+  metadata: text("metadata"), // JSON stringified additional data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  lastMessageAt: timestamp("last_message_at").defaultNow(),
+  priority: text("priority").default("normal"), // normal, high, urgent
+  category: ticketCategoryEnum("category").notNull().default("other"),
+  tags: text("tags").array(),
+  satisfaction: integer("satisfaction"), // 1-5 rating provided by merchant at end of chat
+  feedback: text("feedback"), // Text feedback from merchant
+});
+
+// Chat Messages within chat sessions
+export const chatMessages = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => chatSessions.id).notNull(),
+  senderId: integer("sender_id").references(() => users.id).notNull(),
+  senderType: text("sender_type").notNull(), // "merchant" or "agent"
+  senderName: text("sender_name").notNull(),
+  messageType: chatMessageTypeEnum("message_type").notNull().default("text"),
+  content: text("content").notNull(),
+  timestamp: timestamp("timestamp").defaultNow(),
+  isRead: boolean("is_read").default(false),
+  readAt: timestamp("read_at"),
+  metadata: text("metadata"), // For attachments, AI actions, etc.
+});
+
+// Insert schemas for chat tables
+export const insertChatSessionSchema = createInsertSchema(chatSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastMessageAt: true,
+  endedAt: true,
+  waitingTimeSeconds: true,
+});
+
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
+  id: true,
+  timestamp: true,
+  readAt: true,
+});
+
 // Support agent types
 export type SupportAgent = typeof supportAgents.$inferSelect;
 export type InsertSupportAgent = z.infer<typeof insertSupportAgentSchema>;
@@ -1334,6 +1404,12 @@ export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTo
   id: true,
   usedAt: true,
 });
+
+// Chat types
+export type ChatSession = typeof chatSessions.$inferSelect;
+export type InsertChatSession = z.infer<typeof insertChatSessionSchema>;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 
 // Email and password reset token types
 export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
