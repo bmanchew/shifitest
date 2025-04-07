@@ -404,6 +404,7 @@ export interface IStorage {
   getChatSessionsByMerchantId(merchantId: number): Promise<ChatSession[]>;
   getChatSessionsByAgentId(agentId: number): Promise<ChatSession[]>;
   getChatSessionsByTicketId(ticketId: number): Promise<ChatSession | undefined>;
+  getAllChatSessions(): Promise<ChatSession[]>;
   updateChatSession(id: number, data: Partial<ChatSession>): Promise<ChatSession | undefined>;
   updateChatSessionStatus(id: number, status: string): Promise<ChatSession | undefined>;
   closeChatSession(id: number, satisfaction?: number, feedback?: string): Promise<ChatSession | undefined>;
@@ -4551,6 +4552,340 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error(`Error updating knowledge tag ${id}:`, error);
       return undefined;
+    }
+  }
+
+  // Chat Session operations
+  async createChatSession(session: InsertChatSession): Promise<ChatSession> {
+    try {
+      const [newSession] = await db.insert(chatSessions).values(session).returning();
+      return newSession;
+    } catch (error) {
+      console.error('Error creating chat session:', error);
+      throw new Error(`Failed to create chat session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getChatSession(id: number): Promise<ChatSession | undefined> {
+    try {
+      const [session] = await db.select().from(chatSessions).where(eq(chatSessions.id, id));
+      return session;
+    } catch (error) {
+      console.error(`Error retrieving chat session ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getChatSessionsByMerchantId(merchantId: number): Promise<ChatSession[]> {
+    try {
+      return await db.select().from(chatSessions)
+        .where(eq(chatSessions.merchantId, merchantId))
+        .orderBy(desc(chatSessions.lastActivityAt));
+    } catch (error) {
+      console.error(`Error retrieving chat sessions for merchant ${merchantId}:`, error);
+      return [];
+    }
+  }
+
+  async getChatSessionsByAgentId(agentId: number): Promise<ChatSession[]> {
+    try {
+      return await db.select().from(chatSessions)
+        .where(eq(chatSessions.agentId, agentId))
+        .orderBy(desc(chatSessions.lastActivityAt));
+    } catch (error) {
+      console.error(`Error retrieving chat sessions for agent ${agentId}:`, error);
+      return [];
+    }
+  }
+
+  async getChatSessionsByTicketId(ticketId: number): Promise<ChatSession | undefined> {
+    try {
+      const [session] = await db.select().from(chatSessions)
+        .where(eq(chatSessions.ticketId, ticketId));
+      return session;
+    } catch (error) {
+      console.error(`Error retrieving chat session for ticket ${ticketId}:`, error);
+      return undefined;
+    }
+  }
+  
+  async getAllChatSessions(): Promise<ChatSession[]> {
+    try {
+      return await db.select().from(chatSessions)
+        .orderBy(desc(chatSessions.lastActivityAt));
+    } catch (error) {
+      console.error('Error retrieving all chat sessions:', error);
+      return [];
+    }
+  }
+
+  async updateChatSession(id: number, data: Partial<ChatSession>): Promise<ChatSession | undefined> {
+    try {
+      const [updatedSession] = await db
+        .update(chatSessions)
+        .set(data)
+        .where(eq(chatSessions.id, id))
+        .returning();
+      return updatedSession;
+    } catch (error) {
+      console.error(`Error updating chat session ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async updateChatSessionStatus(id: number, status: string): Promise<ChatSession | undefined> {
+    try {
+      const [updatedSession] = await db
+        .update(chatSessions)
+        .set({ 
+          status: status,
+          lastActivityAt: new Date() 
+        })
+        .where(eq(chatSessions.id, id))
+        .returning();
+      return updatedSession;
+    } catch (error) {
+      console.error(`Error updating chat session ${id} status:`, error);
+      return undefined;
+    }
+  }
+
+  async closeChatSession(id: number, satisfaction?: number, feedback?: string): Promise<ChatSession | undefined> {
+    try {
+      const data: Partial<ChatSession> = {
+        status: 'resolved',
+        endedAt: new Date(),
+        lastActivityAt: new Date()
+      };
+
+      if (satisfaction !== undefined) {
+        data.satisfaction = satisfaction;
+      }
+
+      if (feedback) {
+        data.feedback = feedback;
+      }
+
+      const [updatedSession] = await db
+        .update(chatSessions)
+        .set(data)
+        .where(eq(chatSessions.id, id))
+        .returning();
+      return updatedSession;
+    } catch (error) {
+      console.error(`Error closing chat session ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async transferChatSession(id: number, newAgentId: number, transferReason?: string): Promise<ChatSession | undefined> {
+    try {
+      // First, get the current session to record the previous agent
+      const [currentSession] = await db
+        .select()
+        .from(chatSessions)
+        .where(eq(chatSessions.id, id));
+
+      if (!currentSession) {
+        return undefined;
+      }
+
+      // Update the session with new agent and transfer details
+      const [updatedSession] = await db
+        .update(chatSessions)
+        .set({
+          agentId: newAgentId,
+          transferredFrom: currentSession.agentId,
+          transferReason: transferReason,
+          lastActivityAt: new Date()
+        })
+        .where(eq(chatSessions.id, id))
+        .returning();
+
+      // Create a system message about the transfer
+      const previousAgent = currentSession.agentId 
+        ? await this.getSupportAgent(currentSession.agentId) 
+        : undefined;
+      
+      const newAgent = await this.getSupportAgent(newAgentId);
+
+      if (newAgent) {
+        await this.createChatMessage({
+          sessionId: id,
+          content: `Chat transferred from ${previousAgent?.name || 'previous agent'} to ${newAgent.name}`,
+          senderType: 'system',
+          messageType: 'transfer',
+          isRead: true,
+          sentAt: new Date()
+        });
+      }
+
+      return updatedSession;
+    } catch (error) {
+      console.error(`Error transferring chat session ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  // Chat Message operations
+  async createChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
+    try {
+      // Make sure sentAt is set if not provided
+      if (!message.sentAt) {
+        message.sentAt = new Date();
+      }
+
+      const [newMessage] = await db.insert(chatMessages).values(message).returning();
+      
+      // Update the last activity timestamp on the session
+      await db
+        .update(chatSessions)
+        .set({ lastActivityAt: message.sentAt })
+        .where(eq(chatSessions.id, message.sessionId));
+      
+      return newMessage;
+    } catch (error) {
+      console.error('Error creating chat message:', error);
+      throw new Error(`Failed to create chat message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getChatMessagesBySessionId(sessionId: number, options?: { limit?: number, offset?: number }): Promise<ChatMessage[]> {
+    try {
+      let query = db.select().from(chatMessages)
+        .where(eq(chatMessages.sessionId, sessionId))
+        .orderBy(asc(chatMessages.sentAt));
+      
+      if (options?.limit) {
+        query = query.limit(options.limit);
+      }
+      
+      if (options?.offset) {
+        query = query.offset(options.offset);
+      }
+      
+      return await query;
+    } catch (error) {
+      console.error(`Error retrieving chat messages for session ${sessionId}:`, error);
+      return [];
+    }
+  }
+
+  async markChatMessageAsRead(id: number): Promise<ChatMessage | undefined> {
+    try {
+      const [updatedMessage] = await db
+        .update(chatMessages)
+        .set({ isRead: true })
+        .where(eq(chatMessages.id, id))
+        .returning();
+      return updatedMessage;
+    } catch (error) {
+      console.error(`Error marking chat message ${id} as read:`, error);
+      return undefined;
+    }
+  }
+
+  async markAllChatMessagesAsRead(sessionId: number, userId: number): Promise<number> {
+    try {
+      // Get the user to determine if they're a merchant or agent
+      const user = await this.getUser(userId);
+      if (!user) {
+        return 0;
+      }
+
+      // For merchants, mark agent messages as read
+      // For agents, mark merchant messages as read
+      const senderType = user.role === 'merchant' ? 'agent' : 'merchant';
+      
+      const result = await db
+        .update(chatMessages)
+        .set({ isRead: true })
+        .where(
+          and(
+            eq(chatMessages.sessionId, sessionId),
+            eq(chatMessages.senderType, senderType),
+            eq(chatMessages.isRead, false)
+          )
+        );
+
+      return Number(result.count) || 0;
+    } catch (error) {
+      console.error(`Error marking all chat messages as read for session ${sessionId}:`, error);
+      return 0;
+    }
+  }
+
+  async getUnreadChatMessageCountForMerchant(merchantId: number): Promise<number> {
+    try {
+      // Get all active sessions for this merchant
+      const sessions = await db
+        .select({ id: chatSessions.id })
+        .from(chatSessions)
+        .where(
+          and(
+            eq(chatSessions.merchantId, merchantId),
+            eq(chatSessions.status, 'active')
+          )
+        );
+      
+      if (sessions.length === 0) {
+        return 0;
+      }
+      
+      // Get unread message count from agent to merchant across all sessions
+      const sessionIds = sessions.map(s => s.id);
+      const result = await db
+        .select({ count: count() })
+        .from(chatMessages)
+        .where(
+          and(
+            inArray(chatMessages.sessionId, sessionIds),
+            eq(chatMessages.senderType, 'agent'),
+            eq(chatMessages.isRead, false)
+          )
+        );
+      
+      return result[0]?.count || 0;
+    } catch (error) {
+      console.error(`Error getting unread chat message count for merchant ${merchantId}:`, error);
+      return 0;
+    }
+  }
+
+  async getUnreadChatMessageCountForAgent(agentId: number): Promise<number> {
+    try {
+      // Get all active sessions assigned to this agent
+      const sessions = await db
+        .select({ id: chatSessions.id })
+        .from(chatSessions)
+        .where(
+          and(
+            eq(chatSessions.agentId, agentId),
+            eq(chatSessions.status, 'active')
+          )
+        );
+      
+      if (sessions.length === 0) {
+        return 0;
+      }
+      
+      // Get unread message count from merchant to agent across all sessions
+      const sessionIds = sessions.map(s => s.id);
+      const result = await db
+        .select({ count: count() })
+        .from(chatMessages)
+        .where(
+          and(
+            inArray(chatMessages.sessionId, sessionIds),
+            eq(chatMessages.senderType, 'merchant'),
+            eq(chatMessages.isRead, false)
+          )
+        );
+      
+      return result[0]?.count || 0;
+    } catch (error) {
+      console.error(`Error getting unread chat message count for agent ${agentId}:`, error);
+      return 0;
     }
   }
 

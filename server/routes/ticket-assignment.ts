@@ -1,9 +1,9 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { storage } from '../storage';
 import { assignTicket, findBestAgentForTicket, reassignAgentTickets, updateTicketSlaStatus, updateAgentPerformanceMetrics } from '../services/ticketAssignment';
-import { authenticateToken } from '@/server/middleware/auth';
-import { logger } from '@/server/services/logger';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../services/logger';
 
 export const ticketAssignmentRouter = Router();
 

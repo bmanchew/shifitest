@@ -104,6 +104,7 @@ import registerFinancialSherpaRoutes from "./routes/financialSherpa"; // Import 
 import authRouter from "./routes/auth.routes"; // Import auth routes
 import investorRouter from "./routes/investor"; // Import investor portal routes
 import knowledgeBaseRouter from "./routes/knowledge-base"; // Import knowledge base routes
+import intercomChatRouter from "./routes/intercom-chat"; // Import Intercom chat integration routes
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch'; // or use global fetch if available
@@ -5802,6 +5803,9 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   apiRouter.use("/conversations", communicationsRouter);
   // Also mount the support-tickets endpoint for backward compatibility
   apiRouter.use("/support-tickets", communicationsRouter);
+  
+  // Mount Intercom chat integration
+  apiRouter.use("/chat", intercomChatRouter);
   
   // Mount the SesameAI router for voice generation
   registerSesameAIRoutes(apiRouter);
