@@ -1,12 +1,6 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { MerchantPlaidSettings } from './MerchantPlaidSettings';
-import { Loader2, AlertCircle, Building, Phone, Mail, Home, User } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import axios from 'axios';
 
 interface MerchantDetailProps {
   merchantId: number;
@@ -24,241 +18,34 @@ interface Merchant {
   userId: number | null;
 }
 
-export function MerchantDetail({ merchantId }: MerchantDetailProps) {
-  const { toast } = useToast();
-
-  // Fetch merchant details
-  const { 
-    data: merchant, 
-    isLoading, 
-    isError 
-  } = useQuery({
-    queryKey: ['/api/merchants', merchantId],
-    queryFn: async () => {
-      try {
-        const response = await apiRequest('GET', `/api/merchants/${merchantId}`);
-        return response as unknown as Merchant;
-      } catch (error) {
-        toast({
-          title: 'Error',
-          description: 'Failed to load merchant details',
-          variant: 'destructive',
-        });
-        throw error;
-      }
-    }
-  });
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-3 text-lg">Loading merchant details...</span>
-      </div>
-    );
-  }
-
-  if (isError || !merchant) {
-    return (
-      <div className="flex flex-col justify-center items-center min-h-[60vh] gap-4">
-        <AlertCircle className="h-12 w-12 text-red-500" />
-        <h2 className="text-xl font-semibold">Error Loading Merchant</h2>
-        <p className="text-gray-500">Could not load merchant details. Please try again later.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container mx-auto py-6">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">{merchant.name}</h1>
-          <p className="text-gray-500 mt-1">Merchant ID: {merchant.id}</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Contact Information</CardTitle>
-              <CardDescription>Primary merchant contact details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-start gap-3">
-                <User className="h-5 w-5 text-gray-500 mt-0.5" />
-                <div>
-                  <p className="font-medium">Contact Person</p>
-                  <p className="text-gray-600">{merchant.contactName}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <Mail className="h-5 w-5 text-gray-500 mt-0.5" />
-                <div>
-                  <p className="font-medium">Email</p>
-                  <p className="text-gray-600">{merchant.email}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <Phone className="h-5 w-5 text-gray-500 mt-0.5" />
-                <div>
-                  <p className="font-medium">Phone</p>
-                  <p className="text-gray-600">{merchant.phone}</p>
-                </div>
-              </div>
-              
-              {merchant.address && (
-                <div className="flex items-start gap-3">
-                  <Home className="h-5 w-5 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Address</p>
-                    <p className="text-gray-600">{merchant.address}</p>
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex items-start gap-3">
-                <Building className="h-5 w-5 text-gray-500 mt-0.5" />
-                <div>
-                  <p className="font-medium">Account Status</p>
-                  <p className={`font-semibold ${merchant.active ? 'text-green-600' : 'text-red-600'}`}>
-                    {merchant.active ? 'Active' : 'Inactive'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Account Details</CardTitle>
-              <CardDescription>Additional information about this merchant</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="font-medium">Created On</p>
-                <p className="text-gray-600">
-                  {new Date(merchant.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </p>
-              </div>
-              
-              {merchant.userId && (
-                <div>
-                  <p className="font-medium">User Account ID</p>
-                  <p className="text-gray-600">{merchant.userId}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <Separator className="my-6" />
-
-        <Tabs defaultValue="plaid" className="w-full">
-          <TabsList className="mb-4">
-            <TabsTrigger value="plaid">Plaid Integration</TabsTrigger>
-            <TabsTrigger value="contracts">Contracts</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="activity">Activity Log</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="plaid" className="space-y-4">
-            <MerchantPlaidSettings merchantId={merchant.id} />
-          </TabsContent>
-          
-          <TabsContent value="contracts">
-            <Card>
-              <CardHeader>
-                <CardTitle>Contracts</CardTitle>
-                <CardDescription>Financing contracts for this merchant</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Contract list will be displayed here</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="documents">
-            <Card>
-              <CardHeader>
-                <CardTitle>Documents</CardTitle>
-                <CardDescription>Business documents and verification files</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Document management will be displayed here</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="activity">
-            <Card>
-              <CardHeader>
-                <CardTitle>Activity Log</CardTitle>
-                <CardDescription>Recent activity related to this merchant</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Activity log will be displayed here</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
-  );
-}
-import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import axios from "axios";
-
-interface IMerchant {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  contactName: string;
-  address: string;
-  active: boolean;
-  createdAt: string;
-}
-
-interface IPlaidMerchant {
+interface PlaidMerchant {
   id: number;
   merchantId: number;
-  plaidCustomerId?: string;
-  originatorId?: string;
+  plaidCustomerId: string | null;
+  originatorId: string | null;
   onboardingStatus: string;
-  onboardingUrl?: string;
-  questionnaireId?: string;
+  onboardingUrl: string | null;
   createdAt: string;
-  updatedAt?: string;
+  updatedAt: string | null;
 }
 
-interface IBusinessDetails {
-  legalName?: string;
-  ein?: string;
-  businessStructure?: string;
-  addressLine1?: string;
-  addressLine2?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  websiteUrl?: string;
-  industryType?: string;
-  yearEstablished?: number;
-  annualRevenue?: number;
-  monthlyRevenue?: number;
-  employeeCount?: number;
+interface BusinessDetails {
+  id: number;
+  merchantId: number;
+  legalName: string | null;
+  ein: string | null;
+  businessType: string | null;
+  industry: string | null;
+  yearFounded: number | null;
+  annualRevenue: number | null;
+  createdAt: string;
+  updatedAt: string | null;
 }
 
-const MerchantDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const [merchant, setMerchant] = useState<IMerchant | null>(null);
-  const [plaidMerchant, setPlaidMerchant] = useState<IPlaidMerchant | null>(null);
-  const [businessDetails, setBusinessDetails] = useState<IBusinessDetails | null>(null);
+export function MerchantDetail({ merchantId }: MerchantDetailProps) {
+  const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [plaidMerchant, setPlaidMerchant] = useState<PlaidMerchant | null>(null);
+  const [businessDetails, setBusinessDetails] = useState<BusinessDetails | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [syncingStatus, setSyncingStatus] = useState<boolean>(false);
@@ -266,7 +53,7 @@ const MerchantDetail: React.FC = () => {
   const fetchMerchantDetail = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`/api/admin/merchants/${id}`);
+      const response = await axios.get(`/api/admin/merchants/${merchantId}`);
       if (response.data.success) {
         setMerchant(response.data.merchant);
         setPlaidMerchant(response.data.plaidMerchant);
@@ -283,7 +70,7 @@ const MerchantDetail: React.FC = () => {
 
   useEffect(() => {
     fetchMerchantDetail();
-  }, [id]);
+  }, [merchantId]);
 
   // Function to sync Plaid status
   const syncPlaidStatus = async () => {
@@ -294,7 +81,7 @@ const MerchantDetail: React.FC = () => {
 
     try {
       setSyncingStatus(true);
-      const response = await axios.post(`/api/plaid/sync-merchant-status/${id}`);
+      const response = await axios.post(`/api/plaid/sync-merchant-status/${merchantId}`);
       if (response.data.success) {
         // Refresh merchant details
         fetchMerchantDetail();
@@ -464,13 +251,38 @@ const MerchantDetail: React.FC = () => {
                   <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{businessDetails.ein}</dd>
                 </div>
               )}
-              {/* Additional business details can be added here */}
+              {businessDetails.businessType && (
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Business Type</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{businessDetails.businessType}</dd>
+                </div>
+              )}
+              {businessDetails.industry && (
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Industry</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{businessDetails.industry}</dd>
+                </div>
+              )}
+              {businessDetails.yearFounded && (
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Year Founded</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{businessDetails.yearFounded}</dd>
+                </div>
+              )}
+              {businessDetails.annualRevenue && (
+                <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                  <dt className="text-sm font-medium text-gray-500">Annual Revenue</dt>
+                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                    ${businessDetails.annualRevenue.toLocaleString()}
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
         </>
       )}
     </div>
   );
-};
+}
 
 export default MerchantDetail;
