@@ -4,9 +4,9 @@ import { db } from '../../db';
 import * as schema from '../../../shared/schema';
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
 import { eq } from 'drizzle-orm';
 import { logger } from '../../services/logger';
+import fetch from 'node-fetch';
 
 const router = Router();
 
@@ -19,7 +19,12 @@ router.use(authenticateAdmin);
  */
 router.get('/test-thanksroger', async (req, res) => {
   try {
-    console.log('Testing Thanks Roger API integration');
+    logger.info({
+      message: 'Testing Thanks Roger API integration',
+      userId: req.user?.id,
+      category: 'api',
+      source: 'internal'
+    });
     
     // 1. Retrieve a program agreement from the database
     const agreements = await db.select().from(schema.merchantProgramAgreements).limit(1);
@@ -77,7 +82,14 @@ router.get('/test-thanksroger', async (req, res) => {
       createdAt: agreement.createdAt
     };
 
-    let templateDetails = null;
+    // Define template details interface for better type checking
+    interface TemplateDetails {
+      id: string;
+      name: string;
+      [key: string]: any;
+    }
+    
+    let templateDetails: TemplateDetails | null = null;
     
     // Check for Thanks Roger API key
     const thanksRogerApiKey = process.env.THANKS_ROGER_API_KEY;
@@ -95,9 +107,10 @@ router.get('/test-thanksroger', async (req, res) => {
       console.log(`Fetching template details for ID: ${agreement.externalTemplateId}`);
       
       try {
-        const response = await axios.get(
+        const response = await fetch(
           `https://api.thanksroger.com/v1/templates/${agreement.externalTemplateId}`,
           {
+            method: 'GET',
             headers: {
               'Authorization': `Bearer ${thanksRogerApiKey}`,
               'Content-Type': 'application/json'
@@ -105,7 +118,12 @@ router.get('/test-thanksroger', async (req, res) => {
           }
         );
         
-        templateDetails = response.data;
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API Error: ${response.status} - ${errorText}`);
+        }
+        
+        templateDetails = await response.json() as TemplateDetails;
         
         return res.json({
           success: true,
@@ -124,7 +142,17 @@ router.get('/test-thanksroger', async (req, res) => {
     } 
     // 3. If there's no template ID, create a new template in Thanks Roger
     else {
-      console.log('No template ID found, attempting to create a new template');
+      logger.info({
+        message: 'No template ID found, attempting to create a new template',
+        userId: req.user?.id,
+        category: 'api',
+        source: 'internal',
+        metadata: {
+          agreementId: agreement.id,
+          programId: program.id,
+          merchantId: merchant.id
+        }
+      });
       
       // Check if file exists
       const filePath = path.join(process.cwd(), 'uploads', agreement.filename);
@@ -143,21 +171,27 @@ router.get('/test-thanksroger', async (req, res) => {
         const fileBase64 = fileBuffer.toString('base64');
         
         // Create a new template in Thanks Roger
-        const response = await axios.post(
+        const response = await fetch(
           'https://api.thanksroger.com/v1/templates',
           {
-            name: `${program.name || 'Program'} Agreement - ${new Date().toISOString().split('T')[0]}`,
-            document: fileBase64
-          },
-          {
+            method: 'POST',
             headers: {
               'Authorization': `Bearer ${thanksRogerApiKey}`,
               'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify({
+              name: `${program.name || 'Program'} Agreement - ${new Date().toISOString().split('T')[0]}`,
+              document: fileBase64
+            })
           }
         );
         
-        templateDetails = response.data;
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API Error: ${response.status} - ${errorText}`);
+        }
+        
+        templateDetails = await response.json() as TemplateDetails;
         
         // Update the agreement with the new template ID and name
         if (templateDetails?.id) {
@@ -182,8 +216,20 @@ router.get('/test-thanksroger', async (req, res) => {
           templateDetails
         });
       } catch (err) {
-        console.error('Error creating template:', err);
-        return res.json({
+        logger.error({
+          message: `Error creating Thanks Roger template: ${err instanceof Error ? err.message : String(err)}`,
+          userId: req.user?.id,
+          category: 'api',
+          source: 'internal',
+          metadata: {
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            agreementId: agreement.id,
+            programId: program.id
+          }
+        });
+        
+        return res.status(500).json({
           success: false,
           message: `Error creating template: ${err instanceof Error ? err.message : String(err)}`,
           agreement: agreementDetails
@@ -191,7 +237,17 @@ router.get('/test-thanksroger', async (req, res) => {
       }
     }
   } catch (err) {
-    console.error('Error in Thanks Roger test endpoint:', err);
+    logger.error({
+      message: `Error in Thanks Roger test endpoint: ${err instanceof Error ? err.message : String(err)}`,
+      userId: req.user?.id,
+      category: 'api',
+      source: 'internal',
+      metadata: {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined
+      }
+    });
+    
     return res.status(500).json({
       success: false,
       message: `Internal server error: ${err instanceof Error ? err.message : String(err)}`
