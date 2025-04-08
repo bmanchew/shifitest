@@ -515,8 +515,52 @@ router.get("/:id/agreements", async (req: Request, res: Response) => {
 // Upload a new agreement for a program and send to Thanks Roger as a template
 router.post("/:id/agreements", upload.single("file"), async (req: Request, res: Response) => {
   try {
+    // Log the request details for debugging
+    logger.info('Agreement upload request received', {
+      category: 'merchant',
+      source: 'internal',
+      metadata: {
+        programId: req.params.id,
+        merchantId: req.merchantId,
+        hasFile: !!req.file,
+        bodyKeys: Object.keys(req.body),
+        headers: req.headers,
+        files: req.files ? Object.keys(req.files) : 'No files',
+        formDataFields: JSON.stringify(req.body)
+      }
+    });
+    
+    // Log multer file details
+    if (req.file) {
+      logger.info('File upload details', {
+        category: 'merchant',
+        source: 'internal',
+        metadata: {
+          originalname: req.file.originalname,
+          mimetype: req.file.mimetype,
+          size: req.file.size,
+          fieldname: req.file.fieldname,
+          filename: req.file.filename
+        }
+      });
+    } else {
+      logger.error('No file found in upload request', {
+        category: 'merchant',
+        source: 'internal',
+        metadata: {
+          formFields: Object.keys(req.body),
+          contentType: req.headers['content-type'],
+        }
+      });
+    }
+    
     const programId = parseInt(req.params.id);
     if (isNaN(programId)) {
+      logger.error('Invalid program ID format', {
+        category: 'merchant',
+        source: 'internal',
+        metadata: { rawId: req.params.id }
+      });
       return res.status(400).json({
         success: false,
         message: "Invalid program ID",
@@ -525,9 +569,17 @@ router.post("/:id/agreements", upload.single("file"), async (req: Request, res: 
 
     // Check if file was uploaded
     if (!req.file) {
+      logger.error('File missing from upload request', {
+        category: 'merchant',
+        source: 'internal',
+        metadata: { 
+          fieldnames: req.body.fieldname || 'unknown',
+          contentType: req.headers['content-type']
+        }
+      });
       return res.status(400).json({
         success: false,
-        message: "No file uploaded",
+        message: "No file uploaded - please ensure you're selecting a file",
       });
     }
 

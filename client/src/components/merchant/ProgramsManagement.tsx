@@ -329,40 +329,170 @@ export default function ProgramsManagement() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   // Handle file selection
-  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("File selection triggered");
+  const handleFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("🔍 File selection triggered", { timestamp: new Date().toISOString() });
     
-    // Access the file input directly to ensure we get the file
-    const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
-    console.log("File input element:", fileInput);
-    console.log("Files from event:", e.target.files);
-    console.log("Files from DOM:", fileInput?.files);
+    try {
+      // Access the file input directly to ensure we get the file
+      const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
+      console.log("📋 File input element details:", { 
+        exists: !!fileInput,
+        id: fileInput?.id,
+        type: fileInput?.type,
+        hasFiles: fileInput?.files && fileInput.files.length > 0,
+        fileCount: fileInput?.files?.length || 0
+      });
+      
+      console.log("📁 Files from event:", e.target.files ? {
+        count: e.target.files.length,
+        items: Array.from(e.target.files).map(f => ({ name: f.name, size: f.size, type: f.type }))
+      } : 'No files');
+      
+      console.log("🗂️ Files from DOM:", fileInput?.files ? {
+        count: fileInput.files.length,
+        items: Array.from(fileInput.files).map(f => ({ name: f.name, size: f.size, type: f.type }))
+      } : 'No files');
+      
+      // Try to get files from either source
+      const files = e.target.files || (fileInput ? fileInput.files : null);
+      
+      if (!files || files.length === 0) {
+        console.log("❌ No files selected - empty file list");
+        return;
+      }
+      
+      if (!selectedProgram) {
+        console.log("⚠️ No program selected");
+        toast({
+          title: "No program selected",
+          description: "Please select a program first",
+          variant: "destructive",
+        });
+        return;
+      }
+  
+      const file = files[0];
+      console.log("✅ File selected:", { 
+        name: file.name, 
+        size: file.size, 
+        type: file.type,
+        lastModified: new Date(file.lastModified).toISOString()
+      });
+      
+      // Test file readability
+      try {
+        const reader = new FileReader();
+        reader.onload = () => {
+          console.log("📄 File is readable, first 100 bytes:", reader.result?.toString().substring(0, 100));
+        };
+        reader.onerror = (error) => {
+          console.error("❌ Error reading file:", error);
+        };
+        reader.readAsText(file.slice(0, 100)); // Just read the first 100 bytes
+      } catch (readError) {
+        console.error("❌ File reading test failed:", readError);
+      }
+      
+      // Save the file to state
+      setSelectedFile(file);
+      console.log("💾 File saved to state");
+      
+      // Display selected file name
+      const fileDisplay = document.getElementById("selectedFileDisplay");
+      if (fileDisplay) {
+        fileDisplay.innerHTML = `<strong>Selected file:</strong> ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+        fileDisplay.className = "text-sm font-medium w-full border p-2 rounded bg-muted";
+        console.log("🖥️ Updated file display element");
+      } else {
+        console.log("❌ Could not find file display element");
+      }
+    } catch (error) {
+      console.error("❌ Error in file selection handler:", error);
+    }
     
-    // Try to get files from either source
-    const files = e.target.files || (fileInput ? fileInput.files : null);
+    // Upload the file directly instead of using handleFileUpload
+    console.log("Directly uploading file after selection");
     
-    if (!files || files.length === 0) {
-      console.log("No files selected - empty file list");
+    // Get the file from our state
+    const fileToUpload = selectedFile;
+    
+    if (!fileToUpload || !selectedProgram) {
+      console.log("File or program missing before direct upload");
       return;
     }
     
-    if (!selectedProgram) {
-      console.log("No program selected");
-      return;
-    }
-
-    const file = files[0];
-    console.log("File selected:", file.name, file.size);
-    setSelectedFile(file);
+    setIsUploading(true);
     
-    // Display selected file name
-    const fileDisplay = document.getElementById("selectedFileDisplay");
-    if (fileDisplay) {
-      fileDisplay.innerHTML = `<strong>Selected file:</strong> ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
-      fileDisplay.className = "text-sm font-medium w-full border p-2 rounded bg-muted";
-      console.log("Updated file display");
-    } else {
-      console.log("Could not find file display element");
+    try {
+      console.log(`Directly uploading "${fileToUpload.name}" (${fileToUpload.size} bytes, ${fileToUpload.type}) for program ID ${selectedProgram.id}`);
+      
+      // Create a new FormData object
+      const formData = new FormData();
+      
+      // Add the file with the correct field name expected by multer
+      formData.append("file", fileToUpload);
+      
+      // Log what's being sent
+      console.log("FormData content:");
+      for (const pair of formData.entries()) {
+        console.log(`${pair[0]}: ${pair[1] instanceof File ? `File: ${pair[1].name}, ${pair[1].size} bytes, ${pair[1].type}` : pair[1]}`);
+      }
+      
+      // Get CSRF token for secure submission
+      const token = await getCsrfToken();
+      if (!token) {
+        throw new Error("Could not get CSRF token");
+      }
+      
+      console.log("Sending request with CSRF token:", token.substring(0, 5) + '...');
+      
+      // Note: Don't set Content-Type header as browser will set it with the boundary
+      const response = await fetch(`/api/merchant/programs/${selectedProgram.id}/agreements`, {
+        method: "POST",
+        headers: {
+          "X-CSRF-Token": token,
+        },
+        body: formData,
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to upload agreement");
+      }
+      
+      console.log("Upload successful");
+      
+      toast({
+        title: "Agreement Uploaded",
+        description: "Your agreement has been sent to Thanks Roger for template creation",
+      });
+      refetchAgreements();
+      
+      // Reset the file selection
+      setSelectedFile(null);
+      
+      // Reset the file display
+      const fileDisplay = document.getElementById("selectedFileDisplay");
+      if (fileDisplay) {
+        fileDisplay.textContent = "No file selected";
+        fileDisplay.className = "text-sm text-muted-foreground w-full";
+      }
+      
+      // Reset the file input
+      const agreementFileInput = document.getElementById("agreement-file") as HTMLInputElement;
+      if (agreementFileInput) {
+        agreementFileInput.value = "";
+      }
+    } catch (error) {
+      console.error("Direct upload failed:", error);
+      toast({
+        title: "Error",
+        description: `Failed to upload agreement: ${error instanceof Error ? error.message : "Unknown error"}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
   
@@ -751,35 +881,18 @@ export default function ProgramsManagement() {
                     />
                     <Button 
                       type="button"
-                      variant="outline"
+                      disabled={isUploading}
                       className="flex-1"
                       onClick={() => {
-                        const fileInput = document.getElementById("agreement-file");
+                        // Directly trigger the file selector when clicking "Upload"
+                        const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
                         if (fileInput) {
                           fileInput.click();
                         }
                       }}
                     >
-                      <FileText className="mr-2 h-4 w-4" />
-                      Select Document
-                    </Button>
-                    <Button 
-                      type="button"
-                      disabled={isUploading}
-                      className="min-w-[120px]"
-                      onClick={handleFileUpload}
-                    >
-                      {isUploading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Uploading...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="mr-2 h-4 w-4" />
-                          Upload
-                        </>
-                      )}
+                      <Upload className="mr-2 h-4 w-4" />
+                      Select & Upload File
                     </Button>
                   </div>
                   
@@ -833,10 +946,19 @@ export default function ProgramsManagement() {
                             e.stopPropagation();
                             e.currentTarget.classList.remove("bg-blue-100");
                           }}
-                          onDrop={(e) => {
+                          onDrop={async (e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             e.currentTarget.classList.remove("bg-blue-100");
+                            
+                            if (!selectedProgram) {
+                              toast({
+                                title: "No program selected",
+                                description: "Please select a program first",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
                             
                             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                               const file = e.dataTransfer.files[0];
@@ -850,6 +972,63 @@ export default function ProgramsManagement() {
                               if (fileDisplay) {
                                 fileDisplay.innerHTML = `<strong>Selected file:</strong> ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
                                 fileDisplay.className = "text-sm font-medium w-full border p-2 rounded bg-muted";
+                              }
+                              
+                              // Directly upload the file
+                              setIsUploading(true);
+                              
+                              try {
+                                console.log(`Directly uploading dropped file "${file.name}" for program ID ${selectedProgram.id}`);
+                                
+                                const formData = new FormData();
+                                formData.append("file", file);
+                                
+                                // Get CSRF token for secure submission
+                                const token = await getCsrfToken();
+                                if (!token) {
+                                  throw new Error("Could not get CSRF token");
+                                }
+                                
+                                const response = await fetch(`/api/merchant/programs/${selectedProgram.id}/agreements`, {
+                                  method: "POST",
+                                  headers: {
+                                    "X-CSRF-Token": token,
+                                  },
+                                  body: formData,
+                                  credentials: "include",
+                                });
+                                
+                                if (!response.ok) {
+                                  const errorData = await response.json().catch(() => ({}));
+                                  throw new Error(errorData.message || "Failed to upload agreement");
+                                }
+                                
+                                console.log("Dropped file upload successful");
+                                
+                                toast({
+                                  title: "Agreement Uploaded",
+                                  description: "Your agreement has been sent to Thanks Roger for template creation",
+                                });
+                                refetchAgreements();
+                                
+                                // Reset the file selection
+                                setSelectedFile(null);
+                                
+                                // Reset the file display
+                                const fileDisplay = document.getElementById("selectedFileDisplay");
+                                if (fileDisplay) {
+                                  fileDisplay.textContent = "No file selected";
+                                  fileDisplay.className = "text-sm text-muted-foreground w-full";
+                                }
+                              } catch (error) {
+                                console.error("Dropped file upload failed:", error);
+                                toast({
+                                  title: "Error",
+                                  description: `Failed to upload agreement: ${error instanceof Error ? error.message : "Unknown error"}`,
+                                  variant: "destructive",
+                                });
+                              } finally {
+                                setIsUploading(false);
                               }
                             }
                           }}
