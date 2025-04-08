@@ -21,6 +21,64 @@ const plaidClient = new PlaidApi(configuration);
  */
 export const plaidService = {
   /**
+   * Create a link token for initializing Plaid Link
+   * @param options Options for creating link token including userId, clientUserId, and products
+   * @returns The link token object from Plaid
+   */
+  async createLinkToken(options: { userId?: string | number, clientUserId: string, products: string[], redirect_uri?: string }) {
+    try {
+      const { userId, clientUserId, products, redirect_uri } = options;
+      
+      // Create link token configuration - using any type to avoid TypeScript errors since we're adding dynamic properties
+      const config: any = {
+        user: {
+          client_user_id: clientUserId.toString(),
+        },
+        client_name: process.env.PLAID_CLIENT_NAME || 'ShiFi Merchant Portal',
+        products: products as any[],
+        country_codes: ['US'] as any[],
+        language: 'en',
+        webhook: process.env.PLAID_WEBHOOK_URL,
+      };
+      
+      // Add redirect URI if provided
+      if (redirect_uri) {
+        config.redirect_uri = redirect_uri;
+      }
+      
+      const response = await plaidClient.linkTokenCreate(config);
+      
+      logger.info({
+        message: `Created Plaid link token for client user ID ${clientUserId}`,
+        category: 'plaid',
+        userId: typeof userId === 'string' ? undefined : userId,
+        source: 'plaid',
+        metadata: {
+          clientUserId,
+          products
+        }
+      });
+      
+      return {
+        linkToken: response.data.link_token,
+        expiration: response.data.expiration
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error creating Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'plaid',
+        source: 'plaid',
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          clientUserId: options.clientUserId
+        }
+      });
+      throw error;
+    }
+  },
+  
+  /**
    * Get accounts for a user from Plaid
    * @param accessToken Plaid access token
    * @returns Array of accounts
