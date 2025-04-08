@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/auth';
 import { storage } from '../storage';
 import { logger } from '../services/logger';
 import { z } from 'zod';
+import { SupportTicket } from '../../shared/schema';
 
 const router = Router();
 
@@ -41,9 +42,8 @@ router.get("/", async (req: Request, res: Response) => {
       });
     }
     
-    // Get all tickets first
-    let tickets = await storage.getAllSupportTickets();
-
+    let tickets: SupportTicket[] = [];
+    
     // For merchants, enforce that they can only see their own tickets
     if (req.user.role === 'merchant') {
       // If no merchantId was provided, get it from the user's merchant record
@@ -80,12 +80,43 @@ router.get("/", async (req: Request, res: Response) => {
         });
       }
       
-      // Always filter by the user's merchant ID
-      tickets = tickets.filter(ticket => ticket.merchantId === userMerchantId);
+      // Use the optimized method with server-side filtering and pagination
+      tickets = await storage.getSupportTicketsByMerchantId(userMerchantId, {
+        status: status as any,
+        category: category as any,
+        priority: priority as any,
+        limit: parsedLimit,
+        offset: parsedOffset
+      });
     } else if (req.user.role === 'admin') {
       // For admins, use the query parameter if provided
       if (parsedMerchantId) {
-        tickets = tickets.filter(ticket => ticket.merchantId === parsedMerchantId);
+        tickets = await storage.getSupportTicketsByMerchantId(parsedMerchantId, {
+          status: status as any,
+          category: category as any,
+          priority: priority as any,
+          limit: parsedLimit,
+          offset: parsedOffset
+        });
+      } else {
+        // Get all tickets with filters applied on the server side
+        tickets = await storage.getAllSupportTickets({
+          limit: parsedLimit,
+          offset: parsedOffset
+        });
+        
+        // Apply any additional filters
+        if (status) {
+          tickets = tickets.filter(ticket => ticket.status === status);
+        }
+        
+        if (priority) {
+          tickets = tickets.filter(ticket => ticket.priority === priority);
+        }
+        
+        if (category) {
+          tickets = tickets.filter(ticket => ticket.category === category);
+        }
       }
     } else {
       // For other roles (non-admins, non-merchants), forbid access
@@ -93,18 +124,6 @@ router.get("/", async (req: Request, res: Response) => {
         success: false,
         message: "Insufficient permission to access tickets"
       });
-    }
-    
-    if (status) {
-      tickets = tickets.filter(ticket => ticket.status === status);
-    }
-    
-    if (priority) {
-      tickets = tickets.filter(ticket => ticket.priority === priority);
-    }
-    
-    if (category) {
-      tickets = tickets.filter(ticket => ticket.category === category);
     }
     
     logger.info({
@@ -357,7 +376,7 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
     const messageSchema = z.object({
       content: z.string().min(1, "Message content is required"),
       senderId: z.number().optional(),
-      senderType: z.enum(["admin", "merchant", "customer", "system"]).default("merchant")
+      senderType: z.enum(["admin", "merchant", "customer", "sales_rep", "investor"]).default("merchant")
     });
     
     const validatedData = messageSchema.parse(req.body);
@@ -470,9 +489,9 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
     // Log the activity
     await storage.createTicketActivityLog({
       ticketId: id,
-      activityType: "message_added",
-      performedBy: req.user.id,
-      performedByType: req.user.role,
+      actionType: "message_added",
+      userId: req.user.id,
+      actionDetails: `Message added by ${req.user.role}`,
       metadata: JSON.stringify({
         messageId: message.id,
         senderType: validatedData.senderType
@@ -527,7 +546,7 @@ router.patch("/:id/status", async (req: Request, res: Response) => {
         "under_review"
       ]),
       updatedBy: z.number().optional(),
-      updatedByType: z.enum(["admin", "merchant", "system"]).default("merchant")
+      updatedByType: z.enum(["admin", "merchant", "customer", "sales_rep", "investor"]).default("merchant")
     });
     
     const validatedData = statusSchema.parse(req.body);
@@ -616,9 +635,11 @@ router.patch("/:id/status", async (req: Request, res: Response) => {
     // Log the activity
     await storage.createTicketActivityLog({
       ticketId: id,
-      activityType: "status_change",
-      performedBy: req.user.id,
-      performedByType: req.user.role,
+      actionType: "status_change",
+      userId: req.user.id,
+      actionDetails: `Status changed from ${ticket.status} to ${validatedData.status}`,
+      previousValue: ticket.status,
+      newValue: validatedData.status,
       metadata: JSON.stringify({
         oldStatus: ticket.status,
         newStatus: validatedData.status

@@ -359,7 +359,13 @@ export interface IStorage {
   createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket>;
   getSupportTicket(id: number): Promise<SupportTicket | undefined>;
   getSupportTicketByNumber(ticketNumber: string): Promise<SupportTicket | undefined>;
-  getSupportTicketsByMerchantId(merchantId: number): Promise<SupportTicket[]>;
+  getSupportTicketsByMerchantId(merchantId: number, options?: { 
+    status?: string;
+    category?: string;
+    priority?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<SupportTicket[]>;
   getSupportTicketsByStatus(status: string): Promise<SupportTicket[]>;
   updateSupportTicket(id: number, data: Partial<SupportTicket>): Promise<SupportTicket | undefined>;
   updateSupportTicketStatus(id: number, status: string): Promise<SupportTicket | undefined>;
@@ -3779,10 +3785,16 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getSupportTicketsByMerchantId(merchantId: number): Promise<SupportTicket[]> {
+  async getSupportTicketsByMerchantId(merchantId: number, options?: { 
+    status?: string;
+    category?: string;
+    priority?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<SupportTicket[]> {
     try {
       // Explicitly select only the columns we know exist in the database
-      const tickets = await db
+      let query = db
         .select({
           id: supportTickets.id,
           ticketNumber: supportTickets.ticketNumber,
@@ -3803,8 +3815,34 @@ export class DatabaseStorage implements IStorage {
           // Omit firstResponseAt, dueBy, and slaStatus which might not exist in the database yet
         })
         .from(supportTickets)
-        .where(eq(supportTickets.merchantId, merchantId))
-        .orderBy(desc(supportTickets.updatedAt));
+        .where(eq(supportTickets.merchantId, merchantId));
+        
+      // Apply additional filters if provided
+      if (options?.status) {
+        query = query.where(eq(supportTickets.status, options.status as any));
+      }
+      
+      if (options?.category) {
+        query = query.where(eq(supportTickets.category, options.category as any));
+      }
+      
+      if (options?.priority) {
+        query = query.where(eq(supportTickets.priority, options.priority as any));
+      }
+      
+      // Apply pagination
+      if (options?.limit) {
+        query = query.limit(options.limit);
+      }
+      
+      if (options?.offset) {
+        query = query.offset(options.offset);
+      }
+      
+      // Apply ordering
+      query = query.orderBy(desc(supportTickets.updatedAt));
+      
+      const tickets = await query;
 
       // Add the missing fields with default values
       return tickets.map(ticket => ({

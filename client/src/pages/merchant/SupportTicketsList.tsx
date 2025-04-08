@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertCircle, Loader2, Plus, Search, Filter } from "lucide-react";
+import { AlertCircle, Loader2, Plus, Search, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/use-auth";
 import { getStatusColor, formatDate } from "@/lib/utils";
@@ -31,30 +31,65 @@ export default function SupportTicketsList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalTickets, setTotalTickets] = useState(0);
+  
+  // Debounce search to avoid excessive API calls
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-  // Fetch tickets
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["support-tickets"],
+  // Calculate offset for pagination
+  const offset = (currentPage - 1) * itemsPerPage;
+
+  // Fetch tickets with server-side filtering and pagination
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["support-tickets", statusFilter, categoryFilter, debouncedSearch, currentPage, itemsPerPage],
     queryFn: async () => {
       if (!user?.id || user.role !== "merchant") {
-        return { tickets: [] };
+        return { tickets: [], count: 0 };
       }
       
-      // We don't need to pass merchantId as query param anymore
-      // The backend will automatically use the merchant ID from the authenticated user
-      const response = await fetch(`/api/support-tickets`);
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (categoryFilter !== "all") params.append("category", categoryFilter);
+      if (debouncedSearch) params.append("search", debouncedSearch);
+      params.append("limit", itemsPerPage.toString());
+      params.append("offset", offset.toString());
+      
+      // Make request with query parameters
+      const response = await fetch(`/api/support-tickets?${params.toString()}`);
       
       if (!response.ok) {
         console.error("Failed to fetch tickets:", response.statusText);
         throw new Error("Failed to fetch tickets");
       }
-      return response.json();
+      
+      const result = await response.json();
+      setTotalTickets(result.count || 0);
+      return result;
     },
     enabled: !!user?.id && user.role === "merchant",
   });
   
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, categoryFilter, debouncedSearch]);
+  
   // Extract tickets array from the response
   const tickets = data?.tickets || [];
+  
+  // Calculate total pages
+  const totalPages = Math.ceil(totalTickets / itemsPerPage);
 
   // Handler for creating a new ticket
   const handleCreateTicket = () => {
@@ -92,25 +127,19 @@ export default function SupportTicketsList() {
         return status.charAt(0).toUpperCase() + status.slice(1);
     }
   };
-
-  // Filter tickets based on search and filters
-  const filteredTickets = tickets.filter((ticket: any) => {
-    // Apply search filter (case-insensitive)
-    const matchesSearch =
-      searchQuery === "" ||
-      ticket.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.ticketNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (ticket.description && 
-        ticket.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    // Apply status filter
-    const matchesStatus = statusFilter === "all" || ticket.status === statusFilter;
-    
-    // Apply category filter
-    const matchesCategory = categoryFilter === "all" || ticket.category === categoryFilter;
-    
-    return matchesSearch && matchesStatus && matchesCategory;
-  });
+  
+  // Handle pagination
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+  
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
   
   // Loading state inside MerchantLayout
   if (isLoading) {
@@ -203,7 +232,7 @@ export default function SupportTicketsList() {
         </Card>
 
         {/* Tickets List */}
-        {filteredTickets.length === 0 ? (
+        {tickets.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="pt-6 flex flex-col items-center justify-center py-16">
               <div className="text-center">
@@ -224,7 +253,7 @@ export default function SupportTicketsList() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {filteredTickets.map((ticket: any) => (
+            {tickets.map((ticket: any) => (
               <Card
                 key={ticket.id}
                 className="hover:bg-accent/10 cursor-pointer transition-colors"
@@ -271,6 +300,35 @@ export default function SupportTicketsList() {
                 </CardContent>
               </Card>
             ))}
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {Math.min(tickets.length, 1 + offset)} to {Math.min(offset + tickets.length, totalTickets)} of {totalTickets} tickets
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={goToPreviousPage}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={goToNextPage}
+                    disabled={currentPage >= totalPages}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
