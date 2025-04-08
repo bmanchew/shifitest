@@ -1,143 +1,247 @@
 /**
- * This script generates Plaid asset reports for all merchants with completed onboarding status
- * It uses the Plaid API to create asset reports for merchants that have a valid accessToken
+ * This script generates asset reports for all merchants with completed Plaid onboarding
+ * 
+ * Usage: node generate-asset-reports-for-completed-merchants.cjs
+ * 
+ * Requirements:
+ * - Merchant must have status "completed" in plaid_merchants table
+ * - Merchant must have a valid Plaid access token
+ * - PLAID_CLIENT_ID and PLAID_SECRET environment variables must be set
+ * - For specialized merchant credentials, use PLAID_MERCHANT_SECRET
  */
 
-require('dotenv').config();
-const { createClient } = require('./server/db.cjs');
-const { plaid } = require('./server/services/plaid');
+// Import required modules
+const pg = require('pg');
+const dotenv = require('dotenv');
+const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 
-// Connect to database
-const db = createClient();
+// Load environment variables
+dotenv.config();
 
-// Function to get all merchants with completed Plaid onboarding
-async function getCompletedPlaidMerchants() {
+// Configure days requested for asset reports
+const DAYS_REQUESTED = 90;
+
+// Database connection setup
+const dbConfig = {
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+};
+
+/**
+ * Initialize Plaid client
+ * @param {string} environment - Plaid environment (sandbox, development, production)
+ * @param {string} clientId - Plaid client ID
+ * @param {string} secret - Plaid secret
+ * @returns {PlaidApi} Plaid API client
+ */
+function getPlaidClient(environment, clientId, secret) {
+  console.log(`Initializing Plaid client for environment: ${environment}`);
+  console.log(`Using client ID: ${clientId.substring(0, 6)}...`);
+  
+  const plaidConfig = new Configuration({
+    basePath: PlaidEnvironments[environment] || PlaidEnvironments[process.env.PLAID_ENVIRONMENT] || PlaidEnvironments.sandbox,
+    baseOptions: {
+      headers: {
+        'PLAID-CLIENT-ID': clientId,
+        'PLAID-SECRET': secret,
+      },
+    },
+  });
+  
+  return new PlaidApi(plaidConfig);
+}
+
+/**
+ * Main function to generate asset reports for all completed merchants
+ */
+async function generateAssetReportsForCompletedMerchants() {
+  const client = new pg.Client(dbConfig);
+  
   try {
-    const result = await db.query(
-      `SELECT 
-        pm.id, 
-        pm.merchant_id as "merchantId", 
-        m.name as "merchantName",
-        pm.client_id as "clientId", 
-        pm.access_token as "accessToken", 
-        pm.onboarding_status as "onboardingStatus", 
-        pm.created_at as "createdAt", 
-        pm.updated_at as "updatedAt"
-      FROM plaid_merchants pm
-      LEFT JOIN merchants m ON pm.merchant_id = m.id
-      WHERE pm.onboarding_status = 'completed'
-      ORDER BY pm.updated_at DESC`
+    // Connect to the database
+    await client.connect();
+    
+    // Get all completed merchants with Plaid access tokens
+    const merchantResult = await client.query(
+      `SELECT m.id as merchant_id, m.name as merchant_name, pm.* 
+       FROM plaid_merchants pm
+       JOIN merchants m ON pm.merchant_id = m.id
+       WHERE pm.onboarding_status = 'completed'
+       AND pm.access_token IS NOT NULL
+       ORDER BY pm.merchant_id ASC`
     );
     
-    return result.rows;
-  } catch (error) {
-    console.error('Error fetching completed Plaid merchants:', error);
-    throw error;
-  }
-}
-
-// Function to generate an asset report for a merchant
-async function generateAssetReport(merchant) {
-  if (!merchant.accessToken) {
-    console.warn(`Merchant #${merchant.merchantId} (${merchant.merchantName || 'Unknown'}) has completed status but no access token. Skipping.`);
-    return null;
-  }
-
-  try {
-    console.log(`Generating asset report for Merchant #${merchant.merchantId} (${merchant.merchantName || 'Unknown'})...`);
+    console.log(`Found ${merchantResult.rowCount} completed merchants with Plaid access tokens`);
     
-    // Create the asset report with default days (30)
-    const days = 30;
-    const assetReport = await plaid.createAssetReport(merchant.accessToken, days);
+    // Prepare statistics
+    const stats = {
+      total: merchantResult.rowCount,
+      successful: 0,
+      failed: 0,
+      skipped: 0,
+    };
     
-    // Log success and return the asset report
-    console.log(`Successfully created asset report for Merchant #${merchant.merchantId} (${merchant.merchantName || 'Unknown'})`);
-    console.log(`Asset Report Token: ${assetReport.assetReportToken}`);
+    const processedMerchants = [];
     
-    // Store the asset report in the database
-    await storeAssetReport(merchant.merchantId, assetReport.assetReportToken, assetReport.assetReportId);
-    
-    return assetReport;
-  } catch (error) {
-    console.error(`Error generating asset report for Merchant #${merchant.merchantId} (${merchant.merchantName || 'Unknown'}):`, error);
-    return null;
-  }
-}
-
-// Function to store the asset report in the database
-async function storeAssetReport(merchantId, assetReportToken, assetReportId) {
-  try {
-    await db.query(
-      `INSERT INTO asset_reports (
-        merchant_id, 
-        asset_report_token, 
-        asset_report_id, 
-        status, 
-        created_at
-      ) VALUES ($1, $2, $3, $4, NOW())`,
-      [merchantId, assetReportToken, assetReportId, 'pending']
-    );
-    
-    console.log(`Stored asset report in the database for Merchant #${merchantId}`);
-  } catch (error) {
-    console.error(`Error storing asset report for Merchant #${merchantId}:`, error);
-    throw error;
-  }
-}
-
-// Main function to run the script
-async function main() {
-  try {
-    console.log('Starting Plaid asset report generation for completed merchants...');
-    
-    // Get all completed Plaid merchants
-    const merchants = await getCompletedPlaidMerchants();
-    console.log(`Found ${merchants.length} merchants with completed Plaid onboarding status.`);
-    
-    // If no merchants, exit
-    if (merchants.length === 0) {
-      console.log('No merchants to process. Exiting.');
-      process.exit(0);
+    // Process each merchant
+    for (const merchant of merchantResult.rows) {
+      console.log(`\n========== Processing merchant ID ${merchant.merchant_id}: ${merchant.merchant_name} ==========`);
+      
+      try {
+        // Check if access token format seems valid
+        if (!merchant.access_token.startsWith('access-')) {
+          console.log(`Invalid access token format for merchant ID ${merchant.merchant_id}. Expected format: access-<environment>-<identifier>`);
+          console.log(`Current value: ${merchant.access_token.substring(0, 10)}...`);
+          console.log(`Skipping this merchant.`);
+          stats.skipped++;
+          processedMerchants.push({
+            merchant_id: merchant.merchant_id,
+            name: merchant.merchant_name,
+            status: 'skipped',
+            reason: 'Invalid access token format'
+          });
+          continue;
+        }
+        
+        // Extract environment from access token (e.g., "sandbox" from "access-sandbox-...")
+        const tokenParts = merchant.access_token.split('-');
+        const environment = tokenParts.length > 1 ? tokenParts[1] : 'sandbox';
+        
+        console.log(`Access token environment: ${environment}`);
+        
+        // Determine which credentials to use
+        let clientId = process.env.PLAID_CLIENT_ID;
+        let secret = process.env.PLAID_SECRET;
+        
+        // If merchant has a specific client_id, use that with PLAID_MERCHANT_SECRET
+        if (merchant.client_id) {
+          console.log(`Using merchant-specific client ID: ${merchant.client_id.substring(0, 6)}...`);
+          clientId = merchant.client_id;
+          
+          // Check if merchant-specific secret is available
+          if (process.env.PLAID_MERCHANT_SECRET) {
+            console.log(`Using merchant-specific secret key`);
+            secret = process.env.PLAID_MERCHANT_SECRET;
+          } else {
+            console.log(`Warning: Missing PLAID_MERCHANT_SECRET environment variable for merchant-specific client ID`);
+            console.log(`This might cause authentication errors with Plaid API`);
+          }
+        }
+        
+        // Initialize Plaid client with appropriate credentials
+        const plaidClient = getPlaidClient(environment, clientId, secret);
+        
+        // Create asset report
+        console.log(`Creating asset report for merchant ID ${merchant.merchant_id} using access token: ${merchant.access_token.substring(0, 8)}...`);
+        
+        const assetReportResponse = await plaidClient.assetReportCreate({
+          access_tokens: [merchant.access_token],
+          days_requested: DAYS_REQUESTED,
+          options: {
+            client_report_id: `merchant-${merchant.merchant_id}-${Date.now()}`,
+            webhook: process.env.PLAID_WEBHOOK_URL || 'https://shilohfinance.com/api/plaid/webhook',
+            user: {
+              client_user_id: `merchant-${merchant.merchant_id}`,
+            }
+          }
+        });
+        
+        const assetReportResult = {
+          assetReportId: assetReportResponse.data.asset_report_id,
+          assetReportToken: assetReportResponse.data.asset_report_token
+        };
+        
+        console.log(`Asset report created successfully!`);
+        console.log(`Asset Report ID: ${assetReportResult.assetReportId}`);
+        console.log(`Asset Report Token: ${assetReportResult.assetReportToken.substring(0, 8)}...`);
+        
+        // Store the asset report in the database
+        const storeResult = await client.query(
+          `INSERT INTO asset_reports 
+           (contract_id, user_id, asset_report_id, asset_report_token, days_requested, status, analysis_data, created_at)
+           VALUES (0, $1, $2, $3, $4, 'pending', $5, NOW())
+           RETURNING id`,
+          [
+            merchant.merchant_id,
+            assetReportResult.assetReportId,
+            assetReportResult.assetReportToken,
+            DAYS_REQUESTED,
+            JSON.stringify({
+              generatedBy: 'batch-asset-report-script',
+              timestamp: new Date().toISOString()
+            })
+          ]
+        );
+        
+        console.log(`Asset report stored in database with ID: ${storeResult.rows[0].id}`);
+        
+        stats.successful++;
+        processedMerchants.push({
+          merchant_id: merchant.merchant_id,
+          name: merchant.merchant_name,
+          status: 'success',
+          asset_report_id: assetReportResult.assetReportId
+        });
+      } catch (error) {
+        console.error(`Error generating asset report for merchant ID ${merchant.merchant_id}:`, error.message);
+        
+        // Log more detailed error information if available
+        if (error.response && error.response.data) {
+          console.error('Plaid API Error Details:');
+          console.error(JSON.stringify(error.response.data, null, 2));
+        }
+        
+        stats.failed++;
+        processedMerchants.push({
+          merchant_id: merchant.merchant_id,
+          name: merchant.merchant_name,
+          status: 'failed',
+          error: error.message,
+          error_details: error.response && error.response.data ? error.response.data : null
+        });
+      }
+      
+      // Small delay between requests to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    // Generate reports for each merchant
-    const results = [];
-    for (const merchant of merchants) {
-      const result = await generateAssetReport(merchant);
-      results.push({
-        merchantId: merchant.merchantId,
-        merchantName: merchant.merchantName,
-        success: !!result,
-        assetReportId: result ? result.assetReportId : null,
-        assetReportToken: result ? result.assetReportToken : null
-      });
-    }
+    // Print summary
+    console.log("\n========== Asset Report Generation Summary ==========");
+    console.log(`Total merchants processed: ${stats.total}`);
+    console.log(`Successful: ${stats.successful}`);
+    console.log(`Failed: ${stats.failed}`);
+    console.log(`Skipped: ${stats.skipped}`);
+    console.log("\nProcessed merchants:");
+    console.table(processedMerchants.map(m => ({
+      merchant_id: m.merchant_id,
+      name: m.name,
+      status: m.status
+    })));
     
-    // Output summary
-    console.log('\n--- Asset Report Generation Summary ---');
-    console.log(`Total merchants processed: ${results.length}`);
-    console.log(`Successfully generated reports: ${results.filter(r => r.success).length}`);
-    console.log(`Failed to generate reports: ${results.filter(r => !r.success).length}`);
+    console.log("\nNote: Asset reports are generated asynchronously by Plaid.");
+    console.log("You will receive webhooks when each report is ready for viewing.");
     
-    // List successful and failed merchants
-    console.log('\nSuccessful Asset Reports:');
-    results.filter(r => r.success).forEach(r => {
-      console.log(`- Merchant #${r.merchantId} (${r.merchantName || 'Unknown'}): Report ID ${r.assetReportId}`);
-    });
-    
-    console.log('\nFailed Asset Reports:');
-    results.filter(r => !r.success).forEach(r => {
-      console.log(`- Merchant #${r.merchantId} (${r.merchantName || 'Unknown'})`);
-    });
-    
+    return {
+      stats,
+      processedMerchants
+    };
   } catch (error) {
-    console.error('Error in main process:', error);
+    console.error("General script error:", error.message);
+    throw error;
   } finally {
-    // Close database connection
-    await db.end();
-    console.log('Database connection closed. Script complete.');
+    // Close the database connection
+    await client.end();
   }
 }
 
-// Run the script
-main();
+/**
+ * Handle script execution
+ */
+generateAssetReportsForCompletedMerchants()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error("Script execution failed:", error);
+    process.exit(1);
+  });

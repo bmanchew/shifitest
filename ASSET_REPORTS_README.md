@@ -1,65 +1,152 @@
-# Plaid Asset Report Generator
+# Plaid Asset Report Generation System
 
-This document provides information about the Plaid asset report generator scripts.
+This document provides instructions for using the automated asset report generation system for merchants with completed Plaid integrations.
 
 ## Overview
 
-These scripts allow you to:
+The system consists of three main components:
 
-1. Generate asset reports for all merchants with completed Plaid integrations
-2. Check the status of asset reports for all merchants
+1. **Asset Report Generator** - Creates asset reports for all merchants with completed Plaid onboarding status
+2. **Asset Report Checker** - Checks the status of pending asset reports and updates the database
+3. **Scheduler** - Sets up scheduled tasks to run the generator and checker automatically
 
 ## Prerequisites
 
-- Plaid API keys must be configured in your environment variables
-- Merchants must have completed Plaid integrations with valid access tokens
+To use this system, you need:
+
+1. Plaid API credentials:
+   - `PLAID_CLIENT_ID` - Platform client ID for Plaid API
+   - `PLAID_SECRET` - Platform secret for Plaid API
+   - `PLAID_MERCHANT_SECRET` - Secret for merchant-specific client IDs
+
+2. For each merchant:
+   - Valid Plaid access token in the proper format: `access-<environment>-<identifier>`
+   - Onboarding status set to "completed" in the plaid_merchants table
 
 ## Scripts
 
 ### 1. Generate Asset Reports
 
-The `generate-asset-reports.js` script creates a new asset report for each merchant with a completed Plaid integration.
+The script `generate-asset-reports-for-completed-merchants.cjs` creates asset reports for all eligible merchants.
 
 ```bash
-node generate-asset-reports.js
+node generate-asset-reports-for-completed-merchants.cjs
 ```
 
 This script:
-- Fetches all merchants with 'completed' Plaid onboarding status
-- Creates an asset report for each merchant using their Plaid access token
-- Stores the asset report token in the database
-- Provides a summary of successful and failed report generations
+- Retrieves all merchants with completed Plaid onboarding
+- Creates an asset report for each merchant
+- Stores the report details in the asset_reports table
+- Validates access token formats and skips invalid ones
 
-### 2. Check Asset Report Status
+### 2. Check Asset Reports
 
-The `check-asset-reports.js` script checks the status of all asset reports for merchants with completed Plaid integrations.
+The script `check-asset-reports.js` checks the status of pending asset reports.
 
 ```bash
 node check-asset-reports.js
 ```
 
 This script:
-- Fetches all merchants with 'completed' Plaid onboarding status
-- Retrieves all asset reports associated with these merchants
-- Groups reports by status (pending, ready, error)
-- Provides a summary of the report statuses
+- Retrieves all pending asset reports from the database
+- Queries Plaid API to check the status of each report
+- Updates the database with the current status and asset data
+- Handles errors and updates report status accordingly
 
-## Important Notes
+### 3. Schedule Asset Reports
 
-- Asset reports are created asynchronously by Plaid
-- Webhooks will be received when asset reports are ready for viewing
-- The webhook endpoint must be properly configured in the environment
-- Reports may take a few minutes to generate depending on the amount of data
+There are two approaches to scheduling:
 
-## Viewing Asset Reports
+#### A. Using the JavaScript Scheduler
 
-Asset reports are accessible through the admin interface under the merchant's profile page.
+The script `schedule-asset-reports.cjs` sets up a schedule using node-cron:
+
+```bash
+node schedule-asset-reports.cjs
+```
+
+This creates:
+- Daily asset report generation (1:00 AM by default)
+- Asset report status checks every 4 hours
+- Log files in the logs/ directory
+
+#### B. Using System Cron (Recommended for Production)
+
+For a more robust solution, use the shell script to set up system cron jobs:
+
+```bash
+sudo bash setup-asset-report-schedule.sh
+```
+
+This creates:
+- Daily asset report generation (1:00 AM)
+- Asset report status checks every 6 hours
+- Log files in the logs/ directory
+
+## Database Tables
+
+The system uses the following database tables:
+
+1. `merchants` - Basic merchant information
+2. `plaid_merchants` - Merchant-specific Plaid settings including:
+   - `merchant_id` - Reference to merchants table
+   - `access_token` - Plaid access token
+   - `client_id` - Merchant-specific Plaid client ID (if applicable)
+   - `onboarding_status` - Status of Plaid onboarding process
+
+3. `asset_reports` - Generated asset reports with:
+   - `user_id` - References merchant_id
+   - `asset_report_id` - Plaid's asset report ID
+   - `asset_report_token` - Token for retrieving the report
+   - `status` - Current status (pending/ready/error)
+   - `analysis_data` - JSON data with account balances and details
+
+## Environment Variables
+
+The system uses these environment variables:
+
+- `PLAID_CLIENT_ID` - Platform client ID for Plaid API
+- `PLAID_SECRET` - Platform secret for Plaid API
+- `PLAID_MERCHANT_SECRET` - Secret for merchant-specific client IDs
+- `PLAID_ENVIRONMENT` - Plaid environment (sandbox/development/production)
+- `PLAID_WEBHOOK_URL` - Webhook URL for asset report notifications
+- `ASSET_REPORT_GENERATE_SCHEDULE` - Cron schedule for generation (optional)
+- `ASSET_REPORT_CHECK_SCHEDULE` - Cron schedule for status checks (optional)
 
 ## Troubleshooting
 
-If you encounter any issues:
+### Access Token Format Issues
 
-1. Check that your Plaid API keys are correctly configured
-2. Verify that the merchant has a valid Plaid access token
-3. Check for webhook errors in the logs
-4. Ensure the webhook URL is properly configured and accessible from the internet
+Plaid access tokens must follow the format: `access-<environment>-<identifier>`
+
+For sandbox testing: `access-sandbox-<identifier>`
+For production: `access-production-<identifier>`
+
+### API Authentication Errors
+
+If you receive "INVALID_API_KEYS" errors:
+1. Verify the client ID and secret match the environment of the access token
+2. For merchant-specific client IDs, ensure `PLAID_MERCHANT_SECRET` is set correctly
+3. Confirm the access token is valid and has not expired
+
+### Missing Asset Reports
+
+If reports aren't being generated:
+1. Check that merchants have "completed" onboarding status
+2. Verify access tokens are in the proper format
+3. Check environment compatibility (sandbox tokens with sandbox environment)
+
+### Debugging
+
+For detailed debugging:
+1. Check logs in the logs/ directory
+2. Run scripts with direct Node.js execution to see output
+3. Check the database for error details in the analysis_data field
+
+## Support
+
+For issues with the asset report system, please contact the development team.
+
+## Maintenance
+
+Regularly check the logs directory to ensure scripts are running properly and clean up old log files as needed.

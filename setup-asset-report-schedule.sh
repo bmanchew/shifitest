@@ -1,36 +1,59 @@
 #!/bin/bash
-# This script sets up a cron job to run the asset report generation script at midnight daily
+# This script sets up automatic asset report generation and checking
+# It creates two cron jobs:
+# 1. Generate asset reports for all completed merchants once daily at 1:00 AM
+# 2. Check status of pending asset reports every 6 hours
 
-# Make our script executable
-chmod +x schedule-asset-reports.cjs
-
-# Get the absolute path to the script
-SCRIPT_PATH=$(realpath schedule-asset-reports.cjs)
-LOG_DIR=$(realpath asset_reports)
-
-# Ensure log directory exists
-mkdir -p "$LOG_DIR"
-
-# Create a temporary file for the crontab
-TEMP_CRON=$(mktemp)
-
-# Get the existing crontab
-crontab -l > "$TEMP_CRON" 2>/dev/null
-
-# Check if the cron job already exists
-if grep -q "schedule-asset-reports.cjs" "$TEMP_CRON"; then
-    echo "Cron job for asset report generation already exists. Skipping..."
-else
-    # Add the new cron job to run at midnight daily
-    echo "# Run Plaid asset report generation at midnight daily" >> "$TEMP_CRON"
-    echo "0 0 * * * $SCRIPT_PATH >> $LOG_DIR/cron-asset-reports.log 2>&1" >> "$TEMP_CRON"
-    
-    # Install the updated crontab
-    crontab "$TEMP_CRON"
-    echo "Cron job for asset report generation scheduled to run at midnight daily."
+# Ensure script is run with appropriate permissions
+if [ "$(id -u)" != "0" ]; then
+   echo "This script must be run with administrative privileges (sudo)"
+   exit 1
 fi
 
-# Clean up the temporary file
-rm "$TEMP_CRON"
+# Define script paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GENERATE_SCRIPT="$SCRIPT_DIR/generate-asset-reports-for-completed-merchants.cjs"
+CHECK_SCRIPT="$SCRIPT_DIR/check-asset-reports.js"
+LOG_DIR="$SCRIPT_DIR/logs"
 
-echo "Setup complete. Asset reports will be generated daily and logs will be stored in $LOG_DIR."
+# Create logs directory if it doesn't exist
+mkdir -p "$LOG_DIR"
+
+# Ensure scripts exist
+if [ ! -f "$GENERATE_SCRIPT" ]; then
+  echo "Error: Asset report generation script not found: $GENERATE_SCRIPT"
+  exit 1
+fi
+
+if [ ! -f "$CHECK_SCRIPT" ]; then
+  echo "Error: Asset report check script not found: $CHECK_SCRIPT"
+  exit 1
+fi
+
+# Create temporary crontab file
+TEMP_CRONTAB=$(mktemp)
+crontab -l > "$TEMP_CRONTAB" 2>/dev/null || true
+
+# Remove any existing cron jobs for these scripts
+sed -i "/generate-asset-reports-for-completed-merchants.cjs/d" "$TEMP_CRONTAB"
+sed -i "/check-asset-reports.js/d" "$TEMP_CRONTAB"
+
+# Add scheduled tasks to crontab
+echo "# Asset Report Generation - Daily at 1:00 AM" >> "$TEMP_CRONTAB"
+echo "0 1 * * * cd $SCRIPT_DIR && /usr/bin/node $GENERATE_SCRIPT >> $LOG_DIR/generate-asset-reports-\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRONTAB"
+
+echo "# Asset Report Status Check - Every 6 hours" >> "$TEMP_CRONTAB"
+echo "0 */6 * * * cd $SCRIPT_DIR && /usr/bin/node $CHECK_SCRIPT >> $LOG_DIR/check-asset-reports-\$(date +\%Y\%m\%d).log 2>&1" >> "$TEMP_CRONTAB"
+
+# Install the new crontab
+crontab "$TEMP_CRONTAB"
+rm "$TEMP_CRONTAB"
+
+echo "Asset report scheduler has been set up successfully"
+echo "Asset reports will be generated daily at 1:00 AM"
+echo "Asset report status will be checked every 6 hours"
+echo "Logs will be stored in: $LOG_DIR"
+echo ""
+echo "To manually run the scripts immediately:"
+echo "node $GENERATE_SCRIPT"
+echo "node $CHECK_SCRIPT"
