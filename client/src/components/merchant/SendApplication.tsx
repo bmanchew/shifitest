@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,6 +7,14 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { MerchantProgram } from "@shared/schema";
 
 interface SendApplicationProps {
   merchantId?: number;
@@ -34,10 +43,26 @@ export default function SendApplication(props: SendApplicationProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
+  const [selectedProgramId, setSelectedProgramId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [parsedAmount, setParsedAmount] = useState(0);
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // Fetch programs for the current merchant
+  const { data: programs = [], isLoading: isProgramsLoading } = useQuery<MerchantProgram[]>({
+    queryKey: ["/api/merchant/programs"],
+    queryFn: async () => {
+      const response = await fetch("/api/merchant/programs", {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to fetch programs");
+      }
+      const data = await response.json();
+      return data.data;
+    },
+  });
   
   // This handles the actual sending of the application after calculator confirmation
   const handleSendApplication = async () => {
@@ -59,7 +84,8 @@ export default function SendApplication(props: SendApplicationProps) {
           phoneNumber: formattedPhoneNumber,
           email,
           merchantId: merchantId,
-          amount: parsedAmount
+          amount: parsedAmount,
+          programId: selectedProgramId ? parseInt(selectedProgramId) : undefined
         }),
       });
 
@@ -73,6 +99,7 @@ export default function SendApplication(props: SendApplicationProps) {
       setPhoneNumber("");
       setEmail("");
       setAmount("");
+      setSelectedProgramId("");
       setParsedAmount(0);
 
       toast({
@@ -102,7 +129,8 @@ export default function SendApplication(props: SendApplicationProps) {
           phoneNumber,
           email,
           merchantId: merchantId, 
-          amount: parsedAmountValue
+          amount: parsedAmountValue,
+          programId: selectedProgramId ? parseInt(selectedProgramId) : undefined
         }
       });
 
@@ -165,6 +193,11 @@ export default function SendApplication(props: SendApplicationProps) {
                 throw new Error("Please enter a valid phone number with at least 10 digits");
               }
               
+              // Validate program selection if programs are available
+              if (!isProgramsLoading && programs.length > 0 && !selectedProgramId) {
+                throw new Error("Please select a financing program");
+              }
+              
               // Store parsed amount for sending
               setParsedAmount(parsedAmount);
 
@@ -224,10 +257,44 @@ export default function SendApplication(props: SendApplicationProps) {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="program">Financing Program</Label>
+              <Select 
+                value={selectedProgramId} 
+                onValueChange={setSelectedProgramId}
+              >
+                <SelectTrigger id="program">
+                  <SelectValue placeholder="Select a financing program" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isProgramsLoading ? (
+                    <div className="flex items-center justify-center p-2">
+                      Loading programs...
+                    </div>
+                  ) : programs.length === 0 ? (
+                    <div className="text-center py-2 text-sm text-muted-foreground">
+                      No programs found
+                    </div>
+                  ) : (
+                    programs
+                      .filter(program => program.active)
+                      .map(program => (
+                        <SelectItem 
+                          key={program.id} 
+                          value={program.id.toString()}
+                        >
+                          {program.name} ({program.durationMonths} months)
+                        </SelectItem>
+                      ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button 
               type="submit" 
               className="w-full"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isProgramsLoading}
             >
               {isSubmitting ? "Sending..." : "Send Application"}
             </Button>

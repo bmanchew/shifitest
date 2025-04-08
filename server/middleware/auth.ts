@@ -212,6 +212,9 @@ export const isMerchant = async (req: Request, res: Response, next: NextFunction
       // Attach merchant to request
       req.merchant = merchantRecord as Express.Request['merchant'];
       
+      // Add merchantId to request for convenience
+      req.merchantId = merchantRecord.id;
+      
       // Log the successful merchant identification
       const merchantId = merchantRecord.id;
       logger.debug({
@@ -340,6 +343,9 @@ export const isAdminOrMerchant = async (req: Request, res: Response, next: NextF
           
           // Attach merchant to request
           req.merchant = merchantRecord as Express.Request['merchant'];
+          
+          // Add merchantId to request for convenience
+          req.merchantId = merchantRecord.id;
           
           logger.debug({
             message: `Merchant identified in isAdminOrMerchant: ${merchantRecord.id} for user ${req.user.id}`,
@@ -651,6 +657,9 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
           // Attach merchant to request
           req.merchant = merchantRecord as Express.Request['merchant'];
           
+          // Add merchantId to request for convenience
+          req.merchantId = merchantRecord.id;
+          
           logger.debug({
             message: `Merchant record attached in authenticateToken: ${merchantRecord.id} for user ${req.user.id}`,
             category: 'security',
@@ -869,6 +878,9 @@ export const requireRole = (role: string | string[]) => {
             
             // Attach merchant to request
             req.merchant = merchantRecord as Express.Request['merchant'];
+            
+            // Add merchantId to request for convenience
+            req.merchantId = merchantRecord.id;
           }
         } catch (dbError) {
           // Log the error but continue processing since we need to provide a proper response

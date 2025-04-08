@@ -241,6 +241,46 @@ export const insertMerchantSchema = createInsertSchema(merchants).omit({
   createdAt: true,
 });
 
+// Merchant Programs
+export const merchantPrograms = pgTable("merchant_programs", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  durationMonths: integer("duration_months").notNull(),
+  active: boolean("active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const insertMerchantProgramSchema = createInsertSchema(merchantPrograms).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Merchant Program Sales Agreements
+export const merchantProgramAgreements = pgTable("merchant_program_agreements", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").references(() => merchantPrograms.id).notNull(),
+  filename: text("filename").notNull(),
+  originalFilename: text("original_filename").notNull(),
+  mimeType: text("mime_type").notNull(),
+  data: text("data").notNull(), // Base64 encoded file data or file path
+  fileSize: integer("file_size"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  active: boolean("active").default(true),
+});
+
+export const insertMerchantProgramAgreementSchema = createInsertSchema(merchantProgramAgreements).omit({
+  id: true,
+  uploadedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Contracts
 export const contracts = pgTable("contracts", {
   id: serial("id").primaryKey(),
@@ -250,6 +290,7 @@ export const contracts = pgTable("contracts", {
     .notNull(),
   customerId: integer("customer_id").references(() => users.id),
   salesRepId: integer("sales_rep_id").references(() => users.id), // ID of the sales rep who created/owns this contract
+  programId: integer("program_id").references(() => merchantPrograms.id), // ID of the merchant program associated with this contract
   amount: doublePrecision("amount").notNull(),
   downPayment: doublePrecision("down_payment").notNull(),
   financedAmount: doublePrecision("financed_amount").notNull(),
@@ -353,6 +394,12 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 
 export type Merchant = typeof merchants.$inferSelect;
 export type InsertMerchant = z.infer<typeof insertMerchantSchema>;
+
+export type MerchantProgram = typeof merchantPrograms.$inferSelect;
+export type InsertMerchantProgram = z.infer<typeof insertMerchantProgramSchema>;
+
+export type MerchantProgramAgreement = typeof merchantProgramAgreements.$inferSelect;
+export type InsertMerchantProgramAgreement = z.infer<typeof insertMerchantProgramAgreementSchema>;
 
 export type Contract = typeof contracts.$inferSelect;
 export type InsertContract = z.infer<typeof insertContractSchema>;

@@ -9,6 +9,8 @@ import {
   
   // Merchant related schemas and types
   merchants, Merchant, InsertMerchant,
+  merchantPrograms, MerchantProgram, InsertMerchantProgram,
+  merchantProgramAgreements, MerchantProgramAgreement, InsertMerchantProgramAgreement,
   merchantBusinessDetails, MerchantBusinessDetails, InsertMerchantBusinessDetails,
   merchantDocuments, MerchantDocument, InsertMerchantDocument,
   applicationProgress, ApplicationProgress, InsertApplicationProgress,
@@ -171,6 +173,20 @@ export interface IStorage {
   getAllMerchants(): Promise<Merchant[]>;
   getAllMerchantsWithDetails(): Promise<(Merchant & { businessDetails?: MerchantBusinessDetails })[]>;
   createMerchant(merchant: InsertMerchant): Promise<Merchant>;
+  
+  // Merchant Program operations
+  getMerchantProgram(id: number): Promise<MerchantProgram | undefined>;
+  getMerchantProgramsByMerchantId(merchantId: number): Promise<MerchantProgram[]>;
+  createMerchantProgram(program: InsertMerchantProgram): Promise<MerchantProgram>;
+  updateMerchantProgram(id: number, data: Partial<MerchantProgram>): Promise<MerchantProgram | undefined>;
+  deleteMerchantProgram(id: number): Promise<void>;
+  
+  // Merchant Program Agreement operations
+  getMerchantProgramAgreement(id: number): Promise<MerchantProgramAgreement | undefined>;
+  getMerchantProgramAgreementsByProgramId(programId: number): Promise<MerchantProgramAgreement[]>;
+  createMerchantProgramAgreement(agreement: InsertMerchantProgramAgreement): Promise<MerchantProgramAgreement>;
+  updateMerchantProgramAgreement(id: number, data: Partial<MerchantProgramAgreement>): Promise<MerchantProgramAgreement | undefined>;
+  deleteMerchantProgramAgreement(id: number): Promise<void>;
 
   // Plaid Platform Merchant operations
   getPlaidMerchant(id: number): Promise<PlaidMerchant | undefined>;
@@ -2896,6 +2912,135 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return updatedDocument;
+  }
+
+  // Merchant Program operations
+  async getMerchantProgram(id: number): Promise<MerchantProgram | undefined> {
+    try {
+      const [program] = await db.select().from(merchantPrograms).where(eq(merchantPrograms.id, id));
+      return program || undefined;
+    } catch (error) {
+      console.error(`Error getting merchant program with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getMerchantProgramsByMerchantId(merchantId: number): Promise<MerchantProgram[]> {
+    try {
+      return await db.select().from(merchantPrograms).where(eq(merchantPrograms.merchantId, merchantId));
+    } catch (error) {
+      console.error(`Error getting merchant programs for merchant ID ${merchantId}:`, error);
+      return [];
+    }
+  }
+
+  async createMerchantProgram(program: InsertMerchantProgram): Promise<MerchantProgram> {
+    try {
+      const programWithTimestamps = {
+        ...program,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const [newProgram] = await db.insert(merchantPrograms).values(programWithTimestamps).returning();
+      return newProgram;
+    } catch (error) {
+      console.error(`Error creating merchant program:`, error);
+      throw error;
+    }
+  }
+
+  async updateMerchantProgram(id: number, data: Partial<MerchantProgram>): Promise<MerchantProgram | undefined> {
+    try {
+      const updateData = {
+        ...data,
+        updatedAt: new Date()
+      };
+      
+      const [updatedProgram] = await db.update(merchantPrograms)
+        .set(updateData)
+        .where(eq(merchantPrograms.id, id))
+        .returning();
+
+      return updatedProgram || undefined;
+    } catch (error) {
+      console.error(`Error updating merchant program with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteMerchantProgram(id: number): Promise<void> {
+    try {
+      await db.delete(merchantPrograms).where(eq(merchantPrograms.id, id));
+    } catch (error) {
+      console.error(`Error deleting merchant program with ID ${id}:`, error);
+      throw error;
+    }
+  }
+
+  // Merchant Program Agreement operations
+  async getMerchantProgramAgreement(id: number): Promise<MerchantProgramAgreement | undefined> {
+    try {
+      const [agreement] = await db.select().from(merchantProgramAgreements).where(eq(merchantProgramAgreements.id, id));
+      return agreement || undefined;
+    } catch (error) {
+      console.error(`Error getting merchant program agreement with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async getMerchantProgramAgreementsByProgramId(programId: number): Promise<MerchantProgramAgreement[]> {
+    try {
+      return await db.select().from(merchantProgramAgreements).where(eq(merchantProgramAgreements.programId, programId));
+    } catch (error) {
+      console.error(`Error getting merchant program agreements for program ID ${programId}:`, error);
+      return [];
+    }
+  }
+
+  async createMerchantProgramAgreement(agreement: InsertMerchantProgramAgreement): Promise<MerchantProgramAgreement> {
+    try {
+      const agreementWithTimestamps = {
+        ...agreement,
+        uploadedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const [newAgreement] = await db.insert(merchantProgramAgreements).values(agreementWithTimestamps).returning();
+      return newAgreement;
+    } catch (error) {
+      console.error(`Error creating merchant program agreement:`, error);
+      throw error;
+    }
+  }
+
+  async updateMerchantProgramAgreement(id: number, data: Partial<MerchantProgramAgreement>): Promise<MerchantProgramAgreement | undefined> {
+    try {
+      const updateData = {
+        ...data,
+        updatedAt: new Date()
+      };
+      
+      const [updatedAgreement] = await db.update(merchantProgramAgreements)
+        .set(updateData)
+        .where(eq(merchantProgramAgreements.id, id))
+        .returning();
+
+      return updatedAgreement || undefined;
+    } catch (error) {
+      console.error(`Error updating merchant program agreement with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+
+  async deleteMerchantProgramAgreement(id: number): Promise<void> {
+    try {
+      await db.delete(merchantProgramAgreements).where(eq(merchantProgramAgreements.id, id));
+    } catch (error) {
+      console.error(`Error deleting merchant program agreement with ID ${id}:`, error);
+      throw error;
+    }
   }
 
   // Notification operations

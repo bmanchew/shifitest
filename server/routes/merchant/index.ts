@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { authenticateToken, isMerchant } from "../../middleware/auth";
 import fundingRouter from "./funding";
 import contractsRouter from "./contracts";
+import programsRouter from "./programs";
 import { storage } from "../../storage";
 import { logger } from "../../services/logger";
 
@@ -111,5 +112,6 @@ router.get("/current", async (req: Request, res: Response) => {
 // Mount the sub-routes for merchant API
 router.use("/funding", fundingRouter);
 router.use("/contracts", contractsRouter);
+router.use("/programs", programsRouter);
 
 export default router;
