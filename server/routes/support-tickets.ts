@@ -461,13 +461,26 @@ router.post("/:id/messages", async (req: Request, res: Response) => {
     }
     
     // Add the message
-    const message = await storage.createMessage({
+    const messageData = {
       conversationId: ticket.conversationId,
       senderId: validatedData.senderId || req.user.id,
       senderRole: validatedData.senderType,
       content: validatedData.content,
       isRead: false
-    });
+    };
+    
+    // Debug log to inspect the messageData and request user
+    console.log("Route handler preparing message data:", JSON.stringify(messageData, null, 2));
+    console.log("Request user:", JSON.stringify({
+      id: req.user.id,
+      role: req.user.role,
+      senderType: validatedData.senderType
+    }, null, 2));
+    
+    // Ensure senderId is explicitly set from req.user.id
+    messageData.senderId = req.user.id;
+    
+    const message = await storage.createMessage(messageData);
     
     // If the sender is a merchant, update the ticket status to pending_customer
     // to indicate that customer/admin needs to respond
