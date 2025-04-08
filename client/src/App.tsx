@@ -45,8 +45,6 @@ const InvestorSignup = lazy(() => import("@/components/investor/InvestorSignup")
 const KYCVerification = lazy(() => import("@/components/investor/KYCVerification"));
 const BankConnection = lazy(() => import("@/components/investor/BankConnection"));
 const MerchantSupportTicket = lazy(() => import("@/pages/merchant/SupportTicket"));
-const MerchantMessages = lazy(() => import("@/pages/merchant/Messages"));
-const MerchantMessageDetail = lazy(() => import("@/pages/merchant/MessageDetail"));
 
 // Customer pages
 const CustomerApplication = lazy(() => import("@/pages/customer/Application"));
@@ -173,8 +171,6 @@ function App() {
                 <Route path="/merchant/support-tickets" component={MerchantSupportTicketsList} />
                 <Route path="/merchant/support-tickets/create" component={MerchantCreateSupportTicket} />
                 <Route path="/merchant/support-tickets/:id" component={MerchantSupportTicket} />
-                <Route path="/merchant/messages" component={MerchantMessages} />
-                <Route path="/merchant/messages/:id" component={MerchantMessageDetail} />
                 <Route path="/merchant/knowledge-base" component={MerchantKnowledgeBase} />
                 <Route path="/merchant/ticket-analytics" component={MerchantTicketAnalytics} />
               </>
