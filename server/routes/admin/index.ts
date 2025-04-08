@@ -19,6 +19,7 @@ import plaidRouter from "./plaid";
 import cancelCoveredCareContractRouter from "./cancel-coveredcare-contract";
 import merchantPlaidSettingsRouter from "./merchant-plaid-settings";
 import thanksRogerTestRouter from "./thanksroger-test";
+import thanksRogerRouter from "./thanksroger";
 
 const router = express.Router();
 
@@ -52,6 +53,7 @@ router.use("/plaid-underwriting", plaidUnderwritingRouter);
 router.use("/plaid", plaidRouter);
 router.use("/cancel-coveredcare-contract", cancelCoveredCareContractRouter);
 router.use("/thanksroger", thanksRogerTestRouter);
+router.use("/thanksroger", thanksRogerRouter);
 // Import the Plaid Settings routes but mount them directly
 import { getPlaidSettings, updatePlaidSettings } from "./merchant-plaid-settings";
 
