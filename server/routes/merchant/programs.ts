@@ -665,6 +665,21 @@ router.post("/:id/agreements", upload.single("file"), async (req: Request, res: 
           }
         };
 
+        // Log the creation attempt
+        logger.info({
+          message: "Sending document to Thanks Roger API for template creation",
+          userId: req.user?.id,
+          category: "api",
+          source: "internal",
+          metadata: {
+            documentName: req.file.originalname,
+            documentSize: req.file.size,
+            documentType: req.file.mimetype,
+            merchantId: req.merchantId,
+            programId
+          }
+        });
+
         // Send to Thanks Roger API
         const response = await fetch("https://api.thanksroger.com/v1/templates", {
           method: "POST",
@@ -676,19 +691,33 @@ router.post("/:id/agreements", upload.single("file"), async (req: Request, res: 
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
+          const errorText = await response.text();
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            errorData = { message: errorText || "Unknown error" };
+          }
           throw new Error(`Thanks Roger API error: ${JSON.stringify(errorData)}`);
         }
 
         const templateResponse = await response.json();
         
-        // Update our agreement record with the Thanks Roger template info in metadata
+        logger.info({
+          message: "Successfully created Thanks Roger template",
+          userId: req.user?.id,
+          category: "api",
+          source: "internal",
+          metadata: {
+            templateId: templateResponse.id,
+            templateName: templateResponse.name
+          }
+        });
+        
+        // Update our agreement record with the Thanks Roger template ID and name
         await storage.updateMerchantProgramAgreement(newAgreement.id, {
-          data: JSON.stringify({
-            fileData: fileData,
-            externalTemplateId: templateResponse.id,
-            externalTemplateName: templateResponse.name
-          })
+          externalTemplateId: templateResponse.id,
+          externalTemplateName: templateResponse.name
         });
 
         logger.info({

@@ -272,6 +272,8 @@ export const merchantProgramAgreements = pgTable("merchant_program_agreements", 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
   active: boolean("active").default(true),
+  externalTemplateId: text("external_template_id"),
+  externalTemplateName: text("external_template_name"),
 });
 
 export const insertMerchantProgramAgreementSchema = createInsertSchema(merchantProgramAgreements).omit({
