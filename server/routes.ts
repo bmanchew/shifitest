@@ -1603,7 +1603,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         }
       });
       
-      const { phoneNumber, merchantId, amount, email, customerName } = req.body;
+      const { phoneNumber, merchantId, amount, email, customerName, programId } = req.body;
       
       logger.debug({
         message: "Send application parameters",
@@ -1615,9 +1615,11 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           amount,
           email: email || null,
           customerName: customerName || null,
+          programId: programId || null,
           hasPhoneNumber: !!phoneNumber, 
           hasMerchantId: !!merchantId,
-          hasAmount: !!amount
+          hasAmount: !!amount,
+          hasProgramId: !!programId
         }
       });
 
@@ -1648,7 +1650,8 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           merchantId,
           amount,
           email: email || null,
-          customerName: customerName || null
+          customerName: customerName || null,
+          programId: programId || null
         }
       });
 
@@ -1743,6 +1746,9 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
       });
 
       // Create the contract
+      // Parse programId to integer if provided
+      const parsedProgramId = programId ? parseInt(programId) : null;
+      
       logger.debug({
         message: "Creating new contract",
         category: "api",
@@ -1753,7 +1759,8 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           customerId: customer.id,
           amount,
           downPayment,
-          financedAmount
+          financedAmount,
+          programId: parsedProgramId
         }
       });
       
@@ -1769,7 +1776,8 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         monthlyPayment,
         status: "pending",
         currentStep: "terms",
-        phoneNumber: phoneNumber
+        phoneNumber: phoneNumber,
+        programId: parsedProgramId
       });
       
       logger.info({
@@ -1781,6 +1789,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           contractNumber: newContract.contractNumber,
           customerId: newContract.customerId,
           merchantId: newContract.merchantId,
+          programId: parsedProgramId,
           status: newContract.status,
           currentStep: newContract.currentStep
         }
@@ -1878,6 +1887,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
           merchantId,
           amount,
           contractId: newContract.id,
+          programId: parsedProgramId,
           messageId: result.messageId,
           isSimulated: result.isSimulated
         })
