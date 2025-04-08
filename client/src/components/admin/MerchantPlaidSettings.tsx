@@ -31,7 +31,8 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
     accessToken: '',
     defaultFundingAccount: ''
   });
-  const [isEditing, setIsEditing] = useState(false);
+  // Always in editing mode for easier credential management
+  const [isEditing, setIsEditing] = useState(true);
   const { toast } = useToast();
 
   // Fetch the merchant's Plaid settings
@@ -66,7 +67,7 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
         title: 'Settings Updated',
         description: 'Plaid settings have been successfully updated.',
       });
-      setIsEditing(false);
+      // Keep the form editable
       refetch();
     },
     onError: (error) => {
@@ -197,7 +198,7 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
                   name="clientId"
                   value={formData.clientId}
                   onChange={handleChange}
-                  disabled={!isEditing || isUpdating}
+                  disabled={isUpdating}
                   placeholder="Client ID from Plaid Dashboard"
                   className="flex-1"
                 />
@@ -215,7 +216,7 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
                   name="accessToken"
                   value={formData.accessToken}
                   onChange={handleChange}
-                  disabled={!isEditing || isUpdating}
+                  disabled={isUpdating}
                   placeholder="Access Token for Plaid API"
                   className="flex-1"
                   type="password"
@@ -233,7 +234,7 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
                 name="defaultFundingAccount"
                 value={formData.defaultFundingAccount}
                 onChange={handleChange}
-                disabled={!isEditing || isUpdating}
+                disabled={isUpdating}
                 placeholder="Account ID for default funding"
               />
               <p className="text-sm text-muted-foreground">
@@ -255,72 +256,46 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
           </div>
         </form>
       </CardContent>
-      <CardFooter className="flex justify-between gap-2 pt-0">
-        {isEditing ? (
-          <>
+      <CardFooter className="flex justify-end gap-2 pt-0">
+        {/* Always show relevant buttons - direct edit saves UX steps */}
+        <div className="flex gap-2">
+          {plaidSettings && plaidSettings.originatorId && (
             <Button 
               variant="outline" 
-              onClick={() => {
-                setIsEditing(false);
-                // Reset form to current settings
-                if (plaidSettings) {
-                  setFormData({
-                    clientId: plaidSettings.clientId || '',
-                    accessToken: plaidSettings.accessToken || '',
-                    defaultFundingAccount: plaidSettings.defaultFundingAccount || ''
-                  });
-                }
-              }}
-              disabled={isUpdating}
+              onClick={() => syncWithPlaid()}
+              disabled={isSyncing}
             >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              onClick={handleSubmit}
-              disabled={isUpdating}
-            >
-              {isUpdating ? (
+              {isSyncing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  Syncing...
                 </>
               ) : (
                 <>
-                  <Check className="mr-2 h-4 w-4" />
-                  Save Changes
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Sync with Plaid
                 </>
               )}
             </Button>
-          </>
-        ) : (
-          <>
-            {plaidSettings && plaidSettings.originatorId && (
-              <Button 
-                variant="outline" 
-                onClick={() => syncWithPlaid()}
-                disabled={isSyncing}
-              >
-                {isSyncing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Sync with Plaid
-                  </>
-                )}
-              </Button>
+          )}
+          <Button 
+            type="submit" 
+            onClick={handleSubmit}
+            disabled={isUpdating}
+          >
+            {isUpdating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                Save Changes
+              </>
             )}
-            <Button 
-              onClick={() => setIsEditing(true)}
-            >
-              Edit Settings
-            </Button>
-          </>
-        )}
+          </Button>
+        </div>
       </CardFooter>
     </Card>
   );
