@@ -179,6 +179,7 @@ export interface IStorage {
   createPlaidMerchant(data: InsertPlaidMerchant): Promise<PlaidMerchant>;
   updatePlaidMerchant(id: number, data: Partial<InsertPlaidMerchant>): Promise<PlaidMerchant | undefined>;
   getPlaidMerchantsByStatus(status: string): Promise<PlaidMerchant[]>;
+  getAllPlaidMerchants(): Promise<PlaidMerchant[]>;
 
   // Plaid Transfer operations
   createPlaidTransfer(transfer: InsertPlaidTransfer): Promise<PlaidTransfer>;
@@ -2728,6 +2729,10 @@ export class DatabaseStorage implements IStorage {
 
   async getPlaidMerchantsByStatus(status: string): Promise<PlaidMerchant[]> {
     return await db.select().from(plaidMerchants).where(eq(plaidMerchants.onboardingStatus, status as any));
+  }
+
+  async getAllPlaidMerchants(): Promise<PlaidMerchant[]> {
+    return await db.select().from(plaidMerchants);
   }
 
   // Plaid Transfer methods

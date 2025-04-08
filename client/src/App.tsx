@@ -21,6 +21,7 @@ const AdminMessages = lazy(() => import("@/pages/admin/Messages"));
 const AdminMessageDetail = lazy(() => import("@/pages/admin/MessageDetail"));
 const AdminKnowledgeBase = lazy(() => import("@/pages/admin/KnowledgeBase"));
 const AdminTicketAnalytics = lazy(() => import("@/pages/admin/TicketAnalytics"));
+const AdminPlaidCredentials = lazy(() => import("@/pages/admin/PlaidCredentials"));
 
 // Merchant pages
 const MerchantDashboard = lazy(() => import("@/pages/merchant/Dashboard"));
@@ -152,6 +153,7 @@ function App() {
                 <Route path="/admin/messages/:id" component={AdminMessageDetail} />
                 <Route path="/admin/knowledge-base" component={AdminKnowledgeBase} />
                 <Route path="/admin/ticket-analytics" component={AdminTicketAnalytics} />
+                <Route path="/admin/plaid-credentials" component={AdminPlaidCredentials} />
               </>
             )}
 

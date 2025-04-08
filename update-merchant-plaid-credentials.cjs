@@ -1,141 +1,105 @@
+#!/usr/bin/env node
+
 /**
- * This script updates the Plaid credentials for a specific merchant
+ * Script to update a merchant's Plaid credentials directly in the database
+ * Usage: node update-merchant-plaid-credentials.cjs <merchantId> <accessToken> [clientId]
  * 
- * Usage: node update-merchant-plaid-credentials.cjs <merchantId> <clientId> <accessToken>
+ * Example: node update-merchant-plaid-credentials.cjs 123 access-sandbox-xxxx client-id-xxxx
  */
 
-// Import required modules
-const pg = require('pg');
-const fs = require('fs');
-const path = require('path');
-const dotenv = require('dotenv');
+// Database configuration
+const { db } = require('./server/db.cjs');
+require('dotenv').config();
 
-// Load environment variables
-dotenv.config();
+// Get arguments from command line
+const args = process.argv.slice(2);
 
-// Get command line arguments
-const merchantId = process.argv[2];
-const clientId = process.argv[3];
-const accessToken = process.argv[4];
-
-// Validate input
-if (!merchantId || !clientId || !accessToken) {
-  console.error(`
-Usage: node update-merchant-plaid-credentials.cjs <merchantId> <clientId> <accessToken>
-
-Required:
-  - merchantId: The merchant ID to update
-  - clientId: The Plaid client ID for this merchant
-  - accessToken: The Plaid access token for this merchant
-  `);
+if (args.length < 2) {
+  console.error('Usage: node update-merchant-plaid-credentials.cjs <merchantId> <accessToken> [clientId]');
   process.exit(1);
 }
 
-// Database connection setup
-const dbConfig = {
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-};
+const merchantId = parseInt(args[0]);
+const accessToken = args[1];
+const clientId = args[2] || null; // Optional client ID
 
-async function updateMerchantPlaidCredentials() {
-  const client = new pg.Client(dbConfig);
-  
+if (isNaN(merchantId)) {
+  console.error('Error: Merchant ID must be a number');
+  process.exit(1);
+}
+
+async function updatePlaidCredentials() {
   try {
-    console.log(`Updating Plaid credentials for merchant ID ${merchantId}...`);
-    
-    // Connect to the database
-    await client.connect();
-    
-    // Check if the merchant exists
-    const merchantCheck = await client.query(
-      'SELECT id FROM merchants WHERE id = $1',
+    console.log(`Looking up merchant with ID: ${merchantId}`);
+    // First check if the merchant exists
+    const merchantResult = await db.query(
+      'SELECT id, name FROM merchants WHERE id = $1',
       [merchantId]
     );
-    
-    if (merchantCheck.rowCount === 0) {
-      throw new Error(`Merchant with ID ${merchantId} not found`);
+
+    if (merchantResult.rows.length === 0) {
+      console.error(`Error: No merchant found with ID ${merchantId}`);
+      process.exit(1);
     }
-    
-    // Check if a plaid_merchants record exists for this merchant
-    const plaidMerchantCheck = await client.query(
-      'SELECT id FROM plaid_merchants WHERE merchant_id = $1',
+
+    const merchant = merchantResult.rows[0];
+    console.log(`Found merchant: ${merchant.name} (ID: ${merchant.id})`);
+
+    // Check if a Plaid merchant record already exists
+    const plaidMerchantResult = await db.query(
+      'SELECT id, "merchantId", "accessToken", "clientId", "onboardingStatus" FROM plaid_merchants WHERE "merchantId" = $1',
       [merchantId]
     );
-    
-    let result;
-    
-    if (plaidMerchantCheck.rowCount > 0) {
+
+    let updatedRecord;
+
+    if (plaidMerchantResult.rows.length > 0) {
       // Update existing record
-      result = await client.query(
-        `UPDATE plaid_merchants 
-         SET client_id = $1, 
-             access_token = $2, 
-             onboarding_status = 'completed',
-             updated_at = NOW()
-         WHERE merchant_id = $3
-         RETURNING *`,
-        [clientId, accessToken, merchantId]
+      const existingRecord = plaidMerchantResult.rows[0];
+      console.log(`Found existing Plaid record for merchant ID ${merchantId}`);
+      console.log(`Current status: ${existingRecord.onboardingStatus}`);
+      console.log(`Current access token: ${existingRecord.accessToken ? '****' + existingRecord.accessToken.slice(-4) : 'None'}`);
+      
+      // Only update the onboarding status to completed if it's not already completed
+      const newStatus = existingRecord.onboardingStatus !== 'completed' ? 'completed' : existingRecord.onboardingStatus;
+      
+      const updateResult = await db.query(
+        'UPDATE plaid_merchants SET "accessToken" = $1, "clientId" = $2, "onboardingStatus" = $3, "updatedAt" = NOW() WHERE id = $4 RETURNING *',
+        [accessToken, clientId || existingRecord.clientId, newStatus, existingRecord.id]
       );
-      console.log(`Updated existing Plaid credentials for merchant ID ${merchantId}`);
+      
+      updatedRecord = updateResult.rows[0];
+      console.log(`Updated Plaid credentials for merchant ID ${merchantId}`);
     } else {
-      // Insert new record
-      result = await client.query(
-        `INSERT INTO plaid_merchants 
-         (merchant_id, client_id, access_token, onboarding_status, created_at, updated_at)
-         VALUES ($1, $2, $3, 'completed', NOW(), NOW())
-         RETURNING *`,
-        [merchantId, clientId, accessToken]
+      // Create new record
+      console.log(`No existing Plaid record found for merchant ID ${merchantId}. Creating new record...`);
+      
+      const insertResult = await db.query(
+        'INSERT INTO plaid_merchants ("merchantId", "accessToken", "clientId", "onboardingStatus", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING *',
+        [merchantId, accessToken, clientId, 'completed']
       );
+      
+      updatedRecord = insertResult.rows[0];
       console.log(`Created new Plaid credentials for merchant ID ${merchantId}`);
     }
+
+    console.log('\nPlaid Credentials Updated Successfully:');
+    console.log('----------------------------------------');
+    console.log(`Merchant ID:       ${updatedRecord.merchantId}`);
+    console.log(`Plaid Record ID:   ${updatedRecord.id}`);
+    console.log(`Status:            ${updatedRecord.onboardingStatus}`);
+    console.log(`Access Token:      ${updatedRecord.accessToken ? '****' + updatedRecord.accessToken.slice(-4) : 'None'}`);
+    console.log(`Client ID:         ${updatedRecord.clientId || 'Not set'}`);
+    console.log(`Last Updated:      ${updatedRecord.updatedAt}`);
+    console.log('----------------------------------------');
     
-    // Display the updated/inserted record (without showing the full access token)
-    const record = result.rows[0];
-    const maskedAccessToken = accessToken.substring(0, 4) + '...' + accessToken.substring(accessToken.length - 4);
-    
-    console.log('\nUpdated Plaid Merchant Record:');
-    console.log(`- ID: ${record.id}`);
-    console.log(`- Merchant ID: ${record.merchant_id}`);
-    console.log(`- Client ID: ${record.client_id}`);
-    console.log(`- Access Token: ${maskedAccessToken}`);
-    console.log(`- Onboarding Status: ${record.onboarding_status}`);
-    console.log(`- Updated At: ${record.updated_at}`);
-    
-    console.log('\n✅ Merchant Plaid credentials updated successfully.');
-    
-    // Also update environment variables if missing
-    ensurePlaidEnvironmentVariables();
-    
-    return record;
   } catch (error) {
-    console.error('Error updating merchant Plaid credentials:', error.message);
-    throw error;
+    console.error('Error updating Plaid credentials:', error.message);
+    process.exit(1);
   } finally {
     // Close the database connection
-    await client.end();
+    await db.end();
   }
 }
 
-function ensurePlaidEnvironmentVariables() {
-  // Check if all required Plaid environment variables are set
-  const requiredVars = ['PLAID_CLIENT_ID', 'PLAID_SECRET', 'PLAID_ENV'];
-  const missingVars = requiredVars.filter(varName => !process.env[varName]);
-  
-  if (missingVars.length > 0) {
-    console.log(`\nWarning: Missing Plaid environment variables: ${missingVars.join(', ')}`);
-    console.log('You should set these with the setup-plaid-env.js script:');
-    console.log('node setup-plaid-env.js <clientId> <secret> <environment>');
-  } else {
-    console.log('\nPlaid environment variables are properly configured.');
-  }
-}
-
-// Run the script
-updateMerchantPlaidCredentials()
-  .then(() => {
-    process.exit(0);
-  })
-  .catch(error => {
-    console.error('Script execution failed:', error);
-    process.exit(1);
-  });
+updatePlaidCredentials();
