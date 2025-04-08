@@ -9,6 +9,7 @@ import merchantFundingRoutes from './merchant-funding';
 import customerRoutes from './customers';
 import merchantRoutes from './merchant';
 import merchantContractsRoutes from './merchant/contracts';
+import programsRouter from './merchant/programs';
 import exampleRoutes from './example.routes';
 import investorRoutes from './investor';
 import adminRoutes from './admin/index';
@@ -54,6 +55,10 @@ modulesRouter.use('/api/v1/ticket-assignment', ticketAssignmentRouter);
 modulesRouter.use('/api/v1/intercom', intercomRouter);
 modulesRouter.use('/api/v1/chat', intercomChatRouter);
 modulesRouter.use('/api/v1', ticketCategorizationRouter);
+// Mount programsRouter explicitly for v1 API
+modulesRouter.use('/api/v1/merchant/programs', authenticateToken, programsRouter);
+
+// Handle other merchant routes for v1 API
 modulesRouter.use('/api/v1/merchant', authenticateToken, (req, res, next) => {
   next();
 }, (req, res, next) => {
@@ -85,6 +90,11 @@ modulesRouter.use('/api/ticket-assignment', ticketAssignmentRouter);
 modulesRouter.use('/api/intercom', intercomRouter);
 modulesRouter.use('/api/chat', intercomChatRouter);
 modulesRouter.use('/', ticketCategorizationRouter);
+
+// Mount programsRouter explicitly
+modulesRouter.use('/api/merchant/programs', authenticateToken, programsRouter);
+
+// Handle other merchant routes
 modulesRouter.use('/api/merchant', authenticateToken, (req, res, next) => {
   next();
 }, (req, res, next) => {
