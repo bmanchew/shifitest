@@ -67,7 +67,7 @@ router.get('/test-thanksroger', async (req, res) => {
       programId: agreement.programId,
       programName: program.name || 'Unknown Program',
       merchantId: program.merchantId,
-      merchantName: merchant.businessName || merchant.name || 'Unknown Merchant',
+      merchantName: merchant.name || 'Unknown Merchant',
       originalFilename: agreement.originalFilename,
       mimeType: agreement.mimeType,
       fileSize: agreement.fileSize,
@@ -96,7 +96,7 @@ router.get('/test-thanksroger', async (req, res) => {
       
       try {
         const response = await axios.get(
-          `https://api.thanksroger.com/template/${agreement.externalTemplateId}`,
+          `https://api.thanksroger.com/v1/templates/${agreement.externalTemplateId}`,
           {
             headers: {
               'Authorization': `Bearer ${thanksRogerApiKey}`,
@@ -144,7 +144,7 @@ router.get('/test-thanksroger', async (req, res) => {
         
         // Create a new template in Thanks Roger
         const response = await axios.post(
-          'https://api.thanksroger.com/template',
+          'https://api.thanksroger.com/v1/templates',
           {
             name: `${program.name || 'Program'} Agreement - ${new Date().toISOString().split('T')[0]}`,
             document: fileBase64
