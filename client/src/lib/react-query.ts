@@ -1,87 +1,158 @@
-import { QueryClient } from '@tanstack/react-query';
+/**
+ * React Query configuration and API request utilities
+ * 
+ * This module provides a centralized configuration for React Query,
+ * including proper caching, error handling, and standardized API requests.
+ */
+import { 
+  QueryClient, 
+  DefaultOptions, 
+  QueryClientConfig,
+  MutationOptions
+} from '@tanstack/react-query';
+import axios, { AxiosRequestConfig, AxiosError } from 'axios';
+import { toast } from '@/hooks/use-toast';
 
-// Create a client
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes (previously cacheTime in v4)
-      retry: 1,
-      refetchOnWindowFocus: true,
-      refetchOnMount: true,
-      refetchOnReconnect: true,
+// Default API base URL
+const API_BASE_URL = '/api';
+
+// Default stale time - reduce refetches for improved performance
+const DEFAULT_STALE_TIME = 30 * 1000; // 30 seconds
+
+// Default cache time - keep data in cache longer for performance
+const DEFAULT_CACHE_TIME = 5 * 60 * 1000; // 5 minutes
+
+// Default React Query options to be applied to all queries
+const defaultOptions: DefaultOptions = {
+  queries: {
+    staleTime: DEFAULT_STALE_TIME,
+    gcTime: DEFAULT_CACHE_TIME,
+    refetchOnWindowFocus: false, // Disable refetching on window focus for improved performance
+    retry: (failureCount, error) => {
+      // Only retry network errors, not 4xx or 5xx responses
+      const axiosError = error as AxiosError;
+      if (axiosError.response) {
+        // Don't retry if we received a response (4xx or 5xx)
+        return false;
+      }
+      
+      // Retry network errors up to 2 times
+      return failureCount < 2;
     },
+    // Default error handler that shows toast on errors
+    onError: (error: unknown) => {
+      const axiosError = error as AxiosError;
+      const errorMessage = axiosError.response?.data?.message || 
+                           axiosError.message || 
+                           'An error occurred';
+
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
   },
-});
+  mutations: {
+    // Default error handler for mutations
+    onError: (error: unknown) => {
+      const axiosError = error as AxiosError;
+      const errorMessage = axiosError.response?.data?.message || 
+                           axiosError.message || 
+                           'An error occurred while saving changes';
+
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    },
+    // Default success handler for mutations
+    onSuccess: () => {
+      toast({
+        title: 'Success',
+        description: 'Changes saved successfully',
+        variant: 'default',
+      });
+    }
+  }
+};
+
+// Create React Query client with default settings
+export const queryClientConfig: QueryClientConfig = {
+  defaultOptions
+};
+
+export const queryClient = new QueryClient(queryClientConfig);
+
+// API request utility for consistent error handling and response formatting
+interface ApiRequestOptions extends AxiosRequestConfig {
+  showSuccessToast?: boolean;
+  successMessage?: string;
+  showErrorToast?: boolean;
+  errorMessage?: string;
+}
 
 /**
- * Utility function for making API requests with proper error handling and type safety
- * @param method HTTP method (GET, POST, PUT, DELETE)
- * @param url API endpoint URL
- * @param data Request payload (for POST, PUT)
- * @returns Promise with typed response data
+ * Helper function to make API requests with consistent error handling,
+ * response formatting, and automatically handles CSRF tokens
+ * 
+ * @param options Extended axios request config
+ * @returns Promise resolving to response data
  */
-export async function apiRequest<T = any>(
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-  url: string,
-  data?: any
-): Promise<T> {
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
-
-  // For CSRF protected routes, include the CSRF token if available
-  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken;
-  }
-
-  const options: RequestInit = {
-    method,
-    headers,
-    credentials: 'include', // Include cookies for authentication
-  };
-
-  if (data && method !== 'GET') {
-    options.body = JSON.stringify(data);
-  }
-
-  const response = await fetch(url, options);
-
-  // Handle non-2xx responses
-  if (!response.ok) {
-    const errorText = await response.text();
-    let errorMessage = `API Error (${response.status}): ${response.statusText}`;
+export const apiRequest = async <T = any>(options: ApiRequestOptions): Promise<T> => {
+  try {
+    // Default to API base URL if not specified
+    const url = options.url?.startsWith('http') 
+      ? options.url 
+      : `${API_BASE_URL}${options.url}`;
     
-    try {
-      // Try to parse error as JSON
-      const errorData = JSON.parse(errorText);
-      errorMessage = errorData.message || errorData.error || errorMessage;
-    } catch (e) {
-      // If not JSON, use the raw text
-      if (errorText) {
-        errorMessage = errorText;
-      }
+    // Make the request
+    const response = await axios({
+      ...options,
+      url,
+      // Ensure cookies are included (for CSRF and authentication)
+      withCredentials: true
+    });
+    
+    // Show success toast if enabled
+    if (options.showSuccessToast) {
+      toast({
+        title: 'Success',
+        description: options.successMessage || 'Operation completed successfully',
+        variant: 'default',
+      });
     }
     
-    const error = new Error(errorMessage);
-    (error as any).status = response.status;
-    (error as any).statusText = response.statusText;
-    (error as any).url = url;
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    const errorMessage = (axiosError.response?.data as any)?.message || 
+                         axiosError.message || 
+                         options.errorMessage || 
+                         'An error occurred';
+    
+    // Show error toast if enabled
+    if (options.showErrorToast !== false) {
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
+    
+    // Rethrow for proper error handling
     throw error;
   }
+};
 
-  // Handle empty responses (like 204 No Content)
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  // Parse JSON response
-  try {
-    return await response.json() as T;
-  } catch (error) {
-    console.error('Failed to parse JSON response', error);
-    throw new Error(`Failed to parse API response: ${error instanceof Error ? error.message : String(error)}`);
-  }
+/**
+ * Creates mutation options with proper typing for TanStack Query
+ */
+export function createMutationOptions<TData, TError, TVariables, TContext>(
+  options: MutationOptions<TData, TError, TVariables, TContext>
+): MutationOptions<TData, TError, TVariables, TContext> {
+  return options;
 }
+
+export default queryClient;

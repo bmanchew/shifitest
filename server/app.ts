@@ -85,24 +85,65 @@ export function createApp(): Express {
   // Enhanced authentication middleware to extract user from JWT token
   app.use(async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Get token from Authorization header or cookies
-      const token = getTokenFromRequest(req);
+      // Use our improved token utilities to extract and verify the token
+      const { extractTokenFromRequest, verifyToken } = require('./utils/tokens');
+      const token = extractTokenFromRequest(req);
       
       if (token) {
         try {
-          // Use process.env.JWT_SECRET directly with a fallback for safety
-          const jwtSecret = process.env.JWT_SECRET || 'shifi-secure-jwt-secret-for-development-only';
+          // Verify token using our enhanced verification with more secure algorithm
+          const decoded = verifyToken(token);
           
-          // Use the secret to verify the token
-          const decoded = jwt.verify(token, jwtSecret);
-          
-          if (typeof decoded === 'object' && decoded.userId) {
-            // Get user from database
-            const user = await storage.getUser(decoded.userId);
-            
-            if (user) {
-              // Attach user to request object
-              req.user = user;
+          if (decoded && typeof decoded === 'object' && decoded.userId) {
+            // Get user from database with detailed error handling
+            try {
+              const user = await storage.getUser(decoded.userId);
+              
+              if (user) {
+                // Attach user to request object with the role from token for additional verification
+                req.user = {
+                  ...user,
+                  // If the token has a role but the user doesn't, use the token role
+                  // This helps with backward compatibility during the transition
+                  role: user.role || decoded.role || 'user'
+                };
+                
+                // Log successful authentication
+                logger.debug({
+                  message: `User authenticated: ${user.email} (${user.id})`,
+                  category: "security",
+                  userId: user.id,
+                  source: "internal",
+                  metadata: {
+                    path: req.path,
+                    method: req.method,
+                    role: req.user.role
+                  }
+                });
+              } else {
+                // Log token with valid user ID but user not found in database
+                logger.warn({
+                  message: `JWT token contains valid user ID ${decoded.userId} but user not found in database`,
+                  category: "security",
+                  source: "internal",
+                  metadata: {
+                    path: req.path,
+                    tokenUserId: decoded.userId
+                  }
+                });
+              }
+            } catch (dbError) {
+              // Log database error during user fetch
+              logger.error({
+                message: `Database error fetching user: ${dbError instanceof Error ? dbError.message : String(dbError)}`,
+                category: "database",
+                source: "internal",
+                metadata: {
+                  error: dbError instanceof Error ? dbError.message : String(dbError),
+                  path: req.path,
+                  tokenUserId: decoded.userId
+                }
+              });
             }
           }
         } catch (tokenError) {
@@ -110,6 +151,17 @@ export function createApp(): Express {
           if (!(tokenError instanceof jwt.TokenExpiredError)) {
             logger.warn({
               message: `JWT validation error: ${tokenError instanceof Error ? tokenError.message : String(tokenError)}`,
+              category: "security",
+              source: "internal",
+              metadata: {
+                path: req.path,
+                error: tokenError instanceof Error ? tokenError.message : String(tokenError)
+              }
+            });
+          } else {
+            // Log when token expires for tracking
+            logger.info({
+              message: 'JWT token expired',
               category: "security",
               source: "internal",
               metadata: {
@@ -129,7 +181,9 @@ export function createApp(): Express {
         category: "security",
         source: "internal",
         metadata: {
-          path: req.path
+          path: req.path,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
         }
       });
       next();
