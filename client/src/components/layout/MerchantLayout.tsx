@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,7 +14,6 @@ import {
   Bell,
   CreditCard,
   TicketCheck,
-  MessageSquare,
 } from "lucide-react";
 
 interface MerchantLayoutProps {
@@ -27,25 +25,7 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Get unread messages count
-  const { data: unreadMessagesData } = useQuery({
-    queryKey: ["/api/communications/merchant/unread-count"],
-    queryFn: async () => {
-      try {
-        const response = await fetch("/api/communications/merchant/unread-count");
-        if (!response.ok) {
-          return { success: false, unreadCount: 0 };
-        }
-        return response.json();
-      } catch (error) {
-        console.error("Error fetching unread messages count:", error);
-        return { success: false, unreadCount: 0 };
-      }
-    },
-    refetchInterval: 60000, // Refetch every minute
-  });
-
-  const unreadCount = unreadMessagesData?.unreadCount || 0;
+  // No longer need to fetch unread messages since we removed the Messages section
 
   // Define the navigation item type
   type NavigationItem = {
@@ -86,13 +66,6 @@ export default function MerchantLayout({ children }: MerchantLayoutProps) {
       href: "/merchant/support-tickets",
       icon: TicketCheck,
       current: location === "/merchant/support-tickets",
-    },
-    {
-      name: "Messages",
-      href: "/merchant/messages",
-      icon: MessageSquare,
-      current: location === "/merchant/messages",
-      badge: unreadCount > 0 ? unreadCount : undefined,
     },
     {
       name: "Settings",
