@@ -760,16 +760,15 @@ export class DatabaseStorage implements IStorage {
   // Message methods
   async createMessage(message: InsertMessage): Promise<Message> {
     try {
-      // Map input fields to match schema expectations
-      // The field 'userId' in client input needs to be mapped to 'senderId' in the database
+      // Create the message with the provided data
       const messageToInsert = {
         conversationId: message.conversationId,
-        senderId: message.userId, // Map userId to senderId
-        senderRole: message.isFromMerchant ? "merchant" : "admin", // Derive role from isFromMerchant flag
+        senderId: message.senderId, // Use the senderId directly
+        senderRole: message.senderRole, // Use the provided senderRole
         content: message.content,
         isRead: message.isRead || false,
         readAt: message.isRead ? new Date() : null,
-        createdAt: message.createdAt || new Date()
+        createdAt: new Date()
       };
       
       // Log the prepared message data

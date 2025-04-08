@@ -200,7 +200,9 @@ export default function SupportTicketPage() {
         },
         body: JSON.stringify({
           content: newMessage,
-          ticketId: id
+          ticketId: id,
+          senderId: user?.id,
+          senderType: "merchant"
         }),
       });
       
