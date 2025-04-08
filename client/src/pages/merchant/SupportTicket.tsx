@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   AlertCircle, 
   Loader2, 
@@ -19,12 +20,15 @@ import {
   Clock, 
   Calendar,
   Tag,
-  FileText
+  FileText,
+  User,
+  MessageSquare,
+  Send
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { formatDate, getStatusColor } from "@/lib/utils";
+import { formatDate, formatDateTime, getStatusColor } from "@/lib/utils";
 import MerchantLayout from "@/components/layout/MerchantLayout";
 
 export default function SupportTicketPage() {
@@ -33,6 +37,8 @@ export default function SupportTicketPage() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [newMessage, setNewMessage] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   // Fetch ticket details
   const {
@@ -56,6 +62,26 @@ export default function SupportTicketPage() {
 
   const ticket = ticketData?.ticket;
   const activityLog = ticketData?.activityLog || [];
+  
+  // Fetch messages for this ticket
+  const {
+    data: messagesData = { messages: [] },
+    isLoading: messagesLoading,
+  } = useQuery({
+    queryKey: ["support-ticket-messages", id],
+    queryFn: async () => {
+      if (!id) return { messages: [] };
+      
+      const response = await fetch(`/api/support-tickets/${id}/messages`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch ticket messages");
+      }
+      return response.json();
+    },
+    enabled: !!id,
+  });
+
+  const messages = messagesData.messages || [];
 
   // Format the category text for display
   const formatCategoryText = (category: string) => {
@@ -110,7 +136,7 @@ export default function SupportTicketPage() {
         throw new Error("Failed to update ticket status");
       }
       
-      queryClient.invalidateQueries(["support-ticket", id]);
+      queryClient.invalidateQueries({queryKey: ["support-ticket", id]});
       
       toast({
         title: "Ticket Resolved",
@@ -146,7 +172,7 @@ export default function SupportTicketPage() {
         throw new Error("Failed to update ticket status");
       }
       
-      queryClient.invalidateQueries(["support-ticket", id]);
+      queryClient.invalidateQueries({queryKey: ["support-ticket", id]});
       
       toast({
         title: "Ticket Reopened",
@@ -158,6 +184,49 @@ export default function SupportTicketPage() {
         title: "Error",
         description: "Failed to update ticket status. Please try again.",
       });
+    }
+  };
+  
+  // Handle sending a new message
+  const handleSendMessage = async () => {
+    if (!id || !newMessage.trim() || sendingMessage) return;
+    
+    setSendingMessage(true);
+    try {
+      const response = await fetch(`/api/support-tickets/${id}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: newMessage,
+          ticketId: id
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to send message");
+      }
+      
+      // Clear the input and refresh messages
+      setNewMessage("");
+      queryClient.invalidateQueries({queryKey: ["support-ticket-messages", id]});
+      
+      // Also invalidate the ticket to refresh activity log
+      queryClient.invalidateQueries({queryKey: ["support-ticket", id]});
+      
+      toast({
+        title: "Message Sent",
+        description: "Your reply has been sent successfully.",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+      });
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -246,6 +315,77 @@ export default function SupportTicketPage() {
                     </div>
                   </div>
                 )}
+                
+                {/* Conversation */}
+                <div className="mb-6">
+                  <h3 className="font-medium text-base mb-4">Conversation</h3>
+                  
+                  {messagesLoading ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : messages.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground border rounded-md">
+                      <MessageSquare className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                      <p>No messages yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 mb-6 max-h-[400px] overflow-y-auto p-2">
+                      {messages.map((message: any, index: number) => (
+                        <div 
+                          key={index} 
+                          className={`flex gap-3 ${message.senderRole === 'merchant' ? 'justify-end' : ''}`}
+                        >
+                          <div 
+                            className={`rounded-lg p-3 max-w-[85%] ${
+                              message.senderRole === 'merchant' 
+                                ? 'bg-primary text-primary-foreground ml-auto' 
+                                : 'bg-muted'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-xs font-medium opacity-70">
+                                {message.senderRole === 'merchant' ? 'You' : 'Support Agent'}
+                              </p>
+                            </div>
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                            <div className="text-xs opacity-70 mt-1 text-right">
+                              {formatDateTime(message.createdAt)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Reply form */}
+                  {(ticket.status !== "resolved" && ticket.status !== "closed") && (
+                    <div className="mt-4">
+                      <div className="relative">
+                        <Textarea
+                          placeholder="Type your reply here..."
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          className="pr-20 min-h-[120px]"
+                          disabled={sendingMessage}
+                        />
+                        <Button
+                          className="absolute bottom-3 right-3"
+                          size="sm"
+                          onClick={handleSendMessage}
+                          disabled={!newMessage.trim() || sendingMessage}
+                        >
+                          {sendingMessage ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          ) : (
+                            <Send className="h-4 w-4 mr-1" />
+                          )}
+                          Send
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 
                 {/* Activity Log */}
                 <div className="mt-6">
