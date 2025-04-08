@@ -651,34 +651,51 @@ export default function ProgramsManagement() {
             {/* Upload new agreement */}
             <div className="border rounded-lg p-4">
               <h3 className="font-medium mb-2">Upload New Agreement</h3>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="agreement-file" className="sr-only">
-                  Choose file
-                </Label>
-                <Input
-                  id="agreement-file"
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={handleFileUpload}
-                  disabled={isUploading}
-                />
-                <Button disabled={isUploading}>
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Upload
-                    </>
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Accepted file types: PDF, DOC, DOCX
-              </p>
+              <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="agreement-file">
+                    Choose file
+                  </Label>
+                  <Input
+                    id="agreement-file"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={handleFileUpload}
+                    disabled={isUploading}
+                  />
+                  <Button 
+                    type="button"
+                    disabled={isUploading}
+                    onClick={() => {
+                      const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
+                      if (fileInput && fileInput.files && fileInput.files[0]) {
+                        handleFileUpload({ target: { files: fileInput.files } } as React.ChangeEvent<HTMLInputElement>);
+                      } else {
+                        toast({
+                          title: "No file selected",
+                          description: "Please select a file first",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Accepted file types: PDF, DOC, DOCX. This agreement will be sent to Thanks Roger for template creation.
+                </p>
+              </form>
             </div>
 
             {/* List of agreements */}
