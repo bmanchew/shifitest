@@ -53,7 +53,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { MerchantProgram } from "@shared/schema";
-import { Loader2, Plus, Edit, Trash2, Upload, FileText } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Upload, FileText, FileUp } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getCsrfToken, addCsrfHeader } from "@/lib/csrf";
 
@@ -330,10 +330,19 @@ export default function ProgramsManagement() {
   
   // Handle file selection
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("File selection triggered", e.target.files);
+    console.log("File selection triggered");
     
-    if (!e.target.files || !e.target.files[0]) {
-      console.log("No files selected");
+    // Access the file input directly to ensure we get the file
+    const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
+    console.log("File input element:", fileInput);
+    console.log("Files from event:", e.target.files);
+    console.log("Files from DOM:", fileInput?.files);
+    
+    // Try to get files from either source
+    const files = e.target.files || (fileInput ? fileInput.files : null);
+    
+    if (!files || files.length === 0) {
+      console.log("No files selected - empty file list");
       return;
     }
     
@@ -342,14 +351,14 @@ export default function ProgramsManagement() {
       return;
     }
 
-    const file = e.target.files[0];
+    const file = files[0];
     console.log("File selected:", file.name, file.size);
     setSelectedFile(file);
     
     // Display selected file name
     const fileDisplay = document.getElementById("selectedFileDisplay");
     if (fileDisplay) {
-      fileDisplay.textContent = `Selected file: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+      fileDisplay.innerHTML = `<strong>Selected file:</strong> ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
       fileDisplay.className = "text-sm font-medium w-full border p-2 rounded bg-muted";
       console.log("Updated file display");
     } else {
@@ -734,6 +743,11 @@ export default function ProgramsManagement() {
                       accept=".pdf,.doc,.docx"
                       className="hidden"
                       onChange={handleFileSelection}
+                      onClick={(e) => {
+                        console.log("File input clicked directly");
+                        // Clear the file input value to ensure onChange triggers even if selecting the same file
+                        (e.target as HTMLInputElement).value = "";
+                      }}
                     />
                     <Button 
                       type="button"
@@ -781,22 +795,70 @@ export default function ProgramsManagement() {
                       Accepted file types: PDF, DOC, DOCX. This agreement will be sent to Thanks Roger for template creation.
                     </p>
                     <p className="text-xs text-blue-500">
-                      <strong>Tip:</strong> If the file selector isn't working, try clicking directly below:
+                      <strong>Tip:</strong> If the file selector isn't working, try one of these alternative methods:
                     </p>
-                    <label 
-                      htmlFor="agreement-file" 
-                      className="text-xs underline cursor-pointer text-blue-600 hover:text-blue-800"
-                      onClick={() => {
-                        console.log("Direct label click");
-                        const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
-                        if (fileInput) {
-                          fileInput.click();
-                          console.log("Triggered file input click from label");
-                        }
-                      }}
-                    >
-                      Click here to select a file
-                    </label>
+                    <div className="flex flex-col gap-2">
+                      <label 
+                        htmlFor="agreement-file" 
+                        className="text-xs underline cursor-pointer text-blue-600 hover:text-blue-800"
+                        onClick={() => {
+                          console.log("Direct label click");
+                          const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
+                          if (fileInput) {
+                            fileInput.click();
+                            console.log("Triggered file input click from label");
+                          }
+                        }}
+                      >
+                        Method 1: Click here to select a file from your computer
+                      </label>
+                      
+                      <div className="text-xs mt-2">
+                        Method 2: Drop a file directly onto this box
+                        <div 
+                          className="border-2 border-dashed border-blue-400 rounded p-4 mt-1 bg-blue-50 text-center cursor-pointer"
+                          onClick={() => {
+                            const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
+                            if (fileInput) {
+                              fileInput.click();
+                            }
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.currentTarget.classList.add("bg-blue-100");
+                          }}
+                          onDragLeave={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.currentTarget.classList.remove("bg-blue-100");
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.currentTarget.classList.remove("bg-blue-100");
+                            
+                            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                              const file = e.dataTransfer.files[0];
+                              console.log("File dropped:", file.name, file.size);
+                              
+                              // Manually set the file
+                              setSelectedFile(file);
+                              
+                              // Update the display
+                              const fileDisplay = document.getElementById("selectedFileDisplay");
+                              if (fileDisplay) {
+                                fileDisplay.innerHTML = `<strong>Selected file:</strong> ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+                                fileDisplay.className = "text-sm font-medium w-full border p-2 rounded bg-muted";
+                              }
+                            }
+                          }}
+                        >
+                          <FileUp className="h-8 w-8 mx-auto mb-2 text-blue-500" />
+                          Drop PDF or Document Here
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </form>
