@@ -321,15 +321,35 @@ export default function ProgramsManagement() {
     }
 
     const file = e.target.files[0];
+    
+    // Display selected file name
+    const fileDisplay = document.getElementById("selectedFileDisplay");
+    if (fileDisplay) {
+      fileDisplay.textContent = `Selected file: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+      fileDisplay.className = "text-sm font-medium w-full border p-2 rounded bg-muted";
+    }
+    
+    // If this is just a file selection, don't upload yet
+    if (e.target.className !== "hidden") {
+      return;
+    }
+    
     setIsUploading(true);
 
     try {
       await uploadProgramAgreement(selectedProgram.id, file);
       toast({
         title: "Agreement Uploaded",
-        description: "Your agreement has been uploaded successfully",
+        description: "Your agreement has been sent to Thanks Roger for template creation",
       });
       refetchAgreements();
+      
+      // Reset the file display
+      if (fileDisplay) {
+        fileDisplay.textContent = "No file selected";
+        fileDisplay.className = "text-sm text-muted-foreground w-full";
+      }
+      
       // Reset the file input
       e.target.value = "";
     } catch (error) {
@@ -652,49 +672,68 @@ export default function ProgramsManagement() {
             <div className="border rounded-lg p-4">
               <h3 className="font-medium mb-2">Upload New Agreement</h3>
               <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="agreement-file">
-                    Choose file
-                  </Label>
-                  <Input
-                    id="agreement-file"
-                    type="file"
-                    accept=".pdf,.doc,.docx"
-                    onChange={handleFileUpload}
-                    disabled={isUploading}
-                  />
-                  <Button 
-                    type="button"
-                    disabled={isUploading}
-                    onClick={() => {
-                      const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
-                      if (fileInput && fileInput.files && fileInput.files[0]) {
-                        handleFileUpload({ target: { files: fileInput.files } } as React.ChangeEvent<HTMLInputElement>);
-                      } else {
-                        toast({
-                          title: "No file selected",
-                          description: "Please select a file first",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                  >
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload
-                      </>
-                    )}
-                  </Button>
+                <div className="flex flex-col items-start gap-4">
+                  <div className="w-full flex items-center gap-2">
+                    <input
+                      id="agreement-file"
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                    />
+                    <Button 
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        const fileInput = document.getElementById("agreement-file");
+                        if (fileInput) {
+                          fileInput.click();
+                        }
+                      }}
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Select Document
+                    </Button>
+                    <Button 
+                      type="button"
+                      disabled={isUploading}
+                      className="min-w-[120px]"
+                      onClick={() => {
+                        const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
+                        if (fileInput && fileInput.files && fileInput.files[0]) {
+                          handleFileUpload({ target: { files: fileInput.files } } as React.ChangeEvent<HTMLInputElement>);
+                        } else {
+                          toast({
+                            title: "No file selected",
+                            description: "Please select a file first",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-4 w-4" />
+                          Upload
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  
+                  <div id="selectedFileDisplay" className="text-sm text-muted-foreground w-full">
+                    No file selected
+                  </div>
+                  
+                  <p className="text-xs text-muted-foreground">
+                    Accepted file types: PDF, DOC, DOCX. This agreement will be sent to Thanks Roger for template creation.
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Accepted file types: PDF, DOC, DOCX. This agreement will be sent to Thanks Roger for template creation.
-                </p>
               </form>
             </div>
 
