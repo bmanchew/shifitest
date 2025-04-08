@@ -362,7 +362,7 @@ export default function ProgramsManagement() {
       }
       
       if (!selectedProgram) {
-        console.log("⚠️ No program selected");
+        console.log("⚠️ No program selected", { isDialogOpen: isAgreementsDialogOpen });
         toast({
           title: "No program selected",
           description: "Please select a program first",
@@ -376,7 +376,8 @@ export default function ProgramsManagement() {
         name: file.name, 
         size: file.size, 
         type: file.type,
-        lastModified: new Date(file.lastModified).toISOString()
+        lastModified: new Date(file.lastModified).toISOString(), 
+        selectedProgramId: selectedProgram?.id
       });
       
       // Test file readability
@@ -406,84 +407,88 @@ export default function ProgramsManagement() {
       } else {
         console.log("❌ Could not find file display element");
       }
-    } catch (error) {
-      console.error("❌ Error in file selection handler:", error);
-    }
-    
-    // Upload the file directly instead of using handleFileUpload
-    console.log("Directly uploading file after selection");
-    
-    // Get the file from our state
-    const fileToUpload = selectedFile;
-    
-    if (!fileToUpload || !selectedProgram) {
-      console.log("File or program missing before direct upload");
-      return;
-    }
-    
-    setIsUploading(true);
-    
-    try {
-      console.log(`Directly uploading "${fileToUpload.name}" (${fileToUpload.size} bytes, ${fileToUpload.type}) for program ID ${selectedProgram.id}`);
       
-      // Create a new FormData object
-      const formData = new FormData();
+      // IMPORTANT: Upload the file directly using the file we just received
+      // Don't use state variable which might not be updated yet
+      console.log("Directly uploading file after selection");
       
-      // Add the file with the correct field name expected by multer
-      formData.append("file", fileToUpload);
-      
-      // Log what's being sent
-      console.log("FormData content:");
-      for (const pair of formData.entries()) {
-        console.log(`${pair[0]}: ${pair[1] instanceof File ? `File: ${pair[1].name}, ${pair[1].size} bytes, ${pair[1].type}` : pair[1]}`);
+      // Do a second check for program selection
+      if (!selectedProgram) {
+        console.log("⚠️ No program selected for upload - this should not happen");
+        toast({
+          title: "Error",
+          description: "Program selection was lost. Please try again.",
+          variant: "destructive",
+        });
+        return;
       }
       
-      // Get CSRF token for secure submission
-      const token = await getCsrfToken();
-      if (!token) {
-        throw new Error("Could not get CSRF token");
-      }
+      // Use the file from the event, not from state which might not be updated yet
+      console.log("✅ Program selected for upload:", selectedProgram.id, selectedProgram.name);
       
-      console.log("Sending request with CSRF token:", token.substring(0, 5) + '...');
+      setIsUploading(true);
       
-      // Note: Don't set Content-Type header as browser will set it with the boundary
-      const response = await fetch(`/api/merchant/programs/${selectedProgram.id}/agreements`, {
-        method: "POST",
-        headers: {
-          "X-CSRF-Token": token,
-        },
-        body: formData,
-        credentials: "include",
-      });
+      try {
+        console.log(`Directly uploading "${file.name}" (${file.size} bytes, ${file.type}) for program ID ${selectedProgram.id}`);
+        
+        // Create a new FormData object
+        const formData = new FormData();
+        
+        // Add the file with the correct field name expected by multer
+        formData.append("file", file);
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to upload agreement");
-      }
-      
-      console.log("Upload successful");
-      
-      toast({
-        title: "Agreement Uploaded",
-        description: "Your agreement has been sent to Thanks Roger for template creation",
-      });
-      refetchAgreements();
-      
-      // Reset the file selection
-      setSelectedFile(null);
-      
-      // Reset the file display
-      const fileDisplay = document.getElementById("selectedFileDisplay");
-      if (fileDisplay) {
-        fileDisplay.textContent = "No file selected";
-        fileDisplay.className = "text-sm text-muted-foreground w-full";
-      }
-      
-      // Reset the file input
-      const agreementFileInput = document.getElementById("agreement-file") as HTMLInputElement;
-      if (agreementFileInput) {
-        agreementFileInput.value = "";
-      }
+        // Log what's being sent
+        console.log("FormData content:");
+        for (const pair of formData.entries()) {
+          console.log(`${pair[0]}: ${pair[1] instanceof File ? `File: ${pair[1].name}, ${pair[1].size} bytes, ${pair[1].type}` : pair[1]}`);
+        }
+        
+        // Get CSRF token for secure submission
+        const token = await getCsrfToken();
+        if (!token) {
+          throw new Error("Could not get CSRF token");
+        }
+        
+        console.log("Sending request with CSRF token:", token.substring(0, 5) + '...');
+        
+        // Note: Don't set Content-Type header as browser will set it with the boundary
+        const response = await fetch(`/api/merchant/programs/${selectedProgram.id}/agreements`, {
+          method: "POST",
+          headers: {
+            "X-CSRF-Token": token,
+          },
+          body: formData,
+          credentials: "include",
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || "Failed to upload agreement");
+        }
+        
+        console.log("Upload successful");
+        
+        toast({
+          title: "Agreement Uploaded",
+          description: "Your agreement has been sent to Thanks Roger for template creation",
+        });
+        refetchAgreements();
+        
+        // Reset the file selection
+        setSelectedFile(null);
+        
+        // Reset the file display
+        const fileDisplay = document.getElementById("selectedFileDisplay");
+        if (fileDisplay) {
+          fileDisplay.textContent = "No file selected";
+          fileDisplay.className = "text-sm text-muted-foreground w-full";
+        }
+        
+        // Reset the file input
+        const agreementFileInput = document.getElementById("agreement-file") as HTMLInputElement;
+        if (agreementFileInput) {
+          agreementFileInput.value = "";
+        }
     } catch (error) {
       console.error("Direct upload failed:", error);
       toast({
