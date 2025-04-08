@@ -16,6 +16,7 @@ import merchantReportsRouter from "./merchant-reports";
 import dueDiligenceRouter from "./due-diligence";
 import plaidUnderwritingRouter from "./plaid-underwriting";
 import plaidRouter from "./plaid";
+import cancelCoveredCareContractRouter from "./cancel-coveredcare-contract";
 
 const router = express.Router();
 
@@ -47,6 +48,7 @@ router.use("/merchant-reports", merchantReportsRouter);
 router.use("/due-diligence", dueDiligenceRouter);
 router.use("/plaid-underwriting", plaidUnderwritingRouter);
 router.use("/plaid", plaidRouter);
+router.use("/cancel-coveredcare-contract", cancelCoveredCareContractRouter);
 
 // Merchant Performance routes
 router.get("/merchant-performances", getAllMerchantPerformances);

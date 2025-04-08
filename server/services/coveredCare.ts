@@ -544,6 +544,165 @@ export class CoveredCareService {
   }
 
   /**
+   * Get contract details from CoveredCare settlement data
+   * @param loanNumber The loan number or reference ID from CoveredCare
+   * @param providerGuid The provider GUID associated with the merchant
+   * @param branchGuid The branch location GUID
+   * @param startDate Optional start date for settlement query (defaults to 30 days ago)
+   * @param endDate Optional end date for settlement query (defaults to today)
+   * @returns Contract details from CoveredCare settlement data
+   */
+  async getContractDetailsFromSettlement(
+    loanNumber: string,
+    providerGuid: string,
+    branchGuid: string,
+    startDate?: string,
+    endDate?: string
+  ) {
+    try {
+      // If in development mode, return simulated data
+      if (this.developmentMode) {
+        logger.info({
+          message: "Simulating contract details from CoveredCare settlement (development mode)",
+          category: "api",
+          source: "internal",
+          metadata: {
+            loanNumber,
+            providerGuid,
+            branchGuid,
+            developmentMode: true
+          }
+        });
+        
+        // Return a simulated successful response with contract details
+        return {
+          success: true,
+          loanNumber,
+          status: "Active",
+          amount: 5000,
+          interestRate: 9.99,
+          term: 36,
+          monthlyPayment: 156.07,
+          providerGuid,
+          branchGuid,
+          settlementDate: new Date().toISOString(),
+          loanDetails: {
+            loanNumber,
+            accountNumber: `ACC-${Math.floor(Math.random() * 100000)}`,
+            providerName: "Test Provider",
+            branchName: "Test Branch",
+            loanType: "Installment",
+            originalAmount: 5000,
+            currentBalance: 4900,
+            paymentAmount: 156.07,
+            nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            loanStartDate: new Date().toISOString(),
+            loanEndDate: new Date(Date.now() + 36 * 30 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        };
+      }
+      
+      // Regular API flow when not in development mode
+      if (!this.isInitialized()) {
+        throw new Error("CoveredCare service not initialized");
+      }
+
+      // Set default date range if not provided (last 30 days)
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      
+      const formattedStartDate = startDate || `${thirtyDaysAgo.getMonth() + 1}/${thirtyDaysAgo.getDate()}/${thirtyDaysAgo.getFullYear()}`;
+      const formattedEndDate = endDate || `${today.getMonth() + 1}/${today.getDate()}/${today.getFullYear()}`;
+
+      // First, get settlement details to find loan information
+      logger.info({
+        message: "Getting settlement details from CoveredCare for contract",
+        category: "api",
+        source: "internal",
+        metadata: {
+          loanNumber,
+          providerGuid,
+          branchGuid,
+          startDate: formattedStartDate,
+          endDate: formattedEndDate
+        }
+      });
+
+      const response = await axios({
+        method: "post",
+        url: `${this.apiBaseUrl}/Aggregator/settlement-detail`,
+        headers: this.getHeaders(),
+        data: {
+          providerGUID: providerGuid,
+          branchLocationGUID: branchGuid,
+          startDate: formattedStartDate,
+          endDate: formattedEndDate
+        }
+      });
+
+      if (!response.data || !response.data.settlements) {
+        throw new Error("No settlement data returned from CoveredCare");
+      }
+
+      // Find the loan in the settlement data
+      const settlements = response.data.settlements || [];
+      let loanDetails = null;
+      
+      // Search through settlements for the matching loan number
+      for (const settlement of settlements) {
+        const details = settlement.details || [];
+        const matchingLoan = details.find((detail: any) => detail.loanNumber === loanNumber);
+        
+        if (matchingLoan) {
+          loanDetails = matchingLoan;
+          break;
+        }
+      }
+
+      if (!loanDetails) {
+        throw new Error(`Loan number ${loanNumber} not found in settlement data`);
+      }
+
+      logger.info({
+        message: "Found loan details in CoveredCare settlement data",
+        category: "api",
+        source: "internal",
+        metadata: {
+          loanNumber,
+          status: response.status
+        }
+      });
+
+      // Format and return the contract details
+      return {
+        success: true,
+        loanNumber,
+        status: loanDetails.status || "Active",
+        amount: parseFloat(loanDetails.loanAmount || 0),
+        interestRate: parseFloat(loanDetails.interestRate || 0),
+        term: parseInt(loanDetails.term || 0, 10),
+        monthlyPayment: parseFloat(loanDetails.paymentAmount || 0),
+        providerGuid,
+        branchGuid,
+        settlementDate: loanDetails.settlementDate,
+        loanDetails
+      };
+    } catch (error) {
+      logger.error({
+        message: `Error getting contract details from CoveredCare settlement: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.stack : null,
+          loanNumber
+        }
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Add bank account to an existing location
    * @param providerGuid The provider GUID
    * @param branchGuid The branch GUID

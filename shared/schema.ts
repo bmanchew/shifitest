@@ -266,6 +266,11 @@ export const contracts = pgTable("contracts", {
   completedAt: timestamp("completed_at"),
   phoneNumber: text("phone_number"), // Store customer phone number directly in contract
   
+  // Funding source fields
+  fundingSource: text("funding_source"), // The funding source (ShiFi, CoveredCare, etc.)
+  fundingSourceData: json("funding_source_data").$type<Record<string, any>>(), // JSON data specific to the funding source
+  fundingSourceReferenceId: text("funding_source_reference_id"), // External reference ID (loan number, etc.)
+  
   // Cancellation fields
   cancellationRequestedAt: timestamp("cancellation_requested_at"), // When the merchant requested cancellation
   cancellationReason: text("cancellation_reason"), // Reason provided by merchant
