@@ -84,13 +84,16 @@ type ProgramFormValues = z.infer<typeof programFormSchema>;
  */
 const uploadProgramAgreement = async (programId: number, file: File) => {
   const formData = new FormData();
-  formData.append("agreement", file); // Use "agreement" as the field name
+  formData.append("file", file); // Use "file" to match server expectation
   
   // Get CSRF token for secure submission
   const token = await getCsrfToken();
   if (!token) {
     throw new Error("Could not get CSRF token");
   }
+  
+  console.log("Uploading file with programId:", programId);
+  console.log("File details:", file.name, file.size, file.type);
   
   const response = await fetch(`/api/merchant/programs/${programId}/agreements`, {
     method: "POST",
@@ -327,11 +330,20 @@ export default function ProgramsManagement() {
   
   // Handle file selection
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0] || !selectedProgram) {
+    console.log("File selection triggered", e.target.files);
+    
+    if (!e.target.files || !e.target.files[0]) {
+      console.log("No files selected");
+      return;
+    }
+    
+    if (!selectedProgram) {
+      console.log("No program selected");
       return;
     }
 
     const file = e.target.files[0];
+    console.log("File selected:", file.name, file.size);
     setSelectedFile(file);
     
     // Display selected file name
@@ -339,12 +351,20 @@ export default function ProgramsManagement() {
     if (fileDisplay) {
       fileDisplay.textContent = `Selected file: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
       fileDisplay.className = "text-sm font-medium w-full border p-2 rounded bg-muted";
+      console.log("Updated file display");
+    } else {
+      console.log("Could not find file display element");
     }
   };
   
   // Handle file upload for a program
   const handleFileUpload = async () => {
+    console.log("Upload button clicked");
+    console.log("Selected file:", selectedFile);
+    console.log("Selected program:", selectedProgram);
+    
     if (!selectedFile || !selectedProgram) {
+      console.log("Missing file or program");
       toast({
         title: "No file selected",
         description: "Please select a file first",
@@ -353,10 +373,14 @@ export default function ProgramsManagement() {
       return;
     }
     
+    console.log("Starting upload process");
     setIsUploading(true);
 
     try {
+      console.log(`Uploading "${selectedFile.name}" for program ID ${selectedProgram.id}`);
       await uploadProgramAgreement(selectedProgram.id, selectedFile);
+      console.log("Upload successful");
+      
       toast({
         title: "Agreement Uploaded",
         description: "Your agreement has been sent to Thanks Roger for template creation",
@@ -371,14 +395,17 @@ export default function ProgramsManagement() {
       if (fileDisplay) {
         fileDisplay.textContent = "No file selected";
         fileDisplay.className = "text-sm text-muted-foreground w-full";
+        console.log("Reset file display");
       }
       
       // Reset the file input
       const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
       if (fileInput) {
         fileInput.value = "";
+        console.log("Reset file input");
       }
     } catch (error) {
+      console.error("Upload failed:", error);
       toast({
         title: "Error",
         description: `Failed to upload agreement: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -386,6 +413,7 @@ export default function ProgramsManagement() {
       });
     } finally {
       setIsUploading(false);
+      console.log("Upload process complete");
     }
   };
 
@@ -741,13 +769,35 @@ export default function ProgramsManagement() {
                     </Button>
                   </div>
                   
-                  <div id="selectedFileDisplay" className="text-sm text-muted-foreground w-full">
+                  <div 
+                    id="selectedFileDisplay" 
+                    className="text-sm text-muted-foreground w-full p-2 border border-dashed rounded-md"
+                  >
                     No file selected
                   </div>
                   
-                  <p className="text-xs text-muted-foreground">
-                    Accepted file types: PDF, DOC, DOCX. This agreement will be sent to Thanks Roger for template creation.
-                  </p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs text-muted-foreground">
+                      Accepted file types: PDF, DOC, DOCX. This agreement will be sent to Thanks Roger for template creation.
+                    </p>
+                    <p className="text-xs text-blue-500">
+                      <strong>Tip:</strong> If the file selector isn't working, try clicking directly below:
+                    </p>
+                    <label 
+                      htmlFor="agreement-file" 
+                      className="text-xs underline cursor-pointer text-blue-600 hover:text-blue-800"
+                      onClick={() => {
+                        console.log("Direct label click");
+                        const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
+                        if (fileInput) {
+                          fileInput.click();
+                          console.log("Triggered file input click from label");
+                        }
+                      }}
+                    >
+                      Click here to select a file
+                    </label>
+                  </div>
                 </div>
               </form>
             </div>
