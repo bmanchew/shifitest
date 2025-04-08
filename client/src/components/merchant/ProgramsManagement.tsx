@@ -877,183 +877,69 @@ export default function ProgramsManagement() {
             {/* Upload new agreement */}
             <div className="border rounded-lg p-4">
               <h3 className="font-medium mb-2">Upload New Agreement</h3>
-              <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
-                <div className="flex flex-col items-start gap-4">
-                  <div className="w-full flex items-center gap-2">
-                    <input
-                      id="agreement-file"
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      className="hidden"
-                      onChange={handleFileSelection}
-                      onClick={(e) => {
-                        console.log("File input clicked directly");
-                        // Clear the file input value to ensure onChange triggers even if selecting the same file
-                        (e.target as HTMLInputElement).value = "";
-                      }}
-                    />
-                    <Button 
-                      type="button"
-                      disabled={isUploading}
-                      className="flex-1"
-                      onClick={() => {
-                        // Directly trigger the file selector when clicking "Upload"
-                        const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
-                        if (fileInput) {
-                          fileInput.click();
-                        }
-                      }}
-                    >
-                      <Upload className="mr-2 h-4 w-4" />
-                      Select & Upload File
-                    </Button>
-                  </div>
-                  
-                  <div 
-                    id="selectedFileDisplay" 
-                    className="text-sm text-muted-foreground w-full p-2 border border-dashed rounded-md"
-                  >
-                    No file selected
-                  </div>
-                  
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs text-muted-foreground">
-                      Accepted file types: PDF, DOC, DOCX. This agreement will be sent to Thanks Roger for template creation.
-                    </p>
-                    <p className="text-xs text-blue-500">
-                      <strong>Tip:</strong> If the file selector isn't working, try one of these alternative methods:
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      <label 
-                        htmlFor="agreement-file" 
-                        className="text-xs underline cursor-pointer text-blue-600 hover:text-blue-800"
-                        onClick={() => {
-                          console.log("Direct label click");
-                          const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
-                          if (fileInput) {
-                            fileInput.click();
-                            console.log("Triggered file input click from label");
-                          }
-                        }}
-                      >
-                        Method 1: Click here to select a file from your computer
-                      </label>
+              <div className="space-y-4">
+                <div className="flex flex-col items-center gap-4">
+                  <input
+                    id="agreement-file"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    className="hidden"
+                    onChange={(e) => {
+                      // Handle file selection
+                      handleFileSelection(e);
                       
-                      <div className="text-xs mt-2">
-                        Method 2: Drop a file directly onto this box
-                        <div 
-                          className="border-2 border-dashed border-blue-400 rounded p-4 mt-1 bg-blue-50 text-center cursor-pointer"
-                          onClick={() => {
-                            const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
-                            if (fileInput) {
-                              fileInput.click();
-                            }
-                          }}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.currentTarget.classList.add("bg-blue-100");
-                          }}
-                          onDragLeave={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.currentTarget.classList.remove("bg-blue-100");
-                          }}
-                          onDrop={async (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.currentTarget.classList.remove("bg-blue-100");
-                            
-                            if (!selectedProgram) {
-                              toast({
-                                title: "No program selected",
-                                description: "Please select a program first",
-                                variant: "destructive",
-                              });
-                              return;
-                            }
-                            
-                            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                              const file = e.dataTransfer.files[0];
-                              console.log("File dropped:", file.name, file.size);
-                              
-                              // Manually set the file
-                              setSelectedFile(file);
-                              
-                              // Update the display
-                              const fileDisplay = document.getElementById("selectedFileDisplay");
-                              if (fileDisplay) {
-                                fileDisplay.innerHTML = `<strong>Selected file:</strong> ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
-                                fileDisplay.className = "text-sm font-medium w-full border p-2 rounded bg-muted";
-                              }
-                              
-                              // Directly upload the file
-                              setIsUploading(true);
-                              
-                              try {
-                                console.log(`Directly uploading dropped file "${file.name}" for program ID ${selectedProgram.id}`);
-                                
-                                const formData = new FormData();
-                                formData.append("file", file);
-                                
-                                // Get CSRF token for secure submission
-                                const token = await getCsrfToken();
-                                if (!token) {
-                                  throw new Error("Could not get CSRF token");
-                                }
-                                
-                                const response = await fetch(`/api/merchant/programs/${selectedProgram.id}/agreements`, {
-                                  method: "POST",
-                                  headers: {
-                                    "X-CSRF-Token": token,
-                                  },
-                                  body: formData,
-                                  credentials: "include",
-                                });
-                                
-                                if (!response.ok) {
-                                  const errorData = await response.json().catch(() => ({}));
-                                  throw new Error(errorData.message || "Failed to upload agreement");
-                                }
-                                
-                                console.log("Dropped file upload successful");
-                                
-                                toast({
-                                  title: "Agreement Uploaded",
-                                  description: "Your agreement has been sent to Thanks Roger for template creation",
-                                });
-                                refetchAgreements();
-                                
-                                // Reset the file selection
-                                setSelectedFile(null);
-                                
-                                // Reset the file display
-                                const fileDisplay = document.getElementById("selectedFileDisplay");
-                                if (fileDisplay) {
-                                  fileDisplay.textContent = "No file selected";
-                                  fileDisplay.className = "text-sm text-muted-foreground w-full";
-                                }
-                              } catch (error) {
-                                console.error("Dropped file upload failed:", error);
-                                toast({
-                                  title: "Error",
-                                  description: `Failed to upload agreement: ${error instanceof Error ? error.message : "Unknown error"}`,
-                                  variant: "destructive",
-                                });
-                              } finally {
-                                setIsUploading(false);
-                              }
-                            }
-                          }}
-                        >
-                          <FileUp className="h-8 w-8 mx-auto mb-2 text-blue-500" />
-                          Drop PDF or Document Here
-                        </div>
+                      // Automatically upload when file is selected
+                      if (e.target.files && e.target.files.length > 0) {
+                        setTimeout(() => {
+                          handleFileUpload();
+                        }, 100);
+                      }
+                    }}
+                  />
+                  
+                  {/* Single clear upload button */}
+                  <Button 
+                    type="button"
+                    disabled={isUploading}
+                    className="w-full h-16 text-lg"
+                    onClick={() => {
+                      const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
+                      if (fileInput) {
+                        fileInput.click();
+                      }
+                    }}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-5 w-5" />
+                        Select & Upload Agreement
+                      </>
+                    )}
+                  </Button>
+                  
+                  {/* File information display */}
+                  {selectedFile && (
+                    <div className="w-full p-3 border rounded-md bg-muted flex items-center space-x-2">
+                      <FileText className="h-5 w-5 text-primary" />
+                      <div className="flex-1">
+                        <p className="font-medium">{selectedFile.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(selectedFile.size / 1024).toFixed(2)} KB • {selectedFile.type || 'Unknown type'}
+                        </p>
                       </div>
                     </div>
-                  </div>
+                  )}
+                  
+                  <p className="text-sm text-muted-foreground text-center">
+                    Accepted files: PDF, DOC, DOCX. This agreement will be sent to Thanks Roger for template creation.
+                  </p>
                 </div>
-              </form>
+              </div>
             </div>
 
             {/* List of agreements */}
