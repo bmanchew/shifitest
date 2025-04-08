@@ -104,7 +104,16 @@ router.get('/test-thanksroger', async (req, res) => {
     
     // 2. If there's a template ID, fetch the template details from Thanks Roger
     if (agreement.externalTemplateId) {
-      console.log(`Fetching template details for ID: ${agreement.externalTemplateId}`);
+      logger.info({
+        message: `Fetching template details for ID: ${agreement.externalTemplateId}`,
+        userId: req.user?.id,
+        category: 'api',
+        source: 'internal',
+        metadata: {
+          templateId: agreement.externalTemplateId,
+          apiKeyPresent: !!thanksRogerApiKey
+        }
+      });
       
       try {
         const response = await fetch(
@@ -113,7 +122,8 @@ router.get('/test-thanksroger', async (req, res) => {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${thanksRogerApiKey}`,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
             }
           }
         );
@@ -132,8 +142,19 @@ router.get('/test-thanksroger', async (req, res) => {
           templateDetails
         });
       } catch (err) {
-        console.error('Error fetching template details:', err);
-        return res.json({
+        logger.error({
+          message: `Error fetching Thanks Roger template details: ${err instanceof Error ? err.message : String(err)}`,
+          userId: req.user?.id,
+          category: 'api',
+          source: 'internal',
+          metadata: {
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+            templateId: agreement.externalTemplateId
+          }
+        });
+        
+        return res.status(500).json({
           success: false,
           message: `Error fetching template details: ${err instanceof Error ? err.message : String(err)}`,
           agreement: agreementDetails
@@ -171,13 +192,26 @@ router.get('/test-thanksroger', async (req, res) => {
         const fileBase64 = fileBuffer.toString('base64');
         
         // Create a new template in Thanks Roger
+        logger.info({
+          message: 'Attempting to reach Thanks Roger API',
+          userId: req.user?.id,
+          category: 'api',
+          source: 'internal',
+          metadata: {
+            url: 'https://api.thanksroger.com/v1/templates',
+            apiKeyPresent: !!thanksRogerApiKey,
+            documentSize: fileBase64.length
+          }
+        });
+        
         const response = await fetch(
           'https://api.thanksroger.com/v1/templates',
           {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${thanksRogerApiKey}`,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
             },
             body: JSON.stringify({
               name: `${program.name || 'Program'} Agreement - ${new Date().toISOString().split('T')[0]}`,

@@ -52,7 +52,7 @@ router.use("/due-diligence", dueDiligenceRouter);
 router.use("/plaid-underwriting", plaidUnderwritingRouter);
 router.use("/plaid", plaidRouter);
 router.use("/cancel-coveredcare-contract", cancelCoveredCareContractRouter);
-router.use("/thanksroger", thanksRogerTestRouter);
+router.use("/thanksroger-test", thanksRogerTestRouter);
 router.use("/thanksroger", thanksRogerRouter);
 // Import the Plaid Settings routes but mount them directly
 import { getPlaidSettings, updatePlaidSettings } from "./merchant-plaid-settings";

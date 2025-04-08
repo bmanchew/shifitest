@@ -3,8 +3,96 @@ import { logger } from "../../services/logger";
 import { storage } from "../../storage";
 import { db } from "../../db";
 import { merchantProgramAgreements } from "@shared/schema";
+import { testConnectivity } from "./connectivity-test";
 
 const router = Router();
+
+// Route to check basic connectivity to Thanks Roger API - public for testing purposes
+router.get("/connectivity-check-public", async (req: Request, res: Response) => {
+  try {
+    logger.info({
+      message: "Testing Thanks Roger API connectivity",
+      userId: req.user?.id,
+      category: "api",
+      source: "internal"
+    });
+    
+    const thanksRogerBaseUrl = "https://api.thanksroger.com";
+    const thanksRogerApiKey = process.env.THANKS_ROGER_API_KEY;
+    
+    // Basic connectivity check (without auth)
+    const baseConnectivity = await testConnectivity(thanksRogerBaseUrl);
+    
+    // Test connectivity with auth if API key is available
+    let authConnectivity = null;
+    let authConnectivityHeadOnly = null;
+    
+    if (thanksRogerApiKey) {
+      // Use a different approach for auth check with headers
+      try {
+        logger.info({
+          message: "Testing authenticated connection with API key",
+          userId: req.user?.id,
+          category: "api",
+          source: "internal"
+        });
+        
+        const response = await fetch(`${thanksRogerBaseUrl}/v1/templates`, {
+          method: 'HEAD',
+          headers: {
+            'Authorization': `Bearer ${thanksRogerApiKey}`,
+            'Accept': 'application/json'
+          }
+        });
+        
+        authConnectivityHeadOnly = {
+          success: response.ok,
+          message: `Auth connection with HEAD method: ${response.status} ${response.statusText}`,
+          details: {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries([...response.headers.entries()])
+          }
+        };
+      } catch (error) {
+        authConnectivityHeadOnly = {
+          success: false,
+          message: `Auth connection failed with HEAD method: ${error instanceof Error ? error.message : String(error)}`,
+          details: {
+            error: error instanceof Error ? error.message : String(error)
+          }
+        };
+      }
+      
+      // Also do the simpler connectivity test
+      authConnectivity = await testConnectivity(`${thanksRogerBaseUrl}/v1/templates`);
+    }
+    
+    return res.json({
+      success: baseConnectivity.success,
+      message: baseConnectivity.message,
+      baseConnectivity,
+      authConnectivity,
+      authConnectivityHeadOnly, 
+      apiKeyPresent: !!thanksRogerApiKey
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error testing connectivity: ${error instanceof Error ? error.message : String(error)}`,
+      userId: req.user?.id,
+      category: "api",
+      source: "internal",
+      metadata: {
+        error: error instanceof Error ? error.message : String(error)
+      }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: `Error testing connectivity: ${error instanceof Error ? error.message : String(error)}`
+    });
+  }
+});
 
 // This route is only available to admin users for testing the Thanks Roger API integration
 router.get("/test-thanksroger", async (req: Request, res: Response) => {
