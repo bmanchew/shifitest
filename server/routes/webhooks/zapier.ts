@@ -3,7 +3,7 @@
  */
 import { Request, Response, Router } from 'express';
 import { z } from 'zod';
-import { logger } from '../../utils/logger';
+import { logger, LogSource } from '../../utils/logger';
 import { zapierService, ZapierContractStatusUpdate } from '../../services/zapier';
 
 const router = Router();
@@ -34,7 +34,7 @@ router.post('/contract-update', async (req: Request, res: Response) => {
       logger.error({
         message: 'Invalid webhook data received from Zapier',
         category: 'integration',
-        source: 'webhook',
+        source: 'webhook' as LogSource,
         metadata: {
           errors: validationResult.error.format(),
           body: req.body
@@ -63,7 +63,7 @@ router.post('/contract-update', async (req: Request, res: Response) => {
       logger.info({
         message: `Successfully processed contract update from Zapier: ${webhookData.contractNumber}`,
         category: 'integration',
-        source: 'webhook',
+        source: 'webhook' as LogSource,
         metadata: {
           contractId: webhookData.contractId,
           contractNumber: webhookData.contractNumber,
@@ -80,7 +80,7 @@ router.post('/contract-update', async (req: Request, res: Response) => {
       logger.error({
         message: `Failed to process contract update from Zapier: ${webhookData.contractNumber}`,
         category: 'integration',
-        source: 'webhook',
+        source: 'webhook' as LogSource,
         metadata: {
           contractId: webhookData.contractId,
           contractNumber: webhookData.contractNumber,
@@ -99,7 +99,7 @@ router.post('/contract-update', async (req: Request, res: Response) => {
     logger.error({
       message: `Error processing webhook from Zapier: ${errorMessage}`,
       category: 'integration',
-      source: 'webhook',
+      source: 'webhook' as LogSource,
       metadata: {
         error: errorMessage,
         body: req.body
@@ -121,7 +121,7 @@ router.post('/test', (req: Request, res: Response) => {
   logger.info({
     message: 'Received test webhook from Zapier',
     category: 'integration',
-    source: 'webhook',
+    source: 'webhook' as LogSource,
     metadata: {
       body: req.body,
       headers: req.headers,

@@ -7,7 +7,7 @@ import { db } from '../../db';
 import { merchants } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { zapierService } from '../../services/zapier';
-import { logger } from '../../utils/logger';
+import { logger, LogSource } from '../../utils/logger';
 
 const router = Router();
 
@@ -55,7 +55,7 @@ router.get('/:merchantId', async (req: Request, res: Response) => {
     logger.error({
       message: `Error getting merchant Zapier settings: ${errorMessage}`,
       category: 'api',
-      source: 'internal',
+      source: 'internal' as LogSource,
       metadata: {
         merchantId: req.params.merchantId,
         error: errorMessage
@@ -131,7 +131,7 @@ router.patch('/:merchantId', async (req: Request, res: Response) => {
     logger.info({
       message: `Updated Zapier integration settings for merchant ${merchantId}`,
       category: 'integration',
-      source: 'zapier',
+      source: 'zapier' as LogSource,
       metadata: {
         merchantId,
         enabled: updatedMerchant.zapierIntegrationEnabled
@@ -151,7 +151,7 @@ router.patch('/:merchantId', async (req: Request, res: Response) => {
     logger.error({
       message: `Error updating merchant Zapier settings: ${errorMessage}`,
       category: 'api',
-      source: 'internal',
+      source: 'internal' as LogSource,
       metadata: {
         merchantId: req.params.merchantId,
         error: errorMessage
@@ -224,7 +224,7 @@ router.post('/:merchantId/test', async (req: Request, res: Response) => {
       logger.info({
         message: `Test payload sent successfully to Zapier for merchant ${merchantId}`,
         category: 'integration',
-        source: 'zapier',
+        source: 'zapier' as LogSource,
         metadata: {
           merchantId,
           webhookUrl: '(URL redacted)'
@@ -239,7 +239,7 @@ router.post('/:merchantId/test', async (req: Request, res: Response) => {
       logger.error({
         message: `Failed to send test payload to Zapier for merchant ${merchantId}`,
         category: 'integration',
-        source: 'zapier',
+        source: 'zapier' as LogSource,
         metadata: {
           merchantId,
           webhookUrl: '(URL redacted)'
@@ -257,7 +257,7 @@ router.post('/:merchantId/test', async (req: Request, res: Response) => {
     logger.error({
       message: `Error testing Zapier integration: ${errorMessage}`,
       category: 'integration',
-      source: 'zapier',
+      source: 'zapier' as LogSource,
       metadata: {
         merchantId: req.params.merchantId,
         error: errorMessage

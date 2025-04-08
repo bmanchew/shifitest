@@ -25,13 +25,16 @@ import intercomRouter from './intercom';
 import intercomChatRouter from './intercom-chat';
 import merchantZapierSettingsRoutes from './admin/merchant-zapier-settings';
 import zapierWebhookRoutes from './webhooks/zapier';
-import { apiRateLimiter, authRateLimiter, userCreationRateLimiter } from '../middleware/authRateLimiter';
+import { createRateLimiter, loginRateLimiter, passwordResetRateLimiter, registrationRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
 import { testConnectivity } from './admin/connectivity-test';
 
 // Create main router for modular routes
 const modulesRouter = express.Router();
+
+// Create API rate limiter (10 requests per second)
+const apiRateLimiter = createRateLimiter(10, 1000, 'Too many API requests. Please try again in a moment.');
 
 // Apply API rate limiting to all API routes
 modulesRouter.use('/api', apiRateLimiter);

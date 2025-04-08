@@ -100,7 +100,7 @@ class ZapierService {
         logger.info({
           message: `Successfully sent application data to Zapier: ${data.contractNumber}`,
           category: 'integration',
-          source: 'zapier',
+          source: 'zapier' as LogSource,
           metadata: {
             contractId: data.contractId,
             contractNumber: data.contractNumber,
@@ -115,7 +115,7 @@ class ZapierService {
         logger.error({
           message: `Failed to send application data to Zapier: ${data.contractNumber}`,
           category: 'integration',
-          source: 'zapier',
+          source: 'zapier' as LogSource,
           metadata: {
             contractId: data.contractId,
             contractNumber: data.contractNumber,
@@ -133,7 +133,7 @@ class ZapierService {
       logger.error({
         message: `Error sending application data to Zapier: ${errorMessage}`,
         category: 'integration',
-        source: 'zapier',
+        source: 'zapier' as LogSource,
         metadata: {
           contractId: data.contractId,
           contractNumber: data.contractNumber,
@@ -162,7 +162,7 @@ class ZapierService {
         logger.error({
           message: `Contract not found for Zapier update: ${updateData.contractNumber}`,
           category: 'integration',
-          source: 'zapier',
+          source: 'zapier' as LogSource,
           metadata: {
             contractId: updateData.contractId,
             contractNumber: updateData.contractNumber
@@ -177,7 +177,7 @@ class ZapierService {
         logger.error({
           message: `Contract number mismatch in Zapier update: ${updateData.contractNumber}`,
           category: 'security',
-          source: 'zapier',
+          source: 'zapier' as LogSource,
           metadata: {
             contractId: updateData.contractId,
             providedContractNumber: updateData.contractNumber,
@@ -246,7 +246,7 @@ class ZapierService {
                   step: updateData.applicationProgress.step as any, // Casting needed due to enum type
                   completed: updateData.applicationProgress.completed || false,
                   data: JSON.stringify({
-                    source: 'zapier',
+                    source: 'zapier' as LogSource,
                     timestamp: new Date().toISOString(),
                     notes: updateData.notes || 'Updated via Zapier webhook'
                   })
@@ -258,7 +258,7 @@ class ZapierService {
               logger.error({
                 message: `Failed to update application progress: ${errorMessage}`,
                 category: 'integration',
-                source: 'zapier',
+                source: 'zapier' as LogSource,
                 metadata: {
                   contractId: updateData.contractId,
                   step: updateData.applicationProgress.step,
@@ -279,7 +279,7 @@ class ZapierService {
         logger.info({
           message: `Updated contract ${updateData.contractNumber} via Zapier webhook`,
           category: 'integration',
-          source: 'zapier',
+          source: 'zapier' as LogSource,
           metadata: {
             contractId: updateData.contractId,
             contractNumber: updateData.contractNumber,
@@ -297,7 +297,7 @@ class ZapierService {
       logger.error({
         message: `Error updating contract status from Zapier: ${errorMessage}`,
         category: 'integration',
-        source: 'zapier',
+        source: 'zapier' as LogSource,
         metadata: {
           contractId: updateData.contractId,
           contractNumber: updateData.contractNumber,
