@@ -78,12 +78,19 @@ const programFormSchema = z.object({
 type ProgramFormValues = z.infer<typeof programFormSchema>;
 
 // Function to upload program agreement
+/**
+ * Upload a program agreement file to the server
+ * This function handles the file upload and creation of a Thanks Roger template
+ */
 const uploadProgramAgreement = async (programId: number, file: File) => {
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("agreement", file); // Use "agreement" as the field name
   
-  // Get CSRF token
+  // Get CSRF token for secure submission
   const token = await getCsrfToken();
+  if (!token) {
+    throw new Error("Could not get CSRF token");
+  }
   
   const response = await fetch(`/api/merchant/programs/${programId}/agreements`, {
     method: "POST",
@@ -95,7 +102,8 @@ const uploadProgramAgreement = async (programId: number, file: File) => {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to upload agreement");
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || "Failed to upload agreement");
   }
 
   return response.json();
@@ -314,13 +322,17 @@ export default function ProgramsManagement() {
     }
   };
 
-  // Handle file upload for a program
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File selection state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  // Handle file selection
+  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0] || !selectedProgram) {
       return;
     }
 
     const file = e.target.files[0];
+    setSelectedFile(file);
     
     // Display selected file name
     const fileDisplay = document.getElementById("selectedFileDisplay");
@@ -328,30 +340,44 @@ export default function ProgramsManagement() {
       fileDisplay.textContent = `Selected file: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
       fileDisplay.className = "text-sm font-medium w-full border p-2 rounded bg-muted";
     }
-    
-    // If this is just a file selection, don't upload yet
-    if (e.target.className !== "hidden") {
+  };
+  
+  // Handle file upload for a program
+  const handleFileUpload = async () => {
+    if (!selectedFile || !selectedProgram) {
+      toast({
+        title: "No file selected",
+        description: "Please select a file first",
+        variant: "destructive",
+      });
       return;
     }
     
     setIsUploading(true);
 
     try {
-      await uploadProgramAgreement(selectedProgram.id, file);
+      await uploadProgramAgreement(selectedProgram.id, selectedFile);
       toast({
         title: "Agreement Uploaded",
         description: "Your agreement has been sent to Thanks Roger for template creation",
       });
       refetchAgreements();
       
+      // Reset the file selection
+      setSelectedFile(null);
+      
       // Reset the file display
+      const fileDisplay = document.getElementById("selectedFileDisplay");
       if (fileDisplay) {
         fileDisplay.textContent = "No file selected";
         fileDisplay.className = "text-sm text-muted-foreground w-full";
       }
       
       // Reset the file input
-      e.target.value = "";
+      const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = "";
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -679,7 +705,7 @@ export default function ProgramsManagement() {
                       type="file"
                       accept=".pdf,.doc,.docx"
                       className="hidden"
-                      onChange={handleFileUpload}
+                      onChange={handleFileSelection}
                     />
                     <Button 
                       type="button"
@@ -699,18 +725,7 @@ export default function ProgramsManagement() {
                       type="button"
                       disabled={isUploading}
                       className="min-w-[120px]"
-                      onClick={() => {
-                        const fileInput = document.getElementById("agreement-file") as HTMLInputElement;
-                        if (fileInput && fileInput.files && fileInput.files[0]) {
-                          handleFileUpload({ target: { files: fileInput.files } } as React.ChangeEvent<HTMLInputElement>);
-                        } else {
-                          toast({
-                            title: "No file selected",
-                            description: "Please select a file first",
-                            variant: "destructive",
-                          });
-                        }
-                      }}
+                      onClick={handleFileUpload}
                     >
                       {isUploading ? (
                         <>
