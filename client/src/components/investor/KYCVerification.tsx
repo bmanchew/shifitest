@@ -15,8 +15,10 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { VerificationStatusBadge } from '@/features/investor/VerificationStatusBadge';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { formatVerificationStatus } from '@/shared/utils/formatters';
 
 // Interface for the verification session
 // API response types
@@ -309,7 +311,12 @@ export default function KYCVerification() {
   return (
     <div className="container mx-auto max-w-4xl py-8 px-4">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">KYC Verification</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold">KYC Verification</h1>
+          {profileQuery.data?.verificationStatus && (
+            <VerificationStatusBadge status={profileQuery.data.verificationStatus} />
+          )}
+        </div>
         <p className="text-muted-foreground mt-2">
           To comply with regulations, we need to verify your identity before you can access the investor portal.
         </p>
