@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import PlaidAssetReport from './reports/PlaidAssetReport';
 import MidDeskReport from './reports/MidDeskReport';
 import DueDiligenceReport from './reports/DueDiligenceReport';
+import { MerchantPlaidSettings } from './MerchantPlaidSettings';
 
 interface MerchantDetailProps {
   merchantId: number;
@@ -381,6 +382,15 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
             </div>
           )}
         </dl>
+      </div>
+      
+      {/* Plaid Credentials Section */}
+      <div className="mt-6 mb-6">
+        <div className="px-4 py-5 sm:px-6 border-t border-gray-200">
+          <h3 className="text-lg leading-6 font-medium text-gray-900">Plaid API Credentials</h3>
+          <p className="mt-1 max-w-2xl text-sm text-gray-500">Manage Plaid API credentials for this merchant</p>
+        </div>
+        <MerchantPlaidSettings merchantId={merchantId} />
       </div>
       
       {/* Business Details Section (if available) */}
