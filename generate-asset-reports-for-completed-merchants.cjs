@@ -39,7 +39,7 @@ function getPlaidClient(environment, clientId, secret) {
   console.log(`Using client ID: ${clientId.substring(0, 6)}...`);
   
   const plaidConfig = new Configuration({
-    basePath: PlaidEnvironments[environment] || PlaidEnvironments[process.env.PLAID_ENVIRONMENT] || PlaidEnvironments.sandbox,
+    basePath: PlaidEnvironments[environment] || PlaidEnvironments[process.env.PLAID_ENVIRONMENT] || PlaidEnvironments.production,
     baseOptions: {
       headers: {
         'PLAID-CLIENT-ID': clientId,

@@ -32,13 +32,13 @@ const dbConfig = {
 // Configure Plaid
 console.log('Raw environment variable PLAID_ENVIRONMENT:', process.env.PLAID_ENVIRONMENT);
 
-// Force the environment to match the access token prefix - 'sandbox' for testing 
-const plaidEnvironment = 'sandbox';
+// Force the environment to match the access token prefix - using production
+const plaidEnvironment = 'production';
 console.log('Forced Plaid environment to:', plaidEnvironment);
 
 // We'll retrieve and use the merchant-specific client ID when we get the merchant data
 const plaidConfig = new Configuration({
-  basePath: PlaidEnvironments[plaidEnvironment] || PlaidEnvironments.sandbox,
+  basePath: PlaidEnvironments[plaidEnvironment] || PlaidEnvironments.production,
   baseOptions: {
     headers: {
       'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
@@ -102,7 +102,7 @@ async function generateAssetReportForMerchant() {
     
     // Create the asset report
     console.log(`Creating asset report using access token: ${plaidMerchant.access_token.substring(0, 4)}...${plaidMerchant.access_token.substring(plaidMerchant.access_token.length - 4)}`);
-    console.log(`Using Plaid environment: ${process.env.PLAID_ENVIRONMENT || 'sandbox'}`);
+    console.log(`Using Plaid environment: ${process.env.PLAID_ENVIRONMENT || 'production'}`);
     console.log(`Using Plaid client ID: ${plaidClient.configuration.baseOptions.headers['PLAID-CLIENT-ID'].substring(0, 6)}...`);
     console.log(`Using Plaid secret: ${process.env.PLAID_SECRET ? process.env.PLAID_SECRET.substring(0, 6) + '...' : 'undefined'}`);
     
