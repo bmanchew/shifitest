@@ -1,0 +1,964 @@
+Code Improvement Suggestions
+This document provides specific code examples to address the remaining issues identified in the ShiFi Tester application.
+Code Organization Improvements
+1. Extract Duplicated Utility Functions
+Create a shared utility file for commonly used formatting functions:
+typescript
+// File: /shared/utils/formatters.ts
+
+/**
+ * Formats category codes into human-readable text
+ * @param category The category code to format
+ * @returns Formatted category text
+ */
+export function formatCategoryText(category: string): string {
+  switch (category) {
+    case "accounting": return "Accounting & Billing";
+    case "customer_issue": return "Customer Issue";
+    case "technical_issue": return "Technical Issue";
+    case "other": return "Other";
+    default: return category;
+  }
+}
+
+/**
+ * Formats status codes into human-readable text
+ * @param status The status code to format
+ * @returns Formatted status text
+ */
+export function getStatusText(status: string): string {
+  switch (status) {
+    case "open": return "Open";
+    case "in_progress": return "In Progress";
+    case "pending": return "Pending";
+    case "resolved": return "Resolved";
+    case "closed": return "Closed";
+    default: return status;
+  }
+}
+
+/**
+ * Formats priority codes into human-readable text
+ * @param priority The priority code to format
+ * @returns Formatted priority text
+ */
+export function getPriorityText(priority: string): string {
+  switch (priority) {
+    case "low": return "Low";
+    case "normal": return "Normal";
+    case "high": return "High";
+    case "urgent": return "Urgent";
+    default: return priority;
+  }
+}
+
+/**
+ * Returns the appropriate color for a ticket status
+ * @param status The status code
+ * @returns CSS color class name
+ */
+export function getStatusColor(status: string): string {
+  switch (status) {
+    case "open": return "bg-blue-100 text-blue-800";
+    case "in_progress": return "bg-yellow-100 text-yellow-800";
+    case "pending": return "bg-purple-100 text-purple-800";
+    case "resolved": return "bg-green-100 text-green-800";
+    case "closed": return "bg-gray-100 text-gray-800";
+    default: return "bg-gray-100 text-gray-800";
+  }
+}
+
+/**
+ * Returns the appropriate color for a ticket priority
+ * @param priority The priority code
+ * @returns CSS color class name
+ */
+export function getPriorityColor(priority: string): string {
+  switch (priority) {
+    case "low": return "bg-blue-100 text-blue-800";
+    case "normal": return "bg-green-100 text-green-800";
+    case "high": return "bg-orange-100 text-orange-800";
+    case "urgent": return "bg-red-100 text-red-800";
+    default: return "bg-gray-100 text-gray-800";
+  }
+}
+
+/**
+ * Formats a date into a human-readable string
+ * @param date The date to format
+ * @returns Formatted date string
+ */
+export function formatDate(date: string | Date): string {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+Then update components to use these shared utilities:
+typescript
+// In any component file
+import { 
+  formatCategoryText, 
+  getStatusText, 
+  getPriorityText,
+  getStatusColor,
+  getPriorityColor,
+  formatDate
+} from '@/shared/utils/formatters';
+
+// Use in component
+<span className={getStatusColor(ticket.status)}>
+  {getStatusText(ticket.status)}
+</span>
+2. Standardize Component Structure
+Create a consistent component organization pattern:
+typescript
+// File: /client/src/components/ui/Badge.tsx
+// Example of a UI component
+
+import React from 'react';
+import { cn } from '@/lib/utils';
+
+export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: 'default' | 'secondary' | 'destructive' | 'outline';
+  size?: 'sm' | 'md' | 'lg';
+}
+
+/**
+ * Badge component for displaying status indicators
+ */
+export function Badge({
+  className,
+  variant = 'default',
+  size = 'md',
+  ...props
+}: BadgeProps) {
+  return (
+    <div
+      className={cn(
+        'inline-flex items-center rounded-full font-medium',
+        {
+          'bg-primary text-primary-foreground': variant === 'default',
+          'bg-secondary text-secondary-foreground': variant === 'secondary',
+          'bg-destructive text-destructive-foreground': variant === 'destructive',
+          'border border-input bg-background': variant === 'outline',
+          'px-2 py-0.5 text-xs': size === 'sm',
+          'px-2.5 py-0.5 text-sm': size === 'md',
+          'px-3 py-1 text-base': size === 'lg',
+        },
+        className
+      )}
+      {...props}
+    />
+  );
+}
+typescript
+// File: /client/src/features/tickets/TicketStatusBadge.tsx
+// Example of a feature-specific component
+
+import { Badge } from '@/components/ui/Badge';
+import { getStatusColor, getStatusText } from '@/shared/utils/formatters';
+
+interface TicketStatusBadgeProps {
+  status: string;
+  className?: string;
+}
+
+/**
+ * Displays a ticket status with appropriate styling
+ */
+export function TicketStatusBadge({ status, className }: TicketStatusBadgeProps) {
+  return (
+    <Badge 
+      className={getStatusColor(status)}
+      variant="outline"
+      size="sm"
+    >
+      {getStatusText(status)}
+    </Badge>
+  );
+}
+Performance Improvements
+1. Add Query Caching Configuration
+Implement proper caching for React Query:
+typescript
+// File: /client/src/lib/react-query.ts
+
+import { QueryClient } from '@tanstack/react-query';
+
+// Create a client
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
+      retry: 1,
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+    },
+  },
+});
+Then update the query hooks:
+typescript
+// In any component using React Query
+import { useQuery } from '@tanstack/react-query';
+
+export function useSupportTickets(filters = {}) {
+  return useQuery({
+    queryKey: ['support-tickets', filters],
+    queryFn: async () => {
+      const queryParams = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) queryParams.append(key, String(value));
+      });
+      
+      const response = await fetch(`/api/support-tickets?${queryParams}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch tickets');
+      }
+      return response.json();
+    },
+    // These options override the defaults when needed
+    staleTime: 2 * 60 * 1000, // 2 minutes for this specific query
+  });
+}
+2. Implement Virtualization for Large Lists
+Add virtualization to improve performance with large lists:
+typescript
+// File: /client/src/components/tickets/TicketList.tsx
+
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { useRef } from 'react';
+import { TicketCard } from './TicketCard';
+
+interface TicketListProps {
+  tickets: Array<{
+    id: number;
+    subject: string;
+    status: string;
+    priority: string;
+    createdAt: string;
+    // other ticket properties
+  }>;
+  isLoading: boolean;
+}
+
+export function TicketList({ tickets, isLoading }: TicketListProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  
+  const virtualizer = useVirtualizer({
+    count: tickets.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 100, // Estimated height of each ticket card
+    overscan: 5, // Number of items to render outside of the visible area
+  });
+  
+  if (isLoading) {
+    return <div className="p-4">Loading tickets...</div>;
+  }
+  
+  if (!tickets.length) {
+    return <div className="p-4">No tickets found.</div>;
+  }
+  
+  return (
+    <div 
+      ref={parentRef} 
+      className="h-[600px] overflow-auto border rounded-md"
+    >
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {virtualizer.getVirtualItems().map((virtualItem) => (
+          <div
+            key={virtualItem.key}
+            data-index={virtualItem.index}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: `${virtualItem.size}px`,
+              transform: `translateY(${virtualItem.start}px)`,
+            }}
+          >
+            <TicketCard ticket={tickets[virtualItem.index]} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+Security Improvements
+1. Remove Hardcoded Fallback User ID
+Replace hardcoded fallback with proper error handling:
+typescript
+// File: /client/src/components/forms/TicketSubmissionForm.tsx
+
+// Replace this code:
+/*
+if (!submitterId) {
+  // For merchant users, we'll use merchant ID 2 as a fallback ID value
+  console.log("Using fallback user ID: 2");
+  submitterId = 2;
+}
+*/
+
+// With this code:
+if (!submitterId) {
+  toast({
+    title: "Authentication Error",
+    description: "Unable to verify your identity. Please try logging out and back in.",
+    variant: "destructive",
+  });
+  setIsSubmitting(false);
+  return; // Prevent form submission
+}
+2. Implement Rate Limiting
+Add rate limiting to protect API endpoints:
+typescript
+// File: /server/middleware/rateLimiter.ts
+
+import rateLimit from 'express-rate-limit';
+import { ErrorFactory } from '../services/errorHandler';
+
+/**
+ * Standard API rate limiter - 100 requests per 15 minutes
+ */
+export const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (req, res, next) => {
+    next(ErrorFactory.custom({
+      message: 'Too many requests, please try again later.',
+      statusCode: 429,
+      errorCode: 'RATE_LIMIT_EXCEEDED',
+      category: 'security'
+    }));
+  }
+});
+
+/**
+ * Stricter rate limiter for authentication endpoints - 10 requests per 15 minutes
+ */
+export const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res, next) => {
+    next(ErrorFactory.custom({
+      message: 'Too many authentication attempts, please try again later.',
+      statusCode: 429,
+      errorCode: 'AUTH_RATE_LIMIT_EXCEEDED',
+      category: 'security'
+    }));
+  }
+});
+Then apply the rate limiters in the main server file:
+typescript
+// File: /server/index.ts
+
+import { apiLimiter, authLimiter } from './middleware/rateLimiter';
+
+// Apply rate limiting to routes
+app.use('/api/auth', authLimiter);
+app.use('/api/users', apiLimiter);
+app.use('/api/support-tickets', apiLimiter);
+app.use('/api/communications', apiLimiter);
+User Experience Improvements
+1. Implement Consistent Form Validation Feedback
+Enhance form validation feedback:
+typescript
+// File: /client/src/components/ui/FormField.tsx
+
+import { FormControl, FormDescription, FormItem, FormLabel, FormMessage } from './Form';
+import { Input } from './Input';
+import { cn } from '@/lib/utils';
+
+interface FormFieldProps {
+  control: any;
+  name: string;
+  label: string;
+  description?: string;
+  placeholder?: string;
+  type?: string;
+  disabled?: boolean;
+  className?: string;
+}
+
+/**
+ * Enhanced form field with consistent validation feedback
+ */
+export function FormField({
+  control,
+  name,
+  label,
+  description,
+  placeholder,
+  type = 'text',
+  disabled = false,
+  className,
+}: FormFieldProps) {
+  return (
+    <FormItem className={className}>
+      <FormLabel>{label}</FormLabel>
+      <FormControl>
+        <Input
+          type={type}
+          placeholder={placeholder}
+          disabled={disabled}
+          {...control.register(name)}
+          className={cn({
+            'border-red-500 focus-visible:ring-red-500': control.formState.errors[name],
+          })}
+          aria-invalid={!!control.formState.errors[name]}
+          aria-describedby={`${name}-description ${name}-error`}
+        />
+      </FormControl>
+      {description && (
+        <FormDescription id={`${name}-description`}>
+          {description}
+        </FormDescription>
+      )}
+      <FormMessage id={`${name}-error`} />
+    </FormItem>
+  );
+}
+2. Enhance Keyboard Navigation
+Improve keyboard accessibility:
+typescript
+// File: /client/src/components/ui/Card.tsx
+
+import { forwardRef } from 'react';
+import { cn } from '@/lib/utils';
+
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  interactive?: boolean;
+  onAction?: () => void;
+}
+
+/**
+ * Card component with enhanced keyboard navigation
+ */
+export const Card = forwardRef<HTMLDivElement, CardProps>(
+  ({ className, interactive = false, onAction, children, ...props }, ref) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (interactive && onAction && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        onAction();
+      }
+    };
+    
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'rounded-lg border bg-card text-card-foreground shadow-sm',
+          {
+            'cursor-pointer hover:shadow-md transition-shadow': interactive,
+          },
+          className
+        )}
+        tabIndex={interactive ? 0 : undefined}
+        role={interactive ? 'button' : undefined}
+        onKeyDown={interactive ? handleKeyDown : undefined}
+        onClick={interactive && onAction ? onAction : undefined}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  }
+);
+Card.displayName = 'Card';
+Testing Improvements
+1. Implement Unit Tests
+Add Jest tests for critical components and utilities:
+typescript
+// File: /tests/utils/formatters.test.ts
+
+import { 
+  formatCategoryText, 
+  getStatusText, 
+  getPriorityText 
+} from '@/shared/utils/formatters';
+
+describe('Formatter Utilities', () => {
+  describe('formatCategoryText', () => {
+    it('should format known categories correctly', () => {
+      expect(formatCategoryText('accounting')).toBe('Accounting & Billing');
+      expect(formatCategoryText('customer_issue')).toBe('Customer Issue');
+      expect(formatCategoryText('technical_issue')).toBe('Technical Issue');
+      expect(formatCategoryText('other')).toBe('Other');
+    });
+    
+    it('should return the original value for unknown categories', () => {
+      expect(formatCategoryText('unknown_category')).toBe('unknown_category');
+    });
+  });
+  
+  describe('getStatusText', () => {
+    it('should format known statuses correctly', () => {
+      expect(getStatusText('open')).toBe('Open');
+      expect(getStatusText('in_progress')).toBe('In Progress');
+      expect(getStatusText('pending')).toBe('Pending');
+      expect(getStatusText('resolved')).toBe('Resolved');
+      expect(getStatusText('closed')).toBe('Closed');
+    });
+    
+    it('should return the original value for unknown statuses', () => {
+      expect(getStatusText('unknown_status')).toBe('unknown_status');
+    });
+  });
+  
+  describe('getPriorityText', () => {
+    it('should format known priorities correctly', () => {
+      expect(getPriorityText('low')).toBe('Low');
+      expect(getPriorityText('normal')).toBe('Normal');
+      expect(getPriorityText('high')).toBe('High');
+      expect(getPriorityText('urgent')).toBe('Urgent');
+    });
+    
+    it('should return the original value for unknown priorities', () => {
+      expect(getPriorityText('unknown_priority')).toBe('unknown_priority');
+    });
+  });
+});
+2. Implement End-to-End Tests
+Add Cypress tests for critical user flows:
+typescript
+// File: /cypress/e2e/ticket-submission.cy.ts
+
+describe('Ticket Submission Flow', () => {
+  beforeEach(() => {
+    // Mock the authentication
+    cy.intercept('GET', '/api/users/me', {
+      statusCode: 200,
+      body: {
+        id: 1,
+        name: 'Test Merchant',
+        email: 'merchant@example.com',
+        role: 'merchant'
+      }
+    }).as('getUser');
+    
+    // Mock the ticket creation endpoint
+    cy.intercept('POST', '/api/support-tickets', {
+      statusCode: 201,
+      body: {
+        success: true,
+        data: {
+          id: 123,
+          ticketNumber: 'TICKET-123',
+          subject: 'Test Ticket',
+          status: 'open',
+          createdAt: new Date().toISOString()
+        }
+      }
+    }).as('createTicket');
+    
+    // Visit the ticket creation page
+    cy.visit('/merchant/support-tickets/create');
+    cy.wait('@getUser');
+  });
+  
+  it('should successfully submit a ticket with valid data', () => {
+    // Fill out the form
+    cy.get('input[name="subject"]').type('Test Ticket');
+    cy.get('select[name="category"]').select('technical_issue');
+    cy.get('select[name="priority"]').select('normal');
+    cy.get('textarea[name="description"]').type('This is a test ticket description with at least 20 characters.');
+    
+    // Submit the form
+    cy.get('button[type="submit"]').click();
+    
+    // Wait for the API call
+    cy.wait('@createTicket');
+    
+    // Verify success message
+    cy.contains('Your support ticket #TICKET-123 has been created successfully').should('be.visible');
+    
+    // Verify redirect to ticket list
+    cy.url().should('include', '/merchant/support-tickets');
+  });
+  
+  it('should show validation errors for invalid data', () => {
+    // Submit without filling the form
+    cy.get('button[type="submit"]').click();
+    
+    // Verify validation errors
+    cy.contains('Subject must be at least 5 characters').should('be.visible');
+    cy.contains('Please select a category').should('be.visible');
+    cy.contains('Description must be at least 20 characters').should('be.visible');
+    
+    // API call should not be made
+    cy.get('@createTicket.all').should('have.length', 0);
+  });
+});
+Documentation Improvements
+1. Enhance API Documentation
+Create comprehensive API documentation:
+typescript
+// File: /server/routes/support-tickets.ts
+
+/**
+ * @api {get} /api/support-tickets Get all support tickets
+ * @apiName GetSupportTickets
+ * @apiGroup SupportTickets
+ * @apiVersion 1.0.0
+ *
+ * @apiParam {String} [status] Filter tickets by status
+ * @apiParam {String} [category] Filter tickets by category
+ * @apiParam {String} [priority] Filter tickets by priority
+ * @apiParam {String} [search] Search term for ticket subject or description
+ * @apiParam {Number} [page=1] Page number for pagination
+ * @apiParam {Number} [limit=10] Number of tickets per page
+ *
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Response data
+ * @apiSuccess {Array} data.tickets List of tickets
+ * @apiSuccess {Number} data.total Total number of tickets matching the filters
+ * @apiSuccess {Number} data.pages Total number of pages
+ * @apiSuccess {Number} data.page Current page number
+ *
+ * @apiError {Boolean} success false
+ * @apiError {Object} error Error details
+ * @apiError {String} error.message Error message
+ * @apiError {String} error.code Error code
+ */
+router.get('/', asyncHandler(async (req, res) => {
+  // Implementation...
+}));
+
+/**
+ * @api {post} /api/support-tickets Create a new support ticket
+ * @apiName CreateSupportTicket
+ * @apiGroup SupportTickets
+ * @apiVersion 1.0.0
+ *
+ * @apiParam {String} subject Ticket subject (5-100 characters)
+ * @apiParam {String} category Ticket category (accounting, customer_issue, technical_issue, other)
+ * @apiParam {String} priority Ticket priority (low, normal, high, urgent)
+ * @apiParam {String} description Detailed description (20-2000 characters)
+ * @apiParam {Number} [contractId] Related contract ID (optional)
+ *
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Ticket data
+ * @apiSuccess {Number} data.id Ticket ID
+ * @apiSuccess {String} data.ticketNumber Ticket reference number
+ * @apiSuccess {String} data.subject Ticket subject
+ * @apiSuccess {String} data.status Ticket status
+ * @apiSuccess {String} data.createdAt Creation timestamp
+ *
+ * @apiError {Boolean} success false
+ * @apiError {Object} error Error details
+ * @apiError {String} error.message Error message
+ * @apiError {String} error.code Error code
+ * @apiError {Array} [error.details] Validation error details
+ */
+router.post('/', asyncHandler(async (req, res) => {
+  // Implementation...
+}));
+2. Add Component Documentation
+Add JSDoc comments to components:
+typescript
+/**
+ * TicketSubmissionForm - A form component for creating support tickets
+ *
+ * @component
+ * @param {Object} props - Component props
+ * @param {number} [props.merchantId] - ID of the merchant submitting the ticket
+ * @param {Function} props.onSuccess - Callback function called after successful submission
+ * @param {Object} [props.initialValues] - Optional initial values for the form
+ * @param {number} [props.contractId] - Optional contract ID to associate with the ticket
+ *
+ * @example
+ * <TicketSubmissionForm
+ *   onSuccess={(id, ticketNumber) => navigate(`/tickets/${id}`)}
+ *   initialValues={{ subject: "Issue with payment", category: "accounting" }}
+ * />
+ */
+export function TicketSubmissionForm({
+  merchantId,
+  onSuccess,
+  initialValues,
+  contractId,
+}: TicketSubmissionFormProps) {
+  // Component implementation
+}
+Additional Feature Suggestions
+1. Implement Real-Time Notifications
+Add real-time notifications for ticket updates:
+typescript
+// File: /server/services/notificationService.ts
+
+import { Server as SocketIOServer } from 'socket.io';
+import { Server as HttpServer } from 'http';
+import { verifyJwt } from './authService';
+import { logger } from './logger';
+
+export class NotificationService {
+  private io: SocketIOServer;
+  
+  constructor(httpServer: HttpServer)  {
+    this.io = new SocketIOServer(httpServer, {
+      cors: {
+        origin: process.env.CLIENT_URL || 'http://localhost:3000',
+        methods: ['GET', 'POST'],
+        credentials: true
+      }
+    }) ;
+    
+    this.io.use(async (socket, next) => {
+      try {
+        const token = socket.handshake.auth.token;
+        if (!token) {
+          return next(new Error('Authentication error'));
+        }
+        
+        const decoded = await verifyJwt(token);
+        socket.data.user = decoded;
+        next();
+      } catch (error) {
+        logger.error({
+          message: 'Socket authentication error',
+          category: 'security',
+          metadata: { error: error.message }
+        });
+        next(new Error('Authentication error'));
+      }
+    });
+    
+    this.io.on('connection', (socket) => {
+      const userId = socket.data.user.id;
+      const userRole = socket.data.user.role;
+      
+      logger.info({
+        message: 'User connected to notifications',
+        category: 'socket',
+        metadata: { userId, userRole }
+      });
+      
+      // Join user-specific room
+      socket.join(`user:${userId}`);
+      
+      // Join role-specific room
+      socket.join(`role:${userRole}`);
+      
+      socket.on('disconnect', () => {
+        logger.info({
+          message: 'User disconnected from notifications',
+          category: 'socket',
+          metadata: { userId, userRole }
+        });
+      });
+    });
+  }
+  
+  /**
+   * Send a notification to a specific user
+   */
+  public notifyUser(userId: number, notification: any) {
+    this.io.to(`user:${userId}`).emit('notification', notification);
+    logger.info({
+      message: 'Notification sent to user',
+      category: 'notification',
+      metadata: { userId, notification }
+    });
+  }
+  
+  /**
+   * Send a notification to all users with a specific role
+   */
+  public notifyRole(role: string, notification: any) {
+    this.io.to(`role:${role}`).emit('notification', notification);
+    logger.info({
+      message: 'Notification sent to role',
+      category: 'notification',
+      metadata: { role, notification }
+    });
+  }
+  
+  /**
+   * Send a notification about a ticket update
+   */
+  public notifyTicketUpdate(ticketId: number, update: any) {
+    this.io.to(`ticket:${ticketId}`).emit('ticket:update', update);
+    logger.info({
+      message: 'Ticket update notification sent',
+      category: 'notification',
+      metadata: { ticketId, update }
+    });
+  }
+}
+2. Implement Advanced Search and Filtering
+Add advanced search and filtering capabilities:
+typescript
+// File: /client/src/components/tickets/AdvancedFilterPanel.tsx
+
+import { useState } from 'react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { DateRangePicker } from '@/components/ui/DateRangePicker';
+import { X, Filter, Search } from 'lucide-react';
+
+interface FilterValues {
+  search?: string;
+  status?: string;
+  category?: string;
+  priority?: string;
+  assignedTo?: number;
+  dateRange?: {
+    from: Date | undefined;
+    to: Date | undefined;
+  };
+}
+
+interface AdvancedFilterPanelProps {
+  onFilterChange: (filters: FilterValues) => void;
+  agents: Array<{ id: number; name: string }>;
+}
+
+export function AdvancedFilterPanel({ onFilterChange, agents }: AdvancedFilterPanelProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [filters, setFilters] = useState<FilterValues>({});
+  
+  const handleFilterChange = (key: keyof FilterValues, value: any) => {
+    const newFilters = { ...filters, [key]: value };
+    setFilters(newFilters);
+  };
+  
+  const handleApplyFilters = () => {
+    onFilterChange(filters);
+  };
+  
+  const handleResetFilters = () => {
+    setFilters({});
+    onFilterChange({});
+  };
+  
+  return (
+    <div className="mb-6 border rounded-md p-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Filters</h3>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {isExpanded ? 'Hide Filters' : 'Show Filters'}
+        </Button>
+      </div>
+      
+      {/* Basic search always visible */}
+      <div className="mt-2 flex gap-2">
+        <div className="flex-1">
+          <Input
+            placeholder="Search tickets..."
+            value={filters.search || ''}
+            onChange={(e) => handleFilterChange('search', e.target.value)}
+            className="w-full"
+            icon={<Search className="h-4 w-4" />}
+          />
+        </div>
+        <Button onClick={handleApplyFilters}>
+          Apply
+        </Button>
+        <Button variant="outline" onClick={handleResetFilters}>
+          Reset
+        </Button>
+      </div>
+      
+      {/* Advanced filters */}
+      {isExpanded && (
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Status</label>
+            <Select
+              value={filters.status || ''}
+              onValueChange={(value) => handleFilterChange('status', value)}
+            >
+              <option value="">All Statuses</option>
+              <option value="open">Open</option>
+              <option value="in_progress">In Progress</option>
+              <option value="pending">Pending</option>
+              <option value="resolved">Resolved</option>
+              <option value="closed">Closed</option>
+            </Select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">Category</label>
+            <Select
+              value={filters.category || ''}
+              onValueChange={(value) => handleFilterChange('category', value)}
+            >
+              <option value="">All Categories</option>
+              <option value="accounting">Accounting & Billing</option>
+              <option value="customer_issue">Customer Issue</option>
+              <option value="technical_issue">Technical Issue</option>
+              <option value="other">Other</option>
+            </Select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">Priority</label>
+            <Select
+              value={filters.priority || ''}
+              onValueChange={(value) => handleFilterChange('priority', value)}
+            >
+              <option value="">All Priorities</option>
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </Select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">Assigned To</label>
+            <Select
+              value={filters.assignedTo?.toString() || ''}
+              onValueChange={(value) => handleFilterChange('assignedTo', value ? parseInt(value) : undefined)}
+            >
+              <option value="">Anyone</option>
+              <option value="unassigned">Unassigned</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id.toString()}>
+                  {agent.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium mb-1">Date Range</label>
+            <DateRangePicker
+              value={filters.dateRange}
+              onChange={(range) => handleFilterChange('dateRange', range)}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+Conclusion
+These code improvements address the remaining issues identified in the ShiFi Tester application. By implementing these changes, the application will become more maintainable, secure, and user-friendly. The improvements are organized by category and prioritized based on their impact and implementation complexity.
+The most critical improvements to implement first are:
+Security improvements (removing hardcoded fallback user ID and implementing rate limiting)
+Performance improvements (adding query caching configuration)
+Code organization improvements (extracting duplicated utility functions)
+These changes will provide the most immediate benefits while setting the foundation for the more complex improvements like virtualization, testing, and new features.

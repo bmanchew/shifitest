@@ -19,6 +19,38 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
 // Interface for the verification session
+// API response types
+interface ProfileResponse {
+  success: boolean;
+  profile: {
+    id: number;
+    userId: number;
+    accreditationStatus: boolean | null;
+    verificationStatus: string;
+    kycCompleted: boolean;
+    verificationSessionId: string | null;
+    documentVerificationCompleted: boolean;
+    investmentGoals: string;
+    [key: string]: any; // For any additional fields
+  };
+}
+
+interface CreateSessionResponse {
+  success: boolean;
+  sessionId: string;
+  sessionUrl: string;
+}
+
+interface SessionStatusResponse {
+  success: boolean;
+  status: {
+    status: string;
+    decision?: {
+      status: string;
+    };
+  };
+}
+
 interface VerificationSession {
   sessionId: string;
   sessionUrl: string;
@@ -39,7 +71,7 @@ export default function KYCVerification() {
   const profileQuery = useQuery({
     queryKey: ['/api/investor/profile'],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/investor/profile');
+      const response = await apiRequest<ProfileResponse>('GET', '/api/investor/profile');
       return response.profile;
     }
   });
@@ -47,10 +79,10 @@ export default function KYCVerification() {
   // Create a verification session
   const createSessionMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/investor/kyc/create-session');
+      const response = await apiRequest<CreateSessionResponse>('POST', '/api/investor/kyc/create-session');
       return response;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: CreateSessionResponse) => {
       setSession({
         sessionId: data.sessionId,
         sessionUrl: data.sessionUrl,
@@ -75,11 +107,15 @@ export default function KYCVerification() {
   // Check session status
   const checkSessionMutation = useMutation({
     mutationFn: async (sessionId: string) => {
-      const response = await apiRequest('GET', `/api/investor/kyc/session/${sessionId}`);
+      const response = await apiRequest<SessionStatusResponse>('GET', `/api/investor/kyc/session/${sessionId}`);
       return response;
     },
-    onSuccess: (data) => {
-      if (data.status === 'approved' || data.status === 'verified') {
+    onSuccess: (data: SessionStatusResponse) => {
+      // Check verification status based on the status object
+      const status = data.status?.status;
+      const decision = data.status?.decision?.status;
+      
+      if (status === 'completed' && decision === 'approved') {
         setProgress(100);
         setIsPolling(false);
         
@@ -95,7 +131,7 @@ export default function KYCVerification() {
         setTimeout(() => {
           setLocation('/investor/verify/bank');
         }, 2000);
-      } else if (data.status === 'rejected') {
+      } else if (status === 'rejected' || decision === 'rejected') {
         setProgress(0);
         setIsPolling(false);
         
@@ -127,20 +163,76 @@ export default function KYCVerification() {
     }
   }, [match, params, toast]);
 
-  // Poll for session status
+  // Poll for session status with exponential backoff
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let timeoutId: NodeJS.Timeout;
+    let pollCount = 0;
+    const MAX_POLLS = 12; // Maximum number of polls (1 hour with exponential backoff)
+    const BASE_INTERVAL = 5000; // Start with 5 seconds
+    
+    const pollWithBackoff = () => {
+      if (!isPolling || !session?.sessionId) return;
+      
+      // Exponential backoff with maximum interval capped at 2 minutes
+      const interval = Math.min(BASE_INTERVAL * Math.pow(1.5, pollCount), 120000);
+      
+      // Log polling attempt for debugging
+      console.log(`Polling session ${session.sessionId} (attempt ${pollCount + 1}/${MAX_POLLS})`);
+      
+      checkSessionMutation.mutate(session.sessionId, {
+        onSuccess: (data: SessionStatusResponse) => {
+          // If verification is complete, stop polling
+          if (data.status?.status === 'completed') {
+            setIsPolling(false);
+            setProgress(100);
+            
+            // If approved, redirect to dashboard after a short delay
+            if (data.status?.decision?.status === 'approved') {
+              setTimeout(() => {
+                setLocation('/investor/dashboard');
+              }, 2000);
+            }
+          } else {
+            // Continue polling if not complete and under max attempts
+            pollCount++;
+            if (pollCount < MAX_POLLS) {
+              timeoutId = setTimeout(pollWithBackoff, interval);
+            } else {
+              // Stop polling after max attempts
+              setIsPolling(false);
+              toast({
+                title: "Verification Status Check Timeout",
+                description: "We were unable to determine your verification status. Please check back later or contact support.",
+                variant: "destructive",
+              });
+            }
+          }
+        },
+        onError: () => {
+          // On error, retry with exponential backoff
+          pollCount++;
+          if (pollCount < MAX_POLLS) {
+            timeoutId = setTimeout(pollWithBackoff, interval);
+          } else {
+            setIsPolling(false);
+            toast({
+              title: "Verification Status Check Failed",
+              description: "There was a problem checking your verification status. Please check back later.",
+              variant: "destructive",
+            });
+          }
+        }
+      });
+    };
     
     if (isPolling && session?.sessionId) {
-      interval = setInterval(() => {
-        checkSessionMutation.mutate(session.sessionId);
-      }, 5000);
+      pollWithBackoff();
     }
     
     return () => {
-      if (interval) clearInterval(interval);
+      if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isPolling, session, checkSessionMutation]);
+  }, [isPolling, session, checkSessionMutation, setLocation, toast]);
 
   // Start verification process
   const startVerification = () => {
@@ -150,7 +242,9 @@ export default function KYCVerification() {
   // Redirect to verification provider
   const redirectToVerification = () => {
     if (session?.sessionUrl) {
-      window.location.href = session.sessionUrl;
+      // For external URLs, we need to use window.location
+      // This is the correct use case for window.location.href
+      window.open(session.sessionUrl, "_blank", "noopener,noreferrer");
     }
   };
 

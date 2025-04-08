@@ -37,6 +37,7 @@ import { logger } from "../services/logger";
 import { authenticateToken, isInvestor, isAdmin } from "../middleware/auth";
 import { blockchainService } from "../services/blockchain";
 import { plaidService } from "../services/plaidService";
+import { generateJwtToken } from "../services/auth";
 import { diditService } from "../services/didit";
 import emailService from "../services/email";
 import crypto from "crypto";
@@ -137,11 +138,8 @@ router.post("/applications", async (req: Request, res: Response) => {
       documentVerificationCompleted: false
     });
     
-    // Generate authentication token
-    const token = crypto.randomBytes(32).toString('hex');
-    
-    // In a real implementation, we would store this token securely
-    // and associate it with the user account
+    // Generate a proper JWT token for the user
+    const token = generateJwtToken(user);
     
     return res.status(201).json({
       success: true,
@@ -1194,14 +1192,46 @@ router.post("/kyc/create-session", isInvestor, async (req: Request, res: Respons
       }
     };
 
-    const session = await diditService.createVerificationSession(sessionOptions);
+    try {
+      const session = await diditService.createVerificationSession(sessionOptions);
 
-    if (!session || !session.session_url) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create verification session"
-      });
-    }
+      if (!session) {
+        logger.error({
+          message: "DiDit verification session creation returned null",
+          category: "api",
+          source: "investor",
+          metadata: {
+            userId,
+            investorId: investorProfile.id
+          }
+        });
+        
+        return res.status(503).json({
+          success: false,
+          message: "Identity verification service is temporarily unavailable. Please try again later.",
+          errorCode: "VERIFICATION_SERVICE_ERROR",
+          retryable: true
+        });
+      }
+
+      if (!session.session_url) {
+        logger.error({
+          message: "DiDit verification session created but missing URL",
+          category: "api",
+          source: "investor",
+          metadata: {
+            userId,
+            investorId: investorProfile.id,
+            sessionId: session.session_id
+          }
+        });
+        
+        return res.status(500).json({
+          success: false,
+          message: "Unable to generate verification URL. Please contact support.",
+          errorCode: "VERIFICATION_URL_MISSING"
+        });
+      }
 
     // Update the investor profile with session information
     await storage.updateInvestorProfile(investorProfile.id, {
@@ -1225,6 +1255,24 @@ router.post("/kyc/create-session", isInvestor, async (req: Request, res: Respons
       sessionUrl: session.session_url,
       sessionId: session.session_id
     });
+    } catch (innerError) {
+      logger.error({
+        message: `Error in DiDit session creation process: ${innerError instanceof Error ? innerError.message : String(innerError)}`,
+        category: "api",
+        source: "investor",
+        metadata: {
+          userId,
+          investorId: investorProfile.id,
+          error: innerError instanceof Error ? innerError.stack : undefined
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "An unexpected error occurred during verification setup",
+        errorCode: "VERIFICATION_SETUP_ERROR"
+      });
+    }
   } catch (error) {
     logger.error({
       message: `Error creating DiDit KYC session: ${error instanceof Error ? error.message : String(error)}`,
