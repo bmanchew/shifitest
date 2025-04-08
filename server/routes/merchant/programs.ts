@@ -219,41 +219,48 @@ router.put("/:id/request-update", async (req: Request, res: Response) => {
       });
     }
 
-    // Create a program change request in the system
-    const changeRequest = await storage.createMerchantProgramChangeRequest({
+    // Create a temporary change record in the database
+    // Note: We're using the agreement system temporarily until we implement the full change request system
+    const changeRecord = await storage.createMerchantProgramAgreement({
       programId,
-      merchantId: req.merchantId,
-      requestType: "update",
-      requestedData: JSON.stringify(validationResult.data),
-      reason: validationResult.data.reason,
-      status: "pending",
-      requestedBy: req.user?.id || 0,
+      filename: `change-request-${programId}-${Date.now()}.json`,
+      originalFilename: `program-update-request-${programId}.json`,
+      mimeType: "application/json",
+      data: JSON.stringify({
+        programId,
+        merchantId: req.merchantId,
+        requestType: "update",
+        requestedData: validationResult.data,
+        reason: validationResult.data.reason || "Merchant requested update",
+        status: "pending",
+        requestedBy: req.user?.id || 0,
+      }),
+      active: false,
     });
 
     // Create a notification for admins
     await storage.createNotification({
-      userId: 1, // Admin user ID
-      userType: "admin",
+      recipientId: 1, // Admin user ID
+      recipientType: "admin",
       type: "program_change_request",
-      title: "Program Update Request",
-      message: `Merchant ${req.merchantId} has requested to update program ${programId} - ${program.name}`,
       metadata: JSON.stringify({
-        requestId: changeRequest.id,
+        changeRecordId: changeRecord.id,
         merchantId: req.merchantId,
         programId,
         programName: program.name,
+        requestedChanges: validationResult.data,
       }),
     });
 
     logger.info({
       message: `Merchant requested program update: Program ID ${programId}`,
       userId: req.user?.id,
-      category: "merchant",
+      category: "api",
       source: "internal",
       metadata: {
         merchantId: req.merchantId,
         programId,
-        requestId: changeRequest.id,
+        changeRecordId: changeRecord.id,
         requestedChanges: JSON.stringify(validationResult.data),
       },
     });
@@ -261,7 +268,7 @@ router.put("/:id/request-update", async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Program update request submitted for admin approval",
-      requestId: changeRequest.id,
+      requestId: changeRecord.id,
     });
   } catch (error) {
     logger.error({
@@ -395,41 +402,47 @@ router.post("/:id/request-archive", async (req: Request, res: Response) => {
       });
     }
 
-    // Create a program change request in the system
-    const changeRequest = await storage.createMerchantProgramChangeRequest({
+    // Create a temporary archive record in the database
+    // Note: We're using the agreement system temporarily until we implement the full change request system
+    const archiveRecord = await storage.createMerchantProgramAgreement({
       programId,
-      merchantId: req.merchantId,
-      requestType: "archive",
-      requestedData: null,
-      reason: validationResult.data.reason,
-      status: "pending",
-      requestedBy: req.user?.id || 0,
+      filename: `archive-request-${programId}-${Date.now()}.json`,
+      originalFilename: `program-archive-request-${programId}.json`,
+      mimeType: "application/json",
+      data: JSON.stringify({
+        programId,
+        merchantId: req.merchantId,
+        requestType: "archive",
+        reason: validationResult.data.reason,
+        status: "pending",
+        requestedBy: req.user?.id || 0,
+      }),
+      active: false,
     });
 
     // Create a notification for admins
     await storage.createNotification({
-      userId: 1, // Admin user ID
-      userType: "admin",
+      recipientId: 1, // Admin user ID
+      recipientType: "admin",
       type: "program_archive_request",
-      title: "Program Archive Request",
-      message: `Merchant ${req.merchantId} has requested to archive program ${programId} - ${program.name}`,
       metadata: JSON.stringify({
-        requestId: changeRequest.id,
+        archiveRecordId: archiveRecord.id,
         merchantId: req.merchantId,
         programId,
         programName: program.name,
+        reason: validationResult.data.reason,
       }),
     });
 
     logger.info({
       message: `Merchant requested program archive: Program ID ${programId}`,
       userId: req.user?.id,
-      category: "merchant",
+      category: "api",
       source: "internal",
       metadata: {
         merchantId: req.merchantId,
         programId,
-        requestId: changeRequest.id,
+        archiveRecordId: archiveRecord.id,
         reason: validationResult.data.reason,
       },
     });
@@ -437,7 +450,7 @@ router.post("/:id/request-archive", async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Program archive request submitted for admin approval",
-      requestId: changeRequest.id,
+      requestId: archiveRecord.id,
     });
   } catch (error) {
     logger.error({
@@ -669,10 +682,13 @@ router.post("/:id/agreements", upload.single("file"), async (req: Request, res: 
 
         const templateResponse = await response.json();
         
-        // Update our agreement record with the Thanks Roger template ID
+        // Update our agreement record with the Thanks Roger template info in metadata
         await storage.updateMerchantProgramAgreement(newAgreement.id, {
-          externalTemplateId: templateResponse.id,
-          externalTemplateName: templateResponse.name
+          data: JSON.stringify({
+            fileData: fileData,
+            externalTemplateId: templateResponse.id,
+            externalTemplateName: templateResponse.name
+          })
         });
 
         logger.info({

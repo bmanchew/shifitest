@@ -15,37 +15,53 @@ export default function MerchantDashboard() {
   const merchantId = user?.merchantId || 49; // Default to Shiloh Finance ID (49)
   const [activeTab, setActiveTab] = useState<string>("overview");
 
-  const { data: contracts = [], isLoading: isContractsLoading } = useQuery<Contract[]>({
+  const { data: contractsData = { contracts: [] }, isLoading: isContractsLoading } = useQuery({
     queryKey: ["/api/contracts", { merchantId }],
     queryFn: async () => {
       try {
+        console.log("Fetching contracts for merchant ID:", merchantId);
         const res = await fetch(`/api/contracts?merchantId=${merchantId}`, {
           credentials: "include",
         });
         if (!res.ok) {
           console.error(`Failed to fetch contracts: ${res.status}`);
-          return [];
+          return { contracts: [] };
         }
         const data = await res.json();
-        return Array.isArray(data) ? data : [];
+        console.log("Contract API Response:", data);
+        
+        // Handle different response formats
+        if (Array.isArray(data)) {
+          return { contracts: data };
+        } else if (data.contracts && Array.isArray(data.contracts)) {
+          return data;
+        } else if (data.success && Array.isArray(data.data)) {
+          return { contracts: data.data };
+        } else {
+          console.error("Unexpected response format:", data);
+          return { contracts: [] };
+        }
       } catch (error) {
         console.error("Error fetching contracts:", error);
-        return [];
+        return { contracts: [] };
       }
     },
     retry: 1,
     retryDelay: 1000,
   });
+  
+  // Extract contracts array from response
+  const contracts = Array.isArray(contractsData.contracts) ? contractsData.contracts : [];
 
   // Calculate statistics
-  const activeContracts = contracts.filter((c) => c.status === "active").length;
+  const activeContracts = contracts.filter((c: any) => c.status === "active").length;
 
   const totalFinanced = contracts
-    .filter((c) => c.status === "active" || c.status === "completed")
-    .reduce((sum, contract) => sum + contract.financedAmount, 0);
+    .filter((c: any) => c.status === "active" || c.status === "completed")
+    .reduce((sum: number, contract: any) => sum + (contract.financedAmount || 0), 0);
 
   const pendingApplications = contracts.filter(
-    (c) => c.status === "pending",
+    (c: any) => c.status === "pending",
   ).length;
 
   const formatCurrency = (amount: number) => {

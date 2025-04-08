@@ -489,15 +489,23 @@ export default function ProgramsManagement() {
         if (agreementFileInput) {
           agreementFileInput.value = "";
         }
+      } catch (error) {
+        console.error("Direct upload failed:", error);
+        toast({
+          title: "Error",
+          description: `Failed to upload agreement: ${error instanceof Error ? error.message : "Unknown error"}`,
+          variant: "destructive",
+        });
+      } finally {
+        setIsUploading(false);
+      }
     } catch (error) {
-      console.error("Direct upload failed:", error);
+      console.error("File selection error:", error);
       toast({
         title: "Error",
-        description: `Failed to upload agreement: ${error instanceof Error ? error.message : "Unknown error"}`,
+        description: `An error occurred during file selection: ${error instanceof Error ? error.message : "Unknown error"}`,
         variant: "destructive",
       });
-    } finally {
-      setIsUploading(false);
     }
   };
   
