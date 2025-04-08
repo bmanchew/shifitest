@@ -113,7 +113,8 @@ router.post('/signup', upload.any(), async (req, res) => {
     const { 
       firstName, lastName, email, phone, companyName,
       legalBusinessName, ein, businessStructure,
-      plaidPublicToken, plaidAccountId
+      plaidPublicToken, plaidAccountId,
+      primaryProgramName, primaryProgramDescription, primaryProgramDurationMonths
     } = req.body;
 
     // First verify revenue requirements using Plaid
@@ -291,6 +292,43 @@ router.post('/signup', upload.any(), async (req, res) => {
           error: middeskError instanceof Error ? middeskError.stack : String(middeskError)
         }
       });
+    }
+
+    // Initiate KYC verification with DiDit
+    // Create default program if program information was provided
+    if (primaryProgramName) {
+      try {
+        // Create the merchant's default program
+        await storage.createMerchantProgram({
+          merchantId: merchant.id,
+          name: primaryProgramName,
+          description: primaryProgramDescription || `${companyName} Standard Financing Program`,
+          durationMonths: primaryProgramDurationMonths || 12,
+          active: true,
+          isDefault: true
+        });
+
+        logger.info({
+          message: `Default program created for merchant: ${merchant.id}`,
+          category: 'system',
+          source: 'internal',
+          metadata: {
+            merchantId: merchant.id,
+            programName: primaryProgramName
+          }
+        });
+      } catch (programError) {
+        logger.error({
+          message: `Error creating default program: ${programError instanceof Error ? programError.message : String(programError)}`,
+          category: 'api',
+          source: 'internal',
+          metadata: {
+            merchantId: merchant.id,
+            error: programError instanceof Error ? programError.stack : String(programError)
+          }
+        });
+        // Continue with signup - don't fail the whole process if program creation fails
+      }
     }
 
     // Initiate KYC verification with DiDit

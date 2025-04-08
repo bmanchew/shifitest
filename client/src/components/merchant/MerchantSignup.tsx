@@ -75,6 +75,14 @@ const formSchema = z.object({
   contactPhone: z.string().regex(/^\d{10}$/, {
     message: "Please enter a valid 10-digit phone number.",
   }),
+  // Program information
+  primaryProgramName: z.string().min(2, {
+    message: "Program name must be at least 2 characters.",
+  }),
+  primaryProgramDescription: z.string().optional(),
+  primaryProgramDurationMonths: z.coerce.number().min(1, {
+    message: "Program duration must be at least 1 month.",
+  }),
   termsAgreed: z.boolean().refine(val => val === true, {
     message: "You must agree to the terms and conditions.",
   }),
@@ -131,6 +139,9 @@ export function MerchantSignup() {
       contactName: "",
       contactEmail: "",
       contactPhone: "",
+      primaryProgramName: "",
+      primaryProgramDescription: "",
+      primaryProgramDurationMonths: 12,
       termsAgreed: false,
     },
   });
@@ -607,6 +618,71 @@ export function MerchantSignup() {
                   )}
                 />
               </div>
+
+              {/* Program Information Section */}
+              <div className="col-span-2 mt-6 mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Program Information</h3>
+                <p className="text-sm text-gray-500">
+                  Set up the default financing program you'll offer to your customers
+                </p>
+              </div>
+              
+              <FormField
+                control={form.control}
+                name="primaryProgramName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Primary Program Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Standard Financing Program" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      This is the default program your customers will see
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="primaryProgramDurationMonths"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Program Duration (Months)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder="12"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="primaryProgramDescription"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>Program Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describe the financing program you offer to customers"
+                        className="resize-none"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      This description will be shown to customers when they apply
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               
               <FormField
                 control={form.control}
