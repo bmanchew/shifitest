@@ -17,6 +17,7 @@ import dueDiligenceRouter from "./due-diligence";
 import plaidUnderwritingRouter from "./plaid-underwriting";
 import plaidRouter from "./plaid";
 import cancelCoveredCareContractRouter from "./cancel-coveredcare-contract";
+import merchantPlaidSettingsRouter from "./merchant-plaid-settings";
 
 const router = express.Router();
 
@@ -49,6 +50,12 @@ router.use("/due-diligence", dueDiligenceRouter);
 router.use("/plaid-underwriting", plaidUnderwritingRouter);
 router.use("/plaid", plaidRouter);
 router.use("/cancel-coveredcare-contract", cancelCoveredCareContractRouter);
+// Import the Plaid Settings routes but mount them directly
+import { getPlaidSettings, updatePlaidSettings } from "./merchant-plaid-settings";
+
+// Use dedicated endpoints for merchant Plaid settings
+router.get("/merchants/:merchantId/plaid-settings", getPlaidSettings);
+router.patch("/merchants/:merchantId/plaid-settings", updatePlaidSettings);
 
 // Merchant Performance routes
 router.get("/merchant-performances", getAllMerchantPerformances);

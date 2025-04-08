@@ -1,16 +1,10 @@
-import { Router } from 'express';
+import { Request, Response } from 'express';
 import { db } from '../../db';
 import { plaidMerchants } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { logger } from '../../services/logger';
 import { z } from 'zod';
-import { authenticateAdmin } from '../../middleware/auth';
 import { storage } from '../../storage';
-
-const router = Router();
-
-// Apply admin authentication middleware to all routes
-router.use(authenticateAdmin);
 
 // Schema for update credentials
 const updatePlaidCredentialsSchema = z.object({
@@ -20,11 +14,11 @@ const updatePlaidCredentialsSchema = z.object({
 });
 
 /**
- * @route GET /api/merchants/:merchantId/plaid-settings
+ * @route GET /api/admin/merchants/:merchantId/plaid-settings
  * @desc Get Plaid settings for a specific merchant
  * @access Private - Admin only
  */
-router.get('/:merchantId', async (req, res) => {
+export async function getPlaidSettings(req: Request, res: Response) {
   try {
     const merchantId = parseInt(req.params.merchantId);
     if (isNaN(merchantId)) {
@@ -73,14 +67,14 @@ router.get('/:merchantId', async (req, res) => {
       message: 'Failed to fetch Plaid settings'
     });
   }
-});
+}
 
 /**
- * @route PATCH /api/merchants/:merchantId/plaid-settings
+ * @route PATCH /api/admin/merchants/:merchantId/plaid-settings
  * @desc Update Plaid settings for a specific merchant
  * @access Private - Admin only
  */
-router.patch('/:merchantId', async (req, res) => {
+export async function updatePlaidSettings(req: Request, res: Response) {
   try {
     const merchantId = parseInt(req.params.merchantId);
     if (isNaN(merchantId)) {
@@ -167,6 +161,4 @@ router.patch('/:merchantId', async (req, res) => {
       message: 'Failed to update Plaid settings'
     });
   }
-});
-
-export default router;
+}

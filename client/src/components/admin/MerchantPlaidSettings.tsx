@@ -42,10 +42,10 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
     isError,
     refetch 
   } = useQuery({
-    queryKey: ['/api/merchants', merchantId, 'plaid-settings'],
+    queryKey: ['/api/admin/merchants', merchantId, 'plaid-settings'],
     queryFn: async () => {
       try {
-        const response = await apiRequest('GET', `/api/merchants/${merchantId}/plaid-settings`);
+        const response = await apiRequest('GET', `/api/admin/merchants/${merchantId}/plaid-settings`);
         return response as unknown as PlaidSettings;
       } catch (error) {
         // If 404, it means settings don't exist yet which is okay
@@ -60,7 +60,7 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
   // Mutation to update the Plaid settings
   const { mutate: updateSettings, isPending: isUpdating } = useMutation({
     mutationFn: async (data: typeof formData) => {
-      return await apiRequest('PATCH', `/api/merchants/${merchantId}/plaid-settings`, data);
+      return await apiRequest('PATCH', `/api/admin/merchants/${merchantId}/plaid-settings`, data);
     },
     onSuccess: () => {
       toast({
@@ -83,7 +83,7 @@ export function MerchantPlaidSettings({ merchantId }: MerchantPlaidSettingsProps
   // Mutation to sync with Plaid
   const { mutate: syncWithPlaid, isPending: isSyncing } = useMutation({
     mutationFn: async () => {
-      return await apiRequest('POST', `/api/merchants/${merchantId}/plaid-sync`);
+      return await apiRequest('POST', `/api/admin/merchants/${merchantId}/plaid-sync`);
     },
     onSuccess: () => {
       toast({
