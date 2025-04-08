@@ -55,6 +55,18 @@ import { z } from "zod";
 import { MerchantProgram } from "@shared/schema";
 import { Loader2, Plus, Edit, Trash2, Upload, FileText } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { getCsrfToken, addCsrfHeader } from "@/lib/csrf";
+
+// Define agreement type
+interface ProgramAgreement {
+  id: number;
+  programId: number;
+  originalFilename: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedAt: string;
+  storedFilename: string;
+}
 
 // Define the form schema
 const programFormSchema = z.object({
@@ -69,9 +81,15 @@ type ProgramFormValues = z.infer<typeof programFormSchema>;
 const uploadProgramAgreement = async (programId: number, file: File) => {
   const formData = new FormData();
   formData.append("file", file);
-
+  
+  // Get CSRF token
+  const token = await getCsrfToken();
+  
   const response = await fetch(`/api/merchant/programs/${programId}/agreements`, {
     method: "POST",
+    headers: {
+      "X-CSRF-Token": token,
+    },
     body: formData,
     credentials: "include",
   });
@@ -119,11 +137,12 @@ export default function ProgramsManagement() {
   });
 
   // Fetch agreements for a specific program
-  const { data: agreements = [], isLoading: isAgreementsLoading, refetch: refetchAgreements } = useQuery({
+  const { data: agreements = [], isLoading: isAgreementsLoading, refetch: refetchAgreements } = useQuery<ProgramAgreement[]>({
     queryKey: ["/api/merchant/programs/agreements", selectedProgram?.id],
     queryFn: async () => {
       if (!selectedProgram) return [];
       
+      // Use credentials and ensure CSRF token is handled by default fetch behavior
       const response = await fetch(`/api/merchant/programs/${selectedProgram.id}/agreements`, {
         credentials: "include",
       });
@@ -141,11 +160,14 @@ export default function ProgramsManagement() {
   // Create a new program
   const createProgram = useMutation({
     mutationFn: async (data: ProgramFormValues) => {
+      // Get CSRF token and add it to headers
+      const headers = await addCsrfHeader({
+        "Content-Type": "application/json",
+      });
+      
       const response = await fetch("/api/merchant/programs", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(data),
         credentials: "include",
       });
@@ -177,11 +199,14 @@ export default function ProgramsManagement() {
   // Update an existing program
   const updateProgram = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<ProgramFormValues> }) => {
+      // Get CSRF token and add it to headers
+      const headers = await addCsrfHeader({
+        "Content-Type": "application/json",
+      });
+      
       const response = await fetch(`/api/merchant/programs/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(data),
         credentials: "include",
       });
@@ -212,8 +237,12 @@ export default function ProgramsManagement() {
   // Delete a program
   const deleteProgram = useMutation({
     mutationFn: async (id: number) => {
+      // Get CSRF token and add it to headers
+      const headers = await addCsrfHeader();
+      
       const response = await fetch(`/api/merchant/programs/${id}`, {
         method: "DELETE",
+        headers,
         credentials: "include",
       });
 
@@ -242,8 +271,12 @@ export default function ProgramsManagement() {
   // Delete an agreement
   const deleteAgreement = useMutation({
     mutationFn: async (id: number) => {
+      // Get CSRF token and add it to headers
+      const headers = await addCsrfHeader();
+      
       const response = await fetch(`/api/merchant/programs/agreements/${id}`, {
         method: "DELETE",
+        headers,
         credentials: "include",
       });
 
@@ -671,7 +704,7 @@ export default function ProgramsManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {agreements.map((agreement) => (
+                    {agreements.map((agreement: ProgramAgreement) => (
                       <TableRow key={agreement.id}>
                         <TableCell className="font-medium">
                           {agreement.originalFilename}
