@@ -1641,20 +1641,6 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         });
       }
 
-      logger.info({
-        message: "Application SMS requested",
-        category: "sms",
-        source: "twilio",
-        metadata: {
-          phoneNumber,
-          merchantId,
-          amount,
-          email: email || null,
-          customerName: customerName || null,
-          programId: programId || null
-        }
-      });
-
       // Get merchant
       const parsedMerchantId = parseInt(merchantId);
       logger.debug({
@@ -1692,7 +1678,8 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         metadata: {
           merchantId: parsedMerchantId,
           merchantName: merchant.name,
-          merchantBusinessType: merchant.businessType || 'unknown'
+          merchantBusinessType: merchant.businessType || 'unknown',
+          zapierIntegrationEnabled: merchant.zapierIntegrationEnabled || false
         }
       });
 
@@ -1843,71 +1830,185 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
         }
       });
 
-      // Prepare the SMS message
-      const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
+      // Get program details if applicable
+      let programName = null;
+      let programDuration = null;
       
-      logger.debug({
-        message: "Preparing to send application SMS",
-        category: "api",
-        source: "twilio",
-        metadata: {
-          phoneNumber,
-          messageLength: messageText.length,
-          containsUrl: messageText.includes('http'),
-          merchantName: merchant.name
+      if (parsedProgramId) {
+        try {
+          const program = await storage.getMerchantProgram(parsedProgramId);
+          if (program) {
+            programName = program.name;
+            programDuration = program.durationMonths;
+          }
+        } catch (err) {
+          logger.warn({
+            message: `Could not fetch program details: ${err instanceof Error ? err.message : String(err)}`,
+            category: "api",
+            source: "internal",
+            metadata: { programId: parsedProgramId }
+          });
         }
-      });
-
-      // Send SMS using Twilio service
-      const result = await twilioService.sendSMS({
-        to: phoneNumber,
-        body: messageText
-      });
+      }
       
-      logger.info({
-        message: "Application SMS sending result",
-        category: "api",
-        source: "twilio",
-        metadata: {
-          success: result.success || true,
-          isSimulated: result.isSimulated,
-          messageId: result.messageId,
-          phoneNumber
-        }
-      });
-
-      // Log the SMS delivery attempt
-      await storage.createLog({
-        level: "info",
-        category: "sms",
-        source: "twilio",
-        message: `Application SMS to ${phoneNumber}`,
-        metadata: JSON.stringify({
-          phoneNumber,
-          merchantId,
-          amount,
+      // Check if this merchant has Zapier integration enabled
+      if (merchant.zapierIntegrationEnabled && merchant.zapierWebhookUrl) {
+        // Import the zapierService - we're doing this here to avoid circular dependencies
+        const { zapierService } = await import('./services/zapier');
+        
+        logger.info({
+          message: "Using Zapier integration for application processing",
+          category: "api",
+          source: "zapier",
+          metadata: {
+            merchantId: parsedMerchantId,
+            zapierWebhookUrl: merchant.zapierWebhookUrl ? '[REDACTED]' : 'undefined',
+            contractId: newContract.id
+          }
+        });
+        
+        // Prepare data for Zapier
+        const zapierData = {
           contractId: newContract.id,
-          programId: parsedProgramId,
-          messageId: result.messageId,
-          isSimulated: result.isSimulated
-        })
-      });
+          merchantId: parsedMerchantId,
+          merchantName: merchant.name,
+          customerName: customerName || customer.name || 'Customer',
+          customerEmail: email || customer.email || '',
+          customerPhone: phoneNumber,
+          amount: parseFloat(amount),
+          programName: programName || 'Standard Financing',
+          programDuration: programDuration || termMonths,
+          applicationDate: new Date().toISOString(),
+          applicationDetails: {
+            contractNumber,
+            downPayment,
+            financedAmount,
+            interestRate,
+            monthlyPayment,
+            status: 'pending',
+            applicationUrl
+          }
+        };
+        
+        // Send to Zapier webhook
+        const zapierResult = await zapierService.sendApplicationToZapier(
+          merchant.zapierWebhookUrl,
+          zapierData
+        );
+        
+        logger.info({
+          message: "Zapier application submission result",
+          category: "api",
+          source: "zapier",
+          metadata: {
+            success: zapierResult.success,
+            message: zapierResult.message,
+            contractId: newContract.id
+          }
+        });
+        
+        // Log the Zapier submission
+        await storage.createLog({
+          level: "info",
+          category: "integration",
+          source: "zapier",
+          message: `Application data sent to Zapier for contract ${newContract.contractNumber}`,
+          metadata: JSON.stringify({
+            contractId: newContract.id,
+            merchantId: parsedMerchantId,
+            success: zapierResult.success,
+            message: zapierResult.message
+          })
+        });
+        
+        // Return success response
+        return res.json({
+          success: true,
+          message: `Application information sent to external system for processing`,
+          contractId: newContract.id,
+          applicationUrl,
+          integrationMethod: 'zapier'
+        });
+      } else {
+        // Use traditional SMS method
+        logger.info({
+          message: "Using SMS for application delivery",
+          category: "sms",
+          source: "twilio",
+          metadata: {
+            merchantId: parsedMerchantId,
+            phoneNumber,
+            contractId: newContract.id
+          }
+        });
+        
+        // Prepare the SMS message
+        const messageText = `You've been invited by ${merchant.name} to apply for financing of $${amount}. Click here to apply: ${applicationUrl}`;
+        
+        logger.debug({
+          message: "Preparing to send application SMS",
+          category: "api",
+          source: "twilio",
+          metadata: {
+            phoneNumber,
+            messageLength: messageText.length,
+            containsUrl: messageText.includes('http'),
+            merchantName: merchant.name
+          }
+        });
 
-      return res.json({
-        success: true,
-        message: result.isSimulated ? 
-          `Application SMS would be sent to ${phoneNumber} (simulation mode)` : 
-          `Application SMS sent to ${phoneNumber}`,
-        contractId: newContract.id,
-        applicationUrl,
-        messageId: result.messageId,
-        isSimulated: result.isSimulated
-      });
+        // Send SMS using Twilio service
+        const result = await twilioService.sendSMS({
+          to: phoneNumber,
+          body: messageText
+        });
+        
+        logger.info({
+          message: "Application SMS sending result",
+          category: "api",
+          source: "twilio",
+          metadata: {
+            success: result.success || true,
+            isSimulated: result.isSimulated,
+            messageId: result.messageId,
+            phoneNumber
+          }
+        });
+
+        // Log the SMS delivery attempt
+        await storage.createLog({
+          level: "info",
+          category: "sms",
+          source: "twilio",
+          message: `Application SMS to ${phoneNumber}`,
+          metadata: JSON.stringify({
+            phoneNumber,
+            merchantId,
+            amount,
+            contractId: newContract.id,
+            programId: parsedProgramId,
+            messageId: result.messageId,
+            isSimulated: result.isSimulated
+          })
+        });
+
+        return res.json({
+          success: true,
+          message: result.isSimulated ? 
+            `Application SMS would be sent to ${phoneNumber} (simulation mode)` : 
+            `Application SMS sent to ${phoneNumber}`,
+          contractId: newContract.id,
+          applicationUrl,
+          messageId: result.messageId,
+          isSimulated: result.isSimulated,
+          integrationMethod: 'sms'
+        });
+      }
     } catch (error) {
       logger.error({
-        message: `Application SMS error: ${error instanceof Error ? error.message : String(error)}`,
-        category: "sms",
-        source: "twilio",
+        message: `Application processing error: ${error instanceof Error ? error.message : String(error)}`,
+        category: "api",
+        source: "internal",
         metadata: {
           error: error instanceof Error ? error.stack : String(error)
         }
@@ -1915,7 +2016,7 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
 
       return res.status(500).json({
         success: false,
-        message: "Failed to send application SMS",
+        message: "Failed to process application",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }

@@ -22,6 +22,50 @@ export const userRoleEnum = pgEnum("user_role", [
   "investor",
 ]);
 
+// Logging enums
+export const logLevelEnum = pgEnum("log_level", [
+  "debug",
+  "info",
+  "warn",
+  "error",
+  "critical",
+]);
+
+export const logCategoryEnum = pgEnum("log_category", [
+  "system",
+  "auth",
+  "api",
+  "database",
+  "payment",
+  "notification",
+  "email",
+  "sms",
+  "security",
+  "blockchain",
+  "contract",
+  "user",
+  "merchant",
+  "analytics",
+  "integration",
+  "test",
+]);
+
+export const logSourceEnum = pgEnum("log_source", [
+  "internal",
+  "api",
+  "web",
+  "mobile",
+  "webhook",
+  "scheduled",
+  "plaid",
+  "stripe",
+  "twilio",
+  "zapier",
+  "contract",
+  "analytics",
+  "notification",
+]);
+
 export const conversationStatusEnum = pgEnum("conversation_status", [
   "active",
   "resolved",
@@ -118,41 +162,7 @@ export const applicationStepEnum = pgEnum("application_step", [
   "signing",
   "completed",
 ]);
-export const logLevelEnum = pgEnum("log_level", [
-  "debug",
-  "info",
-  "warn",
-  "error",
-  "critical",
-]);
-export const logCategoryEnum = pgEnum("log_category", [
-  "system",
-  "user",
-  "api",
-  "payment",
-  "security",
-  "contract",
-  "sms",
-  "underwriting",
-]);
-export const logSourceEnum = pgEnum("log_source", [
-  "internal",
-  "twilio",
-  "didit",
-  "plaid",
-  "thanksroger",
-  "prefi",
-  "stripe",
-  "cfpb",
-  "nlpearl",
-  "signing",
-  "analytics",
-  "notification",
-  "openai",
-  "blockchain",
-  "sesameai",
-  "middesk"
-]);
+// These log enums are defined at the top of the file
 export const verificationTypeEnum = pgEnum("verification_type", [
   "identity",
   "bank",
@@ -231,9 +241,19 @@ export const merchants = pgTable("merchants", {
   phone: text("phone").notNull(),
   address: text("address"),
   active: boolean("active").default(true),
-  archived: boolean("archived").default(false), // Add this line
+  archived: boolean("archived").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   userId: integer("user_id").references(() => users.id),
+  businessType: text("business_type"),
+  // Zapier integration settings
+  zapierIntegrationEnabled: boolean("zapier_integration_enabled").default(false),
+  zapierWebhookUrl: text("zapier_webhook_url"),
+  zapierIntegrationSettings: json("zapier_integration_settings").$type<{
+    notifyOnNewApplication?: boolean;
+    notifyOnStatusChange?: boolean;
+    notifyOnContractSigning?: boolean;
+    customFields?: Record<string, string>;
+  }>(),
 });
 
 export const insertMerchantSchema = createInsertSchema(merchants).omit({
@@ -449,6 +469,11 @@ export const insertUnderwritingDataSchema = createInsertSchema(
 
 export type Log = typeof logs.$inferSelect;
 export type InsertLog = z.infer<typeof insertLogSchema>;
+
+// Log-related types
+export type LogLevel = typeof logLevelEnum.enumValues[number];
+export type LogCategory = typeof logCategoryEnum.enumValues[number]; 
+export type LogSource = typeof logSourceEnum.enumValues[number];
 
 export type UnderwritingData = typeof underwritingData.$inferSelect;
 export type InsertUnderwritingData = z.infer<
