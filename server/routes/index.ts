@@ -23,7 +23,7 @@ import { ticketAssignmentRouter } from './ticket-assignment';
 import ticketCategorizationRouter from './ticket-categorization';
 import intercomRouter from './intercom';
 import intercomChatRouter from './intercom-chat';
-import { apiRateLimiter } from '../middleware/authRateLimiter';
+import { apiRateLimiter, authRateLimiter, userCreationRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
 import { testConnectivity } from './admin/connectivity-test';

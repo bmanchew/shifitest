@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
-import { formatVerificationStatus, getVerificationStatusColor } from '@/shared/utils/formatters';
+// Using the @shared alias defined in vite.config.ts
+import { formatVerificationStatus, getVerificationStatusColor } from '@shared/utils/formatters';
 
 interface VerificationStatusBadgeProps {
   status: string;
@@ -12,9 +13,8 @@ interface VerificationStatusBadgeProps {
 export function VerificationStatusBadge({ status, className }: VerificationStatusBadgeProps) {
   return (
     <Badge 
-      className={getVerificationStatusColor(status)}
+      className={`${getVerificationStatusColor(status)} text-xs py-1 px-2 ${className || ''}`}
       variant="outline"
-      size="sm"
     >
       {formatVerificationStatus(status)}
     </Badge>

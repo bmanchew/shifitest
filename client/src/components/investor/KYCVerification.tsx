@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { VerificationStatusBadge } from '@/features/investor/VerificationStatusBadge';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { formatVerificationStatus } from '@/shared/utils/formatters';
+import { formatVerificationStatus } from '@shared/utils/formatters';
 
 // Interface for the verification session
 // API response types
