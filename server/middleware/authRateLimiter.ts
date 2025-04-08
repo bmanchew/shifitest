@@ -135,3 +135,16 @@ export const verificationRateLimiter = createRateLimiter(
   15 * 60 * 1000,
   'Too many verification attempts. Please try again later.'
 );
+
+// General API rate limiter (100 requests per minute)
+export const apiRateLimiter = createRateLimiter(
+  100,
+  60 * 1000, 
+  'API rate limit exceeded. Please try again later.'
+);
+
+// Auth-specific rate limiter (wrapper around login rate limiter)
+export const authRateLimiter = loginRateLimiter;
+
+// User creation rate limiter (same as registration)
+export const userCreationRateLimiter = registrationRateLimiter;
