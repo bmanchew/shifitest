@@ -23,18 +23,13 @@ import { ticketAssignmentRouter } from './ticket-assignment';
 import ticketCategorizationRouter from './ticket-categorization';
 import intercomRouter from './intercom';
 import intercomChatRouter from './intercom-chat';
-import merchantZapierSettingsRoutes from './admin/merchant-zapier-settings';
-import zapierWebhookRoutes from './webhooks/zapier';
-import { createRateLimiter, loginRateLimiter, passwordResetRateLimiter, registrationRateLimiter } from '../middleware/authRateLimiter';
+import { apiRateLimiter, authRateLimiter, userCreationRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
 import { testConnectivity } from './admin/connectivity-test';
 
 // Create main router for modular routes
 const modulesRouter = express.Router();
-
-// Create API rate limiter (10 requests per second)
-const apiRateLimiter = createRateLimiter(10, 1000, 'Too many API requests. Please try again in a moment.');
 
 // Apply API rate limiting to all API routes
 modulesRouter.use('/api', apiRateLimiter);
@@ -51,8 +46,6 @@ modulesRouter.use('/api/v1/examples', exampleRoutes);
 modulesRouter.use('/api/v1/investor', investorRoutes);
 modulesRouter.use('/api/v1/merchants', merchantRoutes);
 modulesRouter.use('/api/v1/admin', adminRoutes);
-modulesRouter.use('/api/v1/admin/merchant-zapier', authenticateToken, merchantZapierSettingsRoutes);
-modulesRouter.use('/api/v1/webhooks/zapier', zapierWebhookRoutes);
 modulesRouter.use('/api/v1/contracts', contractsRoutes);
 modulesRouter.use('/api/v1/support-tickets', supportTicketsRoutes);
 modulesRouter.use('/api/v1/current-merchant', currentMerchantRoutes);
@@ -88,8 +81,6 @@ modulesRouter.use('/api/examples', exampleRoutes);
 modulesRouter.use('/api/investor', investorRoutes);
 modulesRouter.use('/api/merchants', merchantRoutes);
 modulesRouter.use('/api/admin', adminRoutes);
-modulesRouter.use('/api/admin/merchant-zapier', authenticateToken, merchantZapierSettingsRoutes);
-modulesRouter.use('/api/webhooks/zapier', zapierWebhookRoutes);
 modulesRouter.use('/api/contracts', contractsRoutes);
 modulesRouter.use('/api/support-tickets', supportTicketsRoutes);
 modulesRouter.use('/api/current-merchant', currentMerchantRoutes);

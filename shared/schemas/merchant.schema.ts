@@ -29,10 +29,6 @@ export const merchants = pgTable("merchants", {
   shifiFundingEnabled: boolean("shifi_funding_enabled").default(true),
   coveredCareFundingEnabled: boolean("covered_care_funding_enabled").default(false),
   fundingSettings: json("funding_settings"), // Additional funding provider-specific settings
-  // Zapier integration settings
-  zapierIntegrationEnabled: boolean("zapier_integration_enabled").default(false),
-  zapierWebhookUrl: text("zapier_webhook_url"), // URL for Zapier webhook integration
-  zapierIntegrationSettings: json("zapier_integration_settings"), // Additional Zapier integration configuration
 });
 
 // Merchant business details
