@@ -9,6 +9,7 @@ import { storage } from "./storage";
 import { setupVite, serveStatic } from "./vite";
 import { registerRoutes } from "./routes/index";
 import { apiProxyMiddleware } from "./middleware/api-proxy-middleware.js";
+import { extractTokenFromRequest, verifyToken } from "./utils/tokens";
 
 /**
  * Function to configure and initialize the Express application
@@ -85,39 +86,115 @@ export function createApp(): Express {
   // Enhanced authentication middleware to extract user from JWT token
   app.use(async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Use our improved token utilities to extract and verify the token
-      const { extractTokenFromRequest, verifyToken } = require('./utils/tokens');
+      // Use our imported token utilities to extract and verify the token
       const token = extractTokenFromRequest(req);
+      
+      // Enhanced debug logging for authentication
+      if (req.path.startsWith('/api/admin')) {
+        console.log(`[AUTH DEBUG] Admin route request: ${req.method} ${req.path}`);
+        console.log(`[AUTH DEBUG] Extracted token exists: ${!!token}`);
+        if (token) {
+          try {
+            // Log token details for debugging (partial token only for security)
+            const tokenShort = token.substring(0, 10) + '...' + token.substring(token.length - 5);
+            console.log(`[AUTH DEBUG] Token: ${tokenShort}`);
+            
+            // Validate token format
+            const parts = token.split('.');
+            if (parts.length !== 3) {
+              console.log(`[AUTH DEBUG] Invalid JWT format: does not contain 3 parts`);
+            } else {
+              try {
+                // Decode JWT header and payload (without verification) for debugging
+                const decodedHeader = JSON.parse(Buffer.from(parts[0], 'base64').toString());
+                const decodedPayload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                console.log(`[AUTH DEBUG] Token header:`, decodedHeader);
+                console.log(`[AUTH DEBUG] Token payload:`, decodedPayload);
+              } catch (parseErr) {
+                console.log(`[AUTH DEBUG] Error parsing token parts: ${parseErr.message}`);
+              }
+            }
+          } catch (tokenLogErr) {
+            console.log(`[AUTH DEBUG] Error logging token details: ${tokenLogErr.message}`);
+          }
+        }
+        
+        // Check for auth headers
+        if (req.headers.authorization) {
+          console.log(`[AUTH DEBUG] Authorization header exists: ${req.headers.authorization.substring(0, 15)}...`);
+        } else {
+          console.log(`[AUTH DEBUG] No Authorization header found`);
+        }
+        
+        // Check for cookies
+        if (req.cookies) {
+          console.log(`[AUTH DEBUG] Cookies:`, Object.keys(req.cookies));
+          if (req.cookies.auth_token) {
+            console.log(`[AUTH DEBUG] auth_token cookie exists (length: ${req.cookies.auth_token.length})`);
+          }
+          if (req.cookies.token) {
+            console.log(`[AUTH DEBUG] token cookie exists (length: ${req.cookies.token.length})`);
+          }
+        } else {
+          console.log(`[AUTH DEBUG] No cookies found`);
+        }
+      }
       
       if (token) {
         try {
           // Verify token using our enhanced verification with more secure algorithm
           const decoded = verifyToken(token);
           
+          if (req.path.startsWith('/api/admin')) {
+            console.log(`[AUTH DEBUG] Token verification result:`, decoded ? 'Valid' : 'Invalid');
+            if (decoded) {
+              console.log(`[AUTH DEBUG] Decoded token:`, decoded);
+            }
+          }
+          
           if (decoded && typeof decoded === 'object' && decoded.userId) {
             // Get user from database with detailed error handling
             try {
               const user = await storage.getUser(decoded.userId);
               
+              if (req.path.startsWith('/api/admin')) {
+                console.log(`[AUTH DEBUG] User from database:`, user ? { 
+                  id: user.id, 
+                  email: user.email,
+                  role: user.role 
+                } : 'Not found');
+              }
+              
               if (user) {
                 // Attach user to request object with the role from token for additional verification
+                // CRITICAL FIX: Ensure role from token takes precedence if available
+                const role = decoded.role || user.role || 'user';
+                
                 req.user = {
                   ...user,
-                  // If the token has a role but the user doesn't, use the token role
-                  // This helps with backward compatibility during the transition
-                  role: user.role || decoded.role || 'user'
+                  role // Use the explicit role assignment to ensure it's set correctly
                 };
+                
+                if (req.path.startsWith('/api/admin')) {
+                  console.log(`[AUTH DEBUG] Final user object with role:`, { 
+                    id: req.user.id, 
+                    email: req.user.email, 
+                    role: req.user.role 
+                  });
+                }
                 
                 // Log successful authentication
                 logger.debug({
-                  message: `User authenticated: ${user.email} (${user.id})`,
+                  message: `User authenticated: ${user.email} (${user.id}) with role ${req.user.role}`,
                   category: "security",
                   userId: user.id,
                   source: "internal",
                   metadata: {
                     path: req.path,
                     method: req.method,
-                    role: req.user.role
+                    role: req.user.role,
+                    tokenRole: decoded.role,
+                    dbRole: user.role
                   }
                 });
               } else {
@@ -158,6 +235,10 @@ export function createApp(): Express {
                 error: tokenError instanceof Error ? tokenError.message : String(tokenError)
               }
             });
+            
+            if (req.path.startsWith('/api/admin')) {
+              console.log(`[AUTH DEBUG] Token validation error: ${tokenError.message}`);
+            }
           } else {
             // Log when token expires for tracking
             logger.info({
@@ -168,8 +249,14 @@ export function createApp(): Express {
                 path: req.path
               }
             });
+            
+            if (req.path.startsWith('/api/admin')) {
+              console.log(`[AUTH DEBUG] Token expired`);
+            }
           }
         }
+      } else if (req.path.startsWith('/api/admin')) {
+        console.log(`[AUTH DEBUG] No token found for admin route`);
       }
       
       // Continue even if no token is present or token is invalid
@@ -186,6 +273,11 @@ export function createApp(): Express {
           stack: error instanceof Error ? error.stack : undefined
         }
       });
+      
+      if (req.path.startsWith('/api/admin')) {
+        console.log(`[AUTH DEBUG] Authentication middleware error: ${error.message}`);
+      }
+      
       next();
     }
   });

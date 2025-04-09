@@ -1,169 +1,170 @@
-import axios from 'axios';
+/**
+ * Test script for the admin merchants API endpoints
+ * This is similar to test-admin-contracts.js but for the merchants endpoint
+ */
+
 import fs from 'fs';
-const API_URL = 'http://localhost:5000/api';
+import axios from 'axios';
 
-// Store cookies in memory
+// Admin credentials
+const ADMIN_EMAIL = 'admin@shifi.com';
+const ADMIN_PASSWORD = 'admin123';
+
+// Cookie storage
 let cookies = [];
-let csrfToken = null;
 
-// Load cookies from file if it exists
+// Base URL for API requests
+const API_BASE_URL = 'http://localhost:5000/api';
+
+// Save cookies to a file
+function saveCookies(response) {
+  if (response.headers['set-cookie']) {
+    cookies = response.headers['set-cookie'];
+    fs.writeFileSync('admin-cookies.txt', cookies.join('\n'));
+    console.log('Cookies saved to admin-cookies.txt');
+  }
+}
+
+// Load cookies from file
 function loadCookies() {
   try {
-    if (fs.existsSync('./cookies.txt')) {
-      const cookieData = fs.readFileSync('./cookies.txt', 'utf8');
-      cookies = cookieData.split('\n').filter(c => c.trim() !== '');
-      console.log('Loaded cookies from file');
+    if (fs.existsSync('admin-cookies.txt')) {
+      cookies = fs.readFileSync('admin-cookies.txt', 'utf8').split('\n');
+      console.log('Cookies loaded from admin-cookies.txt');
     }
   } catch (error) {
     console.error('Error loading cookies:', error);
   }
 }
 
-// Save cookies to file
-function saveCookies() {
-  try {
-    fs.writeFileSync('./cookies.txt', cookies.join('\n'));
-    console.log('Saved cookies to file');
-  } catch (error) {
-    console.error('Error saving cookies:', error);
-  }
-}
-
-// Get CSRF token
+// Get CSRF token from the server
 async function getCsrfToken() {
+  console.log('Getting CSRF token...');
   try {
-    console.log('Getting CSRF token...');
-    const response = await axios.get(`${API_URL}/csrf-token`, {
+    // Use the correct CSRF token endpoint
+    const response = await axios.get(`${API_BASE_URL}/csrf-token`, {
       headers: {
         Cookie: cookies.join('; ')
-      }
+      },
+      withCredentials: true // This is important for session cookie handling
     });
     
-    // Save cookies from response
-    if (response.headers['set-cookie']) {
-      cookies = response.headers['set-cookie'];
-      saveCookies();
-    }
-    
-    csrfToken = response.data.csrfToken;
-    console.log('Retrieved CSRF token:', csrfToken);
-    return csrfToken;
+    saveCookies(response);
+    return response.data.csrfToken;
   } catch (error) {
-    console.error('Error getting CSRF token:', error.response?.data || error.message);
-    throw error;
+    console.error('Error getting CSRF token:', error.response ? error.response.data : error.message);
+    return null;
   }
 }
 
 // Login as admin
 async function loginAsAdmin() {
+  // First load any existing cookies
+  loadCookies();
+  
+  // Get a CSRF token for login
+  const csrfToken = await getCsrfToken();
+  if (!csrfToken) {
+    console.error('Failed to get CSRF token');
+    return false;
+  }
+  
+  console.log('Logging in as admin...');
   try {
-    // Get CSRF token first
-    await getCsrfToken();
-    
-    console.log('Logging in as admin...');
-    const loginResponse = await axios.post(
-      `${API_URL}/auth/login`,
-      {
-        email: 'admin@shifi.com',
-        password: 'admin123',
-        userType: 'admin'
+    const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+      userType: 'admin'
+    }, {
+      headers: {
+        'X-CSRF-Token': csrfToken,
+        Cookie: cookies.join('; ')
       },
-      {
-        headers: {
-          'X-CSRF-Token': csrfToken,
-          Cookie: cookies.join('; ')
-        }
-      }
-    );
+      withCredentials: true // Important for session cookie handling
+    });
     
-    // Save cookies from response
-    if (loginResponse.headers['set-cookie']) {
-      cookies = loginResponse.headers['set-cookie'];
-      saveCookies();
-    }
+    saveCookies(response);
+    console.log('Login successful:', response.data);
     
-    console.log('Admin login successful:', loginResponse.data);
-    return loginResponse.data;
-  } catch (error) {
-    console.error('Error logging in as admin:', error.response?.data || error.message);
-    throw error;
-  }
-}
-
-// Get all merchants
-async function getAllMerchants() {
-  try {
-    console.log('Getting all merchants...');
-    const response = await axios.get(
-      `${API_URL}/admin/merchants`,
-      {
-        headers: {
-          'X-CSRF-Token': csrfToken,
-          Cookie: cookies.join('; ')
-        }
-      }
-    );
-    
-    console.log('Retrieved merchants successfully');
-    return response.data;
-  } catch (error) {
-    console.error('Error getting merchants:', error.response?.data || error.message);
-    throw error;
-  }
-}
-
-// Get merchant by ID
-async function getMerchantById(id) {
-  try {
-    console.log(`Getting merchant with ID ${id}...`);
-    const response = await axios.get(
-      `${API_URL}/admin/merchants/${id}`,
-      {
-        headers: {
-          'X-CSRF-Token': csrfToken,
-          Cookie: cookies.join('; ')
-        }
-      }
-    );
-    
-    console.log(`Retrieved merchant ${id} successfully`);
-    return response.data;
-  } catch (error) {
-    console.error(`Error getting merchant ${id}:`, error.response?.data || error.message);
-    throw error;
-  }
-}
-
-// Main function to run the tests
-async function main() {
-  try {
-    // Load cookies (if they exist)
-    loadCookies();
-    
-    // Login as admin
-    await loginAsAdmin();
-    
-    // Get all merchants
-    const merchantsData = await getAllMerchants();
-    console.log('Merchants data:', JSON.stringify(merchantsData, null, 2));
-    
-    // If there are merchants, get the first one's details
-    if (merchantsData.data && merchantsData.data.length > 0) {
-      const firstMerchant = merchantsData.data[0];
-      console.log(`Found merchant with ID ${firstMerchant.id}: ${firstMerchant.name}`);
-      
-      // Get detailed information about this merchant
-      const merchantDetails = await getMerchantById(firstMerchant.id);
-      console.log('Merchant details:', JSON.stringify(merchantDetails, null, 2));
+    // Store the auth token globally to use for API requests
+    if (response.data && response.data.token) {
+      global.authTokenFromLogin = response.data.token;
+      console.log('Stored auth token for future requests');
+    } else if (response.data && response.data.user && response.data.user.token) {
+      global.authTokenFromLogin = response.data.user.token;
+      console.log('Stored auth token from user object for future requests');
     } else {
-      console.log('No merchants found in the database');
+      console.warn('No auth token found in login response');
     }
     
-    console.log('Tests completed successfully!');
+    return true;
   } catch (error) {
-    console.error('Test failed:', error);
+    console.error('Login error:', error.response ? error.response.data : error.message);
+    return false;
   }
 }
 
-// Run the main function
-main();
+// Test admin merchants API
+async function testAdminMerchants() {
+  console.log('\nTesting admin merchants API...');
+  
+  try {
+    // Get CSRF token
+    const csrfToken = await getCsrfToken();
+    if (!csrfToken) {
+      console.error('Failed to get CSRF token');
+      return;
+    }
+    
+    // Get merchants (admin endpoint)
+    console.log('Getting merchants as admin...');
+    
+    // Extract the JWT token from login response stored in localStorage
+    const storedToken = global.authTokenFromLogin;
+    console.log('Using auth token from login:', storedToken ? 'Token available' : 'Token missing');
+    
+    const merchantsResponse = await axios.get(`${API_BASE_URL}/admin/merchants`, {
+      headers: {
+        'X-CSRF-Token': csrfToken,
+        'Authorization': storedToken ? `Bearer ${storedToken}` : '',
+        Cookie: cookies.join('; ')
+      },
+      withCredentials: true // Important for session cookie handling
+    });
+    
+    if (merchantsResponse.data && merchantsResponse.data.merchants) {
+      console.log(`Retrieved ${merchantsResponse.data.merchants.length} merchants`);
+      
+      // Show the first few merchants
+      if (merchantsResponse.data.merchants.length > 0) {
+        console.log("\nSample merchants:");
+        merchantsResponse.data.merchants.slice(0, 3).forEach(merchant => {
+          console.log(`- ${merchant.id}: ${merchant.name} (${merchant.email})`);
+        });
+      }
+    } else {
+      console.log('No merchants found in response:', merchantsResponse.data);
+    }
+  } catch (error) {
+    console.error('Error testing admin merchants API:', error.response ? error.response.data : error.message);
+  }
+}
+
+// Main function
+async function main() {
+  console.log('Starting admin merchants API test...\n');
+  
+  // Login as admin
+  const loggedIn = await loginAsAdmin();
+  
+  if (loggedIn) {
+    await testAdminMerchants();
+  } else {
+    console.error('Admin login failed. Cannot proceed with tests.');
+  }
+}
+
+// Run the tests
+main()
+  .then(() => console.log('\nTest completed'))
+  .catch(error => console.error('Test failed:', error));

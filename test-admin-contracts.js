@@ -84,6 +84,18 @@ async function loginAsAdmin() {
     
     saveCookies(response);
     console.log('Login successful:', response.data);
+    
+    // Store the auth token globally to use for API requests
+    if (response.data && response.data.token) {
+      global.authTokenFromLogin = response.data.token;
+      console.log('Stored auth token for future requests');
+    } else if (response.data && response.data.user && response.data.user.token) {
+      global.authTokenFromLogin = response.data.user.token;
+      console.log('Stored auth token from user object for future requests');
+    } else {
+      console.warn('No auth token found in login response');
+    }
+    
     return true;
   } catch (error) {
     console.error('Login error:', error.response ? error.response.data : error.message);
@@ -105,9 +117,15 @@ async function testContracts() {
     
     // Get all contracts (admin can see all)
     console.log('Getting all contracts as admin...');
+    
+    // Extract the JWT token from login response stored in localStorage
+    const storedToken = global.authTokenFromLogin;
+    console.log('Using auth token from login:', storedToken ? 'Token available' : 'Token missing');
+    
     const contractsResponse = await axios.get(`${API_BASE_URL}/contracts?admin=true`, {
       headers: {
         'X-CSRF-Token': csrfToken,
+        'Authorization': storedToken ? `Bearer ${storedToken}` : '',
         Cookie: cookies.join('; ')
       },
       withCredentials: true // Important for session cookie handling
@@ -123,6 +141,7 @@ async function testContracts() {
       const contractResponse = await axios.get(`${API_BASE_URL}/contracts/${contractId}`, {
         headers: {
           'X-CSRF-Token': csrfToken,
+          'Authorization': global.authTokenFromLogin ? `Bearer ${global.authTokenFromLogin}` : '',
           Cookie: cookies.join('; ')
         },
         withCredentials: true // Important for session cookie handling
@@ -135,6 +154,7 @@ async function testContracts() {
       const underwritingResponse = await axios.get(`${API_BASE_URL}/contracts/${contractId}/underwriting`, {
         headers: {
           'X-CSRF-Token': csrfToken,
+          'Authorization': global.authTokenFromLogin ? `Bearer ${global.authTokenFromLogin}` : '',
           Cookie: cookies.join('; ')
         },
         withCredentials: true // Important for session cookie handling

@@ -54,14 +54,49 @@ export default function MerchantList() {
           const userData = localStorage.getItem("shifi_user");
           if (userData) {
             const user = JSON.parse(userData);
-            // Check different locations where token might be stored
-            authToken = user.token || (user.user && user.user.token);
+            
+            // IMPROVED token extraction - check all possible token locations
+            // Log user structure for debugging
+            console.log(`[TOKEN DEBUG] User data structure: ${JSON.stringify(user, null, 2)}`);
+            
+            // First check if token is directly on user object
+            if (user.token) {
+              authToken = user.token;
+              console.log("[TOKEN DEBUG] Found auth token directly on user object");
+            } 
+            // Then check if it's nested under user.user
+            else if (user.user && user.user.token) {
+              authToken = user.user.token;
+              console.log("[TOKEN DEBUG] Found auth token in nested user.user object");
+            }
+            // Check if it's in an access_token field
+            else if (user.access_token) {
+              authToken = user.access_token;
+              console.log("[TOKEN DEBUG] Found auth token in access_token field");
+            }
+            // Check if there's a JWT property 
+            else if (user.jwt) {
+              authToken = user.jwt;
+              console.log("[TOKEN DEBUG] Found auth token in jwt field");
+            }
+            // Check if token is directly inside user without a token property
+            else if (typeof user === 'string' && user.includes('.') && user.split('.').length === 3) {
+              // This looks like a JWT token directly
+              authToken = user;
+              console.log("[TOKEN DEBUG] User data itself appears to be a JWT token");
+            }
             
             if (authToken) {
-              console.log("Found auth token for admin merchants request");
+              console.log("Successfully found auth token for admin merchants request");
+              
+              // Log token structure for debugging (safe first/last portion only)
+              const tokenPreview = authToken.substring(0, 10) + '...' + authToken.substring(authToken.length - 5);
+              console.log(`Token preview: ${tokenPreview}`);
             } else {
-              console.log("No auth token found in localStorage");
+              console.error("No auth token found in localStorage - user data structure:", user);
             }
+          } else {
+            console.error("No user data found in localStorage");
           }
         } catch (tokenError) {
           console.error("Error getting auth token from localStorage:", tokenError);
@@ -71,6 +106,9 @@ export default function MerchantList() {
         const headers: Record<string, string> = {};
         if (authToken) {
           headers['Authorization'] = `Bearer ${authToken}`;
+          console.log("Added Authorization header with Bearer token");
+        } else {
+          console.warn("No Authorization header added (missing token)");
         }
         
         // Make the request with explicit headers

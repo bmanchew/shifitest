@@ -61,8 +61,13 @@ export const isAuthenticated = async (req: Request, res: Response, next: NextFun
  */
 export const isAdmin = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Enhanced debugging for admin authorization
+    console.log(`[ADMIN AUTH] Checking admin access for ${req.method} ${req.path}`);
+    
     // Check if user is already attached to request (by JWT middleware)
     if (!req.user) {
+      console.log(`[ADMIN AUTH] No user found on request! Authentication failed.`);
+      
       logger.warn({
         message: 'Admin authorization required but no user found on request',
         category: 'security',
@@ -79,17 +84,29 @@ export const isAdmin = async (req: Request, res: Response, next: NextFunction) =
       });
     }
     
-    // Check if user is an admin
-    if (req.user.role !== 'admin') {
+    // Log user details for debugging
+    console.log(`[ADMIN AUTH] User found: ID=${req.user.id}, Email=${req.user.email || 'unknown'}, Role=${req.user.role || 'undefined'}`);
+    
+    // CRITICAL FIX: Ensure role is properly checked, with more explicit debugging and case-insensitive comparison
+    // Extract user role and ensure it's a string, normalized to lowercase
+    const userRole = ((req.user.role || '') + '').toLowerCase().trim();
+    
+    // Now compare the normalized role with 'admin'
+    if (userRole !== 'admin') {
+      console.log(`[ADMIN AUTH] Access denied - User role '${userRole}' is not 'admin'`);
+      
+      // Detailed logging of the user object to help with debugging
+      console.log(`[ADMIN AUTH] Full user object:`, JSON.stringify(req.user, null, 2));
+      
       logger.warn({
-        message: `User ${req.user.email} (${req.user.id}) attempted to access admin resource with role ${req.user.role}`,
+        message: `User ${req.user.email || 'unknown'} (${req.user.id}) attempted to access admin resource with role ${userRole}`,
         category: 'security',
         userId: req.user.id,
         source: 'internal',
         metadata: {
           path: req.path,
           method: req.method,
-          userRole: req.user.role
+          userRole: userRole
         }
       });
       
@@ -99,8 +116,14 @@ export const isAdmin = async (req: Request, res: Response, next: NextFunction) =
       });
     }
     
+    // User is confirmed as admin, proceed
+    console.log(`[ADMIN AUTH] Access granted - User is admin`);
+    
+    // User is an admin, proceed to next middleware/route handler
     next();
   } catch (error) {
+    console.log(`[ADMIN AUTH] Error in admin authorization check: ${error instanceof Error ? error.message : String(error)}`);
+    
     logger.error({
       message: `Admin authorization error: ${error instanceof Error ? error.message : String(error)}`,
       category: 'security',
@@ -147,17 +170,27 @@ export const isMerchant = async (req: Request, res: Response, next: NextFunction
       });
     }
     
-    // Check if user is a merchant
-    if (req.user.role !== 'merchant') {
+    // CRITICAL FIX: Normalize the user role for more reliable role-based access control
+    // Extract user role and ensure it's a string, normalized to lowercase
+    const userRole = ((req.user.role || '') + '').toLowerCase().trim();
+    console.log(`[MERCHANT AUTH] Checking merchant access for user ID ${req.user.id} with role: ${userRole}`);
+
+    // Check if user is a merchant with case-insensitive comparison
+    if (userRole !== 'merchant') {
+      console.log(`[MERCHANT AUTH] Access denied - User role '${userRole}' is not 'merchant'`);
+      
+      // Log detailed user object for debugging
+      console.log(`[MERCHANT AUTH] Full user object:`, JSON.stringify(req.user, null, 2));
+      
       logger.warn({
-        message: `User ${req.user.email} (${req.user.id}) attempted to access merchant resource with role ${req.user.role}`,
+        message: `User ${req.user.email} (${req.user.id}) attempted to access merchant resource with role ${userRole}`,
         category: 'security',
         userId: req.user.id,
         source: 'internal',
         metadata: {
           path: req.path,
           method: req.method,
-          userRole: req.user.role
+          userRole: userRole
         }
       });
       
@@ -297,17 +330,26 @@ export const isAdminOrMerchant = async (req: Request, res: Response, next: NextF
       });
     }
     
-    // Check if user is an admin or merchant
-    if (req.user.role !== 'admin' && req.user.role !== 'merchant') {
+    // CRITICAL FIX: Normalize the user role for more reliable role-based access control
+    const userRole = ((req.user.role || '') + '').toLowerCase().trim();
+    console.log(`[ADMIN/MERCHANT AUTH] Checking admin/merchant access for user ID ${req.user.id} with role: ${userRole}`);
+
+    // Check if user is an admin or merchant with case-insensitive comparison
+    if (userRole !== 'admin' && userRole !== 'merchant') {
+      console.log(`[ADMIN/MERCHANT AUTH] Access denied - User role '${userRole}' is neither 'admin' nor 'merchant'`);
+      
+      // Log detailed user object for debugging
+      console.log(`[ADMIN/MERCHANT AUTH] Full user object:`, JSON.stringify(req.user, null, 2));
+      
       logger.warn({
-        message: `User ${req.user.email} (${req.user.id}) attempted to access admin/merchant resource with role ${req.user.role}`,
+        message: `User ${req.user.email} (${req.user.id}) attempted to access admin/merchant resource with role ${userRole}`,
         category: 'security',
         userId: req.user.id,
         source: 'internal',
         metadata: {
           path: req.path,
           method: req.method,
-          userRole: req.user.role
+          userRole: userRole
         }
       });
       
@@ -318,7 +360,8 @@ export const isAdminOrMerchant = async (req: Request, res: Response, next: NextF
     }
     
     // If user is a merchant, fetch merchant data
-    if (req.user.role === 'merchant') {
+    // Use the normalized role variable for consistency
+    if (userRole === 'merchant') {
       try {
         // Get the merchant record for this user
         const merchantRecords = await db.select()
@@ -424,17 +467,23 @@ export const isCustomer = async (req: Request, res: Response, next: NextFunction
       });
     }
     
-    // Check if user is a customer
-    if (req.user.role !== 'customer') {
+    // CRITICAL FIX: Normalize the user role for consistent case-insensitive checks
+    const userRole = ((req.user.role || '') + '').toLowerCase().trim();
+    console.log(`[CUSTOMER AUTH] Checking customer access for user ID ${req.user.id} with role: ${userRole}`);
+    
+    // Check if user is a customer with case-insensitive comparison
+    if (userRole !== 'customer') {
+      console.log(`[CUSTOMER AUTH] Access denied - User role '${userRole}' is not 'customer'`);
+      
       logger.warn({
-        message: `User ${req.user.email} (${req.user.id}) attempted to access customer resource with role ${req.user.role}`,
+        message: `User ${req.user.email} (${req.user.id}) attempted to access customer resource with role ${userRole}`,
         category: 'security',
         userId: req.user.id,
         source: 'internal',
         metadata: {
           path: req.path,
           method: req.method,
-          userRole: req.user.role
+          userRole: userRole
         }
       });
       
@@ -492,17 +541,23 @@ export const isInvestor = async (req: Request, res: Response, next: NextFunction
       });
     }
     
-    // Check if user is an investor
-    if (req.user.role !== 'investor') {
+    // CRITICAL FIX: Normalize the user role for consistent case-insensitive checks
+    const userRole = ((req.user.role || '') + '').toLowerCase().trim();
+    console.log(`[INVESTOR AUTH] Checking investor access for user ID ${req.user.id} with role: ${userRole}`);
+    
+    // Check if user is an investor with case-insensitive comparison
+    if (userRole !== 'investor') {
+      console.log(`[INVESTOR AUTH] Access denied - User role '${userRole}' is not 'investor'`);
+      
       logger.warn({
-        message: `User ${req.user.email} (${req.user.id}) attempted to access investor resource with role ${req.user.role}`,
+        message: `User ${req.user.email} (${req.user.id}) attempted to access investor resource with role ${userRole}`,
         category: 'security',
         userId: req.user.id,
         source: 'internal',
         metadata: {
           path: req.path,
           method: req.method,
-          userRole: req.user.role
+          userRole: userRole
         }
       });
       
@@ -560,17 +615,23 @@ export const isSalesRep = async (req: Request, res: Response, next: NextFunction
       });
     }
     
-    // Check if user is a sales representative
-    if (req.user.role !== 'sales_rep') {
+    // CRITICAL FIX: Normalize the user role for consistent case-insensitive checks
+    const userRole = ((req.user.role || '') + '').toLowerCase().trim();
+    console.log(`[SALES REP AUTH] Checking sales rep access for user ID ${req.user.id} with role: ${userRole}`);
+    
+    // Check if user is a sales representative with case-insensitive comparison
+    if (userRole !== 'sales_rep') {
+      console.log(`[SALES REP AUTH] Access denied - User role '${userRole}' is not 'sales_rep'`);
+      
       logger.warn({
-        message: `User ${req.user.email} (${req.user.id}) attempted to access sales rep resource with role ${req.user.role}`,
+        message: `User ${req.user.email} (${req.user.id}) attempted to access sales rep resource with role ${userRole}`,
         category: 'security',
         userId: req.user.id,
         source: 'internal',
         metadata: {
           path: req.path,
           method: req.method,
-          userRole: req.user.role
+          userRole: userRole
         }
       });
       
@@ -631,7 +692,11 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     }
     
     // If user is a merchant, also fetch and attach merchant data
-    if (req.user.role === 'merchant') {
+    // Use the normalized role for consistency in checks
+    const userRole = ((req.user.role || '') + '').toLowerCase().trim();
+    console.log(`[AUTH] User role from token: '${userRole}'`);
+    
+    if (userRole === 'merchant') {
       try {
         // Get the merchant record for this user
         const merchantRecords = await db.select()
@@ -731,8 +796,12 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
  */
 export const authenticateAdmin = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    console.log(`[ADMIN AUTH] Authenticating admin request for ${req.method} ${req.path}`);
+    
     // First check if the user is authenticated
     if (!req.user) {
+      console.log(`[ADMIN AUTH] No user found on request - authentication failed`);
+      
       logger.warn({
         message: 'Admin authentication required but no user found on request',
         category: 'security', 
@@ -749,17 +818,27 @@ export const authenticateAdmin = async (req: Request, res: Response, next: NextF
       });
     }
     
+    // Debug log user information
+    console.log(`[ADMIN AUTH] User found: ID=${req.user.id}, Email=${req.user.email || 'unknown'}, Role=${req.user.role || 'unknown'}`);
+    
+    // CRITICAL FIX: Normalize the role check against multiple possible formats
+    // This ensures role check works even if token structure varies
+    const userRole = req.user.role?.toLowerCase() || '';  
+    console.log(`[ADMIN AUTH] Checking if user role '${userRole}' matches 'admin'`);
+    
     // Then check if the user is an admin
-    if (req.user.role !== 'admin') {
+    if (userRole !== 'admin') {
+      console.log(`[ADMIN AUTH] Access denied - User role '${userRole}' is not 'admin'`);
+      
       logger.warn({
-        message: `User ${req.user.email} (${req.user.id}) attempted to access admin resource with role ${req.user.role}`,
+        message: `User ${req.user.email || 'unknown'} (${req.user.id}) attempted to access admin resource with role ${userRole}`,
         category: 'security',
         userId: req.user.id,
         source: 'internal',
         metadata: {
           path: req.path,
           method: req.method,
-          userRole: req.user.role
+          userRole: userRole
         }
       });
       
@@ -768,6 +847,8 @@ export const authenticateAdmin = async (req: Request, res: Response, next: NextF
         message: 'Admin access required'
       });
     }
+    
+    console.log(`[ADMIN AUTH] Access granted - User confirmed as admin`)
     
     next();
   } catch (error) {
@@ -809,8 +890,13 @@ export const authenticateAdmin = async (req: Request, res: Response, next: NextF
 export const requireRole = (role: string | string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
+      console.log(`[ROLE AUTH] Checking role access for ${req.method} ${req.path}`);
+      console.log(`[ROLE AUTH] Required role(s): ${Array.isArray(role) ? role.join(', ') : role}`);
+      
       // Check if user is already attached to request (by JWT middleware)
       if (!req.user) {
+        console.log(`[ROLE AUTH] No user found on request! Authentication failed.`);
+        
         logger.warn({
           message: 'Role-based authorization required but no user found on request',
           category: 'security',
@@ -828,20 +914,33 @@ export const requireRole = (role: string | string[]) => {
         });
       }
       
+      // Log user details for debugging
+      // ENHANCED: Normalize role check - handle various formats and case-insensitivity
+      const userRole = (req.user.role || '').toLowerCase().trim();
+      console.log(`[ROLE AUTH] User found: ID=${req.user.id}, Email=${req.user.email || 'unknown'}, Role=${userRole}`);
+      
       // Handle both single role and array of roles
-      const roles = Array.isArray(role) ? role : [role];
+      // ENHANCED: Convert all roles to lowercase for case-insensitive matching
+      const roles = Array.isArray(role) 
+        ? role.map(r => (r || '').toLowerCase().trim()) 
+        : [(role || '').toLowerCase().trim()];
+      
+      console.log(`[ROLE AUTH] Required roles (normalized): [${roles.join(', ')}]`);
       
       // Check if user has one of the required roles
-      if (!roles.includes(req.user.role)) {
+      // ENHANCED: Use case-insensitive comparison
+      if (!roles.includes(userRole)) {
+        console.log(`[ROLE AUTH] Access denied - User role '${userRole}' is not one of required roles: [${roles.join(', ')}]`);
+        
         logger.warn({
-          message: `User ${req.user.email} (${req.user.id}) attempted to access resource requiring role(s) [${roles.join(', ')}] with role ${req.user.role}`,
+          message: `User ${req.user.email || 'unknown'} (${req.user.id}) attempted to access resource requiring role(s) [${roles.join(', ')}] with role ${userRole}`,
           category: 'security',
           userId: req.user.id,
           source: 'internal',
           metadata: {
             path: req.path,
             method: req.method,
-            userRole: req.user.role,
+            userRole: userRole,
             requiredRoles: roles
           }
         });
@@ -852,8 +951,11 @@ export const requireRole = (role: string | string[]) => {
         });
       }
       
+      console.log(`[ROLE AUTH] Access granted - User role '${userRole}' matches required role(s)`)
+      
       // For merchant role, also fetch and attach merchant data
-      if (req.user.role === 'merchant' && !req.merchant) {
+      // ENHANCED: Make the role check case-insensitive
+      if ((req.user.role || '').toLowerCase() === 'merchant' && !req.merchant) {
         try {
           // Get the merchant record for this user
           const merchantRecords = await db.select()

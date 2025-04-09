@@ -123,6 +123,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log("Setting token from nested user object in login response");
       }
       
+      // Enhanced debugging - log token snippet to verify it exists
+      if (user.token) {
+        const tokenPreview = user.token.substring(0, 10) + '...' + user.token.substring(user.token.length - 5);
+        console.log(`[AUTH DEBUG] Token is present in user object. Preview: ${tokenPreview}`);
+      } else {
+        console.error("[AUTH DEBUG] No token found in response! Authentication may fail.");
+        console.error("[AUTH DEBUG] Response structure:", JSON.stringify(response, null, 2));
+      }
+      
+      // Ensure role information is preserved
+      console.log(`[AUTH DEBUG] User role: ${user.role || 'NOT SET'}`);
+      
+      // CRITICAL FIX: Create a standalone access_token field for components that look there
+      user.access_token = user.token;
+      
       // Set user state and store in localStorage before redirecting
       setUser(user);
       storeUserData(user);
