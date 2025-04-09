@@ -97,6 +97,7 @@ import paymentRouter from "./routes/payments";
 import healthRouter from "./routes/health"; // Import health routes
 import blockchainRouter from "./routes/blockchain"; // Import blockchain routes
 import salesRepRouter from "./routes/salesRep"; // Import sales rep routes
+// Import merchant router is already declared above
 import communicationsRouter from "./routes/communications"; // Import communications routes
 import plaidRouter from "./routes/plaid.routes"; // Import Plaid integration routes
 import indexRoutes from "./routes/index"; // Import routes from index.ts
@@ -5870,6 +5871,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   apiRouter.use("/merchant-dashboard", merchantDashboardRouter);
   apiRouter.use("/merchant-funding", merchantFundingRouter);
   apiRouter.use("/merchant-verification", merchantVerificationRouter);
+  apiRouter.use("/merchant", merchantRouter);
   
   // Mount the notification router
   apiRouter.use("/notifications", notificationRouter);
