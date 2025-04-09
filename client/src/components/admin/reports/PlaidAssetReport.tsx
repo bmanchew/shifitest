@@ -230,21 +230,28 @@ const PlaidAssetReport: React.FC<PlaidAssetReportProps> = ({ merchantId }) => {
                     <div className="mb-4 grid grid-cols-2 gap-4">
                       <div>
                         <h4 className="text-sm font-medium mb-1">Report ID</h4>
-                        <p className="text-sm text-muted-foreground">{selectedReportDetails.report.asset_report_id}</p>
+                        <p className="text-sm text-muted-foreground">{selectedReportDetails && selectedReportDetails.report && selectedReportDetails.report.asset_report_id}</p>
                       </div>
                       <div>
                         <h4 className="text-sm font-medium mb-1">Generated</h4>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(selectedReportDetails.report.date_generated), "PPpp")}
+                          {selectedReportDetails && selectedReportDetails.report && selectedReportDetails.report.date_generated && 
+                            format(new Date(selectedReportDetails.report.date_generated), "PPpp")}
                         </p>
                       </div>
                       <div>
                         <h4 className="text-sm font-medium mb-1">Days of History</h4>
-                        <p className="text-sm text-muted-foreground">{selectedReportDetails.report.days_requested} days</p>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedReportDetails && selectedReportDetails.report && 
+                            `${selectedReportDetails.report.days_requested} days`}
+                        </p>
                       </div>
                       <div>
                         <h4 className="text-sm font-medium mb-1">Financial Institutions</h4>
-                        <p className="text-sm text-muted-foreground">{selectedReportDetails.report.items.length} connected</p>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedReportDetails && selectedReportDetails.report && selectedReportDetails.report.items && 
+                            `${selectedReportDetails.report.items.length} connected`}
+                        </p>
                       </div>
                     </div>
 
@@ -258,34 +265,37 @@ const PlaidAssetReport: React.FC<PlaidAssetReportProps> = ({ merchantId }) => {
                         <div className="text-right">Available Balance</div>
                       </div>
                       <ScrollArea className="h-[300px]">
-                        {selectedReportDetails.report.items.map((item, itemIndex) => (
-                          <React.Fragment key={itemIndex}>
-                            {item.accounts.map((account, accountIndex) => (
-                              <div 
-                                key={`${itemIndex}-${accountIndex}`} 
-                                className="grid grid-cols-5 gap-2 p-3 text-xs border-t"
-                              >
-                                <div>{item.institution_name}</div>
-                                <div>{account.name}</div>
-                                <div className="capitalize">{account.type}{account.subtype ? ` - ${account.subtype}` : ''}</div>
-                                <div className="text-right">
-                                  {new Intl.NumberFormat('en-US', { 
-                                    style: 'currency', 
-                                    currency: account.balances.iso_currency_code 
-                                  }).format(account.balances.current / 100)}
-                                </div>
-                                <div className="text-right">
-                                  {account.balances.available !== null 
-                                    ? new Intl.NumberFormat('en-US', { 
+                        {selectedReportDetails && selectedReportDetails.report && selectedReportDetails.report.items && 
+                          selectedReportDetails.report.items.map((item, itemIndex) => (
+                            <React.Fragment key={itemIndex}>
+                              {item && item.accounts && item.accounts.map((account, accountIndex) => (
+                                <div 
+                                  key={`${itemIndex}-${accountIndex}`} 
+                                  className="grid grid-cols-5 gap-2 p-3 text-xs border-t"
+                                >
+                                  <div>{item.institution_name}</div>
+                                  <div>{account.name}</div>
+                                  <div className="capitalize">{account.type}{account.subtype ? ` - ${account.subtype}` : ''}</div>
+                                  <div className="text-right">
+                                    {account.balances && account.balances.current !== undefined && 
+                                      new Intl.NumberFormat('en-US', { 
                                         style: 'currency', 
-                                        currency: account.balances.iso_currency_code 
-                                      }).format(account.balances.available / 100)
-                                    : 'N/A'}
+                                        currency: account.balances.iso_currency_code || 'USD'
+                                      }).format(account.balances.current / 100)}
+                                  </div>
+                                  <div className="text-right">
+                                    {account.balances && account.balances.available !== null && account.balances.available !== undefined
+                                      ? new Intl.NumberFormat('en-US', { 
+                                          style: 'currency', 
+                                          currency: account.balances.iso_currency_code || 'USD'
+                                        }).format(account.balances.available / 100)
+                                      : 'N/A'}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                          </React.Fragment>
-                        ))}
+                              ))}
+                            </React.Fragment>
+                          ))
+                        }
                       </ScrollArea>
                     </div>
                   </div>

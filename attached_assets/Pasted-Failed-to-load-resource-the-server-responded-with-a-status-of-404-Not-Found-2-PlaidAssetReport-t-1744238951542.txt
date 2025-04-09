@@ -1,0 +1,33 @@
+Failed to load resource: the server responded with a status of 404 (Not Found)
+
+2
+PlaidAssetReport.tsx:233 Uncaught TypeError: Cannot read properties of undefined (reading 'asset_report_id')
+    at PlaidAssetReport.tsx:233:100
+    at Array.map (<anonymous>)
+    at PlaidAssetReport (PlaidAssetReport.tsx:217:27)
+chunk-RPCDYKBN.js?v=f9b4bf3a:14032 The above error occurred in the <PlaidAssetReport> component:
+
+    at PlaidAssetReport (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/admin/reports/PlaidAssetReport.tsx:27:29)
+    at div
+    at div
+    at MerchantDetail (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/admin/MerchantDetail.tsx:30:27)
+    at div
+    at MerchantDetailPage (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/pages/admin/MerchantDetailPage.tsx:24:18)
+    at Route (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f9b4bf3a:206:16)
+    at Switch (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f9b4bf3a:262:17)
+    at Suspense
+    at IntercomProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/IntercomProvider.tsx:22:36)
+    at ErrorBoundary (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/ErrorBoundary.tsx:8:5)
+    at App (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/App.tsx:125:31)
+    at IntercomProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/IntercomProvider.tsx:22:36)
+    at AuthProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/context/AuthContext.tsx:29:32)
+    at QueryClientProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=f9b4bf3a:2805:3)
+    at AppWrapper (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/AppWrapper.tsx?v=jU0z4vIEq6R5TbeTPqBTb:37:3)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+ErrorBoundary.tsx:24 Uncaught error: TypeError: Cannot read properties of undefined (reading 'asset_report_id')
+    at PlaidAssetReport.tsx:233:100
+    at Array.map (<anonymous>)
+    at PlaidAssetReport (PlaidAssetReport.tsx:217:27)
+ 
+Object
