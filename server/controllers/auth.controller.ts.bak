@@ -119,7 +119,7 @@ export const authController = {
       const token = jwt.sign(
         { userId: user.id },
         JWT_SECRET,
-        { expiresIn: "7d" }
+        { expiresIn: '24h' }
       );
       
       // Log successful login
@@ -137,7 +137,7 @@ export const authController = {
       const cookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
         sameSite: 'strict' as const
       };
@@ -254,14 +254,14 @@ export const authController = {
       const token = jwt.sign(
         { userId: user.id },
         JWT_SECRET,
-        { expiresIn: "7d" }
+        { expiresIn: '24h' }
       );
       
       // Set HttpOnly cookie with token
       const cookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
         sameSite: 'strict' as const
       };
@@ -923,14 +923,14 @@ export const authController = {
       const jwtToken = jwt.sign(
         { userId: user.id },
         JWT_SECRET,
-        { expiresIn: "7d" }
+        { expiresIn: '24h' }
       );
       
       // Set HttpOnly cookie with token
       const cookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
         sameSite: 'strict' as const
       };
@@ -1173,14 +1173,14 @@ export const authController = {
       const token = jwt.sign(
         { userId: user.id },
         JWT_SECRET,
-        { expiresIn: "7d" }
+        { expiresIn: '24h' }
       );
       
       // Set HttpOnly cookie with token
       const cookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
         sameSite: 'strict' as const
       };
