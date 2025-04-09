@@ -172,18 +172,17 @@ export function MerchantSignup() {
     console.log("Submitting business info:", values);
     
     try {
-      // Request a link token from your server
-      console.log("Fetching merchant signup link token...");
-      const response = await fetch('/api/plaid/create-link-token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          isSignup: true,
-          products: ["auth", "transactions", "assets"]
-        })
-      });
+      // Request a link token from your server - using GET for signup flow
+      console.log("Fetching merchant signup link token via GET...");
+      
+      // First try using a simple GET request which is simpler and less error-prone
+      const response = await fetch('/api/plaid/create-link-token');
+      
+      console.log("Link token response status:", response.status);
+      if (!response.ok) {
+        throw new Error(`Failed to get link token: ${response.status} ${response.statusText}`);
+      }
+      
       const data = await response.json();
       console.log("Link token response:", data);
       

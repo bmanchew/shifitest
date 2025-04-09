@@ -4181,9 +4181,21 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
   );
 
   // Create a link token - used to initialize Plaid Link
-  apiRouter.all(
+  apiRouter.get("/plaid/create-link-token", async (req: Request, res: Response) => {
+    // Handle GET requests by forwarding them to the handler
+    req.body = { isSignup: true, products: ["auth", "transactions", "assets"] };
+    await handleCreateLinkToken(req, res);
+  });
+  
+  apiRouter.post(
     "/plaid/create-link-token",
     async (req: Request, res: Response) => {
+      await handleCreateLinkToken(req, res);
+    }
+  );
+  
+  // Shared handler function for link token creation
+  async function handleCreateLinkToken(req: Request, res: Response) {
       try {
         const { userId, userName, userEmail, products, redirectUri, isSignup } = req.body;
         
