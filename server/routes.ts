@@ -99,6 +99,7 @@ import blockchainRouter from "./routes/blockchain"; // Import blockchain routes
 import salesRepRouter from "./routes/salesRep"; // Import sales rep routes
 // Import merchant router is already declared above
 import communicationsRouter from "./routes/communications"; // Import communications routes
+import supportTicketsRouter from "./routes/support-tickets"; // Import support tickets routes
 import plaidRouter from "./routes/plaid.routes"; // Import Plaid integration routes
 import indexRoutes from "./routes/index"; // Import routes from index.ts
 import registerSesameAIRoutes from "./routes/sesameAI"; // Import SesameAI routes
@@ -5889,7 +5890,7 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
   // Also mount the conversations endpoint at /conversations for backward compatibility
   apiRouter.use("/conversations", communicationsRouter);
   // Also mount the support-tickets endpoint for backward compatibility
-  apiRouter.use("/support-tickets", communicationsRouter);
+  apiRouter.use("/support-tickets", supportTicketsRouter);
   
   // Mount Intercom chat integration
   apiRouter.use("/chat", intercomChatRouter);
