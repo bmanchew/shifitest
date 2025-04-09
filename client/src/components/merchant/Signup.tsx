@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -6,6 +6,7 @@ import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import React from 'react';
 import { AlertCircle, CheckCircle2, Building2, FileCheck, Building as Bank } from 'lucide-react';
+import { getCsrfToken, addCsrfHeader } from '@/lib/csrf';
 
 interface SignupFormData {
   firstName: string;
@@ -89,9 +90,16 @@ export default function MerchantSignup() {
         // Get the first account from the accounts array
         const accountId = metadata.accounts?.[0]?.id;
         
+        // Get CSRF token and add it to the headers
+        const csrfToken = await getCsrfToken();
+        
         const response = await fetch('/api/merchant/signup', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken, 
+            'CSRF-Token': csrfToken
+          },
           body: JSON.stringify({
             ...formData,
             plaidPublicToken: public_token,
@@ -103,9 +111,13 @@ export default function MerchantSignup() {
         if (data.success) {
           setStep(3);
           window.location.href = data.kycSessionUrl;
+        } else {
+          console.error("API Error:", data);
+          alert("Error submitting form: " + (data.message || "Unknown error"));
         }
       } catch (error) {
         console.error('Error:', error);
+        alert("Error processing bank connection. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -120,10 +132,15 @@ export default function MerchantSignup() {
         setIsLoading(true);
         console.log("Step 1 -> 2: Fetching Plaid link token");
         // Initialize Plaid with isSignup flag to indicate this is part of the signup flow
+        // Get CSRF token for this request
+        const csrfToken = await getCsrfToken();
+        
         const response = await fetch('/api/plaid/create-link-token', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+            'CSRF-Token': csrfToken
           },
           body: JSON.stringify({
             isSignup: true,
@@ -149,10 +166,15 @@ export default function MerchantSignup() {
         if (!plaidToken) {
           console.error("No Plaid token available");
           // Try to get a new token with signup flag
+          // Get CSRF token for this request
+          const csrfToken = await getCsrfToken();
+          
           const response = await fetch('/api/plaid/create-link-token', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': csrfToken,
+              'CSRF-Token': csrfToken
             },
             body: JSON.stringify({
               isSignup: true,
