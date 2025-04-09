@@ -6,6 +6,7 @@ import { logger } from "../services/logger";
 import crypto from "crypto";
 import emailService from "../services/email";
 import { twilioService } from "../services/twilio";
+import { generateToken } from "../utils/tokens";
 
 // Define a default JWT secret for development use
 const DEFAULT_JWT_SECRET = "shifi-secure-jwt-secret-for-development-only";
@@ -115,12 +116,9 @@ export const authController = {
         throw new Error("JWT_SECRET is not configured");
       }
       
-      // Generate JWT token
-      const token = jwt.sign(
-        { userId: user.id },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+      // Generate JWT token with user role included
+      // Generate JWT token using the central token generator
+      const token = generateToken(user);
       
       // Log successful login
       logger.info({
@@ -252,12 +250,8 @@ export const authController = {
         throw new Error("JWT_SECRET is not configured");
       }
       
-      // Generate JWT token
-      const token = jwt.sign(
-        { userId: user.id },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+      // Generate JWT token with role included
+      const token = generateToken(user);
       
       // Set HttpOnly cookie with token
       const cookieOptions = {
@@ -318,9 +312,12 @@ export const authController = {
         });
       }
       
-      // Generate a fresh JWT token
+      // Generate a fresh JWT token with role included
       const token = jwt.sign(
-        { userId: req.user.id },
+        { 
+          userId: req.user.id,
+          role: req.user.role // Include user role in JWT payload
+        },
         JWT_SECRET,
         { expiresIn: "7d" }
       );
@@ -932,12 +929,8 @@ export const authController = {
         throw new Error("JWT_SECRET is not configured");
       }
       
-      // Generate JWT token
-      const jwtToken = jwt.sign(
-        { userId: user.id },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+      // Generate JWT token with role included
+      const jwtToken = generateToken(user);
       
       // Set HttpOnly cookie with token
       const cookieOptions = {
@@ -1182,12 +1175,8 @@ export const authController = {
         throw new Error("JWT_SECRET is not configured");
       }
       
-      // Generate JWT token
-      const token = jwt.sign(
-        { userId: user.id },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+      // Generate JWT token with role included
+      const token = generateToken(user);
       
       // Set HttpOnly cookie with token
       const cookieOptions = {

@@ -65,10 +65,30 @@ export function generateToken(user: any): string {
  */
 export function verifyToken(token: string): any | null {
   try {
+    // Verify the token using the configured secret
     const decoded = jwt.verify(token, DEFAULT_JWT_SECRET, {
       algorithms: ['HS512', 'HS256'] // Accept both algorithms for backward compatibility
     });
-    return decoded;
+    
+    // Ensure decoded is an object
+    if (decoded && typeof decoded === 'object') {
+      // If role is missing from the token, try to get it from the database later
+      // This allows backward compatibility with older tokens that only contain userId
+      if (!decoded.role && decoded.userId) {
+        logger.debug({
+          message: `JWT token missing role property, using database role instead`,
+          category: "security",
+          source: "internal",
+          metadata: {
+            userId: decoded.userId
+          }
+        });
+      }
+      
+      return decoded;
+    }
+    
+    return null;
   } catch (error) {
     logger.warn({
       message: `JWT verification error: ${error instanceof Error ? error.message : String(error)}`,
