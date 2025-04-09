@@ -179,18 +179,10 @@ export default function MerchantSignup() {
         const token = csrfToken || await getCsrfToken();
         console.log("Using CSRF token for Plaid link token request:", token);
         
+        // Use GET request for unauthenticated Plaid link token request during signup flow
         const response = await fetch('/api/plaid/create-link-token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': token,
-            'CSRF-Token': token
-          },
-          credentials: 'include', // Include cookies in the request
-          body: JSON.stringify({
-            isSignup: true,
-            products: ["auth", "transactions", "assets"]
-          })
+          method: 'GET',
+          credentials: 'include' // Include cookies in the request
         });
         const data = await response.json();
         console.log("Plaid link token response:", data);
@@ -225,18 +217,10 @@ export default function MerchantSignup() {
           const token = csrfToken || await getCsrfToken();
           console.log("Using CSRF token for Plaid link token refresh:", token);
           
+          // Use GET request for unauthenticated Plaid link token request during signup flow
           const response = await fetch('/api/plaid/create-link-token', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRF-Token': token,
-              'CSRF-Token': token
-            },
-            credentials: 'include', // Include cookies in the request
-            body: JSON.stringify({
-              isSignup: true,
-              products: ["auth", "transactions", "assets"]
-            })
+            method: 'GET',
+            credentials: 'include' // Include cookies in the request
           });
           const data = await response.json();
           if (data.success && data.linkToken) {

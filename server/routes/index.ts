@@ -92,6 +92,146 @@ modulesRouter.use('/api/intercom', intercomRouter);
 modulesRouter.use('/api/chat', intercomChatRouter);
 modulesRouter.use('/', ticketCategorizationRouter);
 
+// Create a separate router instance for merchant signup (no authentication required)
+// We're accessing the handler directly to avoid middleware
+import multer from 'multer';
+import { storage } from '../storage';
+import { plaidService } from '../services/plaid';
+import { logger } from '../services/logger';
+import emailService from '../services/email';
+import crypto from 'crypto';
+
+// Mount merchant signup route without authentication and without CSRF protection
+// This is a special case since users need to sign up before they have accounts
+modulesRouter.post('/api/merchant/signup', multer({ storage: multer.memoryStorage() }).any(), async (req, res) => {
+  try {
+    const { 
+      firstName, lastName, email, phone, companyName,
+      legalBusinessName, ein, businessStructure,
+      plaidPublicToken, plaidAccountId,
+      primaryProgramName, primaryProgramDescription, primaryProgramDurationMonths,
+      termsOfServiceUrl, privacyPolicyUrl
+    } = req.body;
+
+    // First verify revenue requirements using Plaid
+    if (!plaidPublicToken || !plaidAccountId) {
+      return res.status(400).json({
+        success: false,
+        message: "Bank account verification required for merchant onboarding"
+      });
+    }
+
+    // Exchange public token for access token
+    const { accessToken } = await plaidService.exchangePublicToken(plaidPublicToken);
+
+    // Create asset report for 2 years of data
+    const assetReport = await plaidService.createAssetReport(accessToken, 730); // 2 years
+
+    // Analyze the asset report for revenue verification
+    const analysis = await plaidService.analyzeAssetReportForUnderwriting(assetReport.assetReportToken);
+
+    // Calculate average monthly revenue
+    const monthlyRevenue = analysis?.income?.monthlyIncome || 0;
+    const hasRequiredHistory = analysis?.employment?.employmentMonths >= 24;
+
+    if (monthlyRevenue < 100000 || !hasRequiredHistory) {
+      return res.status(400).json({
+        success: false,
+        message: "Merchant does not meet minimum revenue requirements of $100k/month for 2 years",
+        monthlyRevenue,
+        monthsHistory: analysis?.employment?.employmentMonths
+      });
+    }
+
+    // Generate a temporary password for the merchant
+    const temporaryPassword = crypto.randomBytes(6).toString('hex');
+
+    // First create a user account with merchant role
+    const newUser = await storage.createUser({
+      email,
+      password: temporaryPassword,
+      firstName,
+      lastName,
+      name: `${firstName} ${lastName}`, // For backward compatibility
+      role: 'merchant',
+      phone
+    });
+
+    // Create merchant record associated with the user
+    const merchant = await storage.createMerchant({
+      name: companyName,
+      contactName: `${firstName} ${lastName}`,
+      email,
+      phone,
+      userId: newUser.id, // Link merchant to user account
+      terms_of_service_url: termsOfServiceUrl,
+      privacy_policy_url: privacyPolicyUrl,
+      default_program_name: primaryProgramName,
+      default_program_duration: primaryProgramDurationMonths ? parseInt(primaryProgramDurationMonths) : undefined
+    });
+
+    // Send welcome email with credentials
+    await emailService.sendMerchantWelcome(
+      email,
+      `${firstName} ${lastName}`,
+      temporaryPassword
+    );
+
+    // Log email sent
+    await logger.info({
+      message: `Welcome email sent to merchant: ${email}`,
+      category: 'system',
+      source: 'internal',
+      metadata: {
+        emailInfo: JSON.stringify({
+          merchantId: merchant.id,
+          userId: newUser.id,
+          template: 'merchant_welcome'
+        })
+      }
+    });
+
+    // Store business details
+    await storage.createMerchantBusinessDetails({
+      merchantId: merchant.id,
+      legalName: legalBusinessName,
+      ein,
+      businessStructure
+    });
+
+    // Store bank connection from Plaid
+    await storage.createPlaidConnection({
+      merchantId: merchant.id,
+      itemId: 'pending', // Will be updated after asset report is processed
+      accessToken,
+      accountId: plaidAccountId,
+      status: 'active'
+    });
+
+    return res.status(201).json({
+      success: true,
+      merchantId: merchant.id,
+      userId: newUser.id,
+      message: "Merchant signup completed successfully. Check email for login credentials."
+    });
+  } catch (err) {
+    logger.error({
+      message: `Error in merchant signup: ${err instanceof Error ? err.message : String(err)}`,
+      category: 'api',
+      source: 'internal',
+      metadata: {
+        error: err instanceof Error ? err.stack : String(err),
+        requestBody: JSON.stringify(req.body)
+      }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error processing merchant signup"
+    });
+  }
+});
+
 // Mount programsRouter explicitly
 modulesRouter.use('/api/merchant/programs', authenticateToken, programsRouter);
 
