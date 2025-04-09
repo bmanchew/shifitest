@@ -52,7 +52,7 @@ export function generateToken(user: any): string {
     payload,
     DEFAULT_JWT_SECRET,
     { 
-      expiresIn: '24h',
+      expiresIn: '7d', // Extend token expiration to 7 days instead of 24 hours
       algorithm: 'HS512' // Use stronger algorithm (HS512 instead of default HS256)
     }
   );
@@ -118,6 +118,6 @@ export function getAuthCookieOptions(rememberMe: boolean = false): any {
     secure: process.env.NODE_ENV === 'production', // Only use HTTPS in production
     path: '/',
     sameSite: 'strict' as const, // Prevent CSRF
-    maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000, // 30 days if "remember me", 24 hours otherwise
+    maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000, // 30 days if "remember me", 7 days otherwise (matching JWT token expiration)
   };
 }
