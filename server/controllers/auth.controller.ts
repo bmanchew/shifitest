@@ -313,14 +313,7 @@ export const authController = {
       }
       
       // Generate a fresh JWT token with role included
-      const token = jwt.sign(
-        { 
-          userId: req.user.id,
-          role: req.user.role // Include user role in JWT payload
-        },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+      const token = generateToken(req.user);
 
       // Return user info with token
       res.status(200).json({
