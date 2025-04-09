@@ -169,10 +169,10 @@ router.post('/signup', upload.any(), async (req, res) => {
       email,
       phone,
       userId: newUser.id, // Link merchant to user account
-      termsOfServiceUrl: termsOfServiceUrl,
-      privacyPolicyUrl: privacyPolicyUrl,
-      defaultProgramName: primaryProgramName,
-      defaultProgramDuration: primaryProgramDurationMonths ? parseInt(primaryProgramDurationMonths) : undefined
+      terms_of_service_url: termsOfServiceUrl,
+      privacy_policy_url: privacyPolicyUrl,
+      default_program_name: primaryProgramName,
+      default_program_duration: primaryProgramDurationMonths ? parseInt(primaryProgramDurationMonths) : undefined
     });
 
     // Send welcome email with credentials
@@ -202,7 +202,21 @@ router.post('/signup', upload.any(), async (req, res) => {
       legalName: legalBusinessName,
       ein,
       businessStructure,
-      // Add other fields as needed
+      addressLine1: req.body.streetAddress || '',
+      addressLine2: req.body.streetAddress2 || '',
+      city: req.body.city || '',
+      state: req.body.state || '',
+      zipCode: req.body.zipCode || '',
+      websiteUrl: req.body.website || '',
+      phone: phone || '',
+      formationDate: req.body.formationDate || '',
+      yearEstablished: req.body.yearEstablished ? parseInt(req.body.yearEstablished) : null,
+      annualRevenue: analysis?.income?.yearlyIncome || 0,
+      monthlyRevenue: monthlyRevenue || 0,
+      employeeCount: req.body.employeeCount ? parseInt(req.body.employeeCount) : null,
+      industryType: req.body.industryType || '',
+      middeskBusinessId: middeskBusinessId || '',
+      verificationStatus: businessVerificationStarted ? 'pending' : 'not_started'
     });
 
     // Process file uploads if any
@@ -310,7 +324,7 @@ router.post('/signup', upload.any(), async (req, res) => {
           description: primaryProgramDescription || `${companyName} Standard Financing Program`,
           durationMonths: parseInt(primaryProgramDurationMonths || '12'),
           active: true,
-          isDefault: true
+          is_default: true
         });
 
         logger.info({
@@ -439,7 +453,7 @@ router.patch("/:id", async (req: Request, res: Response) => {
     const updateData = {};
     const allowedFields = [
       'name', 'contactName', 'email', 'phone', 'address', 'active',
-      'termsOfServiceUrl', 'privacyPolicyUrl', 'defaultProgramName', 'defaultProgramDuration'
+      'terms_of_service_url', 'privacy_policy_url', 'default_program_name', 'default_program_duration'
     ];
 
     for (const field of allowedFields) {

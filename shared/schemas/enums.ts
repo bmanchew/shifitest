@@ -197,6 +197,17 @@ export const documentStatusEnum = pgEnum("document_status", [
   "expired",
 ]);
 
+// Business structure enum
+export const businessStructureEnum = pgEnum("business_structure", [
+  "llc",
+  "c_corp",
+  "s_corp",
+  "partnership",
+  "sole_proprietorship",
+  "non_profit",
+  "other",
+]);
+
 // Verification document enums
 export const verificationDocumentTypeEnum = pgEnum("verification_document_type", [
   "id_document",

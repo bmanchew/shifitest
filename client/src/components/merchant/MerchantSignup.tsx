@@ -98,11 +98,25 @@ enum SignupStep {
   Complete = 3,
 }
 
-// Business types - simplified to three main options
+/**
+ * Business types that match the businessStructureEnum in the database
+ * These values must match the enum values defined in shared/schemas/enums.ts:
+ * - llc: Limited Liability Company
+ * - c_corp: C Corporation
+ * - s_corp: S Corporation  
+ * - partnership: Partnership
+ * - sole_proprietorship: Sole Proprietorship
+ * - non_profit: Non-Profit Organization
+ * - other: Other Business Type
+ */
 const businessTypes = [
-  { label: "Corporation", value: "corporation" },
+  { label: "C Corporation", value: "c_corp" },
+  { label: "S Corporation", value: "s_corp" },
   { label: "Limited Liability Company (LLC)", value: "llc" },
+  { label: "Partnership", value: "partnership" },
   { label: "Sole Proprietorship", value: "sole_proprietorship" },
+  { label: "Non-Profit", value: "non_profit" },
+  { label: "Other", value: "other" },
 ];
 
 export function MerchantSignup() {

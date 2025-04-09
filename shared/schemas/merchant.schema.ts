@@ -10,7 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { applicationStepEnum, verificationStatusEnum } from "./enums";
+import { applicationStepEnum, businessStructureEnum, verificationStatusEnum } from "./enums";
 import { users } from "./user.schema";
 
 // Merchants table
@@ -26,14 +26,14 @@ export const merchants = pgTable("merchants", {
   active: boolean("active").default(true),
   archived: boolean("archived").default(false),
   // Legal and program information
-  termsOfServiceUrl: text("terms_of_service_url"),
-  privacyPolicyUrl: text("privacy_policy_url"),
-  defaultProgramName: text("default_program_name"),
-  defaultProgramDuration: integer("default_program_duration"),
+  terms_of_service_url: text("terms_of_service_url"),
+  privacy_policy_url: text("privacy_policy_url"),
+  default_program_name: text("default_program_name"),
+  default_program_duration: integer("default_program_duration"),
   // Funding provider settings
-  shifiFundingEnabled: boolean("shifi_funding_enabled").default(true),
-  coveredCareFundingEnabled: boolean("covered_care_funding_enabled").default(false),
-  fundingSettings: json("funding_settings"), // Additional funding provider-specific settings
+  shifi_funding_enabled: boolean("shifi_funding_enabled").default(true),
+  covered_care_funding_enabled: boolean("covered_care_funding_enabled").default(false),
+  funding_settings: json("funding_settings"), // Additional funding provider-specific settings
 });
 
 // Merchant Programs
@@ -44,7 +44,7 @@ export const merchantPrograms = pgTable("merchant_programs", {
   description: text("description"),
   durationMonths: integer("duration_months").notNull(),
   active: boolean("active").default(true),
-  isDefault: boolean("is_default").default(false),
+  is_default: boolean("is_default").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });
@@ -55,21 +55,33 @@ export const merchantBusinessDetails = pgTable("merchant_business_details", {
   merchantId: integer("merchant_id")
     .notNull()
     .references(() => merchants.id),
-  businessName: text("business_name").notNull(),
-  businessType: text("business_type").notNull(),
+  legalName: text("legal_name").notNull(),
+  businessStructure: businessStructureEnum("business_structure").notNull(),
   ein: text("ein"),
-  address: text("address").notNull(),
+  addressLine1: text("address_line1").notNull(),
+  addressLine2: text("address_line2"),
   city: text("city").notNull(),
   state: text("state").notNull(),
-  zip: text("zip").notNull(),
-  website: text("website"),
-  phoneNumber: text("phone_number").notNull(),
-  incorporationState: text("incorporation_state"),
-  incorporationDate: timestamp("incorporation_date"),
+  zipCode: text("zip_code").notNull(),
+  websiteUrl: text("website_url"),
+  phone: text("phone"),
+  formationDate: text("formation_date"),
+  yearEstablished: integer("year_established"),
   annualRevenue: doublePrecision("annual_revenue"),
-  numberOfEmployees: integer("number_of_employees"),
-  industryCategory: text("industry_category"),
-  industrySubcategory: text("industry_subcategory"),
+  monthlyRevenue: doublePrecision("monthly_revenue"),
+  employeeCount: integer("employee_count"),
+  industryType: text("industry_type"),
+  middeskBusinessId: text("middesk_business_id"),
+  verificationStatus: verificationStatusEnum("verification_status"),
+  verificationData: text("verification_data"),
+  aiVerificationScore: integer("ai_verification_score"),
+  aiVerificationStatus: text("ai_verification_status"),
+  aiVerificationDetails: text("ai_verification_details"),
+  aiVerificationRecommendations: text("ai_verification_recommendations"),
+  aiVerificationDate: timestamp("ai_verification_date"),
+  adminReviewedBy: integer("admin_reviewed_by"),
+  adminReviewedAt: timestamp("admin_reviewed_at"),
+  adminReviewNotes: text("admin_review_notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });
@@ -184,7 +196,7 @@ export const plaidTransfers = pgTable("plaid_transfers", {
 export const insertMerchantSchema = createInsertSchema(merchants).omit({
   id: true,
   createdAt: true,
-  fundingSettings: true,
+  funding_settings: true,
 });
 
 // Select type for merchants
