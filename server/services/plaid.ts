@@ -149,8 +149,43 @@ export const plaidService = {
    * @returns The link token object from Plaid
    */
   async createLinkToken(options: { userId?: string | number, clientUserId: string, products: string[], redirect_uri?: string }) {
+    // Generate a request ID for tracing across logs
+    const requestId = `plaid-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    
     try {
+      // Verify Plaid service is properly initialized
+      if (!this.isInitialized()) {
+        logger.error({
+          message: "Plaid service not initialized when attempting to create link token",
+          category: "api",
+          source: "plaid",
+          metadata: {
+            requestId,
+            clientUserId: options.clientUserId,
+            plaidClientId: process.env.PLAID_CLIENT_ID ? "Present" : "Missing",
+            plaidSecret: process.env.PLAID_SECRET ? "Present" : "Missing",
+            plaidEnvironment: process.env.PLAID_ENVIRONMENT || process.env.PLAID_ENV || "undefined"
+          }
+        });
+        
+        throw new Error("Plaid service not initialized - environment variables may be missing");
+      }
+      
       const { userId, clientUserId, products, redirect_uri } = options;
+      
+      // Log pre-request details 
+      logger.debug({
+        message: "Preparing Plaid link token request",
+        category: "api",
+        source: "plaid",
+        metadata: {
+          requestId,
+          clientUserId,
+          products,
+          hasRedirectUri: !!redirect_uri,
+          environment: process.env.PLAID_ENVIRONMENT || process.env.PLAID_ENV || "undefined"
+        }
+      });
       
       // Create link token configuration - using any type to avoid TypeScript errors since we're adding dynamic properties
       const config: any = {
@@ -161,42 +196,153 @@ export const plaidService = {
         products: products as any[],
         country_codes: ['US'] as any[],
         language: 'en',
-        webhook: process.env.PLAID_WEBHOOK_URL,
       };
+      
+      // Add webhook URL if configured in environment
+      if (process.env.PLAID_WEBHOOK_URL) {
+        config.webhook = process.env.PLAID_WEBHOOK_URL;
+        
+        logger.debug({
+          message: "Adding webhook URL to link token configuration",
+          category: "api",
+          source: "plaid",
+          metadata: {
+            requestId,
+            webhookUrl: process.env.PLAID_WEBHOOK_URL
+          }
+        });
+      }
       
       // Add redirect URI if provided
       if (redirect_uri) {
         config.redirect_uri = redirect_uri;
+        
+        logger.debug({
+          message: "Adding redirect URI to link token configuration",
+          category: "api",
+          source: "plaid",
+          metadata: {
+            requestId,
+            redirectUri: redirect_uri
+          }
+        });
       }
       
+      // Measure API response time for performance monitoring
+      const startTime = Date.now();
+      
+      // Make request to Plaid API 
       const response = await plaidClient.linkTokenCreate(config);
       
+      // Calculate response time
+      const responseTime = Date.now() - startTime;
+      
+      // Log successful response with performance metrics
       logger.info({
         message: `Created Plaid link token for client user ID ${clientUserId}`,
-        category: 'plaid',
+        category: 'api',
         userId: typeof userId === 'string' ? undefined : userId,
         source: 'plaid',
         metadata: {
+          requestId,
           clientUserId,
-          products
+          products,
+          responseTime: `${responseTime}ms`,
+          linkTokenLength: response.data.link_token?.length || 0,
+          expirationTime: response.data.expiration,
+          timestamp: new Date().toISOString()
         }
       });
       
       return {
         linkToken: response.data.link_token,
-        expiration: response.data.expiration
+        expiration: response.data.expiration,
+        requestId // Include the request ID in the response for client-side logging
       };
     } catch (error) {
+      // Enhanced error handling with structured information
+      let errorCode = "UNKNOWN";
+      let errorType = "INTERNAL_ERROR";
+      let errorDetails = "Unknown error";
+      
+      // Extract detailed error information from Plaid response
+      if (error.response?.data) {
+        try {
+          const plaidError = error.response.data;
+          errorDetails = JSON.stringify(plaidError);
+          errorCode = plaidError.error_code || "UNKNOWN";
+          errorType = plaidError.error_type || "API_ERROR";
+          
+          // Record detailed error info from Plaid
+          logger.error({
+            message: `Plaid API error when creating link token: ${plaidError.error_message || 'Unknown Plaid error'}`,
+            category: 'api',
+            source: 'plaid',
+            metadata: {
+              requestId,
+              errorCode,
+              errorType,
+              errorMessage: plaidError.error_message,
+              displayMessage: plaidError.display_message,
+              suggestedAction: plaidError.suggested_action,
+              requestId: plaidError.request_id,
+              clientUserId: options.clientUserId
+            }
+          });
+        } catch (parseError) {
+          // Handle errors when parsing the Plaid error response
+          logger.error({
+            message: "Error parsing Plaid error response during link token creation",
+            category: "api",
+            source: "plaid",
+            metadata: {
+              requestId,
+              originalError: String(error),
+              parseError: String(parseError),
+              responseData: error.response?.data
+            }
+          });
+        }
+      } else if (error instanceof Error) {
+        // Handle standard JavaScript errors
+        errorDetails = error.message;
+        
+        // Classify network/connection errors
+        if (error.message.includes("ETIMEDOUT") || error.message.includes("timeout")) {
+          errorCode = "REQUEST_TIMEOUT";
+          errorType = "NETWORK_ERROR";
+        } else if (error.message.includes("ECONNREFUSED")) {
+          errorCode = "CONNECTION_ERROR";
+          errorType = "NETWORK_ERROR";
+        }
+      }
+      
+      // Log comprehensive error information
       logger.error({
         message: `Error creating Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
-        category: 'plaid',
+        category: 'api',
         source: 'plaid',
         metadata: {
+          requestId,
+          errorType,
+          errorCode,
+          errorDetails,
+          requestInfo: {
+            clientUserId: options.clientUserId,
+            products: options.products,
+            hasRedirectUri: !!options.redirect_uri
+          },
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
-          clientUserId: options.clientUserId
+          timestamp: new Date().toISOString()
         }
       });
+      
+      // Enhance error message with request ID for easier correlation with logs
+      if (error instanceof Error) {
+        error.message = `Plaid link token creation failed: ${error.message} (Request ID: ${requestId})`;
+      }
+      
       throw error;
     }
   },
@@ -809,25 +955,167 @@ export const plaidService = {
    * @returns Object with access token and item ID
    */
   async exchangePublicToken(publicToken: string) {
+    // Generate a request ID for tracing across logs
+    const requestId = `plaid-exchange-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    
     try {
+      // Verify Plaid service is properly initialized
+      if (!this.isInitialized()) {
+        logger.error({
+          message: "Plaid service not initialized when attempting to exchange public token",
+          category: "api",
+          source: "plaid",
+          metadata: {
+            requestId,
+            publicTokenLength: publicToken?.length || 0,
+            plaidClientId: process.env.PLAID_CLIENT_ID ? "Present" : "Missing",
+            plaidSecret: process.env.PLAID_SECRET ? "Present" : "Missing",
+            plaidEnvironment: process.env.PLAID_ENVIRONMENT || process.env.PLAID_ENV || "undefined"
+          }
+        });
+        
+        throw new Error("Plaid service not initialized when attempting to exchange public token");
+      }
+      
+      // Validate input
+      if (!publicToken || typeof publicToken !== 'string' || publicToken.trim() === '') {
+        logger.error({
+          message: "Invalid public token provided to exchangePublicToken",
+          category: "api",
+          source: "plaid",
+          metadata: {
+            requestId,
+            publicTokenValid: !!publicToken,
+            publicTokenType: typeof publicToken
+          }
+        });
+        
+        throw new Error("Invalid public token: token is empty or invalid");
+      }
+      
+      // Log pre-request details
+      logger.debug({
+        message: "Preparing to exchange Plaid public token",
+        category: "api",
+        source: "plaid",
+        metadata: {
+          requestId,
+          publicTokenLength: publicToken.length,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      // Measure API response time for performance monitoring
+      const startTime = Date.now();
+      
+      // Make the request to Plaid
       const response = await plaidClient.itemPublicTokenExchange({
         public_token: publicToken
       });
       
+      // Calculate response time
+      const responseTime = Date.now() - startTime;
+      
+      // Log successful response
+      logger.info({
+        message: "Successfully exchanged Plaid public token",
+        category: "api",
+        source: "plaid",
+        metadata: {
+          requestId,
+          responseTime: `${responseTime}ms`,
+          itemId: response.data.item_id,
+          accessTokenReceived: !!response.data.access_token,
+          accessTokenLength: response.data.access_token?.length || 0,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
       return {
         accessToken: response.data.access_token,
-        itemId: response.data.item_id
+        itemId: response.data.item_id,
+        requestId // Include request ID for client-side tracing
       };
     } catch (error) {
+      // Enhanced error handling with structured categorization
+      let errorCode = "UNKNOWN";
+      let errorType = "INTERNAL_ERROR";
+      let errorDetails = "Unknown error";
+      
+      // Extract detailed error information from Plaid response
+      if (error.response?.data) {
+        try {
+          const plaidError = error.response.data;
+          errorDetails = JSON.stringify(plaidError);
+          errorCode = plaidError.error_code || "UNKNOWN";
+          errorType = plaidError.error_type || "API_ERROR";
+          
+          // Record detailed error info from Plaid
+          logger.error({
+            message: `Plaid API error when exchanging public token: ${plaidError.error_message || 'Unknown Plaid error'}`,
+            category: 'api',
+            source: 'plaid',
+            metadata: {
+              requestId,
+              errorCode,
+              errorType,
+              errorMessage: plaidError.error_message,
+              displayMessage: plaidError.display_message,
+              suggestedAction: plaidError.suggested_action,
+              plaidRequestId: plaidError.request_id,
+              publicTokenLength: publicToken?.length || 0
+            }
+          });
+        } catch (parseError) {
+          // Handle errors when parsing the Plaid error response
+          logger.error({
+            message: "Error parsing Plaid error response during public token exchange",
+            category: "api",
+            source: "plaid",
+            metadata: {
+              requestId,
+              originalError: String(error),
+              parseError: String(parseError),
+              responseData: error.response?.data
+            }
+          });
+        }
+      } else if (error instanceof Error) {
+        // Handle standard JavaScript errors
+        errorDetails = error.message;
+        
+        // Classify network/connection errors
+        if (error.message.includes("ETIMEDOUT") || error.message.includes("timeout")) {
+          errorCode = "REQUEST_TIMEOUT";
+          errorType = "NETWORK_ERROR";
+        } else if (error.message.includes("ECONNREFUSED")) {
+          errorCode = "CONNECTION_ERROR";
+          errorType = "NETWORK_ERROR";
+        }
+      }
+      
+      // Log comprehensive error details
       logger.error({
         message: `Error exchanging public token: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         source: "plaid",
         metadata: {
+          requestId,
+          errorType,
+          errorCode,
+          errorDetails,
+          publicTokenLength: publicToken?.length || 0,
+          publicTokenFirstChars: publicToken ? `${publicToken.substring(0, 5)}...` : 'null',
           error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
+          stack: error instanceof Error ? error.stack : undefined,
+          timestamp: new Date().toISOString()
         }
       });
+      
+      // Enhance error message with request ID and context
+      if (error instanceof Error) {
+        error.message = `Plaid public token exchange failed: ${error.message} (Request ID: ${requestId})`;
+      }
       
       throw error;
     }

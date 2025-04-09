@@ -316,31 +316,96 @@ export const plaidController = {
         expiration: linkTokenResponse.expiration
       });
     } catch (error) {
-      // Extract more detailed error information for logging
+      // Enhanced error handling with better categorization and more detailed information
       let errorDetails = "Unknown error";
       let errorCode = "UNKNOWN";
+      let errorType = "INTERNAL_ERROR";
+      let statusCode = 500;
+      let userMessage = "Error creating link token";
       
+      // Extract detailed error information from Plaid response if available
       if (error.response?.data) {
-        errorDetails = JSON.stringify(error.response.data);
-        errorCode = error.response.data.error_code || "UNKNOWN";
+        try {
+          const plaidError = error.response.data;
+          errorDetails = JSON.stringify(plaidError);
+          errorCode = plaidError.error_code || "UNKNOWN";
+          errorType = plaidError.error_type || "API_ERROR";
+          
+          // Map Plaid error types to appropriate HTTP status codes and user-friendly messages
+          if (plaidError.error_type === "INVALID_REQUEST") {
+            statusCode = 400;
+            userMessage = "Invalid request to Plaid API";
+          } else if (plaidError.error_type === "INVALID_INPUT") {
+            statusCode = 400;
+            userMessage = "Invalid input parameters";
+          } else if (plaidError.error_type === "RATE_LIMIT_EXCEEDED") {
+            statusCode = 429;
+            userMessage = "Rate limit exceeded for Plaid API. Please try again later.";
+          } else if (plaidError.error_type === "API_ERROR") {
+            statusCode = 502;
+            userMessage = "Error from Plaid API service";
+          } else if (plaidError.error_type === "ITEM_ERROR") {
+            statusCode = 404;
+            userMessage = "Requested Plaid resource not found";
+          }
+        } catch (parseError) {
+          logger.error({
+            message: "Error parsing Plaid error response",
+            category: "api",
+            userId: req.user?.id,
+            source: "plaid",
+            metadata: {
+              originalError: String(error),
+              parseError: String(parseError),
+              responseData: error.response?.data
+            }
+          });
+        }
+      } else if (error instanceof Error) {
+        // Handle standard JavaScript errors with more specific information
+        errorDetails = error.message;
+        if (error.message.includes("ETIMEDOUT") || error.message.includes("timeout")) {
+          errorCode = "REQUEST_TIMEOUT";
+          statusCode = 504;
+          userMessage = "Request to Plaid timed out. Please try again.";
+        } else if (error.message.includes("ECONNREFUSED")) {
+          errorCode = "CONNECTION_ERROR";
+          statusCode = 502;
+          userMessage = "Could not connect to Plaid API. Please try again later.";
+        }
       }
       
+      // Enhanced error logging with more context and details
       logger.error({
         message: `Error creating Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         userId: req.user?.id,
         source: "plaid",
         metadata: {
-          errorDetails,
+          errorType,
           errorCode,
-          errorStack: error instanceof Error ? error.stack : undefined
+          errorDetails,
+          requestInfo: {
+            isSignup: req.body.isSignup,
+            hasProducts: !!req.body.products,
+            hasRedirectUri: !!req.body.redirect_uri,
+            hasMerchantId: !!req.body.merchantId,
+            requestMethod: req.method,
+            path: req.path,
+            contentType: req.headers['content-type'],
+          },
+          errorStack: error instanceof Error ? error.stack : undefined,
+          timestamp: new Date().toISOString()
         }
       });
       
-      res.status(500).json({
+      // Return detailed but safely sanitized error information to client
+      res.status(statusCode).json({
         success: false,
-        message: "Error creating link token",
-        error_code: errorCode
+        message: userMessage,
+        error_type: errorType,
+        error_code: errorCode,
+        request_id: Date.now().toString() // Add a request ID for tracking in logs
       });
     }
   },
@@ -402,20 +467,96 @@ export const plaidController = {
         message: "Bank account connected successfully"
       });
     } catch (error) {
+      // Enhanced error handling with more detailed information
+      let errorDetails = "Unknown error";
+      let errorCode = "UNKNOWN";
+      let errorType = "INTERNAL_ERROR";
+      let statusCode = 500;
+      let userMessage = "Error connecting bank account";
+      
+      // Extract detailed error information based on source
+      if (error.response?.data) {
+        try {
+          const plaidError = error.response.data;
+          errorDetails = JSON.stringify(plaidError);
+          errorCode = plaidError.error_code || "UNKNOWN";
+          errorType = plaidError.error_type || "API_ERROR";
+          
+          // Map common Plaid exchange token errors to user-friendly messages
+          if (plaidError.error_code === "INVALID_PUBLIC_TOKEN") {
+            statusCode = 400;
+            userMessage = "The public token is invalid or has expired. Please try connecting your bank account again.";
+          } else if (plaidError.error_code === "ITEM_LOGIN_REQUIRED") {
+            statusCode = 428; // Precondition Required
+            userMessage = "Your bank requires you to log in again. Please reconnect your account.";
+          } else if (plaidError.error_type === "RATE_LIMIT_EXCEEDED") {
+            statusCode = 429;
+            userMessage = "Too many requests. Please try again later.";
+          }
+        } catch (parseError) {
+          logger.error({
+            message: "Error parsing Plaid error response during token exchange",
+            category: "api",
+            userId: req.user?.id,
+            source: "plaid",
+            metadata: {
+              originalError: String(error),
+              parseError: String(parseError),
+              responseData: error.response?.data
+            }
+          });
+        }
+      } else if (error instanceof Error) {
+        errorDetails = error.message;
+        
+        // Identify specific error types from the error message
+        if (error.message.includes("ETIMEDOUT") || error.message.includes("timeout")) {
+          errorCode = "REQUEST_TIMEOUT";
+          statusCode = 504;
+          userMessage = "The connection to your bank timed out. Please try again.";
+        } else if (error.message.includes("ECONNREFUSED")) {
+          errorCode = "CONNECTION_ERROR";
+          statusCode = 502;
+          userMessage = "We couldn't connect to the banking service. Please try again later.";
+        } else if (error.message.includes("database") || error.message.includes("SQL")) {
+          errorCode = "DATABASE_ERROR";
+          userMessage = "We couldn't save your bank connection. Please try again.";
+        }
+      }
+      
+      // Comprehensive error logging with request context
       logger.error({
         message: `Error exchanging Plaid public token: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         userId: req.user?.id,
         source: "plaid",
         metadata: {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
+          errorType,
+          errorCode,
+          errorDetails,
+          requestInfo: {
+            hasPublicToken: !!req.body.public_token,
+            hasMetadata: !!req.body.metadata,
+            institutionId: req.body.metadata?.institution?.id,
+            institutionName: req.body.metadata?.institution?.name,
+            accounts: req.body.metadata?.accounts ? `${req.body.metadata.accounts.length} accounts` : 'none',
+            linkSessionId: req.body.metadata?.link_session_id || 'none',
+            requestMethod: req.method,
+            contentType: req.headers['content-type']
+          },
+          errorStack: error instanceof Error ? error.stack : undefined,
+          timestamp: new Date().toISOString()
         }
       });
       
-      res.status(500).json({
+      // Return user-friendly error message with tracking information
+      res.status(statusCode).json({
         success: false,
-        message: "Error connecting bank account"
+        message: userMessage,
+        error_type: errorType,
+        error_code: errorCode,
+        request_id: Date.now().toString(), // Add a request ID for tracking in logs
+        retry_suggested: statusCode !== 400 // Suggest retry for non-400 errors
       });
     }
   },
@@ -459,22 +600,88 @@ export const plaidController = {
         endDate
       });
     } catch (error) {
+      // Enhanced error handling with better categorization
+      let errorDetails = "Unknown error";
+      let errorCode = "UNKNOWN";
+      let errorType = "INTERNAL_ERROR";
+      let statusCode = 500;
+      let userMessage = "Error getting transactions";
+      
+      // Extract detailed error information from Plaid response
+      if (error.response?.data) {
+        try {
+          const plaidError = error.response.data;
+          errorDetails = JSON.stringify(plaidError);
+          errorCode = plaidError.error_code || "UNKNOWN";
+          errorType = plaidError.error_type || "API_ERROR";
+          
+          // Map common Plaid transactions errors to user-friendly messages
+          if (plaidError.error_code === "ITEM_LOGIN_REQUIRED") {
+            statusCode = 428; // Precondition Required
+            userMessage = "Your bank requires you to log in again. Please reconnect your account.";
+          } else if (plaidError.error_type === "RATE_LIMIT_EXCEEDED") {
+            statusCode = 429;
+            userMessage = "Too many requests. Please try again later.";
+          } else if (plaidError.error_code === "PRODUCT_NOT_READY") {
+            statusCode = 400;
+            userMessage = "Transaction data is still being processed. Please try again in a few minutes.";
+          }
+        } catch (parseError) {
+          logger.error({
+            message: "Error parsing Plaid error response when retrieving transactions",
+            category: "api",
+            userId: req.user?.id,
+            source: "plaid",
+            metadata: {
+              originalError: String(error),
+              parseError: String(parseError),
+              responseData: error.response?.data
+            }
+          });
+        }
+      } else if (error instanceof Error) {
+        errorDetails = error.message;
+        
+        // Identify specific transaction retrieval errors from the message
+        if (error.message.includes("ETIMEDOUT") || error.message.includes("timeout")) {
+          errorCode = "REQUEST_TIMEOUT";
+          statusCode = 504;
+          userMessage = "The connection to get your transactions timed out. Please try again.";
+        } else if (error.message.includes("database") || error.message.includes("SQL")) {
+          errorCode = "DATABASE_ERROR";
+          userMessage = "We couldn't retrieve your transaction data. Please try again.";
+        }
+      }
+      
+      // Comprehensive error logging with transaction request context
       logger.error({
         message: `Error getting Plaid transactions: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         userId: req.user?.id,
         source: "plaid",
         metadata: {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          startDate: req.query.startDate,
-          endDate: req.query.endDate
+          errorType,
+          errorCode,
+          errorDetails,
+          requestInfo: {
+            startDate: req.query.startDate,
+            endDate: req.query.endDate,
+            usingDefaultDates: !req.query.startDate || !req.query.endDate,
+            requestMethod: req.method,
+            path: req.path
+          },
+          errorStack: error instanceof Error ? error.stack : undefined,
+          timestamp: new Date().toISOString()
         }
       });
       
-      res.status(500).json({
+      // Return user-friendly error with consistent format
+      res.status(statusCode).json({
         success: false,
-        message: "Error getting transactions"
+        message: userMessage,
+        error_type: errorType,
+        error_code: errorCode,
+        request_id: Date.now().toString() // Add a request ID for tracking in logs
       });
     }
   },
