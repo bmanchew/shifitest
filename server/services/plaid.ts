@@ -1,7 +1,11 @@
-import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
+import { Configuration, PlaidApi, PlaidEnvironments, LinkTokenCreateRequest } from 'plaid';
 import { storage } from '../storage';
 import { logger } from './logger';
 import { plaidTransferService } from './plaid.transfers';
+
+// Check if Plaid credentials are available
+const hasPlaidCredentials = !!(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET);
+let initialized = false;
 
 // Configure Plaid client
 const configuration = new Configuration({
@@ -18,10 +22,42 @@ const configuration = new Configuration({
 
 const plaidClient = new PlaidApi(configuration);
 
+// Log Plaid initialization status
+if (hasPlaidCredentials) {
+  initialized = true;
+  logger.info({
+    message: "Plaid service initialized successfully",
+    category: "system",
+    source: "plaid",
+    metadata: {
+      environment: process.env.PLAID_ENVIRONMENT || process.env.PLAID_ENV || "sandbox",
+      clientId: process.env.PLAID_CLIENT_ID ? "Present" : "Missing",
+      secret: process.env.PLAID_SECRET ? "Present" : "Missing"
+    }
+  });
+} else {
+  logger.error({
+    message: "Failed to initialize Plaid service - missing credentials",
+    category: "system",
+    source: "plaid",
+    metadata: {
+      clientId: process.env.PLAID_CLIENT_ID ? "Present" : "Missing",
+      secret: process.env.PLAID_SECRET ? "Present" : "Missing"
+    }
+  });
+}
+
 /**
  * Service for interacting with the Plaid API
  */
 export const plaidService = {
+  /**
+   * Check if the Plaid service is properly initialized
+   * @returns boolean indicating if the service is ready to use
+   */
+  isInitialized() {
+    return initialized;
+  },
   /**
    * Analyze an asset report for underwriting purposes
    * @param assetReportToken The asset report token
@@ -991,12 +1027,8 @@ export const plaidService = {
   },
 
   /**
-   * Check if Plaid service is initialized
-   * @returns Boolean indicating if Plaid is ready
+   * This method is already defined at the top of the service
    */
-  isInitialized() {
-    return !!plaidClient && !!process.env.PLAID_CLIENT_ID && !!process.env.PLAID_SECRET;
-  },
 
   /**
    * Create an asset report based on customer phone number

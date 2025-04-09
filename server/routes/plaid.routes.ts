@@ -4,7 +4,9 @@ import { isAuthenticated, isAdmin, isMerchant, isAdminOrMerchant } from '../midd
 
 const router = express.Router();
 
-// Link token creation for connecting bank accounts
+// Link token creation endpoint with both GET and POST support
+// GET is used by the merchant signup flow without authentication
+router.get("/create-link-token", plaidController.createLinkToken);
 router.post("/create-link-token", isAuthenticated, plaidController.createLinkToken);
 
 // Exchange public token for access token (post-connection)

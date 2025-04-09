@@ -228,51 +228,119 @@ export const plaidController = {
    */
   async createLinkToken(req: Request, res: Response) {
     try {
-      // Check if user is authenticated
-      if (!req.user) {
+      // Extract parameters from request
+      const { products, redirect_uri, merchantId, isSignup } = req.body;
+      
+      let clientUserId;
+      let userEmail;
+      
+      // For merchant signup flow where user isn't authenticated yet
+      if (isSignup === true) {
+        // Generate a temporary ID for signup flow
+        clientUserId = `signup-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+        
+        logger.info({
+          message: `Creating Plaid link token for merchant signup`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            clientUserId,
+            isSignup: true,
+            products: products || ["auth", "transactions", "assets"]
+          }
+        });
+      } else if (!req.user) {
+        // For non-signup flows where authentication is required
         return res.status(401).json({
           success: false,
           message: "Not authenticated"
         });
+      } else {
+        // For authenticated users
+        clientUserId = req.user.id.toString();
+        userEmail = req.user.email;
+        
+        logger.info({
+          message: `Plaid link token created for user: ${userEmail}`,
+          category: "api",
+          userId: req.user.id,
+          source: "plaid",
+          metadata: {
+            products,
+            merchantId
+          }
+        });
       }
       
-      // Extract parameters from request
-      const { products, redirect_uri, merchantId } = req.body;
+      // Format products correctly for Plaid
+      let formattedProducts = [];
+      if (Array.isArray(products)) {
+        formattedProducts = products;
+      } else if (products) {
+        formattedProducts = [products];
+      } else {
+        formattedProducts = ["auth", "transactions", "assets"]; // Default products
+      }
       
-      // Create link token
-      // This would use the Plaid client in a real implementation
-      const linkToken = "placeholder_link_token"; // Replace with actual Plaid client call
+      // Check if Plaid is properly initialized
+      if (!plaidService.isInitialized()) {
+        logger.error({
+          message: "Plaid service not initialized when trying to create link token",
+          category: "api",
+          source: "plaid",
+          metadata: {
+            clientUserId,
+            isSignup: isSignup
+          },
+        });
+        
+        return res.status(503).json({
+          success: false,
+          message: "Plaid service is not available. Please try again later.",
+          error: "PLAID_NOT_INITIALIZED"
+        });
+      }
       
-      logger.info({
-        message: `Plaid link token created for user: ${req.user.email}`,
-        category: "api",
-        userId: req.user.id,
-        source: "plaid",
-        metadata: {
-          products,
-          merchantId
-        }
+      // Create a real link token using the Plaid service
+      const linkTokenResponse = await plaidService.createLinkToken({
+        userId: clientUserId,
+        clientUserId,
+        products: formattedProducts,
+        redirect_uri: redirect_uri
       });
       
       res.status(200).json({
         success: true,
-        link_token: linkToken
+        linkToken: linkTokenResponse.linkToken,
+        link_token: linkTokenResponse.linkToken, // For backward compatibility
+        expiration: linkTokenResponse.expiration
       });
     } catch (error) {
+      // Extract more detailed error information for logging
+      let errorDetails = "Unknown error";
+      let errorCode = "UNKNOWN";
+      
+      if (error.response?.data) {
+        errorDetails = JSON.stringify(error.response.data);
+        errorCode = error.response.data.error_code || "UNKNOWN";
+      }
+      
       logger.error({
         message: `Error creating Plaid link token: ${error instanceof Error ? error.message : String(error)}`,
         category: "api",
         userId: req.user?.id,
         source: "plaid",
         metadata: {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
+          errorDetails,
+          errorCode,
+          errorStack: error instanceof Error ? error.stack : undefined
         }
       });
       
       res.status(500).json({
         success: false,
-        message: "Error creating link token"
+        message: "Error creating link token",
+        error_code: errorCode
       });
     }
   },
