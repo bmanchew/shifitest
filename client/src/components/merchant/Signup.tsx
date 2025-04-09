@@ -30,6 +30,11 @@ interface SignupFormData {
   ownerPhone: string;
   ownershipPercentage: string;
   ownerRole: string;
+  termsOfServiceUrl: string;
+  privacyPolicyUrl: string;
+  primaryProgramName: string;
+  primaryProgramDescription: string;
+  primaryProgramDurationMonths: string;
 }
 
 const steps = [
@@ -197,6 +202,56 @@ export default function MerchantSignup() {
                 onChange={(e) => setFormData({...formData, businessStructure: e.target.value})}
                 required
               />
+            </div>
+            
+            {/* Program Information */}
+            <div className="border-t pt-4 mt-4">
+              <h3 className="text-md font-semibold mb-3">Financing Program Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  placeholder="Program Name"
+                  value={formData.primaryProgramName}
+                  onChange={(e) => setFormData({...formData, primaryProgramName: e.target.value})}
+                  required
+                />
+                <Input
+                  placeholder="Program Duration (months)"
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={formData.primaryProgramDurationMonths}
+                  onChange={(e) => setFormData({...formData, primaryProgramDurationMonths: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="mt-3">
+                <Input
+                  placeholder="Program Description"
+                  value={formData.primaryProgramDescription}
+                  onChange={(e) => setFormData({...formData, primaryProgramDescription: e.target.value})}
+                />
+              </div>
+            </div>
+            
+            {/* Legal Links */}
+            <div className="border-t pt-4 mt-4">
+              <h3 className="text-md font-semibold mb-3">Legal Document Links</h3>
+              <div className="space-y-3">
+                <Input
+                  placeholder="Terms of Service URL"
+                  type="url"
+                  value={formData.termsOfServiceUrl}
+                  onChange={(e) => setFormData({...formData, termsOfServiceUrl: e.target.value})}
+                  required
+                />
+                <Input
+                  placeholder="Privacy Policy URL"
+                  type="url"
+                  value={formData.privacyPolicyUrl}
+                  onChange={(e) => setFormData({...formData, privacyPolicyUrl: e.target.value})}
+                  required
+                />
+              </div>
             </div>
           </div>
         );

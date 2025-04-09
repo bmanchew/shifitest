@@ -25,10 +25,28 @@ export const merchants = pgTable("merchants", {
   address: text("address"),
   active: boolean("active").default(true),
   archived: boolean("archived").default(false),
+  // Legal and program information
+  termsOfServiceUrl: text("terms_of_service_url"),
+  privacyPolicyUrl: text("privacy_policy_url"),
+  defaultProgramName: text("default_program_name"),
+  defaultProgramDuration: integer("default_program_duration"),
   // Funding provider settings
   shifiFundingEnabled: boolean("shifi_funding_enabled").default(true),
   coveredCareFundingEnabled: boolean("covered_care_funding_enabled").default(false),
   fundingSettings: json("funding_settings"), // Additional funding provider-specific settings
+});
+
+// Merchant Programs
+export const merchantPrograms = pgTable("merchant_programs", {
+  id: serial("id").primaryKey(),
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  durationMonths: integer("duration_months").notNull(),
+  active: boolean("active").default(true),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
 });
 
 // Merchant business details
@@ -166,6 +184,7 @@ export const plaidTransfers = pgTable("plaid_transfers", {
 export const insertMerchantSchema = createInsertSchema(merchants).omit({
   id: true,
   createdAt: true,
+  fundingSettings: true,
 });
 
 // Select type for merchants
@@ -225,6 +244,23 @@ export type MerchantVerification = typeof merchantVerifications.$inferSelect;
 // Insert type for merchant verifications
 export type InsertMerchantVerification = z.infer<
   typeof insertMerchantVerificationSchema
+>;
+
+// Insert schema for merchant programs
+export const insertMerchantProgramSchema = createInsertSchema(
+  merchantPrograms
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Select type for merchant programs
+export type MerchantProgram = typeof merchantPrograms.$inferSelect;
+
+// Insert type for merchant programs
+export type InsertMerchantProgram = z.infer<
+  typeof insertMerchantProgramSchema
 >;
 
 // Insert schema for application progress

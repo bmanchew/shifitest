@@ -114,7 +114,8 @@ router.post('/signup', upload.any(), async (req, res) => {
       firstName, lastName, email, phone, companyName,
       legalBusinessName, ein, businessStructure,
       plaidPublicToken, plaidAccountId,
-      primaryProgramName, primaryProgramDescription, primaryProgramDurationMonths
+      primaryProgramName, primaryProgramDescription, primaryProgramDurationMonths,
+      termsOfServiceUrl, privacyPolicyUrl
     } = req.body;
 
     // First verify revenue requirements using Plaid
@@ -167,7 +168,11 @@ router.post('/signup', upload.any(), async (req, res) => {
       contactName: `${firstName} ${lastName}`,
       email,
       phone,
-      userId: newUser.id // Link merchant to user account
+      userId: newUser.id, // Link merchant to user account
+      termsOfServiceUrl: termsOfServiceUrl,
+      privacyPolicyUrl: privacyPolicyUrl,
+      defaultProgramName: primaryProgramName,
+      defaultProgramDuration: primaryProgramDurationMonths ? parseInt(primaryProgramDurationMonths) : undefined
     });
 
     // Send welcome email with credentials
@@ -303,7 +308,7 @@ router.post('/signup', upload.any(), async (req, res) => {
           merchantId: merchant.id,
           name: primaryProgramName,
           description: primaryProgramDescription || `${companyName} Standard Financing Program`,
-          durationMonths: primaryProgramDurationMonths || 12,
+          durationMonths: parseInt(primaryProgramDurationMonths || '12'),
           active: true,
           isDefault: true
         });
@@ -432,7 +437,10 @@ router.patch("/:id", async (req: Request, res: Response) => {
 
     // Extract fields to update
     const updateData = {};
-    const allowedFields = ['name', 'contactName', 'email', 'phone', 'address', 'active'];
+    const allowedFields = [
+      'name', 'contactName', 'email', 'phone', 'address', 'active',
+      'termsOfServiceUrl', 'privacyPolicyUrl', 'defaultProgramName', 'defaultProgramDuration'
+    ];
 
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {

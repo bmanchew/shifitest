@@ -21,6 +21,91 @@ const plaidClient = new PlaidApi(configuration);
  */
 export const plaidService = {
   /**
+   * Analyze an asset report for underwriting purposes
+   * @param assetReportToken The asset report token
+   * @returns Analysis of income, transactions, and employment history
+   */
+  async analyzeAssetReportForUnderwriting(assetReportToken: string) {
+    try {
+      const reportResponse = await plaidClient.assetReportGet({
+        asset_report_token: assetReportToken
+      });
+      
+      const report = reportResponse.data.report;
+      
+      // Basic analysis framework
+      const analysis = {
+        income: {
+          monthlyIncome: 0,
+          annualIncome: 0,
+          incomeStability: 0
+        },
+        employment: {
+          employmentMonths: 0,
+          employmentStability: 0
+        },
+        transactions: {
+          averageMonthlyExpenses: 0,
+          largeDeposits: [],
+          largeWithdrawals: []
+        }
+      };
+      
+      // This is a simplified analysis - in a real implementation,
+      // this would be much more sophisticated
+      if (report && report.items && report.items.length > 0) {
+        // Calculate estimated monthly income based on deposits
+        const accounts = report.items.flatMap(item => item.accounts || []);
+        
+        // Simple income estimation based on regular deposits
+        // This is very simplified - real income detection would be more complex
+        const monthlyDeposits = accounts.reduce((sum, account) => {
+          // Only use checking accounts for income analysis
+          if (account.type === 'depository' && account.subtype === 'checking') {
+            return sum + (account.balances?.current || 0) * 0.2; // Very rough income estimate
+          }
+          return sum;
+        }, 0);
+        
+        analysis.income.monthlyIncome = monthlyDeposits;
+        analysis.income.annualIncome = monthlyDeposits * 12;
+        
+        // Simplified employment tenure estimate - just using account age
+        // In reality, this would use employment verification or transaction patterns
+        const oldestAccountMonths = Math.max(...accounts.map(account => {
+          const days = account.days_available || 0;
+          return Math.floor(days / 30);
+        }));
+        
+        analysis.employment.employmentMonths = oldestAccountMonths;
+      }
+      
+      logger.info({
+        message: 'Analyzed asset report for underwriting',
+        category: 'api',
+        source: 'plaid',
+        metadata: {
+          assetReportToken,
+          analysisResult: JSON.stringify(analysis)
+        }
+      });
+      
+      return analysis;
+    } catch (error) {
+      logger.error({
+        message: `Error analyzing asset report: ${error instanceof Error ? error.message : String(error)}`,
+        category: 'api',
+        source: 'plaid',
+        metadata: {
+          assetReportToken,
+          error: error instanceof Error ? error.stack : String(error)
+        }
+      });
+      
+      throw error;
+    }
+  },
+  /**
    * Create a link token for initializing Plaid Link
    * @param options Options for creating link token including userId, clientUserId, and products
    * @returns The link token object from Plaid
