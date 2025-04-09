@@ -245,6 +245,7 @@ export interface IStorage {
   getContractsByStatus(status: string): Promise<Contract[]>;
   storeAssetReportToken(contractId: number, assetReportToken: string, assetReportId: string, options: any): Promise<AssetReport>;
   getAssetReportById(id: number): Promise<AssetReport | undefined>;
+  getAssetReportByToken(assetReportId: string): Promise<AssetReport | undefined>;
   getAssetReportsByContractId(contractId: number): Promise<AssetReport[]>;
   getAssetReportsByUserId(userId: number): Promise<AssetReport[]>;
   getAssetReportsByAssetReportId(assetReportId: string): Promise<AssetReport[]>;
@@ -1952,6 +1953,11 @@ export class DatabaseStorage implements IStorage {
 
   async getAssetReportById(id: number): Promise<AssetReport | undefined> {
     const [assetReport] = await db.select().from(assetReports).where(eq(assetReports.id, id));
+    return assetReport || undefined;
+  }
+  
+  async getAssetReportByToken(assetReportId: string): Promise<AssetReport | undefined> {
+    const [assetReport] = await db.select().from(assetReports).where(eq(assetReports.assetReportId, assetReportId));
     return assetReport || undefined;
   }
 

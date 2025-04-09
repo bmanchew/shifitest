@@ -11,6 +11,91 @@ const router = Router();
 router.use(authenticateToken);
 router.use(isAdmin);
 
+// Get a specific asset report by ID
+router.get('/asset-report/:assetReportId', async (req: Request, res: Response) => {
+  try {
+    const { assetReportId } = req.params;
+    
+    if (!assetReportId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Asset report ID is required" 
+      });
+    }
+    
+    logger.info({
+      message: `Admin requesting specific asset report: ${assetReportId}`,
+      category: "api",
+      userId: req.user?.id,
+      source: "internal",
+      metadata: {
+        assetReportId,
+        path: req.path,
+        method: req.method
+      }
+    });
+    
+    // Fetch the asset report from storage by token
+    const assetReport = await storage.getAssetReportByToken(assetReportId);
+    
+    if (!assetReport) {
+      return res.status(404).json({
+        success: false,
+        message: "Asset report not found"
+      });
+    }
+    
+    // If we have analysis data, return it
+    if (assetReport.analysisData) {
+      try {
+        const analysisData = JSON.parse(assetReport.analysisData);
+        return res.json({
+          success: true,
+          assetReport: {
+            ...assetReport,
+            analysis: analysisData
+          }
+        });
+      } catch (parseError) {
+        logger.error({
+          message: `Error parsing asset report analysis data: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+          category: "api",
+          userId: req.user?.id,
+          source: "internal",
+          metadata: {
+            assetReportId,
+            error: parseError instanceof Error ? parseError.stack : String(parseError)
+          }
+        });
+      }
+    }
+    
+    // If we don't have analysis data or couldn't parse it, return just the asset report
+    res.json({
+      success: true,
+      assetReport
+    });
+  } catch (error) {
+    logger.error({
+      message: `Error fetching asset report: ${error instanceof Error ? error.message : String(error)}`,
+      category: "api",
+      userId: req.user?.id,
+      source: "internal",
+      metadata: {
+        assetReportId: req.params.assetReportId,
+        error: error instanceof Error ? error.stack : String(error),
+        path: req.path,
+        method: req.method
+      }
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch asset report"
+    });
+  }
+});
+
 // Get all asset reports for a merchant
 router.get('/:merchantId/asset-reports', async (req: Request, res: Response) => {
   try {
