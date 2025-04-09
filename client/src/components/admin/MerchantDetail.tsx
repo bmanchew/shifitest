@@ -118,7 +118,7 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
     try {
       setSavingBusinessDetails(true);
       
-      const response = await axios.put(`/api/admin/merchant-reports/${merchantId}/business-details`, editedBusinessDetails);
+      const response = await axios.put(`/api/admin/merchants/${merchantId}/business-details`, editedBusinessDetails);
       
       if (response.data.success) {
         setBusinessDetails(response.data.businessDetails);
@@ -153,7 +153,7 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
     try {
       setRunningMidDeskReport(true);
       
-      const response = await axios.post(`/api/admin/merchant-reports/${merchantId}/run-middesk-report`);
+      const response = await axios.post(`/api/admin/merchants/${merchantId}/verify-business`);
       
       if (response.data.success) {
         toast({
@@ -396,8 +396,15 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
       {/* Business Details Section (if available) */}
       {businessDetails && (
         <>
-          <div className="px-4 py-5 sm:px-6 border-t border-gray-200">
+          <div className="px-4 py-5 sm:px-6 border-t border-gray-200 flex justify-between items-center">
             <h3 className="text-lg leading-6 font-medium text-gray-900">Business Details</h3>
+            <Button
+              onClick={handleEditBusinessDetails}
+              variant="outline"
+              size="sm"
+            >
+              Edit Business Info
+            </Button>
           </div>
           
           <div className="border-t border-gray-200 px-4 py-5 sm:p-0">
