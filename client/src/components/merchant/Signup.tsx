@@ -79,6 +79,29 @@ export default function MerchantSignup() {
   const [plaidToken, setPlaidToken] = useState("");
   const [files, setFiles] = useState<{[key: string]: File}>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
+  
+  // Fetch CSRF token when component mounts
+  useEffect(() => {
+    const fetchCsrfToken = async () => {
+      try {
+        // First ensure we have a fresh CSRF token
+        await fetch('/api/csrf-token', {
+          method: 'GET',
+          credentials: 'include'
+        });
+        
+        // Then get the token from the cookie
+        const token = await getCsrfToken();
+        console.log("Fetched CSRF token for signup flow");
+        setCsrfToken(token);
+      } catch (error) {
+        console.error("Error fetching CSRF token:", error);
+      }
+    };
+    
+    fetchCsrfToken();
+  }, []);
 
   const { open, ready } = usePlaidLink({
     token: plaidToken,
@@ -90,16 +113,27 @@ export default function MerchantSignup() {
         // Get the first account from the accounts array
         const accountId = metadata.accounts?.[0]?.id;
         
-        // Get CSRF token and add it to the headers
-        const csrfToken = await getCsrfToken();
+        // Check if we have the CSRF token from our component state
+        if (!csrfToken) {
+          // Fetch a fresh CSRF token if we don't have one
+          await fetch('/api/csrf-token', {
+            method: 'GET',
+            credentials: 'include'
+          });
+        }
+        
+        // Get the most up-to-date token
+        const token = csrfToken || await getCsrfToken();
+        console.log("Using CSRF token for form submission:", token);
         
         const response = await fetch('/api/merchant/signup', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'X-CSRF-Token': csrfToken, 
-            'CSRF-Token': csrfToken
+            'X-CSRF-Token': token, 
+            'CSRF-Token': token
           },
+          credentials: 'include', // Include cookies in the request
           body: JSON.stringify({
             ...formData,
             plaidPublicToken: public_token,
@@ -131,17 +165,28 @@ export default function MerchantSignup() {
         setStep(2);
         setIsLoading(true);
         console.log("Step 1 -> 2: Fetching Plaid link token");
-        // Initialize Plaid with isSignup flag to indicate this is part of the signup flow
-        // Get CSRF token for this request
-        const csrfToken = await getCsrfToken();
+        
+        // Check if we have the CSRF token from our component state
+        if (!csrfToken) {
+          // Fetch a fresh CSRF token if we don't have one
+          await fetch('/api/csrf-token', {
+            method: 'GET',
+            credentials: 'include'
+          });
+        }
+        
+        // Get the most up-to-date token
+        const token = csrfToken || await getCsrfToken();
+        console.log("Using CSRF token for Plaid link token request:", token);
         
         const response = await fetch('/api/plaid/create-link-token', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRF-Token': csrfToken,
-            'CSRF-Token': csrfToken
+            'X-CSRF-Token': token,
+            'CSRF-Token': token
           },
+          credentials: 'include', // Include cookies in the request
           body: JSON.stringify({
             isSignup: true,
             products: ["auth", "transactions", "assets"]
@@ -166,16 +211,28 @@ export default function MerchantSignup() {
         if (!plaidToken) {
           console.error("No Plaid token available");
           // Try to get a new token with signup flag
-          // Get CSRF token for this request
-          const csrfToken = await getCsrfToken();
+          
+          // Check if we have the CSRF token from our component state
+          if (!csrfToken) {
+            // Fetch a fresh CSRF token if we don't have one
+            await fetch('/api/csrf-token', {
+              method: 'GET',
+              credentials: 'include'
+            });
+          }
+          
+          // Get the most up-to-date token
+          const token = csrfToken || await getCsrfToken();
+          console.log("Using CSRF token for Plaid link token refresh:", token);
           
           const response = await fetch('/api/plaid/create-link-token', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-CSRF-Token': csrfToken,
-              'CSRF-Token': csrfToken
+              'X-CSRF-Token': token,
+              'CSRF-Token': token
             },
+            credentials: 'include', // Include cookies in the request
             body: JSON.stringify({
               isSignup: true,
               products: ["auth", "transactions", "assets"]

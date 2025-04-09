@@ -29,6 +29,10 @@ export const csrfProtectionWithExclusions = (req: Request, res: Response, next: 
     '/api/openai/realtime',    // OpenAI Realtime WebSocket endpoint
     '/api/test-email',         // Test endpoint for contract signed email
     
+    // Merchant signup flow endpoints - critical for onboarding
+    '/api/merchant/signup',     // The merchant signup endpoint (during onboarding)
+    '/api/plaid/create-link-token', // Plaid link token creation endpoint (for onboarding)
+    
     // Communications/Conversations/Tickets endpoints and their variations
     '/api/conversations',      // Backward compatibility route for communications
     '/api/conversations/',     // Ensure the trailing slash version is also excluded
