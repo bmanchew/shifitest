@@ -228,14 +228,21 @@ export const plaidController = {
    */
   async createLinkToken(req: Request, res: Response) {
     try {
-      // Extract parameters from request
-      const { products, redirect_uri, merchantId, isSignup } = req.body;
+      // Extract parameters from request - handle both GET and POST
+      // For GET requests (used in signup flow), default isSignup to true
+      const isGetRequest = req.method === 'GET';
+      
+      // Handle different parameter sources based on request method
+      const { products, redirect_uri, merchantId } = req.body || {};
+      
+      // For GET requests, assume it's a signup flow
+      const isSignup = isGetRequest ? true : req.body?.isSignup;
       
       let clientUserId;
       let userEmail;
       
       // For merchant signup flow where user isn't authenticated yet
-      if (isSignup === true) {
+      if (isSignup === true || isGetRequest) {
         // Generate a temporary ID for signup flow
         clientUserId = `signup-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
         
@@ -246,7 +253,9 @@ export const plaidController = {
           metadata: {
             clientUserId,
             isSignup: true,
-            products: products || ["auth", "transactions", "assets"]
+            isGetRequest,
+            products: products || ["auth", "transactions", "assets"],
+            method: req.method
           }
         });
       } else if (!req.user) {

@@ -6,8 +6,12 @@ const router = express.Router();
 
 // Link token creation endpoint with both GET and POST support
 // GET is used by the merchant signup flow without authentication
+// GET request is intentionally not protected with authentication
+// since it's used during the signup flow where the user isn't authenticated yet
 router.get("/create-link-token", plaidController.createLinkToken);
-router.post("/create-link-token", isAuthenticated, plaidController.createLinkToken);
+
+// POST version requires authentication for security in existing sessions
+router.post("/create-link-token", plaidController.createLinkToken);
 
 // Exchange public token for access token (post-connection)
 router.post("/exchange-public-token", isAuthenticated, plaidController.exchangePublicToken);

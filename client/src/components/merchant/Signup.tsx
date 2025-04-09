@@ -45,7 +45,36 @@ const steps = [
 
 export default function MerchantSignup() {
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState<SignupFormData>({} as SignupFormData);
+  // Initialize form data with empty strings to avoid uncontrolled to controlled warnings
+  const [formData, setFormData] = useState<SignupFormData>({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    email: '',
+    companyName: '',
+    industry: '',
+    website: '',
+    legalBusinessName: '',
+    dba: '',
+    businessStructure: '',
+    stateOfIncorporation: '',
+    dateOfIncorporation: '',
+    ein: '',
+    businessAddress: '',
+    mailingAddress: '',
+    estimatedMonthlyRevenue: '',
+    annualFinancedVolume: '',
+    ownerName: '',
+    ownerEmail: '',
+    ownerPhone: '',
+    ownershipPercentage: '',
+    ownerRole: '',
+    termsOfServiceUrl: '',
+    privacyPolicyUrl: '',
+    primaryProgramName: '',
+    primaryProgramDescription: '',
+    primaryProgramDurationMonths: '12', // Initialize with default value to prevent uncontrolled to controlled warning
+  });
   const [plaidToken, setPlaidToken] = useState("");
   const [files, setFiles] = useState<{[key: string]: File}>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -90,8 +119,17 @@ export default function MerchantSignup() {
         setStep(2);
         setIsLoading(true);
         console.log("Step 1 -> 2: Fetching Plaid link token");
-        // Initialize Plaid
-        const response = await fetch('/api/plaid/create-link-token');
+        // Initialize Plaid with isSignup flag to indicate this is part of the signup flow
+        const response = await fetch('/api/plaid/create-link-token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            isSignup: true,
+            products: ["auth", "transactions", "assets"]
+          })
+        });
         const data = await response.json();
         console.log("Plaid link token response:", data);
         
@@ -110,8 +148,17 @@ export default function MerchantSignup() {
         console.log("Step 2: Opening Plaid link with token:", plaidToken);
         if (!plaidToken) {
           console.error("No Plaid token available");
-          // Try to get a new token
-          const response = await fetch('/api/plaid/create-link-token');
+          // Try to get a new token with signup flag
+          const response = await fetch('/api/plaid/create-link-token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              isSignup: true,
+              products: ["auth", "transactions", "assets"]
+            })
+          });
           const data = await response.json();
           if (data.success && data.linkToken) {
             console.log("Got new link token:", data.linkToken);

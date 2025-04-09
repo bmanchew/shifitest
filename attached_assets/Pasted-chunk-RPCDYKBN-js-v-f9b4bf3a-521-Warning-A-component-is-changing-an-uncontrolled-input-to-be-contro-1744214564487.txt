@@ -1,0 +1,29 @@
+chunk-RPCDYKBN.js?v=f9b4bf3a:521 Warning: A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components
+    at input
+    at _c (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/ui/input.tsx:20:11)
+    at div
+    at div
+    at form
+    at div
+    at _c (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at div
+    at MerchantSignup (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/merchant/Signup.tsx:32:27)
+    at Route (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f9b4bf3a:206:16)
+    at Switch (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit…/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f9b4bf3a:262:17)
+    at Suspense
+    at IntercomProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/IntercomProvider.tsx:22:36)
+    at ErrorBoundary (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/ErrorBoundary.tsx:8:5)
+    at App (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/App.tsx:124:31)
+    at IntercomProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/components/IntercomProvider.tsx:22:36)
+    at AuthProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/context/AuthContext.tsx:29:32)
+    at QueryClientProvider (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit…rkspace/node_modules/.vite/deps/@tanstack_react-query.js?v=f9b4bf3a:2805:3)
+    at AppWrapper (https://1825e65f-101b-467b-bee7-c29733668cc0-00-9psqa3aypt1d.janeway.replit.dev/src/AppWrapper.tsx?v=mLi1BCTdk7-Z_K065YOC_:37:3)
+Signup.tsx:92 Step 1 -> 2: Fetching Plaid link token
+/api/plaid/create-link-token:1 
+ Failed to load resource: the server responded with a status of 401 (Unauthorized)
+Signup.tsx:96 Plaid link token response: 
+Object
+Signup.tsx:105 Failed to get link token: 
+Object
+handleSubmit	@	Signup.tsx:105

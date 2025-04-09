@@ -98,6 +98,7 @@ import healthRouter from "./routes/health"; // Import health routes
 import blockchainRouter from "./routes/blockchain"; // Import blockchain routes
 import salesRepRouter from "./routes/salesRep"; // Import sales rep routes
 import communicationsRouter from "./routes/communications"; // Import communications routes
+import plaidRouter from "./routes/plaid.routes"; // Import Plaid integration routes
 import indexRoutes from "./routes/index"; // Import routes from index.ts
 import registerSesameAIRoutes from "./routes/sesameAI"; // Import SesameAI routes
 import registerFinancialSherpaRoutes from "./routes/financialSherpa"; // Import Financial Sherpa routes
@@ -5548,6 +5549,9 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
 
   // Mount the customers router
   apiRouter.use("/customers", customersRouter);
+  
+  // Mount the Plaid integration router
+  apiRouter.use("/plaid", plaidRouter);
 
   // Special endpoint to get the current authenticated merchant
   // This must be defined BEFORE mounting the merchantRouter to avoid route conflicts
