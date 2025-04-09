@@ -4,6 +4,7 @@ import { fetchCsrfToken } from "./csrf";
 
 export type AuthUser = Omit<User, "password"> & {
   merchantId?: number;
+  token?: string; // Include token in the AuthUser type
 };
 
 export interface AuthResult {

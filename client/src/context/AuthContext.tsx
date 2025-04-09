@@ -112,6 +112,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         user.lastName = nameParts.slice(1).join(" ") || "";
       }
 
+      // Ensure token is set in the user object
+      if (response.token) {
+        // Set the token directly from the response if it exists
+        user.token = response.token;
+        console.log("Setting token from login response into user object");
+      } else if ('user' in response && response.user && response.user.token) {
+        // Also check for token in nested user object in response (if response format includes both)
+        user.token = response.user.token;
+        console.log("Setting token from nested user object in login response");
+      }
+      
       // Set user state and store in localStorage before redirecting
       setUser(user);
       storeUserData(user);

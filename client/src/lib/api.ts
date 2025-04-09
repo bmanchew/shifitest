@@ -119,14 +119,40 @@ export async function apiRequest<T = Response>(
     headers = { ...headers, ...customHeaders };
   }
   
-  // Add authentication token if available
+  // Add authentication token if available (prioritize user object token)
   try {
     const userData = localStorage.getItem("shifi_user");
     if (userData) {
       const user = JSON.parse(userData);
-      if (user.token) {
-        headers['Authorization'] = `Bearer ${user.token}`;
+      
+      // Debug user data from localStorage (only in development)
+      if (import.meta.env.DEV) {
+        console.log("User data from localStorage:", { 
+          ...user, 
+          token: user.token ? `${user.token.substring(0, 10)}...` : "missing" 
+        });
       }
+      
+      // Authentication can come from three sources, in priority order:
+      // 1. The token property directly in the user object
+      // 2. The token property inside the user object (nested user.user.token)
+      // 3. JWT token set in HTTP-only cookies by the server (more secure)
+      
+      // Check for token directly in the user object
+      if (user.token) {
+        if (import.meta.env.DEV) console.log("Using token from user object for Authorization header");
+        headers['Authorization'] = `Bearer ${user.token}`;
+      } 
+      // Check for token in nested user.user object (from api responses)
+      else if (user.user && user.user.token) {
+        if (import.meta.env.DEV) console.log("Using token from nested user.user object for Authorization header");
+        headers['Authorization'] = `Bearer ${user.user.token}`;
+      }
+      else {
+        if (import.meta.env.DEV) console.log("No token found in localStorage user data, relying on HTTP-only cookies");
+      }
+    } else {
+      if (import.meta.env.DEV) console.log("No user data found in localStorage");
     }
   } catch (error) {
     console.error("Error getting auth token from localStorage:", error);

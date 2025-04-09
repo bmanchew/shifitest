@@ -144,15 +144,17 @@ export const authController = {
       
       res.cookie('auth_token', token, cookieOptions);
       
-      // Return user info (without exposing token in the response body)
+      // Return user info WITH token in the response body to support both cookie and localStorage auth
       res.status(200).json({
         success: true,
+        token: token, // Include token in response body so it can be stored in localStorage
         user: {
           id: user.id,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          role: user.role
+          role: user.role,
+          token: token // Include token in user object as well for compatibility
         }
       });
     } catch (error) {
@@ -268,16 +270,18 @@ export const authController = {
       
       res.cookie('auth_token', token, cookieOptions);
       
-      // Return success response without exposing token in JSON
+      // Return success response WITH token in JSON (for both cookie and localStorage auth)
       res.status(201).json({
         success: true,
         message: "User registered successfully",
+        token: token, // Include token in response body
         user: {
           id: user.id,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          role: user.role
+          role: user.role,
+          token: token // Include token in user object as well for consistency
         }
       });
     } catch (error) {
@@ -314,15 +318,24 @@ export const authController = {
         });
       }
       
-      // Return user info
+      // Generate a fresh JWT token
+      const token = jwt.sign(
+        { userId: req.user.id },
+        JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      // Return user info with token
       res.status(200).json({
         success: true,
+        token: token,
         user: {
           id: req.user.id,
           email: req.user.email,
           firstName: req.user.firstName,
           lastName: req.user.lastName,
-          role: req.user.role
+          role: req.user.role,
+          token: token
         }
       });
     } catch (error) {
