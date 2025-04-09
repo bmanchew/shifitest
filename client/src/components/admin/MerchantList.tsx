@@ -48,8 +48,33 @@ export default function MerchantList() {
     queryKey: ["/api/admin/merchants"],
     queryFn: async () => {
       try {
-        // Use our apiRequest function instead of axios directly to get auth token handling
-        const response = await apiRequest("GET", "/api/admin/merchants");
+        // Get auth token from storage explicitly to ensure it's included
+        let authToken: string | undefined;
+        try {
+          const userData = localStorage.getItem("shifi_user");
+          if (userData) {
+            const user = JSON.parse(userData);
+            // Check different locations where token might be stored
+            authToken = user.token || (user.user && user.user.token);
+            
+            if (authToken) {
+              console.log("Found auth token for admin merchants request");
+            } else {
+              console.log("No auth token found in localStorage");
+            }
+          }
+        } catch (tokenError) {
+          console.error("Error getting auth token from localStorage:", tokenError);
+        }
+        
+        // Use our apiRequest function with explicit custom headers for auth token
+        const headers: Record<string, string> = {};
+        if (authToken) {
+          headers['Authorization'] = `Bearer ${authToken}`;
+        }
+        
+        // Make the request with explicit headers
+        const response = await apiRequest("GET", "/api/admin/merchants", undefined, headers);
         
         if (response.success) {
           return response.merchants;
