@@ -154,6 +154,7 @@ function App() {
                 <Route path="/admin/ticket-analytics" component={AdminTicketAnalytics} />
                 <Route path="/admin/plaid-credentials" component={AdminPlaidCredentials} />
                 <Route path="/admin/thanksroger-test" component={AdminThanksRogerTest} />
+                <Route path="/admin/auth-debug" component={lazy(() => import("@/pages/admin/AuthDebug"))} />
               </>
             )}
 
