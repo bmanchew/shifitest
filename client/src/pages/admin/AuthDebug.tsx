@@ -1,10 +1,15 @@
-import AdminLayout from "@/components/layout/AdminLayout";
-import AdminAuthDebug from "@/components/admin/AdminAuthDebug";
+import { Suspense } from 'react';
+import AdminLayout from '@/components/layout/AdminLayout';
+import AdminAuthDebug from '@/components/admin/AdminAuthDebug';
 
-export default function AuthDebugPage() {
+const AuthDebug = () => {
   return (
     <AdminLayout>
-      <AdminAuthDebug />
+      <Suspense fallback={<div>Loading authentication debug tools...</div>}>
+        <AdminAuthDebug />
+      </Suspense>
     </AdminLayout>
   );
-}
+};
+
+export default AuthDebug;

@@ -23,6 +23,7 @@ import { ticketAssignmentRouter } from './ticket-assignment';
 import ticketCategorizationRouter from './ticket-categorization';
 import intercomRouter from './intercom';
 import intercomChatRouter from './intercom-chat';
+import debugRoutes from './debug';
 import { apiRateLimiter, authRateLimiter, userCreationRateLimiter } from '../middleware/authRateLimiter';
 import { logger } from '../services/logger';
 import { authenticateToken } from '../middleware/auth';
@@ -90,6 +91,7 @@ modulesRouter.use('/api/analytics', analyticsRoutes);
 modulesRouter.use('/api/ticket-assignment', ticketAssignmentRouter);
 modulesRouter.use('/api/intercom', intercomRouter);
 modulesRouter.use('/api/chat', intercomChatRouter);
+modulesRouter.use('/api/debug', debugRoutes);
 modulesRouter.use('/', ticketCategorizationRouter);
 
 // Create a separate router instance for merchant signup (no authentication required)

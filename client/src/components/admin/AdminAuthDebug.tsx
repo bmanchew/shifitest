@@ -1,178 +1,181 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { apiRequest } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
-import { fetchCsrfToken } from "@/lib/csrf";
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import { apiRequest } from '@/lib/api';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
-export default function AdminAuthDebug() {
-  const { user } = useAuth();
-  const [csrfToken, setCsrfToken] = useState<string | null>(null);
-  const [csrfStatus, setCsrfStatus] = useState<string>("Not checked");
-  const [verifyTokenStatus, setVerifyTokenStatus] = useState<string>("Not checked");
-  const [adminMerchantsStatus, setAdminMerchantsStatus] = useState<string>("Not checked");
-  const [localStorageData, setLocalStorageData] = useState<string | null>(null);
-  
-  // Get data from localStorage on component mount
-  useEffect(() => {
+/**
+ * Debug panel for admin authentication issues
+ * This component provides information about the current authentication state
+ * and the ability to perform authentication-related actions for debugging.
+ */
+const AdminAuthDebug: React.FC = () => {
+  const { user, login, logout, isLoading } = useAuth();
+  // Derive isAuthenticated from user
+  const isAuthenticated = !!user;
+  const [tokenStatus, setTokenStatus] = useState<any>(null);
+  const [tokenStatusLoading, setTokenStatusLoading] = useState(false);
+  const [merchantsLoading, setMerchantsLoading] = useState(false);
+  const [merchants, setMerchants] = useState<any[]>([]);
+  const [merchantError, setMerchantError] = useState<string | null>(null);
+
+  // Fetch token status from the debug endpoint
+  const checkTokenStatus = async () => {
+    setTokenStatusLoading(true);
     try {
-      const userData = localStorage.getItem("shifi_user");
-      setLocalStorageData(userData);
+      // Pass method, url and optional parameters
+      const response = await apiRequest<any>(
+        "GET", 
+        '/api/debug/token-status', 
+        undefined, 
+        undefined
+      );
+      setTokenStatus(response);
     } catch (error) {
-      console.error("Error accessing localStorage:", error);
-      setLocalStorageData("Error accessing localStorage");
+      console.error('Error checking token status:', error);
+      setTokenStatus({ 
+        success: false, 
+        message: error instanceof Error ? error.message : String(error),
+        error: true 
+      });
+    } finally {
+      setTokenStatusLoading(false);
     }
+  };
+
+  // Attempt to fetch merchants
+  const fetchMerchants = async () => {
+    setMerchantsLoading(true);
+    setMerchantError(null);
+    try {
+      // Define response type and pass all required parameters
+      interface MerchantsResponse {
+        merchants: any[];
+      }
+      
+      const response = await apiRequest<MerchantsResponse>(
+        "GET", 
+        '/api/admin/merchants',
+        undefined,
+        undefined
+      );
+      
+      if (response && response.merchants) {
+        setMerchants(response.merchants);
+      } else {
+        setMerchants([]);
+        setMerchantError('No merchants returned in response');
+      }
+    } catch (error) {
+      console.error('Error fetching merchants:', error);
+      setMerchantError(error instanceof Error ? error.message : String(error));
+      setMerchants([]);
+    } finally {
+      setMerchantsLoading(false);
+    }
+  };
+
+  // Check token status on component mount
+  useEffect(() => {
+    checkTokenStatus();
   }, []);
 
-  // Check CSRF token
-  const checkCsrfToken = async () => {
-    try {
-      setCsrfStatus("Checking...");
-      const token = await fetchCsrfToken();
-      setCsrfToken(token);
-      setCsrfStatus("Valid");
-    } catch (error) {
-      console.error("Error fetching CSRF token:", error);
-      setCsrfStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  // Verify JWT token with server
-  const verifyToken = async () => {
-    try {
-      setVerifyTokenStatus("Checking...");
-      const response = await apiRequest("GET", "/api/auth/verify-token");
-      setVerifyTokenStatus(`Valid: ${JSON.stringify(response)}`);
-    } catch (error) {
-      console.error("Error verifying token:", error);
-      setVerifyTokenStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  // Test admin merchants endpoint
-  const testAdminMerchants = async () => {
-    try {
-      setAdminMerchantsStatus("Checking...");
-      const response = await apiRequest("GET", "/api/admin/merchants");
-      setAdminMerchantsStatus(`Success: Found ${response.merchants ? response.merchants.length : 0} merchants`);
-    } catch (error) {
-      console.error("Error accessing admin merchants:", error);
-      setAdminMerchantsStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    }
+  // Format date from timestamp
+  const formatDate = (timestamp: number) => {
+    if (!timestamp) return 'N/A';
+    return new Date(timestamp * 1000).toLocaleString();
   };
 
   return (
-    <div className="container py-8 max-w-4xl">
-      <h1 className="text-2xl font-bold mb-6">Admin Authentication Debug Tool</h1>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Admin Authentication Debug Panel</h1>
       
-      {/* User Information */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Current User Information</CardTitle>
-          <CardDescription>Details about the currently authenticated user</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {user ? (
-            <div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="font-medium">ID:</div>
-                <div>{user.id}</div>
-                <div className="font-medium">Email:</div>
-                <div>{user.email}</div>
-                <div className="font-medium">Name:</div>
-                <div>{user.firstName} {user.lastName}</div>
-                <div className="font-medium">Role:</div>
-                <div>{user.role}</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <Card className="p-4">
+          <h2 className="text-xl font-semibold mb-2">Authentication State</h2>
+          <div className="mb-4">
+            <p><strong>Is Authenticated:</strong> {isAuthenticated ? 'Yes' : 'No'}</p>
+            <p><strong>Is Loading:</strong> {isLoading ? 'Yes' : 'No'}</p>
+            <p><strong>User ID:</strong> {user?.id || 'Not signed in'}</p>
+            <p><strong>User Email:</strong> {user?.email || 'Not signed in'}</p>
+            <p><strong>User Role:</strong> {user?.role || 'Not signed in'}</p>
+          </div>
+          <div className="flex space-x-2">
+            <Button onClick={() => logout()} variant="destructive" disabled={!isAuthenticated}>
+              Log Out
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <h2 className="text-xl font-semibold mb-2">JWT Token Status</h2>
+          <div className="mb-4">
+            {tokenStatusLoading ? (
+              <p>Loading token status...</p>
+            ) : tokenStatus ? (
+              <div>
+                <p><strong>Status:</strong> {tokenStatus.success ? 'Valid' : 'Invalid'}</p>
+                <p><strong>Message:</strong> {tokenStatus.message}</p>
+                {tokenStatus.details && (
+                  <>
+                    <p><strong>Token Found:</strong> {tokenStatus.details.tokenFound ? 'Yes' : 'No'}</p>
+                    {tokenStatus.details.tokenFound && (
+                      <>
+                        <p><strong>Token Valid:</strong> {tokenStatus.details.tokenValid ? 'Yes' : 'No'}</p>
+                        {tokenStatus.details.decoded && (
+                          <>
+                            <p><strong>User ID:</strong> {tokenStatus.details.decoded.userId}</p>
+                            <p><strong>Role:</strong> {tokenStatus.details.decoded.role}</p>
+                            <p><strong>Issue Time:</strong> {formatDate(tokenStatus.details.decoded.iat)}</p>
+                            <p><strong>Expiration:</strong> {formatDate(tokenStatus.details.decoded.exp)}</p>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
               </div>
+            ) : (
+              <p>No token status data available</p>
+            )}
+          </div>
+          <Button onClick={checkTokenStatus} disabled={tokenStatusLoading}>
+            Refresh Token Status
+          </Button>
+        </Card>
+      </div>
+      
+      <Card className="p-4 mb-8">
+        <h2 className="text-xl font-semibold mb-2">Merchant Data Test</h2>
+        <div className="mb-4">
+          {merchantsLoading ? (
+            <p>Loading merchants...</p>
+          ) : merchantError ? (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              <p><strong>Error:</strong> {merchantError}</p>
+            </div>
+          ) : merchants.length > 0 ? (
+            <div>
+              <p><strong>Merchants Found:</strong> {merchants.length}</p>
+              <ul className="list-disc pl-5 mt-2">
+                {merchants.slice(0, 5).map((merchant: any) => (
+                  <li key={merchant.id}>
+                    {merchant.name} ({merchant.email})
+                  </li>
+                ))}
+                {merchants.length > 5 && <li>... and {merchants.length - 5} more</li>}
+              </ul>
             </div>
           ) : (
-            <Alert variant="destructive">
-              <AlertTitle>Not authenticated</AlertTitle>
-              <AlertDescription>
-                No user is currently authenticated according to the AuthContext.
-              </AlertDescription>
-            </Alert>
+            <p>No merchants found</p>
           )}
-        </CardContent>
-      </Card>
-      
-      {/* LocalStorage Data */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>LocalStorage Data</CardTitle>
-          <CardDescription>User data stored in browser localStorage</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="bg-gray-100 p-4 rounded-md overflow-auto max-h-32">
-            <pre>{localStorageData || "No data found"}</pre>
-          </div>
-        </CardContent>
-      </Card>
-      
-      {/* Authentication Tests */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Authentication Tests</CardTitle>
-          <CardDescription>Run tests to verify authentication components</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <div className="flex justify-between mb-2">
-              <span className="font-medium">CSRF Token:</span>
-              <span className={csrfStatus === "Valid" ? "text-green-600" : csrfStatus.includes("Error") ? "text-red-600" : "text-gray-500"}>
-                {csrfStatus}
-              </span>
-            </div>
-            <Button onClick={checkCsrfToken} variant="outline" size="sm">Check CSRF Token</Button>
-            {csrfToken && (
-              <div className="mt-2 bg-gray-100 p-2 rounded-md text-xs overflow-auto">
-                <code>{csrfToken}</code>
-              </div>
-            )}
-          </div>
-          
-          <Separator />
-          
-          <div>
-            <div className="flex justify-between mb-2">
-              <span className="font-medium">JWT Token Verification:</span>
-              <span className={verifyTokenStatus.includes("Valid") ? "text-green-600" : verifyTokenStatus.includes("Error") ? "text-red-600" : "text-gray-500"}>
-                {verifyTokenStatus === "Not checked" ? "Not checked" : verifyTokenStatus.includes("Valid") ? "Valid" : "Invalid"}
-              </span>
-            </div>
-            <Button onClick={verifyToken} variant="outline" size="sm">Verify JWT Token</Button>
-            {verifyTokenStatus !== "Not checked" && verifyTokenStatus !== "Checking..." && (
-              <div className="mt-2 bg-gray-100 p-2 rounded-md text-xs overflow-auto">
-                <code>{verifyTokenStatus}</code>
-              </div>
-            )}
-          </div>
-          
-          <Separator />
-          
-          <div>
-            <div className="flex justify-between mb-2">
-              <span className="font-medium">Admin Merchants API:</span>
-              <span className={adminMerchantsStatus.includes("Success") ? "text-green-600" : adminMerchantsStatus.includes("Error") ? "text-red-600" : "text-gray-500"}>
-                {adminMerchantsStatus === "Not checked" ? "Not checked" : adminMerchantsStatus.includes("Success") ? "Success" : "Failed"}
-              </span>
-            </div>
-            <Button onClick={testAdminMerchants} variant="outline" size="sm">Test Admin Merchants API</Button>
-            {adminMerchantsStatus !== "Not checked" && adminMerchantsStatus !== "Checking..." && (
-              <div className="mt-2 bg-gray-100 p-2 rounded-md text-xs overflow-auto">
-                <code>{adminMerchantsStatus}</code>
-              </div>
-            )}
-          </div>
-        </CardContent>
-        <CardFooter>
-          <p className="text-sm text-gray-500">
-            Use these tools to debug authentication issues. If all tests pass but you still have problems, check server logs for more details.
-          </p>
-        </CardFooter>
+        </div>
+        <Button onClick={fetchMerchants} disabled={merchantsLoading}>
+          Test Fetch Merchants
+        </Button>
       </Card>
     </div>
   );
-}
+};
+
+export default AdminAuthDebug;
