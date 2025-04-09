@@ -220,26 +220,33 @@ export function MerchantSignup() {
     
     try {
       // Exchange the public token for an access token
-      console.log("Sending public token to exchange endpoint with data:", { 
-        publicToken, 
-        merchantId, 
-        businessInfo: businessInfo ? { ...businessInfo } : null 
-      });
+      const requestData = {
+        publicToken,
+        merchantId,
+        businessInfo: businessInfo ? { ...businessInfo } : null,
+        isSignup: true,
+        metadata: metadata || {}
+      };
+      
+      console.log("Sending public token to exchange endpoint with data:", requestData);
       
       const response = await fetch('/api/plaid/exchange-public-token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          publicToken,
-          merchantId,
-          businessInfo,
-          isSignup: true
-        }),
+        body: JSON.stringify(requestData),
       });
       
+      console.log("Exchange token response status:", response.status);
+      
+      if (!response.ok) {
+        console.error("Exchange token API error:", response.status, response.statusText);
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
       const data = await response.json();
+      console.log("Exchange token response data:", data);
       
       if (data.success) {
         setAccounts(data.accounts || []);
@@ -789,8 +796,20 @@ export function MerchantSignup() {
             )}
             
             <Button
-              onClick={() => open()}
-              disabled={!ready || isLoading}
+              onClick={() => {
+                console.log("Connect Bank clicked. Link token:", linkToken, "Ready:", ready);
+                if (ready && linkToken) {
+                  open();
+                } else {
+                  console.error("Plaid Link not ready or token missing", { ready, linkToken });
+                  toast({
+                    title: "Connection Error",
+                    description: "Bank connection service is not ready. Please try again.",
+                    variant: "destructive",
+                  });
+                }
+              }}
+              disabled={!ready || isLoading || !linkToken}
               className="w-full"
             >
               {isLoading ? "Processing..." : "Connect Bank Account"}

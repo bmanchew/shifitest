@@ -5,7 +5,9 @@ import { plaidTransferService } from './plaid.transfers';
 
 // Configure Plaid client
 const configuration = new Configuration({
-  basePath: PlaidEnvironments[process.env.PLAID_ENVIRONMENT as keyof typeof PlaidEnvironments] || PlaidEnvironments.sandbox,
+  basePath: PlaidEnvironments[process.env.PLAID_ENVIRONMENT as keyof typeof PlaidEnvironments] || 
+            PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments] || 
+            PlaidEnvironments.sandbox,
   baseOptions: {
     headers: {
       'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
