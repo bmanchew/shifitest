@@ -4297,12 +4297,69 @@ apiRouter.post("/application-progress", async (req: Request, res: Response) => {
   );
 
   // Exchange public token for access token and store it
-  // Exchange public token for access token and store it
-apiRouter.post(
-  "/plaid/set-access-token",
-  async (req: Request, res: Response) => {
-    try {
-      const { publicToken, userId, contractId } = req.body;
+  apiRouter.post(
+    "/plaid/exchange-public-token",
+    async (req: Request, res: Response) => {
+      try {
+        const { publicToken, merchantId, businessInfo, isSignup } = req.body;
+        
+        if (!publicToken) {
+          return res.status(400).json({
+            success: false,
+            message: "Public token is required"
+          });
+        }
+        
+        logger.info({
+          message: `Exchanging Plaid public token${merchantId ? ` for merchant ${merchantId}` : ''}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            merchantId,
+            isSignup: !!isSignup
+          }
+        });
+        
+        // Exchange the public token for an access token
+        const exchangeResponse = await plaidService.exchangePublicToken(publicToken);
+        
+        const { accessToken, itemId } = exchangeResponse;
+        
+        // Get accounts information
+        const authData = await plaidService.getAuth(accessToken);
+        
+        // Return success with accounts information
+        res.json({
+          success: true,
+          accounts: authData.accounts,
+          merchant_id: merchantId,
+          verification_status: "pending",
+          message: "Bank account connected successfully"
+        });
+      } catch (error) {
+        logger.error({
+          message: `Error exchanging Plaid public token: ${error instanceof Error ? error.message : String(error)}`,
+          category: "api",
+          source: "plaid",
+          metadata: {
+            error: error instanceof Error ? error.stack : String(error)
+          }
+        });
+        
+        res.status(500).json({
+          success: false,
+          message: "Failed to connect bank account. Please try again."
+        });
+      }
+    }
+  );
+  
+  // Legacy endpoint - Exchange public token for access token and store it
+  apiRouter.post(
+    "/plaid/set-access-token",
+    async (req: Request, res: Response) => {
+      try {
+        const { publicToken, userId, contractId } = req.body;
 
       if (!publicToken) {
         return res.status(400).json({
