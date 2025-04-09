@@ -169,15 +169,27 @@ export function MerchantSignup() {
   const onSubmitBusinessInfo = async (values: BusinessFormValues) => {
     setIsLoading(true);
     setBusinessInfo(values);
+    console.log("Submitting business info:", values);
     
     try {
       // Request a link token from your server
-      const response = await fetch('/api/plaid/merchant-signup-link-token');
+      console.log("Fetching merchant signup link token...");
+      const response = await fetch('/api/plaid/create-link-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          isSignup: true,
+          products: ["auth", "transactions", "assets"]
+        })
+      });
       const data = await response.json();
+      console.log("Link token response:", data);
       
       if (data.success) {
-        setLinkToken(data.linkToken);
-        setMerchantId(data.merchant_id);
+        setLinkToken(data.linkToken || data.link_token);
+        setMerchantId(data.merchant_id || data.merchantId || `merchant-${Date.now()}`);
         setCurrentStep(SignupStep.BankConnection);
       } else {
         setErrorMessage(data.message || "Failed to prepare bank connection");
@@ -186,6 +198,7 @@ export function MerchantSignup() {
           description: data.message || "Failed to prepare bank connection",
           variant: "destructive",
         });
+        console.error("Error fetching link token:", data);
       }
     } catch (error) {
       console.error('Error getting link token:', error);
@@ -203,10 +216,17 @@ export function MerchantSignup() {
   // Handle Plaid Link success
   const onPlaidSuccess = async (publicToken: string, metadata: any) => {
     setIsLoading(true);
+    console.log("Plaid Link success, exchanging public token", { publicToken, metadata });
     
     try {
       // Exchange the public token for an access token
-      const response = await fetch('/api/plaid/merchant-signup-exchange', {
+      console.log("Sending public token to exchange endpoint with data:", { 
+        publicToken, 
+        merchantId, 
+        businessInfo: businessInfo ? { ...businessInfo } : null 
+      });
+      
+      const response = await fetch('/api/plaid/exchange-public-token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -215,6 +235,7 @@ export function MerchantSignup() {
           publicToken,
           merchantId,
           businessInfo,
+          isSignup: true
         }),
       });
       
