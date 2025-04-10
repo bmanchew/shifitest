@@ -120,10 +120,16 @@ class APIClientGenerator:
             
         # Create headers with API key if available
         headers = {
+            "Accept": "application/json",
             "Content-Type": "application/json"
         }
         if self.datacrunch_api_key:
+            # Try multiple auth header formats
             headers["X-API-KEY"] = self.datacrunch_api_key
+            headers["Authorization"] = f"Bearer {self.datacrunch_api_key}"
+            headers["Api-Key"] = self.datacrunch_api_key
+            
+        logger.info(f"Using API authentication headers: X-API-KEY, Authorization, Api-Key")
             
         # Make a simple status check request to test connectivity
         try:
@@ -297,7 +303,10 @@ class APIClientGenerator:
             "Content-Type": "application/json"
         }
         if self.datacrunch_api_key:
+            # Try multiple auth header formats
             headers["X-API-KEY"] = self.datacrunch_api_key
+            headers["Authorization"] = f"Bearer {self.datacrunch_api_key}"
+            headers["Api-Key"] = self.datacrunch_api_key
         
         # Make the request to DataCrunch TTS endpoint
         url = f"{self.datacrunch_url}/tts" if self.datacrunch_url else ""

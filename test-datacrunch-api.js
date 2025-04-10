@@ -21,7 +21,11 @@ dotenv.config({ path: '.env' });
 
 // Debug loaded environment variables
 console.log('Environment variables loaded from .env');
-console.log('DATACRUNCH_URL:', process.env.DATACRUNCH_URL || 'Not found');
+console.log('Original DATACRUNCH_URL:', process.env.DATACRUNCH_URL || 'Not found');
+
+// Override with the correct URL regardless of what's in the environment
+process.env.DATACRUNCH_URL = 'https://api.datacrunch.io/v1';
+console.log('Updated DATACRUNCH_URL:', process.env.DATACRUNCH_URL);
 
 // Check required environment variables
 const DATACRUNCH_URL = process.env.DATACRUNCH_URL;
@@ -59,8 +63,19 @@ async function testDataCrunchConnection() {
     const headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      'X-API-KEY': DATACRUNCH_API_KEY
+      'X-API-KEY': DATACRUNCH_API_KEY,
+      // Add alternative auth methods in case one is required
+      'Authorization': `Bearer ${DATACRUNCH_API_KEY}`,
+      'Api-Key': DATACRUNCH_API_KEY
     };
+    
+    console.log('Using headers:', JSON.stringify({
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'X-API-KEY': '***API_KEY***',
+      'Authorization': 'Bearer ***API_KEY***',
+      'Api-Key': '***API_KEY***'
+    }, null, 2));
     
     // Make a request to the models endpoint
     console.log(`Making request to ${DATACRUNCH_URL}/models`);
@@ -118,7 +133,10 @@ async function testVoiceGeneration() {
     const headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      'X-API-KEY': DATACRUNCH_API_KEY
+      'X-API-KEY': DATACRUNCH_API_KEY,
+      // Add alternative auth methods in case one is required
+      'Authorization': `Bearer ${DATACRUNCH_API_KEY}`,
+      'Api-Key': DATACRUNCH_API_KEY
     };
     
     // Prepare request payload
