@@ -7,6 +7,7 @@ import { RefreshCw, CheckCircle, XCircle, AlertCircle, Clock } from "lucide-reac
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { getCsrfToken } from '@/lib/csrf';
 
 interface MidDeskReportProps {
   merchantId: number;
@@ -41,11 +42,8 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, midDeskBusine
       setLoading(true);
       setError(null);
       
-      // Get CSRF token from cookie
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('_csrf='))
-        ?.split('=')[1];
+      // Get CSRF token from API utility
+      const csrfToken = await getCsrfToken();
       
       const response = await axios.get(
         `/api/admin/merchant-reports/${merchantId}/business-verification`,
@@ -74,11 +72,8 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, midDeskBusine
       setInitiatingVerification(true);
       setError(null);
       
-      // Get CSRF token from cookie
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('_csrf='))
-        ?.split('=')[1];
+      // Get CSRF token from API utility
+      const csrfToken = await getCsrfToken();
       
       const response = await axios.post(
         `/api/admin/merchant-reports/${merchantId}/verify-business`,

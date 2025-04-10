@@ -193,11 +193,8 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
     try {
       setRunningMidDeskReport(true);
       
-      // Get CSRF token from cookie
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('_csrf='))
-        ?.split('=')[1];
+      // Get CSRF token from API utility
+      const csrfToken = await getCsrfToken();
       
       const response = await axios.post(
         `/api/admin/merchants/${merchantId}/verify-business`,
@@ -246,11 +243,8 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
     try {
       setSyncingStatus(true);
       
-      // Get CSRF token from cookie
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('_csrf='))
-        ?.split('=')[1];
+      // Get CSRF token from API utility
+      const csrfToken = await getCsrfToken();
       
       const response = await axios.post(
         `/api/plaid/sync-merchant-status/${merchantId}`,
@@ -297,11 +291,8 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
       setVerifyingBusiness(true);
       setError(null);
       
-      // Get CSRF token from cookie
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('_csrf='))
-        ?.split('=')[1];
+      // Get CSRF token from API utility
+      const csrfToken = await getCsrfToken();
       
       const response = await axios.post(
         `/api/admin/merchants/${merchantId}/verify-business`, 
