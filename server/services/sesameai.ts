@@ -8,7 +8,7 @@ import { logger } from './logger';
 const execPromise = util.promisify(exec);
 
 // Define voice engine types
-export type VoiceEngine = 'mock' | 'gtts' | 'huggingface';
+export type VoiceEngine = 'mock' | 'gtts' | 'huggingface' | 'datacrunch';
 
 export interface GenerateVoiceOptions {
   text: string;
@@ -43,6 +43,7 @@ export class SesameAIService {
   private csm_script_path: string;
   private gtts_script_path: string;
   private huggingface_script_path: string;
+  private datacrunch_script_path: string;
   private defaultEngine: VoiceEngine = 'gtts'; // Default to Google TTS which is more reliable
   
   constructor() {
@@ -51,6 +52,7 @@ export class SesameAIService {
     this.csm_script_path = path.join(process.cwd(), 'sesamechat', 'csm', 'run_csm.py');
     this.gtts_script_path = path.join(process.cwd(), 'sesamechat', 'csm', 'run_gtts.py');
     this.huggingface_script_path = path.join(process.cwd(), 'sesamechat', 'csm', 'run_huggingface.py');
+    this.datacrunch_script_path = path.join(process.cwd(), 'sesamechat', 'csm', 'run_datacrunch.py');
     
     // Ensure output directory exists
     this.initialize();
@@ -72,21 +74,31 @@ export class SesameAIService {
       // Check which voice engines are available
       const availableEngines: VoiceEngine[] = [];
       
-      // Check for Google TTS (preferred for reliability)
-      if (fs.existsSync(this.gtts_script_path)) {
-        availableEngines.push('gtts');
+      // Check for DataCrunch (highest priority - production quality with GPU acceleration)
+      if (fs.existsSync(this.datacrunch_script_path)) {
+        availableEngines.push('datacrunch');
         logger.info({
-          message: 'Google TTS script found',
+          message: 'DataCrunch speech script found',
           source: 'sesameai',
           category: 'system'
         });
       }
       
-      // Check for Hugging Face (best quality)
+      // Check for Hugging Face (high quality)
       if (fs.existsSync(this.huggingface_script_path)) {
         availableEngines.push('huggingface');
         logger.info({
           message: 'Hugging Face speech script found',
+          source: 'sesameai',
+          category: 'system'
+        });
+      }
+      
+      // Check for Google TTS (reliable fallback)
+      if (fs.existsSync(this.gtts_script_path)) {
+        availableEngines.push('gtts');
+        logger.info({
+          message: 'Google TTS script found',
           source: 'sesameai',
           category: 'system'
         });
@@ -103,11 +115,17 @@ export class SesameAIService {
       }
       
       // Set default engine based on availability
-      if (availableEngines.includes('gtts')) {
-        this.defaultEngine = 'gtts';
+      if (availableEngines.includes('datacrunch')) {
+        // Prefer DataCrunch for highest quality with GPU acceleration
+        this.defaultEngine = 'datacrunch';
       } else if (availableEngines.includes('huggingface')) {
+        // Use Hugging Face as second choice
         this.defaultEngine = 'huggingface';
+      } else if (availableEngines.includes('gtts')) {
+        // Fall back to Google TTS if needed
+        this.defaultEngine = 'gtts';
       } else if (availableEngines.includes('mock')) {
+        // Last resort is mock CSM
         this.defaultEngine = 'mock';
       } else {
         logger.error({
@@ -115,8 +133,9 @@ export class SesameAIService {
           source: 'sesameai',
           category: 'system',
           metadata: { 
-            gttsPath: this.gtts_script_path,
+            datacrunchPath: this.datacrunch_script_path,
             huggingfacePath: this.huggingface_script_path,
+            gttsPath: this.gtts_script_path,
             csmPath: this.csm_script_path
           }
         });
@@ -178,6 +197,10 @@ export class SesameAIService {
     let engineName: string;
     
     switch (engine) {
+      case 'datacrunch':
+        scriptPath = this.datacrunch_script_path;
+        engineName = 'DataCrunch Speech';
+        break;
       case 'gtts':
         scriptPath = this.gtts_script_path;
         engineName = 'Google TTS';
@@ -231,9 +254,23 @@ export class SesameAIService {
       // Build the command based on the engine
       let cmd = `${this.pythonInterpreter} ${scriptPath} --text ${escapedText} --speaker ${speaker} --output "${fullOutputPath}"`;
       
-      // Add model ID parameter for Hugging Face if provided
-      if (engine === 'huggingface' && modelId) {
+      // Add model ID parameter for Hugging Face or DataCrunch if provided
+      if ((engine === 'huggingface' || engine === 'datacrunch') && modelId) {
         cmd += ` --model "${modelId}"`;
+      }
+      
+      // Add DataCrunch URL and API key if available as environment variables
+      if (engine === 'datacrunch') {
+        const datacrunchUrl = process.env.DATACRUNCH_URL;
+        const apiKey = process.env.DATACRUNCH_API_KEY;
+        
+        if (datacrunchUrl) {
+          cmd += ` --datacrunch-url "${datacrunchUrl}"`;
+        }
+        
+        if (apiKey) {
+          cmd += ` --api-key "${apiKey}"`;
+        }
       }
       
       logger.info({
