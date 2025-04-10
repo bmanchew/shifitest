@@ -87,6 +87,8 @@ modulesRouter.use('/api/investor', investorRoutes);
 modulesRouter.use('/api/merchants', merchantRoutes);
 modulesRouter.use('/api/admin', adminRoutes);
 modulesRouter.use('/api/contracts', contractsRoutes);
+modulesRouter.use('/api/contracts', contractStatusRoutes);  // Add contract status routes to legacy API
+modulesRouter.use('/api/underwriting', underwritingRoutes); // Add underwriting routes to legacy API
 modulesRouter.use('/api/support-tickets', supportTicketsRoutes);
 modulesRouter.use('/api/current-merchant', currentMerchantRoutes);
 modulesRouter.use('/api/application-progress', applicationProgressRouter);
