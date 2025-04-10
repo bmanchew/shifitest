@@ -24,7 +24,11 @@ console.log('DATACRUNCH_CLIENT_ID:', process.env.DATACRUNCH_CLIENT_ID ? 'Found (
 console.log('DATACRUNCH_CLIENT_SECRET:', process.env.DATACRUNCH_CLIENT_SECRET ? 'Found (masked)' : 'Not found');
 
 // Check required environment variables
-const DATACRUNCH_URL = process.env.DATACRUNCH_URL || 'https://api.datacrunch.io';
+const DATACRUNCH_URL = process.env.DATACRUNCH_URL;
+// Make sure URL has proper format with protocol
+const formattedUrl = DATACRUNCH_URL && DATACRUNCH_URL.startsWith('http') 
+  ? DATACRUNCH_URL 
+  : `https://${DATACRUNCH_URL || 'api.datacrunch.io/v1'}`;
 const DATACRUNCH_CLIENT_ID = process.env.DATACRUNCH_CLIENT_ID;
 const DATACRUNCH_CLIENT_SECRET = process.env.DATACRUNCH_CLIENT_SECRET;
 
@@ -117,8 +121,9 @@ async function testOAuthVoiceGeneration(token) {
     return false;
   }
   
-  // Use the API base URL
-  const baseUrl = DATACRUNCH_URL;
+  // Use the known working API base URL 
+  // DATACRUNCH_URL may be an IP address that doesn't support TTS
+  const baseUrl = 'https://api.datacrunch.io/v1';
   const ttsEndpoint = '/tts';
   
   // Set up OAuth Bearer authentication
@@ -212,6 +217,7 @@ async function main() {
   
   console.log('Current configuration:');
   console.log(`DataCrunch URL: ${DATACRUNCH_URL}`);
+  console.log(`Formatted URL: ${formattedUrl}`);
   console.log(`DataCrunch Client ID: ${DATACRUNCH_CLIENT_ID ? 'Set (masked)' : 'Not set'}`);
   console.log(`DataCrunch Client Secret: ${DATACRUNCH_CLIENT_SECRET ? 'Set (masked)' : 'Not set'}`);
   console.log('');
