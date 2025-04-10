@@ -16,8 +16,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
-dotenv.config();
+// Load environment variables with path to .env
+dotenv.config({ path: '.env' });
+
+// Debug loaded environment variables
+console.log('Environment variables loaded from .env');
+console.log('DATACRUNCH_URL:', process.env.DATACRUNCH_URL || 'Not found');
 
 // Check required environment variables
 const DATACRUNCH_URL = process.env.DATACRUNCH_URL;
