@@ -119,21 +119,35 @@ class APIClientGenerator:
             return False
             
         # Create headers with API key if available
-        headers = {}
+        headers = {
+            "Content-Type": "application/json"
+        }
         if self.datacrunch_api_key:
-            headers["Authorization"] = f"Bearer {self.datacrunch_api_key}"
+            headers["X-API-KEY"] = self.datacrunch_api_key
             
-        # Make a simple status check request
-        response = requests.get(
-            f"{self.datacrunch_url.rstrip('/')}/status", 
-            headers=headers,
-            timeout=5
-        )
-        
-        if response.status_code != 200:
-            raise ConnectionError(f"DataCrunch status check failed with code {response.status_code}: {response.text}")
+        # Make a simple status check request to test connectivity
+        try:
+            # Use models endpoint to check if connection works
+            response = requests.get(
+                f"{self.datacrunch_url.rstrip('/')}/models", 
+                headers=headers,
+                timeout=5
+            )
             
-        return True
+            if response.status_code == 200:
+                # Connection successful
+                logger.info(f"Successfully connected to DataCrunch API - found {len(response.json().get('data', []))} models")
+                return True
+            elif response.status_code == 401:
+                # Authentication error
+                raise ConnectionError(f"DataCrunch API authentication failed: Invalid API key")
+            else:
+                # Other errors
+                raise ConnectionError(f"DataCrunch API check failed with code {response.status_code}: {response.text}")
+        except requests.RequestException as e:
+            raise ConnectionError(f"Could not connect to DataCrunch API: {str(e)}")
+            
+        return False
     
     def _check_huggingface_connection(self):
         """
@@ -251,21 +265,27 @@ class APIClientGenerator:
         """
         logger.info(f"Generating audio with DataCrunch for text: {text[:50]}...")
         
-        # Prepare the request payload
+        # Prepare the request payload according to DataCrunch API docs
         payload = {
             "text": text,
-            "speaker": speaker,
+            "voice_id": f"speaker_{speaker}",  # Convert speaker index to voice_id format
             "model_id": self.model_id,
-            "max_audio_length_ms": max_audio_length_ms,
-            "temperature": temperature,
-            "top_k": top_k
+            "settings": {
+                "stability": 0.5,
+                "similarity": 0.75,
+                "style": 0.0,
+                "speaker_boost": True,
+                "temperature": temperature,
+                "top_k": top_k,
+                "max_duration_seconds": max_audio_length_ms / 1000.0  # Convert ms to seconds
+            }
         }
         
         # Include context if provided
         if context:
             payload["context"] = [
                 {
-                    "speaker": segment.speaker,
+                    "speaker": f"speaker_{segment.speaker}",
                     "text": segment.text
                 }
                 for segment in context
@@ -273,14 +293,22 @@ class APIClientGenerator:
         
         # Create headers with API key if available
         headers = {
+            "Accept": "application/json",
             "Content-Type": "application/json"
         }
         if self.datacrunch_api_key:
-            headers["Authorization"] = f"Bearer {self.datacrunch_api_key}"
+            headers["X-API-KEY"] = self.datacrunch_api_key
         
-        # Make the request to DataCrunch
+        # Make the request to DataCrunch TTS endpoint
+        url = f"{self.datacrunch_url}/tts" if self.datacrunch_url else ""
+        if not url:
+            raise ValueError("DataCrunch URL not set")
+            
+        # Remove any trailing slashes
+        url = url.rstrip('/')
+        
         response = requests.post(
-            f"{self.datacrunch_url.rstrip('/')}/generate", 
+            url, 
             json=payload,
             headers=headers,
             timeout=60  # Longer timeout as generation can take time
@@ -288,18 +316,31 @@ class APIClientGenerator:
         
         # Handle response
         if response.status_code != 200:
-            raise RuntimeError(f"DataCrunch generation failed with code {response.status_code}: {response.text}")
+            raise RuntimeError(f"DataCrunch TTS generation failed with code {response.status_code}: {response.text}")
         
         # Parse the response
-        result = response.json()
-        
-        if not result.get("success", False):
-            raise RuntimeError(f"DataCrunch generation failed: {result.get('error', 'Unknown error')}")
-        
-        # Process audio data
-        audio_data = result.get("audio_data")
-        if not audio_data:
-            raise RuntimeError("No audio data in response")
+        try:
+            result = response.json()
+            
+            # Check for success
+            if not result.get("success", False):
+                error_message = result.get("message", "Unknown error")
+                raise RuntimeError(f"DataCrunch TTS generation failed: {error_message}")
+            
+            # Get audio data - assuming it comes as base64 string
+            audio_data = result.get("audio_data") or result.get("data", {}).get("audio_data")
+            if not audio_data:
+                raise RuntimeError("No audio data in response")
+                
+            logger.info("Successfully received audio data from DataCrunch API")
+            
+        except ValueError as e:
+            # Handle case where response might be raw audio data instead of JSON
+            if response.headers.get("Content-Type", "").startswith("audio/"):
+                logger.info("Received raw audio data from DataCrunch API")
+                audio_data = response.content
+            else:
+                raise RuntimeError(f"Failed to parse DataCrunch API response: {str(e)}")
         
         # Decode the base64 audio data
         audio_bytes = base64.b64decode(audio_data)
