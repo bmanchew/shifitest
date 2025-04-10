@@ -6,7 +6,7 @@
 import { Router, Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { storage } from '../storage';
-import { logger } from '../utils/logger';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -18,77 +18,110 @@ const router = Router();
 router.get('/:id/status', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const contractId = parseInt(req.params.id);
-    const userId = req.user?.id;
     
-    if (!userId) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Unauthorized - User not authenticated' 
+    if (isNaN(contractId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid contract ID format"
       });
     }
-
-    // Get the contract
-    const contract = await storage.getContract(contractId);
     
+    // Fetch the contract to ensure it exists
+    const contract = await storage.getContract(contractId);
     if (!contract) {
       return res.status(404).json({
         success: false,
-        message: 'Contract not found'
+        message: "Contract not found"
       });
     }
     
-    // Check permissions - either the user is admin or the contract belongs to their merchant
-    const isAdmin = req.user?.role === 'admin';
+    // Get application progress steps for this contract
+    const applicationProgress = await storage.getApplicationProgressByContractId(contractId);
     
-    if (!isAdmin) {
-      const userMerchant = await storage.getMerchantByUserId(userId);
-      
-      if (!userMerchant || userMerchant.id !== contract.merchantId) {
-        return res.status(403).json({
-          success: false,
-          message: 'Forbidden - Not authorized to view this contract status'
-        });
-      }
-    }
-
-    // Get application progress for this contract
-    const progressData = await storage.getApplicationProgressByContractId(contractId);
+    // Get all completed steps in the application process
+    const completedVerifications = await storage.getCompletedContractVerificationSteps(contractId);
     
-    // Transform progress data into status steps
-    const steps = progressData.map((progress, index) => ({
-      id: progress.id.toString(),
-      name: progress.step.charAt(0).toUpperCase() + progress.step.slice(1).replace(/_/g, ' '),
-      status: progress.completed ? 'completed' : 'pending',
-      completedAt: progress.completedAt ? progress.completedAt.toISOString() : undefined
+    // Format the response with all application steps and their status
+    const statusSteps = applicationProgress.map(step => ({
+      step: step.step,
+      completed: step.completed,
+      completedAt: step.completedAt,
+      description: getStepDescription(step.step),
+      order: getStepOrder(step.step)
     }));
     
-    // If no progress data exists, return default steps
-    const defaultSteps = steps.length > 0 ? steps : [
-      { id: '1', name: 'Application Submitted', status: 'completed', completedAt: new Date().toISOString() },
-      { id: '2', name: 'Identity Verification', status: 'pending' },
-      { id: '3', name: 'Underwriting Review', status: 'pending' },
-      { id: '4', name: 'Contract Signing', status: 'pending' },
-      { id: '5', name: 'Bank Account Verification', status: 'pending' }
-    ];
-    
-    res.status(200).json({
-      success: true,
-      steps: defaultSteps
+    // Add any additional verification steps that might not be in the progress table
+    completedVerifications.forEach(verification => {
+      if (!statusSteps.some(step => step.step === verification.step)) {
+        statusSteps.push({
+          step: verification.step,
+          completed: true,
+          completedAt: verification.completedAt,
+          description: getStepDescription(verification.step),
+          order: getStepOrder(verification.step)
+        });
+      }
     });
-  } catch (error: any) {
+    
+    // Sort steps by their order for consistent display
+    const sortedSteps = statusSteps.sort((a, b) => a.order - b.order);
+    
+    // Return success with the current application status
+    return res.json({
+      success: true,
+      contractId,
+      contractNumber: contract.contractNumber,
+      currentStep: contract.currentStep,
+      status: contract.status,
+      steps: sortedSteps
+    });
+    
+  } catch (error) {
     logger.error({
-      message: `Error fetching contract status: ${error.message}`,
+      message: `Error fetching contract status: ${error instanceof Error ? error.message : String(error)}`,
       category: 'api',
       source: 'internal',
-      metadata: { error: error.message, contractId: req.params.id }
+      metadata: {
+        contractId: req.params.id,
+        error: error instanceof Error ? error.stack : String(error)
+      }
     });
     
-    res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error',
-      error: error.message
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve contract status"
     });
   }
 });
+
+// Helper function to get a human-readable description for each step
+function getStepDescription(step: string): string {
+  const descriptions: Record<string, string> = {
+    'terms': 'Terms and Conditions acceptance',
+    'kyc': 'Identity verification',
+    'bank': 'Bank account connection',
+    'bank_pending': 'Bank account verification pending',
+    'payment': 'Payment setup',
+    'signing': 'Contract signing',
+    'completed': 'Application completed'
+  };
+  
+  return descriptions[step] || `Step: ${step}`;
+}
+
+// Helper function to determine the order of steps for display
+function getStepOrder(step: string): number {
+  const order: Record<string, number> = {
+    'terms': 1,
+    'kyc': 2,
+    'bank': 3,
+    'bank_pending': 3.5,
+    'payment': 4,
+    'signing': 5,
+    'completed': 6
+  };
+  
+  return order[step] || 99;
+}
 
 export default router;

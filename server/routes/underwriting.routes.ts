@@ -6,7 +6,7 @@
 import { Router, Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { storage } from '../storage';
-import { logger } from '../utils/logger';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -18,12 +18,11 @@ const router = Router();
 router.get('/', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { contractId } = req.query;
-    const userId = req.user?.id;
     
     if (!contractId) {
       return res.status(400).json({
         success: false,
-        message: 'Contract ID is required'
+        message: "Contract ID is required"
       });
     }
     
@@ -32,133 +31,139 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
     if (isNaN(contractIdNum)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid contract ID format'
+        message: "Invalid contract ID format"
       });
     }
     
-    if (!userId) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Unauthorized - User not authenticated' 
-      });
-    }
-
-    // Get the contract
+    // Verify the contract exists
     const contract = await storage.getContract(contractIdNum);
-    
     if (!contract) {
       return res.status(404).json({
         success: false,
-        message: 'Contract not found'
+        message: "Contract not found"
       });
     }
     
-    // Check permissions - either the user is admin or the contract belongs to their merchant
-    const isAdmin = req.user?.role === 'admin';
-    
-    if (!isAdmin) {
-      const userMerchant = await storage.getMerchantByUserId(userId);
-      
-      if (!userMerchant || userMerchant.id !== contract.merchantId) {
-        return res.status(403).json({
-          success: false,
-          message: 'Forbidden - Not authorized to view underwriting data for this contract'
-        });
-      }
-    }
-
-    // Try to get underwriting data for this contract
+    // Fetch all underwriting data for this contract
     const underwritingData = await storage.getUnderwritingDataByContractId(contractIdNum);
     
-    if (!underwritingData || underwritingData.length === 0) {
-      // Provide demo data if no real data exists
-      // Different data based on user role
-      if (isAdmin) {
-        return res.status(200).json({
-          success: true,
-          creditScore: 720,
-          incomeVerification: {
-            status: 'verified',
-            monthlyIncome: 5000,
-            employmentStatus: 'full_time',
-          },
-          riskAssessment: {
-            overallRisk: 'low',
-            factors: [
-              { name: 'Credit History', rating: 'good' },
-              { name: 'Debt-to-Income Ratio', rating: 'excellent' },
-              { name: 'Employment Stability', rating: 'good' }
-            ]
-          },
-          decisionStatus: 'pending'
-        });
-      } else if (req.user?.role === 'merchant') {
-        return res.status(200).json({
-          success: true,
-          decisionStatus: 'pending',
-          estimatedDecisionDate: new Date(Date.now() + 86400000).toISOString()
-        });
+    // Check user authorization - admin or merchant that owns the contract
+    if (req.user) {
+      if (req.user.role === 'admin') {
+        // Admin can see all data
+      } else if (req.user.role === 'merchant') {
+        const merchant = await storage.getMerchantByUserId(req.user.id);
+        if (!merchant || merchant.id !== contract.merchantId) {
+          return res.status(403).json({
+            success: false,
+            message: "Not authorized to view underwriting data for this contract"
+          });
+        }
       } else {
-        // Customer view
-        return res.status(200).json({
-          success: true,
-          applicationInProgress: true,
-          estimatedCompletionTime: '1-2 business days'
+        // Other roles not allowed
+        return res.status(403).json({
+          success: false,
+          message: "Not authorized to access underwriting data"
         });
       }
-    }
-    
-    // If we have real data, use the most recent underwriting result
-    const mostRecent = underwritingData.sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )[0];
-    
-    // Parse data if it's stored as JSON string
-    let parsedData = mostRecent.data;
-    if (typeof mostRecent.data === 'string') {
-      try {
-        parsedData = JSON.parse(mostRecent.data);
-      } catch (e) {
-        // If parsing fails, keep as is
-        parsedData = mostRecent.data;
-      }
-    }
-    
-    // Different response based on user role
-    if (isAdmin) {
-      // Admin gets full data
-      return res.status(200).json({
-        success: true,
-        id: mostRecent.id,
-        contractId: mostRecent.contractId,
-        score: mostRecent.score,
-        decision: mostRecent.decision,
-        data: parsedData,
-        createdAt: mostRecent.createdAt,
-        updatedAt: mostRecent.updatedAt
-      });
     } else {
-      // Non-admin users get limited data
-      return res.status(200).json({
-        success: true,
-        decisionStatus: mostRecent.decision || 'pending',
-        estimatedDecisionDate: new Date(Date.now() + 86400000).toISOString()
+      // No user in request
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
       });
     }
-  } catch (error: any) {
-    logger.error({
-      message: `Error fetching underwriting data: ${error.message}`,
-      category: 'api',
-      source: 'internal',
-      metadata: { error: error.message, contractId: req.query.contractId }
+    
+    if (!underwritingData) {
+      return res.status(404).json({
+        success: false,
+        message: "No underwriting data found for this contract"
+      });
+    }
+    
+    // Format the response with all required data
+    // Include key underwriting metrics for analysis
+    const formattedData = {
+      contractId: contractIdNum,
+      contractNumber: contract.contractNumber,
+      underwritingStatus: contract.underwritingStatus || 'pending',
+      creditTier: underwritingData.creditTier,
+      creditScore: underwritingData.creditScore,
+      annualIncome: underwritingData.annualIncome,
+      employmentHistoryMonths: underwritingData.employmentHistoryMonths,
+      debtToIncomeRatio: underwritingData.debtToIncomeRatio,
+      totalPoints: getTotalUnderwritingPoints(underwritingData),
+      decision: getUnderwritingDecision(underwritingData),
+      details: {
+        creditScorePoints: underwritingData.creditScorePoints,
+        annualIncomePoints: underwritingData.annualIncomePoints,
+        employmentHistoryPoints: underwritingData.employmentHistoryPoints,
+        debtToIncomePoints: underwritingData.debtToIncomePoints,
+        bankBalancePoints: underwritingData.bankBalancePoints,
+        bankHistoryPoints: underwritingData.bankHistoryPoints,
+        businessHistoryPoints: underwritingData.businessHistoryPoints
+      },
+      createdAt: underwritingData.createdAt,
+      updatedAt: underwritingData.updatedAt
+    };
+    
+    return res.json({
+      success: true,
+      data: formattedData
     });
     
-    res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error',
-      error: error.message
+  } catch (error) {
+    logger.error({
+      message: `Error retrieving underwriting data: ${error instanceof Error ? error.message : String(error)}`,
+      category: 'api',
+      source: 'internal',
+      metadata: {
+        contractId: req.query.contractId,
+        error: error instanceof Error ? error.stack : String(error)
+      }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve underwriting data"
     });
   }
 });
+
+/**
+ * Calculate total underwriting points from all categories
+ */
+function getTotalUnderwritingPoints(underwritingData: any): number {
+  let total = 0;
+  
+  // Add all points categories
+  total += underwritingData.creditScorePoints || 0;
+  total += underwritingData.annualIncomePoints || 0;
+  total += underwritingData.employmentHistoryPoints || 0;
+  total += underwritingData.debtToIncomePoints || 0;
+  total += underwritingData.bankBalancePoints || 0;
+  total += underwritingData.bankHistoryPoints || 0;
+  total += underwritingData.businessHistoryPoints || 0;
+  
+  return total;
+}
+
+/**
+ * Determine underwriting decision based on total points and criteria
+ */
+function getUnderwritingDecision(underwritingData: any): string {
+  const totalPoints = getTotalUnderwritingPoints(underwritingData);
+  
+  // Decision thresholds
+  if (totalPoints >= 80) {
+    return 'Approved';
+  } else if (totalPoints >= 60) {
+    return 'Conditionally Approved';
+  } else if (totalPoints >= 40) {
+    return 'Manual Review Required';
+  } else {
+    return 'Declined';
+  }
+}
 
 export default router;
