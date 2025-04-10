@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 interface MidDeskReportProps {
   merchantId: number;
   midDeskBusinessId: string;
-  businessId?: number;
+  businessId: number;
   onRefresh?: () => void;
 }
 
@@ -40,7 +40,22 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, midDeskBusine
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`/api/admin/merchant-reports/${merchantId}/business-verification`);
+      
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('_csrf='))
+        ?.split('=')[1];
+      
+      const response = await axios.get(
+        `/api/admin/merchant-reports/${merchantId}/business-verification`,
+        {
+          headers: {
+            'CSRF-Token': csrfToken,
+            'X-CSRF-Token': csrfToken,
+          }
+        }
+      );
       
       if (response.data.success) {
         setVerificationDetails(response.data);
@@ -58,7 +73,23 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, midDeskBusine
     try {
       setInitiatingVerification(true);
       setError(null);
-      const response = await axios.post(`/api/admin/merchant-reports/${merchantId}/verify-business`);
+      
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('_csrf='))
+        ?.split('=')[1];
+      
+      const response = await axios.post(
+        `/api/admin/merchant-reports/${merchantId}/verify-business`,
+        { businessId: businessId },
+        {
+          headers: {
+            'CSRF-Token': csrfToken,
+            'X-CSRF-Token': csrfToken,
+          }
+        }
+      );
       
       if (response.data.success) {
         // Refresh merchant details to get updated middeskBusinessId
