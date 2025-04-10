@@ -14,6 +14,8 @@ import exampleRoutes from './example.routes';
 import investorRoutes from './investor';
 import adminRoutes from './admin/index';
 import contractsRoutes from './contracts.routes';
+import contractStatusRoutes from './contract-status.routes';  // Add new import
+import underwritingRoutes from './underwriting.routes';       // Add new import
 import supportTicketsRoutes from './support-tickets';
 import currentMerchantRoutes from './current-merchant';
 import applicationProgressRouter from './application-progress';
@@ -48,6 +50,8 @@ modulesRouter.use('/api/v1/investor', investorRoutes);
 modulesRouter.use('/api/v1/merchants', merchantRoutes);
 modulesRouter.use('/api/v1/admin', adminRoutes);
 modulesRouter.use('/api/v1/contracts', contractsRoutes);
+modulesRouter.use('/api/v1/contracts', contractStatusRoutes);  // Add contract status routes
+modulesRouter.use('/api/v1/underwriting', underwritingRoutes); // Add underwriting routes
 modulesRouter.use('/api/v1/support-tickets', supportTicketsRoutes);
 modulesRouter.use('/api/v1/current-merchant', currentMerchantRoutes);
 modulesRouter.use('/api/v1/application-progress', applicationProgressRouter);

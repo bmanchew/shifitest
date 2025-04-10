@@ -224,6 +224,7 @@ export interface IStorage {
   getApplicationProgress(id: number): Promise<ApplicationProgress | undefined>;
   getApplicationProgressByContractId(contractId: number): Promise<ApplicationProgress[]>;
   getApplicationProgressByContractIdAndStep(contractId: number, step: string): Promise<ApplicationProgress | null>;
+  getCompletedContractVerificationSteps(contractId: number): Promise<Array<{ step: string, completedAt: Date }>>;
   createApplicationProgress(progress: InsertApplicationProgress): Promise<ApplicationProgress>;
   updateApplicationProgressCompletion(id: number, completed: boolean, data?: string): Promise<ApplicationProgress | undefined>;
   updateApplicationProgress(progressId: number, data: Partial<ApplicationProgress>): Promise<ApplicationProgress | null>;
@@ -1759,6 +1760,32 @@ export class DatabaseStorage implements IStorage {
     });
 
     return progress || null;
+  }
+
+  // Method to get all completed contract verification steps for a contract
+  async getCompletedContractVerificationSteps(
+    contractId: number
+  ): Promise<Array<{ step: string, completedAt: Date }>> {
+    try {
+      const completedSteps = await db.query.applicationProgress.findMany({
+        where: and(
+          eq(applicationProgress.contractId, contractId),
+          eq(applicationProgress.completed, true)
+        ),
+        columns: {
+          step: true,
+          updatedAt: true
+        }
+      });
+      
+      return completedSteps.map(step => ({
+        step: step.step,
+        completedAt: step.updatedAt || new Date()
+      }));
+    } catch (error) {
+      console.error("Error in getCompletedContractVerificationSteps:", error);
+      return [];
+    }
   }
 
   // Method to update application progress with any data
