@@ -10,6 +10,7 @@ import PlaidAssetReport from './reports/PlaidAssetReport';
 import MidDeskReport from './reports/MidDeskReport';
 import DueDiligenceReport from './reports/DueDiligenceReport';
 import { MerchantPlaidSettings } from './MerchantPlaidSettings';
+import { getCsrfToken } from '@/lib/csrf';
 
 interface MerchantDetailProps {
   merchantId: number;
@@ -144,11 +145,8 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
     try {
       setSavingBusinessDetails(true);
       
-      // Get CSRF token from cookie
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('_csrf='))
-        ?.split('=')[1];
+      // Get CSRF token from API utility
+      const csrfToken = await getCsrfToken();
       
       // Add CSRF token to request headers
       const response = await axios.put(
