@@ -16,12 +16,16 @@ export const isAuthenticated = async (req: Request, res: Response, next: NextFun
   try {
     // Check if user is already attached to request (by JWT middleware)
     if (!req.user) {
+      // Get the full path including the base path (/api/auth)
+      const fullPath = req.baseUrl + req.path;
+      
       logger.warn({
         message: 'Authentication required but no user found on request',
         category: 'security',
         source: 'internal',
         metadata: {
-          path: req.path,
+          path: fullPath,
+          originalPath: req.originalUrl,
           method: req.method,
         }
       });

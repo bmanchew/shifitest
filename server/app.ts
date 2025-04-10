@@ -86,6 +86,16 @@ export function createApp(): Express {
   // Enhanced authentication middleware to extract user from JWT token
   app.use(async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Add detailed debugging for /auth/me endpoint
+      if (req.path === '/me' && req.baseUrl === '/api/auth') {
+        console.log(`[AUTH DEBUG] Accessing /api/auth/me endpoint`);
+        console.log(`[AUTH DEBUG] Request cookies:`, req.cookies);
+        console.log(`[AUTH DEBUG] Request headers:`, {
+          authorization: req.headers.authorization ? 'Present (not shown for security)' : 'Not present',
+          cookie: req.headers.cookie ? 'Present (not shown for security)' : 'Not present'
+        });
+      }
+      
       // Use our imported token utilities to extract and verify the token
       const token = extractTokenFromRequest(req);
       
