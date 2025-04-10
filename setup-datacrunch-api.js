@@ -7,29 +7,15 @@
 
 import fs from 'fs';
 import path from 'path';
-import readline from 'readline';
-import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
+import { createInterface } from 'readline';
 
-// ES module compatibility
+// Get current filename and directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Constants
-const ENV_FILE = '.env';
-const DATACRUNCH_URL_ENV = 'DATACRUNCH_URL';
-const DATACRUNCH_API_KEY_ENV = 'DATACRUNCH_API_KEY';
-const HUGGINGFACE_API_KEY_ENV = 'HUGGINGFACE_API_KEY';
-const DEFAULT_DATACRUNCH_URL = 'https://api.datacrunch.io/v1';
-
-// Load existing environment variables
-const env = dotenv.config().parsed || {};
-
-// Create readline interface for user input
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+// Environment file path
+const ENV_FILE = path.join(__dirname, '.env');
 
 /**
  * Prompt user for input
@@ -37,8 +23,14 @@ const rl = readline.createInterface({
  * @returns {Promise<string>} - The user's response
  */
 function prompt(question) {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
   return new Promise((resolve) => {
     rl.question(question, (answer) => {
+      rl.close();
       resolve(answer);
     });
   });
@@ -50,8 +42,8 @@ function prompt(question) {
  * @returns {boolean} - Whether the key passes basic validation
  */
 function validateApiKey(key) {
-  // Basic validation - non-empty and has at least 10 characters
-  return key && key.trim().length >= 10;
+  // Basic validation
+  return key && key.length > 10;
 }
 
 /**
@@ -59,11 +51,31 @@ function validateApiKey(key) {
  * @param {Object} env - The environment variables to write
  */
 function writeEnv(env) {
-  const envContent = Object.entries(env)
-    .map(([key, value]) => `${key}=${value}`)
-    .join('\n');
-
-  fs.writeFileSync(ENV_FILE, envContent);
+  let envContent = '';
+  
+  // Read existing content
+  if (fs.existsSync(ENV_FILE)) {
+    envContent = fs.readFileSync(ENV_FILE, 'utf8');
+  }
+  
+  // Update or add each environment variable
+  for (const [key, value] of Object.entries(env)) {
+    if (!value) continue;
+    
+    // Check if the variable already exists
+    const regex = new RegExp(`^${key}=.*$`, 'm');
+    if (regex.test(envContent)) {
+      // Replace existing variable
+      envContent = envContent.replace(regex, `${key}=${value}`);
+    } else {
+      // Add new variable
+      envContent += `\n${key}=${value}`;
+    }
+  }
+  
+  // Write the updated content
+  fs.writeFileSync(ENV_FILE, envContent.trim() + '\n');
+  
   console.log(`Environment variables written to ${ENV_FILE}`);
 }
 
@@ -71,83 +83,100 @@ function writeEnv(env) {
  * Main function
  */
 async function main() {
-  try {
-    console.log('DataCrunch and HuggingFace API Setup');
-    console.log('====================================');
-    console.log('This script will help you set up the API keys and URL for the DataCrunch and HuggingFace integration.');
-    console.log('');
-
-    // DataCrunch URL
-    const existingUrl = env[DATACRUNCH_URL_ENV];
-    let useDefaultUrl = true;
-    
-    if (existingUrl) {
-      console.log(`Current DataCrunch URL: ${existingUrl}`);
-      useDefaultUrl = (await prompt(`Use default URL (${DEFAULT_DATACRUNCH_URL})? (Y/n): `)).toLowerCase() !== 'n';
-    } else {
-      useDefaultUrl = (await prompt(`Use default DataCrunch URL (${DEFAULT_DATACRUNCH_URL})? (Y/n): `)).toLowerCase() !== 'n';
-    }
-    
-    env[DATACRUNCH_URL_ENV] = useDefaultUrl ? DEFAULT_DATACRUNCH_URL : await prompt('Enter DataCrunch URL: ');
-
-    // DataCrunch API Key
-    const existingDataCrunchKey = env[DATACRUNCH_API_KEY_ENV];
-    if (existingDataCrunchKey) {
-      console.log(`DataCrunch API key is already set (${existingDataCrunchKey.substring(0, 3)}...${existingDataCrunchKey.substring(existingDataCrunchKey.length - 3)})`);
-      const changeKey = (await prompt('Do you want to change it? (y/N): ')).toLowerCase() === 'y';
-      
-      if (changeKey) {
-        let apiKey = await prompt('Enter DataCrunch API key: ');
-        while (!validateApiKey(apiKey)) {
-          console.log('Invalid API key. Please enter a valid key.');
-          apiKey = await prompt('Enter DataCrunch API key: ');
-        }
-        env[DATACRUNCH_API_KEY_ENV] = apiKey;
+  console.log('DataCrunch and HuggingFace API Setup');
+  console.log('===================================\n');
+  
+  // Load existing .env file if it exists
+  let env = {};
+  if (fs.existsSync(ENV_FILE)) {
+    const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+    envContent.split('\n').forEach(line => {
+      const match = line.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        env[match[1]] = match[2];
       }
-    } else {
-      let apiKey = await prompt('Enter DataCrunch API key: ');
-      while (!validateApiKey(apiKey)) {
-        console.log('Invalid API key. Please enter a valid key.');
-        apiKey = await prompt('Enter DataCrunch API key: ');
-      }
-      env[DATACRUNCH_API_KEY_ENV] = apiKey;
-    }
-
-    // HuggingFace API Key
-    const existingHfKey = env[HUGGINGFACE_API_KEY_ENV];
-    if (existingHfKey) {
-      console.log(`HuggingFace API key is already set (${existingHfKey.substring(0, 3)}...${existingHfKey.substring(existingHfKey.length - 3)})`);
-      const changeKey = (await prompt('Do you want to change it? (y/N): ')).toLowerCase() === 'y';
-      
-      if (changeKey) {
-        let apiKey = await prompt('Enter HuggingFace API key: ');
-        while (!validateApiKey(apiKey)) {
-          console.log('Invalid API key. Please enter a valid key.');
-          apiKey = await prompt('Enter HuggingFace API key: ');
-        }
-        env[HUGGINGFACE_API_KEY_ENV] = apiKey;
-      }
-    } else {
-      let apiKey = await prompt('Enter HuggingFace API key: ');
-      while (!validateApiKey(apiKey)) {
-        console.log('Invalid API key. Please enter a valid key.');
-        apiKey = await prompt('Enter HuggingFace API key: ');
-      }
-      env[HUGGINGFACE_API_KEY_ENV] = apiKey;
-    }
-
-    // Write to .env file
-    writeEnv(env);
-
-    console.log('\nAPI keys and URL have been set up successfully!');
-    console.log('\nNOTE: You will need to restart the application for these changes to take effect.');
-    
-  } catch (error) {
-    console.error('Error:', error.message);
-  } finally {
-    rl.close();
+    });
   }
+  
+  // DataCrunch Configuration
+  console.log('\nDataCrunch API Configuration');
+  console.log('-----------------------------');
+  
+  // URL is fixed to the proper API endpoint
+  const datacrunchUrl = "https://api.datacrunch.io";
+  console.log(`DataCrunch API URL: ${datacrunchUrl}`);
+  
+  // Get client ID if not already set
+  let datacrunchClientId = env.DATACRUNCH_CLIENT_ID || '';
+  if (!datacrunchClientId) {
+    datacrunchClientId = await prompt('Enter your DataCrunch client ID: ');
+  } else {
+    console.log(`DataCrunch client ID is already set (${datacrunchClientId.substring(0, 4)}...)`);
+    const change = await prompt('Do you want to change it? (y/n): ');
+    if (change.toLowerCase() === 'y') {
+      datacrunchClientId = await prompt('Enter your DataCrunch client ID: ');
+    }
+  }
+  
+  // Get client secret if not already set
+  let datacrunchClientSecret = env.DATACRUNCH_CLIENT_SECRET || '';
+  if (!datacrunchClientSecret) {
+    datacrunchClientSecret = await prompt('Enter your DataCrunch client secret: ');
+  } else {
+    console.log('DataCrunch client secret is already set');
+    const change = await prompt('Do you want to change it? (y/n): ');
+    if (change.toLowerCase() === 'y') {
+      datacrunchClientSecret = await prompt('Enter your DataCrunch client secret: ');
+    }
+  }
+  
+  // Get API key if not already set
+  let datacrunchApiKey = env.DATACRUNCH_API_KEY || '';
+  if (!datacrunchApiKey) {
+    datacrunchApiKey = await prompt('Enter your DataCrunch API key: ');
+  } else {
+    console.log(`DataCrunch API key is already set (${datacrunchApiKey.substring(0, 4)}...)`);
+    const change = await prompt('Do you want to change it? (y/n): ');
+    if (change.toLowerCase() === 'y') {
+      datacrunchApiKey = await prompt('Enter your DataCrunch API key: ');
+    }
+  }
+  
+  // HuggingFace Configuration
+  console.log('\nHuggingFace API Configuration');
+  console.log('-----------------------------');
+  
+  // Get API key if not already set
+  let huggingfaceApiKey = env.HUGGINGFACE_API_KEY || '';
+  if (!huggingfaceApiKey) {
+    huggingfaceApiKey = await prompt('Enter your HuggingFace API key: ');
+  } else {
+    console.log(`HuggingFace API key is already set (${huggingfaceApiKey.substring(0, 4)}...)`);
+    const change = await prompt('Do you want to change it? (y/n): ');
+    if (change.toLowerCase() === 'y') {
+      huggingfaceApiKey = await prompt('Enter your HuggingFace API key: ');
+    }
+  }
+  
+  // Validate and save
+  console.log('\nValidating and saving configuration...');
+  
+  const newEnv = {
+    DATACRUNCH_URL: datacrunchUrl,
+    DATACRUNCH_CLIENT_ID: datacrunchClientId,
+    DATACRUNCH_CLIENT_SECRET: datacrunchClientSecret,
+    DATACRUNCH_API_KEY: datacrunchApiKey,
+    HUGGINGFACE_API_KEY: huggingfaceApiKey
+  };
+  
+  // Write to .env file
+  writeEnv(newEnv);
+  
+  console.log('\nConfiguration complete!');
+  console.log('To use these settings, restart your application.');
 }
 
 // Run the main function
-main();
+main().catch(error => {
+  console.error('Error:', error);
+});
