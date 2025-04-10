@@ -25,8 +25,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { apiRequest } from "@/lib/queryClient";
 import { ChevronLeft } from "lucide-react";
+import { FormInputField } from "@/components/common/forms/FormInputField";
+import { apiClient } from "@/lib/api/apiClient";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
