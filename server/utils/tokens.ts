@@ -263,11 +263,13 @@ export function verifyToken(token: string): any | null {
  * @returns Token string or null if not found
  */
 export function extractTokenFromRequest(req: Request): string | null {
-  // Debug logging for admin routes
+  // Debug logging for admin routes and auth/me endpoint
   const isAdminRoute = req.path.startsWith('/api/admin');
+  const isAuthMeRoute = (req.baseUrl === '/api/auth' && req.path === '/me') || req.originalUrl === '/api/auth/me';
+  const shouldLog = isAdminRoute || isAuthMeRoute;
   
-  if (isAdminRoute) {
-    console.log(`[TOKEN EXTRACT] Processing token extraction for ${req.method} ${req.path}`);
+  if (shouldLog) {
+    console.log(`[TOKEN EXTRACT] Processing token extraction for ${req.method} ${req.baseUrl}${req.path} (originalUrl: ${req.originalUrl})`);
     
     if (req.cookies) {
       console.log(`[TOKEN EXTRACT] Available cookies:`, Object.keys(req.cookies));
@@ -279,6 +281,13 @@ export function extractTokenFromRequest(req: Request): string | null {
       console.log(`[TOKEN EXTRACT] Authorization header exists`);
     } else {
       console.log(`[TOKEN EXTRACT] No Authorization header`);
+    }
+    
+    // Log cookie contents (partial for security)
+    if (req.cookies && req.cookies.auth_token) {
+      const tokenPreview = req.cookies.auth_token.substring(0, 10) + '...' + 
+                          req.cookies.auth_token.substring(req.cookies.auth_token.length - 5);
+      console.log(`[TOKEN EXTRACT] auth_token cookie value preview: ${tokenPreview}`);
     }
   }
   
