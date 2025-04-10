@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 
 interface MidDeskReportProps {
   merchantId: number;
-  businessDetails: any;
-  onRefresh: () => void;
+  midDeskBusinessId: string;
+  businessId?: number;
+  onRefresh?: () => void;
 }
 
 interface VerificationDetails {
@@ -24,7 +25,7 @@ interface VerificationDetails {
   details?: any;
 }
 
-const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, businessDetails, onRefresh }) => {
+const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, midDeskBusinessId, businessId, onRefresh }) => {
   const [verificationDetails, setVerificationDetails] = useState<VerificationDetails | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +33,7 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, businessDetai
 
   const fetchVerificationDetails = async () => {
     // Skip if no MidDesk business ID available
-    if (!businessDetails?.middeskBusinessId) {
+    if (!midDeskBusinessId) {
       return;
     }
 
@@ -61,7 +62,9 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, businessDetai
       
       if (response.data.success) {
         // Refresh merchant details to get updated middeskBusinessId
-        onRefresh();
+        if (onRefresh) {
+          onRefresh();
+        }
         // Then fetch verification details
         fetchVerificationDetails();
       } else {
@@ -76,10 +79,10 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, businessDetai
 
   // Initialize component
   useEffect(() => {
-    if (businessDetails?.middeskBusinessId) {
+    if (midDeskBusinessId) {
       fetchVerificationDetails();
     }
-  }, [merchantId, businessDetails?.middeskBusinessId]);
+  }, [merchantId, midDeskBusinessId]);
 
   // Get status icon based on verification status
   const getStatusIcon = (status: string) => {
@@ -157,7 +160,7 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, businessDetai
   };
 
   // If verification hasn't been initiated yet
-  if (!businessDetails?.middeskBusinessId && !initiatingVerification) {
+  if (!midDeskBusinessId && !initiatingVerification) {
     return (
       <Card>
         <CardHeader>
@@ -262,7 +265,7 @@ const MidDeskReport: React.FC<MidDeskReportProps> = ({ merchantId, businessDetai
           </div>
         ) : (
           <div className="text-center py-4 text-muted-foreground">
-            <p>Business ID: {businessDetails?.middeskBusinessId}</p>
+            <p>Business ID: {midDeskBusinessId}</p>
             <p className="mt-2">Verification details not available.</p>
           </div>
         )}

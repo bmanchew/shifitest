@@ -144,7 +144,23 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
     try {
       setSavingBusinessDetails(true);
       
-      const response = await axios.put(`/api/admin/merchants/${merchantId}/business-details`, editedBusinessDetails);
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('_csrf='))
+        ?.split('=')[1];
+      
+      // Add CSRF token to request headers
+      const response = await axios.put(
+        `/api/admin/merchants/${merchantId}/business-details`, 
+        editedBusinessDetails,
+        {
+          headers: {
+            'CSRF-Token': csrfToken,
+            'X-CSRF-Token': csrfToken,
+          }
+        }
+      );
       
       if (response.data.success) {
         setBusinessDetails(response.data.businessDetails);
@@ -179,7 +195,22 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
     try {
       setRunningMidDeskReport(true);
       
-      const response = await axios.post(`/api/admin/merchants/${merchantId}/verify-business`);
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('_csrf='))
+        ?.split('=')[1];
+      
+      const response = await axios.post(
+        `/api/admin/merchants/${merchantId}/verify-business`,
+        {},
+        {
+          headers: {
+            'CSRF-Token': csrfToken,
+            'X-CSRF-Token': csrfToken,
+          }
+        }
+      );
       
       if (response.data.success) {
         toast({
@@ -216,7 +247,24 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
 
     try {
       setSyncingStatus(true);
-      const response = await axios.post(`/api/plaid/sync-merchant-status/${merchantId}`);
+      
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('_csrf='))
+        ?.split('=')[1];
+      
+      const response = await axios.post(
+        `/api/plaid/sync-merchant-status/${merchantId}`,
+        {},
+        {
+          headers: {
+            'CSRF-Token': csrfToken,
+            'X-CSRF-Token': csrfToken,
+          }
+        }
+      );
+      
       if (response.data.success) {
         // Refresh merchant details
         fetchMerchantDetail();
@@ -251,9 +299,24 @@ function MerchantDetail({ merchantId }: MerchantDetailProps) {
       setVerifyingBusiness(true);
       setError(null);
       
-      const response = await axios.post(`/api/admin/merchants/${merchantId}/verify-business`, {
-        businessId: businessDetails.id
-      });
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('_csrf='))
+        ?.split('=')[1];
+      
+      const response = await axios.post(
+        `/api/admin/merchants/${merchantId}/verify-business`, 
+        {
+          businessId: businessDetails.id
+        },
+        {
+          headers: {
+            'CSRF-Token': csrfToken,
+            'X-CSRF-Token': csrfToken,
+          }
+        }
+      );
       
       if (response.data.success) {
         toast({
