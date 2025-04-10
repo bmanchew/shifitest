@@ -22,14 +22,21 @@ dotenv.config({ path: '.env' });
 // Debug loaded environment variables
 console.log('Environment variables loaded from .env');
 console.log('Original DATACRUNCH_URL:', process.env.DATACRUNCH_URL || 'Not found');
+console.log('DATACRUNCH_CLIENT_ID:', process.env.DATACRUNCH_CLIENT_ID ? 'Found (masked)' : 'Not found');
+console.log('DATACRUNCH_CLIENT_SECRET:', process.env.DATACRUNCH_CLIENT_SECRET ? 'Found (masked)' : 'Not found');
 
 // Override with the correct URL regardless of what's in the environment
+// From our tests, we know that the base URL is correct and returns 401, not 404
 process.env.DATACRUNCH_URL = 'https://api.datacrunch.io/v1';
 console.log('Updated DATACRUNCH_URL:', process.env.DATACRUNCH_URL);
 
 // Check required environment variables
 const DATACRUNCH_URL = process.env.DATACRUNCH_URL;
-const DATACRUNCH_API_KEY = process.env.DATACRUNCH_API_KEY;
+const DATACRUNCH_CLIENT_ID = process.env.DATACRUNCH_CLIENT_ID;
+const DATACRUNCH_CLIENT_SECRET = process.env.DATACRUNCH_CLIENT_SECRET;
+
+// Variable to store the access token once we get it
+let accessToken = null;
 
 // Test constants
 const TEST_TEXT = "Hello, this is a test of the DataCrunch API integration. If you hear this message, the integration is working correctly.";
@@ -59,27 +66,162 @@ async function testDataCrunchConnection() {
   }
   
   try {
-    // Prepare request headers
-    const headers = {
+    // The root endpoint returned 401, which means it's the correct endpoint but our auth is wrong
+    // Let's try different auth header combinations to see which one works
+    
+    console.log('Focusing on the root endpoint (/) which returned 401 Unauthorized');
+    console.log('Testing different authentication header formats...');
+
+    const authTests = [
+      {
+        name: 'X-API-KEY only',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-API-KEY': DATACRUNCH_API_KEY
+        }
+      },
+      {
+        name: 'Authorization: Bearer',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DATACRUNCH_API_KEY}`
+        }
+      },
+      {
+        name: 'Api-Key',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Api-Key': DATACRUNCH_API_KEY
+        }
+      },
+      {
+        name: 'x-api-key (lowercase)',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'x-api-key': DATACRUNCH_API_KEY
+        }
+      },
+      {
+        name: 'Custom format: X-API-KEY without prefix',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-API-KEY': DATACRUNCH_API_KEY.replace('em1pn6pq673kRwlz9ya7jbrdvRGd6ZDNfeDgaOhQkL', '')
+        }
+      }
+    ];
+    
+    let response = null;
+    let successfulAuth = null;
+    // Use a global variable to share the successful auth between functions
+    global.successfulAuth = null;
+    
+    // Try each auth combination
+    for (const test of authTests) {
+      console.log(`Testing auth format: ${test.name}`);
+      
+      try {
+        // Make a request to the root endpoint
+        response = await axios.get(DATACRUNCH_URL, { 
+          headers: test.headers,
+          timeout: 5000,
+          validateStatus: null
+        });
+        
+        console.log(`Response: ${response.status} ${response.statusText}`);
+        
+        // If we get a 200 response, we found the right auth format
+        if (response.status === 200) {
+          console.log('✅ Found working authentication format!');
+          successfulAuth = test;
+          global.successfulAuth = test;
+          break;
+        }
+        else {
+          // Show the response data for debugging
+          const shortResponseData = JSON.stringify(response.data).substring(0, 100);
+          console.log(`Response data snippet: ${shortResponseData}...`);
+        }
+      } catch (error) {
+        console.log(`Error: ${error.message}`);
+      }
+      
+      console.log('-----------------------');
+    }
+    
+    // Try direct API endpoint tests for common TTS patterns
+    console.log('\nTesting direct TTS endpoints...');
+    
+    const ttsEndpoints = [
+      '/tts',
+      '/api/tts', 
+      '/v1/tts',
+      '/text-to-speech',
+      '/synthesize'
+    ];
+    
+    let successfulEndpoint = null;
+    
+    // Use all auth headers to be safe
+    const combinedHeaders = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       'X-API-KEY': DATACRUNCH_API_KEY,
-      // Add alternative auth methods in case one is required
       'Authorization': `Bearer ${DATACRUNCH_API_KEY}`,
-      'Api-Key': DATACRUNCH_API_KEY
+      'Api-Key': DATACRUNCH_API_KEY,
+      'x-api-key': DATACRUNCH_API_KEY
     };
     
-    console.log('Using headers:', JSON.stringify({
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'X-API-KEY': '***API_KEY***',
-      'Authorization': 'Bearer ***API_KEY***',
-      'Api-Key': '***API_KEY***'
-    }, null, 2));
+    for (const endpoint of ttsEndpoints) {
+      const fullUrl = `${DATACRUNCH_URL}${endpoint}`;
+      console.log(`Trying ${fullUrl}...`);
+      
+      try {
+        // We'll try a post request since TTS endpoints typically use POST
+        const testPayload = {
+          text: "Hello world",
+          voice_id: "speaker_0"
+        };
+        
+        response = await axios.post(fullUrl, testPayload, { 
+          headers: combinedHeaders,
+          timeout: 5000,
+          validateStatus: null
+        });
+        
+        console.log(`Response: ${response.status} ${response.statusText}`);
+        
+        // Any non-404 response might indicate this is a valid endpoint
+        if (response.status !== 404) {
+          console.log('⚠️ Found potential TTS endpoint (non-404 response)');
+          successfulEndpoint = endpoint;
+          
+          // Show the response data for debugging
+          const shortResponseData = JSON.stringify(response.data).substring(0, 100);
+          console.log(`Response data snippet: ${shortResponseData}...`);
+        }
+      } catch (error) {
+        console.log(`Error with ${fullUrl}: ${error.message}`);
+      }
+    }
     
-    // Make a request to the models endpoint
-    console.log(`Making request to ${DATACRUNCH_URL}/models`);
-    const response = await axios.get(`${DATACRUNCH_URL}/models`, { headers });
+    if (!successfulAuth && !successfulEndpoint) {
+      throw new Error('Could not find valid auth format or API endpoint');
+    }
+    
+    // Use the successful headers or combined headers
+    const bestHeaders = successfulAuth ? successfulAuth.headers : combinedHeaders;
+    
+    if (successfulEndpoint) {
+      console.log(`Making request to successful endpoint: ${DATACRUNCH_URL}${successfulEndpoint}`);
+      response = await axios.get(`${DATACRUNCH_URL}${successfulEndpoint}`, { headers: bestHeaders });
+    } else {
+      console.log('No successful endpoint found, but continuing with tests');
+    }
     
     if (response.status === 200) {
       console.log('✅ Successfully connected to DataCrunch API');
@@ -129,15 +271,22 @@ async function testVoiceGeneration() {
   console.log('\nTesting voice generation with DataCrunch API...');
   
   try {
-    // Prepare request headers
-    const headers = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'X-API-KEY': DATACRUNCH_API_KEY,
-      // Add alternative auth methods in case one is required
-      'Authorization': `Bearer ${DATACRUNCH_API_KEY}`,
-      'Api-Key': DATACRUNCH_API_KEY
-    };
+    // Use the successful auth format if available, or try all formats
+    let headers;
+    if (global.successfulAuth) {
+      console.log(`Using successful auth format: ${global.successfulAuth.name}`);
+      headers = global.successfulAuth.headers;
+    } else {
+      console.log('No successful auth format found, trying all formats');
+      headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-API-KEY': DATACRUNCH_API_KEY,
+        'Authorization': `Bearer ${DATACRUNCH_API_KEY}`,
+        'Api-Key': DATACRUNCH_API_KEY,
+        'x-api-key': DATACRUNCH_API_KEY
+      };
+    }
     
     // Prepare request payload
     const payload = {
