@@ -1,10 +1,12 @@
 
-import { ContractDetails as ContractDetailsComponent } from "@/components/contract/ContractDetails";
+import ContractDetailsComponent from "@/components/contract/ContractDetails";
 import AdminLayout from "@/components/layout/AdminLayout";
-import { useParams } from "react-router-dom";
+import { useRoute } from "wouter";
 
 export default function ContractDetails() {
-  const { contractId } = useParams();
+  // Use wouter's useRoute hook instead of react-router-dom's useParams
+  const [_, params] = useRoute("/admin/contracts/:contractId");
+  const contractId = params?.contractId;
   
   return (
     <AdminLayout>

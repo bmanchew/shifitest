@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { useRoute } from 'wouter';
 import axios from 'axios';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,9 +9,11 @@ import ApplicationStatus from './ApplicationStatus';
 import DocumentView from './DocumentView';
 import UnderwritingViewFactory from '../underwriting/UnderwritingViewFactory';
 
-const ContractDetails = () => {
-  const [match, params] = useRoute('/contracts/:contractId');
-  const contractId = params?.contractId;
+interface ContractDetailsProps {
+  contractId?: string;
+}
+
+const ContractDetails: React.FC<ContractDetailsProps> = ({ contractId }) => {
   const [contract, setContract] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
