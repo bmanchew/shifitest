@@ -86,8 +86,10 @@ async function fetchDocumentAsBase64(documentUrl: string): Promise<string | null
 import { reportsRouter } from "./routes/admin/reports";
 import adminRouter from "./routes/admin";
 import contractsRouter from "./routes/contracts";
+import contractStatusRouter from "./routes/contract-status.routes"; // Import contract status routes
 import customersRouter from "./routes/customers";
 import underwritingRouter from "./routes/underwriting";
+import underwritingApiRouter from "./routes/underwriting.routes"; // Import underwriting API routes
 import merchantRouter from "./routes/merchant";
 import merchantDashboardRouter from "./routes/merchant-dashboard";
 import merchantFundingRouter from "./routes/merchant-funding";
@@ -5545,9 +5547,13 @@ apiRouter.post("/plaid/webhook", async (req: Request, res: Response) => {
 
   // Mount the underwriting router
   apiRouter.use("/underwriting", underwritingRouter);
+  apiRouter.use("/underwriting", underwritingApiRouter);
 
   // Mount the contracts router
   apiRouter.use("/contracts", contractsRouter);
+  
+  // Mount the contract status router
+  apiRouter.use("/contracts", contractStatusRouter);
 
   // Mount the customers router
   apiRouter.use("/customers", customersRouter);
