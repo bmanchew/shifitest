@@ -3,6 +3,8 @@ import { User } from "@shared/schema";
 
 export type AuthUser = Omit<User, "password"> & {
   merchantId?: number;
+  token?: string;
+  access_token?: string;
 };
 
 export interface AuthResult {
@@ -15,6 +17,44 @@ export interface RegisterParams {
   firstName: string;
   lastName: string;
   role: string;
+}
+
+/**
+ * Store user data in cookies instead of localStorage for better security
+ * @param user The user data to store
+ */
+export function storeUserData(user: AuthUser): void {
+  // We don't store user data in localStorage/cookies anymore
+  // Authentication is handled via HTTP-only cookies set by the server
+  console.log("User data storage handled by secure cookies");
+}
+
+/**
+ * Clear stored user data (for logout)
+ */
+export function clearUserData(): void {
+  // We don't need to clear localStorage as we're using secure cookies now
+  console.log("User data clearing handled by server-side cookie removal");
+}
+
+/**
+ * Determine the proper home route based on user role
+ */
+export function getUserHomeRoute(user: AuthUser): string {
+  if (!user) return "/";
+  
+  switch (user.role) {
+    case "admin":
+      return "/admin/dashboard";
+    case "merchant":
+      return "/merchant/dashboard";
+    case "investor":
+      return "/investor/dashboard";
+    case "customer":
+      return "/customer/dashboard";
+    default:
+      return "/";
+  }
 }
 
 export async function registerUser(params: RegisterParams): Promise<void> {

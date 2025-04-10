@@ -27,6 +27,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { ChevronLeft } from "lucide-react";
 import { FormInputField } from "@/components/common/forms/FormInputField";
+import { SelectFormField } from "@/components/common/forms/SelectFormField";
+import { CheckboxFormField } from "@/components/common/forms/CheckboxFormField";
 import { apiClient } from "@/lib/api/apiClient";
 
 const formSchema = z.object({
@@ -68,15 +70,21 @@ export default function InvestorSignup() {
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
     try {
-      // Send the application data to the backend and create an investor account
-      const response = await apiRequest<{success: boolean; userId?: number; token?: string; existingUser?: boolean}>(
-        "POST", 
-        "/api/investor/applications", 
-        data
-      );
+      // Send the application data to the backend using our new API client
+      const response = await apiClient.post<{
+        success: boolean; 
+        userId?: number; 
+        token?: string; 
+        existingUser?: boolean
+      }>("/api/investor/applications", data);
+      
+      // Check for errors
+      if (response.error) {
+        throw new Error(response.error);
+      }
       
       // Check if the user already exists
-      if (response.existingUser) {
+      if (response.data?.existingUser) {
         toast({
           title: "Email already exists",
           description: "This email is already registered. Please login or use a different email.",
@@ -92,11 +100,6 @@ export default function InvestorSignup() {
         description: "Your investor application has been pre-approved. Please complete the verification process.",
       });
       
-      // Store auth token
-      if (response.token) {
-        localStorage.setItem('authToken', response.token);
-      }
-      
       // Redirect to KYC verification page
       setTimeout(() => {
         navigate("/investor/verify/kyc");
@@ -104,56 +107,17 @@ export default function InvestorSignup() {
     } catch (error: any) {
       console.error("Signup error:", error);
       
-      // Enhanced error logging for debugging
-      if (error.response) {
-        console.error("Error response details:", {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data
-        });
-      }
-      
-      // Check if this is the existing email error
-      if (error.response && error.response.status === 400 && error.message && error.message.includes("Email already exists")) {
+      // Handle specific error types
+      if (error.message && error.message.includes("Email already exists")) {
         toast({
           title: "Email already exists",
           description: "This email is already registered. Please login or use a different email.",
           variant: "destructive"
         });
-      } else if (error instanceof SyntaxError && error.message.includes('Unexpected token')) {
-        // Detect HTML responses that cause JSON parsing errors
-        console.error("Received invalid JSON response, possible HTML:", 
-          error.message.substring(0, 100));
-          
-        // Try to extract more details from the error
-        const errorText = error.message;
-        const isCSRFError = errorText.includes('CSRF') || errorText.includes('csrf');
-        const isProxyError = errorText.includes('proxy') || errorText.includes('gateway');
-        
-        if (isCSRFError) {
-          toast({
-            title: "Security Verification Failed",
-            description: "Your session may have expired. Please refresh the page and try again.",
-            variant: "destructive",
-          });
-        } else if (isProxyError) {
-          toast({
-            title: "Connection Issue",
-            description: "There appears to be a network gateway issue. Please try again later.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Connection Issue",
-            description: "The server returned an unexpected response format. This might be due to a connection or proxy issue.",
-            variant: "destructive",
-          });
-        }
-      } else if (error.response && error.response.status === 403) {
-        // Handle CSRF token validation errors
+      } else if (error.message && error.message.includes("CSRF")) {
         toast({
-          title: "Session Verification Failed",
-          description: "Your security token may have expired. Please refresh the page and try again.",
+          title: "Security Verification Failed",
+          description: "Your session may have expired. Please refresh the page and try again.",
           variant: "destructive",
         });
       } else {
@@ -197,57 +161,30 @@ export default function InvestorSignup() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
+                <FormInputField
                   control={form.control}
                   name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Full Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="John Smith" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Full Name"
+                  placeholder="John Smith"
                 />
-                <FormField
+                <FormInputField
                   control={form.control}
                   name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email Address</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="john@example.com" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Email Address"
+                  placeholder="john@example.com"
+                  type="email"
                 />
-                <FormField
+                <FormInputField
                   control={form.control}
                   name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="(555) 123-4567" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Phone Number"
+                  placeholder="(555) 123-4567"
                 />
-                <FormField
+                <FormInputField
                   control={form.control}
                   name="company"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Company/Organization (Optional)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Your company name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Company/Organization (Optional)"
+                  placeholder="Your company name"
                 />
               </div>
 
@@ -256,50 +193,30 @@ export default function InvestorSignup() {
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Investment Information</h3>
                 
-                <FormField
+                <SelectFormField
                   control={form.control}
                   name="investmentAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Approximate Investment Amount</FormLabel>
-                      <FormControl>
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                          {...field}
-                        >
-                          <option value="">Select an amount</option>
-                          <option value="50k-100k">$50,000 - $100,000</option>
-                          <option value="100k-250k">$100,000 - $250,000</option>
-                          <option value="250k-500k">$250,000 - $500,000</option>
-                          <option value="500k-1m">$500,000 - $1,000,000</option>
-                          <option value="1m+">$1,000,000+</option>
-                        </select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Approximate Investment Amount"
+                  placeholder="Select an amount"
+                  options={[
+                    { value: "50k-100k", label: "$50,000 - $100,000" },
+                    { value: "100k-250k", label: "$100,000 - $250,000" },
+                    { value: "250k-500k", label: "$250,000 - $500,000" },
+                    { value: "500k-1m", label: "$500,000 - $1,000,000" },
+                    { value: "1m+", label: "$1,000,000+" }
+                  ]}
                 />
                 
-                <FormField
+                <SelectFormField
                   control={form.control}
                   name="investmentGoals"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Investment Goals</FormLabel>
-                      <FormControl>
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                          {...field}
-                        >
-                          <option value="">Select your investment goal</option>
-                          <option value="change_world">Change the World for Good</option>
-                          <option value="multiple_wealth">Multiple Wealth</option>
-                          <option value="both">Both</option>
-                        </select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="Investment Goals"
+                  placeholder="Select your investment goal"
+                  options={[
+                    { value: "change_world", label: "Change the World for Good" },
+                    { value: "multiple_wealth", label: "Multiple Wealth" },
+                    { value: "both", label: "Both" }
+                  ]}
                 />
               </div>
 
@@ -308,52 +225,18 @@ export default function InvestorSignup() {
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Investor Qualification</h3>
                 
-                <FormField
+                <CheckboxFormField
                   control={form.control}
                   name="isAccredited"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>
-                          I confirm that I am an accredited investor as defined by the SEC
-                        </FormLabel>
-                        <FormDescription>
-                          An individual with income exceeding $200,000 (or $300,000 with spouse) in each of the prior two years, or with a net worth over $1 million, excluding primary residence.
-                        </FormDescription>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="I confirm that I am an accredited investor as defined by the SEC"
+                  description="An individual with income exceeding $200,000 (or $300,000 with spouse) in each of the prior two years, or with a net worth over $1 million, excluding primary residence."
                 />
                 
-                <FormField
+                <CheckboxFormField
                   control={form.control}
                   name="agreeToTerms"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>
-                          I agree to the terms and conditions
-                        </FormLabel>
-                        <FormDescription>
-                          By checking this box, you agree to our <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>.
-                        </FormDescription>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  label="I agree to the terms and conditions"
+                  description={<>By checking this box, you agree to our <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>.</>}
                 />
               </div>
 

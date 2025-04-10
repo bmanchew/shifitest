@@ -1,3 +1,4 @@
+import React from 'react';
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Control } from "react-hook-form";
@@ -10,6 +11,8 @@ interface FormInputFieldProps {
   description?: string;
   type?: string;
   disabled?: boolean;
+  required?: boolean;
+  className?: string;
 }
 
 export function FormInputField({
@@ -20,20 +23,25 @@ export function FormInputField({
   description,
   type = "text",
   disabled = false,
+  required = false,
+  className,
 }: FormInputFieldProps) {
   return (
     <FormField
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
+        <FormItem className={className}>
+          <FormLabel>
+            {label} {required && <span className="text-red-500">*</span>}
+          </FormLabel>
           <FormControl>
-            <Input 
-              placeholder={placeholder} 
-              type={type} 
-              disabled={disabled} 
-              {...field} 
+            <Input
+              {...field}
+              placeholder={placeholder}
+              type={type}
+              disabled={disabled}
+              className="w-full"
             />
           </FormControl>
           {description && <FormDescription>{description}</FormDescription>}

@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api/apiClient";
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api/apiClient';
 
 export interface InvestorProfile {
   id: number;
@@ -7,42 +7,48 @@ export interface InvestorProfile {
   accreditationStatus: boolean | null;
   verificationStatus: string;
   kycCompleted: boolean;
-  // Add other profile fields
+  verificationSessionId: string | null;
+  documentVerificationCompleted: boolean;
+  investmentGoals: string;
+  [key: string]: any; // For any additional fields
 }
 
+interface ProfileResponse {
+  success: boolean;
+  profile: InvestorProfile;
+}
+
+/**
+ * Hook to fetch and manage the investor profile data
+ * Centralizes the fetching logic and provides consistent error handling
+ */
 export function useInvestorProfile() {
-  const queryClient = useQueryClient();
-
-  const profileQuery = useQuery({
-    queryKey: ["investorProfile"],
+  const {
+    data,
+    isLoading,
+    error,
+    refetch
+  } = useQuery({
+    queryKey: ['/api/investor/profile'],
     queryFn: async () => {
-      const response = await apiClient.get<{ profile: InvestorProfile }>("/api/investor/profile");
+      const response = await apiClient.get<ProfileResponse>('/api/investor/profile');
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data?.profile;
-    },
-  });
-
-  const updateProfile = useMutation({
-    mutationFn: async (profileData: Partial<InvestorProfile>) => {
-      const response = await apiClient.post<{ success: boolean }>("/api/investor/profile", profileData);
-      if (response.error) {
-        throw new Error(response.error);
+      
+      if (!response.data?.profile) {
+        return null;
       }
-      return response.data;
-    },
-    onSuccess: () => {
-      // Invalidate profile query to refresh data
-      queryClient.invalidateQueries({ queryKey: ["investorProfile"] });
-    },
+      
+      return response.data.profile;
+    }
   });
 
   return {
-    profile: profileQuery.data,
-    isLoading: profileQuery.isLoading,
-    error: profileQuery.error,
-    updateProfile: updateProfile.mutate,
-    isUpdating: updateProfile.isPending,
+    profile: data,
+    isLoading,
+    error: error as Error | null,
+    refetch
   };
 }

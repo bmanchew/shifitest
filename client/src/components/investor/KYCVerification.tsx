@@ -17,8 +17,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VerificationStatusBadge } from '@/features/investor/VerificationStatusBadge';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
-import { formatVerificationStatus } from '@shared/utils/formatters';
+import { apiClient } from '@/lib/api/apiClient';
+// Removed formatVerificationStatus as it's not found
+import { useVerification } from '@/context/VerificationContext';
+import { useInvestorProfile } from '@/hooks/api/useInvestorProfile';
 
 // Interface for the verification session
 // API response types
@@ -69,20 +71,30 @@ export default function KYCVerification() {
   const [isPolling, setIsPolling] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  // Get investor profile to check current verification status
+  // Use our new hook instead of direct query
+  const { profile, isLoading: profileLoading, error: profileError } = useInvestorProfile();
+  
+  // For backward compatibility during transition
   const profileQuery = useQuery({
     queryKey: ['/api/investor/profile'],
     queryFn: async () => {
-      const response = await apiRequest<ProfileResponse>('GET', '/api/investor/profile');
-      return response.profile;
-    }
+      const response = await apiClient.get<ProfileResponse>('/api/investor/profile');
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data?.profile;
+    },
+    enabled: !profile // Only run this query if our hook doesn't return a profile
   });
 
-  // Create a verification session
+  // Create a verification session with our new API client
   const createSessionMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest<CreateSessionResponse>('POST', '/api/investor/kyc/create-session');
-      return response;
+    mutationFn: async (): Promise<CreateSessionResponse> => {
+      const response = await apiClient.post<CreateSessionResponse>('/api/investor/kyc/create-session');
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data as CreateSessionResponse;
     },
     onSuccess: (data: CreateSessionResponse) => {
       setSession({
@@ -106,11 +118,14 @@ export default function KYCVerification() {
     }
   });
 
-  // Check session status
+  // Check session status with our new API client
   const checkSessionMutation = useMutation({
-    mutationFn: async (sessionId: string) => {
-      const response = await apiRequest<SessionStatusResponse>('GET', `/api/investor/kyc/session/${sessionId}`);
-      return response;
+    mutationFn: async (sessionId: string): Promise<SessionStatusResponse> => {
+      const response = await apiClient.get<SessionStatusResponse>(`/api/investor/kyc/session/${sessionId}`);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data as SessionStatusResponse;
     },
     onSuccess: (data: SessionStatusResponse) => {
       // Check verification status based on the status object
@@ -251,7 +266,7 @@ export default function KYCVerification() {
   };
 
   // Loading state
-  if (profileQuery.isLoading) {
+  if (profileLoading || (!profile && profileQuery.isLoading)) {
     return (
       <div className="container mx-auto max-w-4xl py-8 px-4">
         <div className="mb-8">
@@ -279,9 +294,10 @@ export default function KYCVerification() {
     );
   }
 
-  // If already verified
-  if (profileQuery.data?.verificationStatus === 'verified' || 
-      profileQuery.data?.kycCompleted === true) {
+  // If already verified - use profile from hook if available, otherwise fallback to query
+  const currentProfile = profile || profileQuery.data;
+  if (currentProfile?.verificationStatus === 'verified' || 
+      currentProfile?.kycCompleted === true) {
     return (
       <div className="container mx-auto max-w-4xl py-8 px-4">
         <div className="mb-8">
@@ -313,8 +329,8 @@ export default function KYCVerification() {
       <div className="mb-8">
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-bold">KYC Verification</h1>
-          {profileQuery.data?.verificationStatus && (
-            <VerificationStatusBadge status={profileQuery.data.verificationStatus} />
+          {currentProfile?.verificationStatus && (
+            <VerificationStatusBadge status={currentProfile.verificationStatus as any} />
           )}
         </div>
         <p className="text-muted-foreground mt-2">
@@ -341,7 +357,7 @@ export default function KYCVerification() {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {profileQuery.data?.verificationStatus === 'pending' || isPolling ? (
+            {currentProfile?.verificationStatus === 'pending' || isPolling ? (
               <Alert className="mb-6 bg-blue-50 border-blue-200">
                 <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                 <AlertTitle className="text-blue-800">Verification in Progress</AlertTitle>
@@ -349,7 +365,7 @@ export default function KYCVerification() {
                   We're currently processing your verification information. This typically takes 1-2 minutes, but may take longer in some cases.
                 </AlertDescription>
               </Alert>
-            ) : profileQuery.data?.verificationStatus === 'rejected' ? (
+            ) : currentProfile?.verificationStatus === 'rejected' ? (
               <Alert className="mb-6 bg-red-50 border-red-200">
                 <AlertCircle className="h-4 w-4 text-red-600" />
                 <AlertTitle className="text-red-800">Verification Failed</AlertTitle>
