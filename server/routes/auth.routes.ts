@@ -15,6 +15,9 @@ router.post('/register', registrationRateLimiter, asyncHandler(authController.re
 // Verify token route
 router.get('/verify-token', isAuthenticated, asyncHandler(authController.verifyToken));
 
+// Get current user route
+router.get('/me', isAuthenticated, asyncHandler(authController.getCurrentUser));
+
 // Logout route
 router.post('/logout', isAuthenticated, asyncHandler(authController.logout));
 

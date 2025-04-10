@@ -19,6 +19,46 @@ const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
  */
 export const authController = {
   /**
+   * Get current authenticated user
+   * @param req Express Request
+   * @param res Express Response
+   */
+  async getCurrentUser(req: Request, res: Response) {
+    try {
+      // User should be attached to the request by authentication middleware
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: "Not authenticated"
+        });
+      }
+      
+      // Return the user data (without password)
+      const { password, ...userWithoutPassword } = req.user;
+      
+      return res.status(200).json({
+        success: true,
+        user: userWithoutPassword
+      });
+    } catch (error) {
+      logger.error({
+        message: `Error fetching current user: ${error instanceof Error ? error.message : String(error)}`,
+        category: "auth",
+        userId: req.user?.id,
+        source: "internal",
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
+      });
+      
+      return res.status(500).json({
+        success: false,
+        message: "An error occurred while fetching current user"
+      });
+    }
+  },
+  /**
    * Login a user
    * @param req Express Request
    * @param res Express Response
