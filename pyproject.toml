@@ -7,6 +7,7 @@ dependencies = [
     "gtts>=2.5.4",
     "numpy>=2.2.4",
     "pydub>=0.25.1",
+    "requests>=2.32.3",
     "scipy>=1.15.2",
     "soundfile>=0.13.1",
     "torch>=2.6.0",

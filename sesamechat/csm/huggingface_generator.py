@@ -1,167 +1,118 @@
-#!/usr/bin/env python3
 """
-Production-ready generator module that interfaces with Hugging Face models for high-quality speech synthesis
-Specifically designed to work with the sesame/csm-1b model
+Hugging Face TTS Generator Module
+
+This module provides integration with Hugging Face's TTS models
+through their Inference API. It's used as a fallback for DataCrunch TTS.
 """
 
 import os
-import torch
-import torchaudio
-import numpy as np
-from typing import List, Optional, Union
+import json
+import base64
+import logging
+import requests
+from typing import Optional, Tuple
 
-# Import Hugging Face transformers and pipeline
-try:
-    from transformers import pipeline, AutoProcessor, AutoModel
-except ImportError:
-    # Log the error but don't fail completely
-    print("Warning: transformers package not found. Please install with 'pip install transformers'")
-    # Define dummy classes to allow the script to run (they won't be used unless specifically requested)
-    class DummyAutoProcessor:
-        @classmethod
-        def from_pretrained(cls, *args, **kwargs):
-            raise ImportError("transformers package not installed")
-    
-    class DummyAutoModel:
-        @classmethod
-        def from_pretrained(cls, *args, **kwargs):
-            raise ImportError("transformers package not installed")
-    
-    class DummyPipeline:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("transformers package not installed")
-    
-    # Assign the dummy classes    
-    AutoProcessor = DummyAutoProcessor
-    AutoModel = DummyAutoModel
-    pipeline = DummyPipeline
-
-class Segment:
-    """
-    A segment representing text or audio for the conversational speech model
-    """
-    def __init__(self, speaker: int, text: str, audio: Optional[torch.Tensor] = None):
-        """
-        Initialize a segment
-        
-        Args:
-            speaker: Speaker ID (0 for female, 1 for male)
-            text: Text content
-            audio: Optional audio data
-        """
-        self.speaker = speaker
-        self.text = text
-        self.audio = audio
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class HuggingFaceGenerator:
     """
-    A production-ready generator class using Hugging Face models
+    Hugging Face text-to-speech generator that uses the Hugging Face
+    Inference API for voice synthesis.
     """
-    def __init__(self, model_id="sesame/csm-1b", device=None):
+    
+    # Constants
+    DEFAULT_VOICE = "speaker_0"
+    DEFAULT_MODEL = "facebook/mms-tts-eng"
+    API_URL_BASE = "https://api-inference.huggingface.co/models/"
+    
+    def __init__(self, api_key: Optional[str] = None):
         """
-        Initialize the generator with a specific Hugging Face model
+        Initialize the Hugging Face generator.
         
         Args:
-            model_id: The Hugging Face model ID to use
-            device: The device to run the model on ("cuda" or "cpu")
+            api_key: Hugging Face API key, defaults to env var HUGGINGFACE_API_KEY
         """
-        self.model_id = model_id
-        # Auto-detect device if not specified
-        if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            self.device = device
+        # Get API key from environment if not provided
+        self.api_key = api_key or os.getenv("HUGGINGFACE_API_KEY")
         
-        self.sample_rate = 24000
-        
-        # Load the model and processor
-        try:
-            self.processor = AutoProcessor.from_pretrained(model_id)
-            self.model = AutoModel.from_pretrained(model_id).to(self.device)
-            self.initialized = True
-            print(f"Successfully loaded model {model_id} on {self.device}")
-        except Exception as e:
-            print(f"Failed to load model {model_id}: {str(e)}")
-            self.initialized = False
-
-    def generate(
-        self,
-        text: str,
-        speaker: int,
-        context: List[Segment] = None,
-        max_audio_length_ms: float = 90_000,
-        temperature: float = 0.9,
-        topk: int = 50,
-    ) -> torch.Tensor:
+        # Check if we have a valid API key
+        if not self.api_key:
+            logger.warning("Hugging Face API key not found. Set HUGGINGFACE_API_KEY environment variable.")
+    
+    def generate_audio(self, 
+                      text: str, 
+                      voice: str = DEFAULT_VOICE,
+                      model: Optional[str] = None) -> Tuple[bytes, float]:
         """
-        Generate audio from text using the Hugging Face model
+        Generate audio from text using Hugging Face TTS API.
         
         Args:
             text: The text to convert to speech
-            speaker: Speaker ID (0 for female, 1 for male)
-            context: Previous conversation context
-            max_audio_length_ms: Maximum length of generated audio in milliseconds
-            temperature: Sampling temperature
-            topk: Top-k sampling parameter
+            voice: The voice ID to use (default: speaker_0)
+            model: The model ID to use (defaults to facebook/mms-tts-eng)
             
         Returns:
-            A tensor containing the generated audio
+            Tuple[bytes, float]: Audio data as bytes and duration in seconds
+            
+        Raises:
+            ValueError: If there's an issue with the request or response
+            RequestException: If the API request fails
         """
-        if not self.initialized:
-            raise RuntimeError("Model not initialized properly")
+        if not text.strip():
+            raise ValueError("Text cannot be empty")
+            
+        if not self.api_key:
+            raise ValueError("Hugging Face API key is required")
+        
+        # Use provided model or default
+        model_id = model or self.DEFAULT_MODEL
+        
+        # Prepare API URL
+        api_url = f"{self.API_URL_BASE}{model_id}"
+        
+        # Prepare headers
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        # Prepare payload
+        payload = {
+            "inputs": text,
+            "parameters": {
+                "speaker": voice
+            }
+        }
         
         try:
-            # Process the input
-            inputs = self.processor(
-                text=text,
-                return_tensors="pt",
-                truncation=True,
-                max_length=512  # Limit input length to avoid OOM
-            ).to(self.device)
+            # Make API request
+            logger.debug(f"Requesting speech synthesis from Hugging Face model: {model_id}")
+            response = requests.post(
+                api_url,
+                headers=headers,
+                json=payload,
+                timeout=30  # Speech generation can take time
+            )
             
-            # Set speaker ID
-            if hasattr(inputs, "speaker_id"):
-                inputs["speaker_id"] = torch.tensor([speaker]).to(self.device)
+            # Check response
+            response.raise_for_status()
             
-            # Generate audio
-            with torch.no_grad():
-                output = self.model.generate(
-                    **inputs,
-                    max_length=max_audio_length_ms // 20,  # Convert ms to tokens (approximation)
-                    do_sample=True,
-                    temperature=temperature,
-                    top_k=topk
-                )
-                
-            # Process output to get waveform
-            if hasattr(self.processor, "batch_decode"):
-                # Some models return tokens that need decoding
-                waveform = self.processor.batch_decode(output, output_type="waveform")
-                if isinstance(waveform, list):
-                    waveform = waveform[0]  # Take the first item if it's a batch
+            # Audio is returned directly as bytes
+            audio_data = response.content
+            
+            # Estimate duration (no duration info provided by API)
+            # Assuming WAV format, ~32KB per second of audio as rough estimate
+            estimated_duration = len(audio_data) / 32000
+            
+            return audio_data, estimated_duration
+            
+        except requests.exceptions.HTTPError as e:
+            if response.status_code == 401:
+                raise ValueError(f"Hugging Face API authentication error: {response.text}")
+            elif response.status_code == 404:
+                raise ValueError(f"Hugging Face model not found: {model_id}")
             else:
-                # For direct waveform output models
-                waveform = output.cpu()
-                
-            # Ensure it's the right format
-            if isinstance(waveform, torch.Tensor):
-                if len(waveform.shape) > 1 and waveform.shape[0] == 1:
-                    # Remove batch dimension if present
-                    waveform = waveform.squeeze(0)
-                    
-            return waveform
-        except Exception as e:
-            raise RuntimeError(f"Error generating audio: {str(e)}")
-
-def load_huggingface_model(model_id="sesame/csm-1b", device=None) -> HuggingFaceGenerator:
-    """
-    Load the Hugging Face model
-    
-    Args:
-        model_id: The Hugging Face model ID to use
-        device: The device to load the model on ("cuda" or "cpu")
-        
-    Returns:
-        A HuggingFaceGenerator instance
-    """
-    return HuggingFaceGenerator(model_id=model_id, device=device)
+                raise ValueError(f"Hugging Face API error: {response.text}")
+        except requests.exceptions.RequestException as e:
+            raise e

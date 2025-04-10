@@ -1,18 +1,11 @@
 /**
- * Test script for DataCrunch integration with the SesameAI service
+ * Test script for DataCrunch integration with the SesameAI service (CommonJS version)
  * This tests the full integration from TypeScript to Python with DataCrunch
  */
 
-import { sesameAIService } from './server/services/sesameai.js'; 
-// If the above import fails, try the following alternative:
-// const { sesameAIService } = require('./server/services/sesameai');
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-// Get current filename and directory name in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const { sesameAIService } = require('./server/services/sesameai');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Test the DataCrunch integration with SesameAI
@@ -33,7 +26,7 @@ async function testDataCrunchIntegration() {
     const testText = "This is a test of the DataCrunch voice engine integration with SesameAI.";
     
     // Create output path
-    const outputDir = path.join(__dirname, 'public', 'audio');
+    const outputDir = path.join(process.cwd(), 'public', 'audio');
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
@@ -58,8 +51,8 @@ async function testDataCrunchIntegration() {
         console.log(`${engine} result:`, result);
         
         // Check if the files were created
-        const wavExists = fs.existsSync(path.join(__dirname, 'public/audio', path.basename(result.audioUrl)));
-        const mp3Exists = result.mp3Url ? fs.existsSync(path.join(__dirname, 'public/audio', path.basename(result.mp3Url))) : false;
+        const wavExists = fs.existsSync(path.join(process.cwd(), 'public/audio', path.basename(result.audioUrl)));
+        const mp3Exists = result.mp3Url ? fs.existsSync(path.join(process.cwd(), 'public/audio', path.basename(result.mp3Url))) : false;
         
         console.log(`WAV file exists: ${wavExists}`);
         console.log(`MP3 file exists: ${mp3Exists}`);
