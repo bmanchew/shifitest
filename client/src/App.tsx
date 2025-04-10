@@ -23,6 +23,7 @@ const AdminKnowledgeBase = lazy(() => import("@/pages/admin/KnowledgeBase"));
 const AdminTicketAnalytics = lazy(() => import("@/pages/admin/TicketAnalytics"));
 const AdminPlaidCredentials = lazy(() => import("@/pages/admin/PlaidCredentials"));
 const AdminThanksRogerTest = lazy(() => import("@/pages/admin/ThanksRogerTest"));
+const AdminThanksRogerDocumentTest = lazy(() => import("@/pages/admin/ThanksRogerDocumentTest"));
 import AdminAuthDebugPage from "@/pages/admin/AuthDebug";
 
 // Merchant pages
@@ -156,6 +157,7 @@ function App() {
                 <Route path="/admin/ticket-analytics" component={AdminTicketAnalytics} />
                 <Route path="/admin/plaid-credentials" component={AdminPlaidCredentials} />
                 <Route path="/admin/thanksroger-test" component={AdminThanksRogerTest} />
+                <Route path="/admin/thanksroger-document-test" component={AdminThanksRogerDocumentTest} />
                 <Route path="/admin/auth-debug" component={AdminAuthDebugPage} />
               </>
             )}

@@ -1,377 +1,248 @@
-import { Request, Response, Router } from "express";
-import { logger } from "../../services/logger";
-import { storage } from "../../storage";
-import { db } from "../../db";
-import { merchantProgramAgreements } from "@shared/schema";
-import { testConnectivity } from "./connectivity-test";
+import { Router } from 'express';
+import { db } from '../../db';
+import { contracts, applicationProgress } from '../../../shared/schema';
+import { desc, and, eq, isNotNull } from 'drizzle-orm';
+import fetch from 'node-fetch';
+import { logger } from '../../services/logger';
+import { authenticateToken, requireRole } from '../../middleware/auth';
 
 const router = Router();
 
-// Route to check basic connectivity to Thanks Roger API - public for testing purposes
-router.get("/connectivity-check-public", async (req: Request, res: Response) => {
+// Middleware to ensure only admins can access these endpoints
+router.use(authenticateToken);
+router.use(requireRole('admin'));
+
+/**
+ * Get all documents with Thanks Roger URLs
+ */
+router.get('/documents', async (req, res) => {
   try {
-    logger.info({
-      message: "Testing Thanks Roger API connectivity",
-      userId: req.user?.id,
-      category: "api",
-      source: "internal"
-    });
-    
-    const thanksRogerBaseUrl = "https://api.thanksroger.com";
-    const thanksRogerApiKey = process.env.THANKS_ROGER_API_KEY;
-    
-    // Basic connectivity check (without auth)
-    const baseConnectivity = await testConnectivity(thanksRogerBaseUrl);
-    
-    // Test connectivity with auth if API key is available
-    let authConnectivity = null;
-    let authConnectivityHeadOnly = null;
-    
-    if (thanksRogerApiKey) {
-      // Use a different approach for auth check with headers
-      try {
-        logger.info({
-          message: "Testing authenticated connection with API key",
-          userId: req.user?.id,
-          category: "api",
-          source: "internal"
-        });
-        
-        const response = await fetch(`${thanksRogerBaseUrl}/v1/templates`, {
-          method: 'HEAD',
-          headers: {
-            'Authorization': `Bearer ${thanksRogerApiKey}`,
-            'Accept': 'application/json'
-          }
-        });
-        
-        authConnectivityHeadOnly = {
-          success: response.ok,
-          message: `Auth connection with HEAD method: ${response.status} ${response.statusText}`,
-          details: {
-            status: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries([...response.headers.entries()])
-          }
-        };
-      } catch (error) {
-        authConnectivityHeadOnly = {
-          success: false,
-          message: `Auth connection failed with HEAD method: ${error instanceof Error ? error.message : String(error)}`,
-          details: {
-            error: error instanceof Error ? error.message : String(error)
-          }
-        };
-      }
+    // Find recently signed contracts
+    const recentContracts = await db.select({
+      id: contracts.id,
+      contractNumber: contracts.contractNumber,
+      status: contracts.status,
+      signedAt: contracts.signedAt,
+      merchantId: contracts.merchantId,
+      customerId: contracts.customerId,
+      externalDocumentId: contracts.externalDocumentId,
+      externalSignatureId: contracts.externalSignatureId
+    })
+    .from(contracts)
+    .where(
+      and(
+        contracts.status.in(['signed', 'active']),
+        contracts.signedAt.isNotNull()
+      )
+    )
+    .orderBy(desc(contracts.signedAt))
+    .limit(50);
+
+    const documentsWithUrls = [];
+
+    // For each contract, try to find the document URL
+    for (const contract of recentContracts) {
+      // Try to find document URL in application progress
+      const progressRecords = await db.select()
+        .from(applicationProgress)
+        .where(
+          and(
+            applicationProgress.contractId.eq(contract.id),
+            applicationProgress.step.in(['signing', 'contract_signed', 'document_signed'])
+          )
+        )
+        .limit(1);
+
+      let documentUrl = null;
       
-      // Also do the simpler connectivity test
-      authConnectivity = await testConnectivity(`${thanksRogerBaseUrl}/v1/templates`);
+      // Extract document URL from metadata if available
+      if (progressRecords.length > 0) {
+        const progressRecord = progressRecords[0];
+        
+        try {
+          if (progressRecord.data) {
+            const metadata = typeof progressRecord.data === 'string' 
+              ? JSON.parse(progressRecord.data) 
+              : progressRecord.data;
+              
+            documentUrl = metadata.documentUrl;
+          }
+        } catch (error) {
+          logger.error('Error parsing metadata:', {
+            error: (error as Error).message,
+            progressRecordId: progressRecord.id,
+            contractId: contract.id
+          });
+        }
+      }
+
+      // If document URL found, add to the list
+      if (documentUrl) {
+        documentsWithUrls.push({
+          id: contract.id,
+          contractId: contract.id,
+          contractNumber: contract.contractNumber,
+          status: contract.status,
+          signedAt: contract.signedAt,
+          documentUrl,
+          accessible: null,
+          contentType: null
+        });
+      }
     }
-    
-    return res.json({
-      success: baseConnectivity.success,
-      message: baseConnectivity.message,
-      baseConnectivity,
-      authConnectivity,
-      authConnectivityHeadOnly, 
-      apiKeyPresent: !!thanksRogerApiKey
+
+    res.json({
+      success: true,
+      documents: documentsWithUrls
     });
   } catch (error) {
-    logger.error({
-      message: `Error testing connectivity: ${error instanceof Error ? error.message : String(error)}`,
-      userId: req.user?.id,
-      category: "api",
-      source: "internal",
-      metadata: {
-        error: error instanceof Error ? error.message : String(error)
-      }
+    logger.error('Error retrieving Thanks Roger documents:', {
+      error: (error as Error).message,
+      stack: (error as Error).stack
     });
     
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: `Error testing connectivity: ${error instanceof Error ? error.message : String(error)}`
+      message: 'Error retrieving document data',
+      error: (error as Error).message
     });
   }
 });
 
-// This route is only available to admin users for testing the Thanks Roger API integration
-router.get("/test-thanksroger", async (req: Request, res: Response) => {
+/**
+ * Verify if a document URL is accessible
+ */
+router.get('/verify-document/:id', async (req, res) => {
+  const contractId = parseInt(req.params.id);
+  
   try {
-    logger.info({
-      message: "Admin requested Thanks Roger API test",
-      userId: req.user?.id,
-      category: "api",
-      source: "internal",
-      metadata: {}
-    });
-
-    // Check if Thanks Roger API key is configured
-    const thanksRogerApiKey = process.env.THANKS_ROGER_API_KEY;
-    if (!thanksRogerApiKey) {
-      return res.status(500).json({
-        success: false,
-        message: "THANKS_ROGER_API_KEY environment variable is not set"
-      });
-    }
-
-    // Query the database directly for merchant program agreements
-    const agreements = await db.select().from(merchantProgramAgreements).limit(10);
-    if (agreements.length === 0) {
+    // Find the contract
+    const contract = await db.select()
+      .from(contracts)
+      .where(eq(contracts.id, contractId))
+      .limit(1);
+      
+    if (contract.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "No program agreements found in the database. Please upload a document first."
+        message: 'Contract not found'
       });
     }
 
-    const agreement = agreements[0];
+    // Find document URL from application progress
+    const progressRecords = await db.select()
+      .from(applicationProgress)
+      .where(
+        and(
+          applicationProgress.contractId.eq(contractId),
+          applicationProgress.step.in(['signing', 'contract_signed', 'document_signed'])
+        )
+      )
+      .limit(1);
     
-    // Get the related program and merchant
-    const program = await storage.getMerchantProgram(agreement.programId);
-    if (!program) {
-      return res.status(404).json({
-        success: false,
-        message: `Program with ID ${agreement.programId} not found.`
-      });
-    }
-
-    const merchant = await storage.getMerchant(program.merchantId);
-    if (!merchant) {
-      return res.status(404).json({
-        success: false,
-        message: `Merchant with ID ${program.merchantId} not found.`
-      });
-    }
-
-    // Prepare the response data
-    const agreementData = {
-      id: agreement.id,
-      programId: agreement.programId,
-      programName: program.name,
-      filename: agreement.filename,
-      originalFilename: agreement.originalFilename,
-      mimeType: agreement.mimeType,
-      fileSize: agreement.fileSize,
-      uploadedAt: agreement.uploadedAt,
-      merchantId: program.merchantId,
-      merchantName: merchant.name,
-      hasExternalTemplateId: !!agreement.externalTemplateId,
-      externalTemplateId: agreement.externalTemplateId,
-      externalTemplateName: agreement.externalTemplateName
-    };
-
-    // If agreement already has a template ID, fetch its details
-    if (agreement.externalTemplateId) {
-      logger.info({
-        message: "Agreement already has a Thanks Roger template",
-        userId: req.user?.id,
-        category: "api",
-        source: "internal",
-        metadata: {
-          templateId: agreement.externalTemplateId,
-          templateName: agreement.externalTemplateName
-        }
-      });
-
-      // Try to fetch template details from Thanks Roger
+    let documentUrl = null;
+    
+    // Extract document URL from metadata
+    if (progressRecords.length > 0) {
+      const progressRecord = progressRecords[0];
+      
       try {
-        const response = await fetch(`https://api.thanksroger.com/v1/templates/${agreement.externalTemplateId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${thanksRogerApiKey}`
-          }
-        });
-
-        if (response.ok) {
-          const templateDetails = await response.json();
-          return res.status(200).json({
-            success: true,
-            agreement: agreementData,
-            templateDetails,
-            message: "Agreement already has a template in Thanks Roger"
-          });
-        } else {
-          const errorText = await response.text();
-          return res.status(response.status).json({
-            success: false,
-            agreement: agreementData,
-            error: errorText,
-            message: "Failed to fetch template details from Thanks Roger"
-          });
+        if (progressRecord.data) {
+          const metadata = typeof progressRecord.data === 'string' 
+            ? JSON.parse(progressRecord.data) 
+            : progressRecord.data;
+            
+          documentUrl = metadata.documentUrl;
         }
       } catch (error) {
-        logger.error({
-          message: `Error fetching Thanks Roger template: ${error instanceof Error ? error.message : String(error)}`,
-          userId: req.user?.id,
-          category: "api",
-          source: "internal",
-          metadata: {
-            error: error instanceof Error ? error.message : String(error),
-            templateId: agreement.externalTemplateId
-          }
-        });
-
-        return res.status(500).json({
-          success: false,
-          agreement: agreementData,
-          error: error instanceof Error ? error.message : String(error),
-          message: "Error fetching template details from Thanks Roger"
+        logger.error('Error parsing metadata during verification:', {
+          error: (error as Error).message,
+          progressRecordId: progressRecord.id,
+          contractId
         });
       }
-    } else {
-      // Agreement doesn't have a template ID yet
-      logger.info({
-        message: "Agreement does not have a Thanks Roger template ID yet",
-        userId: req.user?.id,
-        category: "api",
-        source: "internal",
-        metadata: {
-          agreementId: agreement.id
-        }
-      });
+    }
 
-      // Check if data exists
-      if (!agreement.data) {
-        return res.status(400).json({
-          success: false,
-          agreement: agreementData,
-          message: "Agreement data is missing or empty. Cannot create template."
-        });
-      }
-
-      // Prepare template data
-      const templateData = {
-        name: `${merchant.name} - ${program.name} Agreement`,
-        description: `Sales agreement for ${merchant.name}'s ${program.name} financing program`,
-        document: agreement.data,
-        documentName: agreement.originalFilename,
-        documentType: agreement.mimeType,
-        tags: ["program_agreement", `merchant_${merchant.id}`, `program_${program.id}`],
-        metadata: {
-          merchantId: merchant.id,
-          merchantName: merchant.name,
-          programId: program.id,
-          programName: program.name,
-          programDuration: program.durationMonths,
-        }
-      };
-
-      // Send to Thanks Roger API
-      logger.info({
-        message: "Sending document to Thanks Roger API for template creation",
-        userId: req.user?.id,
-        category: "api",
-        source: "internal",
-        metadata: {
-          documentName: agreement.originalFilename,
-          documentSize: agreement.fileSize,
-          documentType: agreement.mimeType,
-          merchantId: merchant.id,
-          programId: program.id
-        }
-      });
-
-      try {
-        const response = await fetch("https://api.thanksroger.com/v1/templates", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${thanksRogerApiKey}`
-          },
-          body: JSON.stringify(templateData)
-        });
-
-        if (response.ok) {
-          const templateResponse = await response.json();
+    // If no document URL, check contract fields
+    if (!documentUrl && contract[0].externalDocumentId) {
+      // Try to use the Thanks Roger API to get document details
+      const thanksRogerApiKey = process.env.THANKS_ROGER_API_KEY || process.env.THANKSROGER_API_KEY;
+      
+      if (thanksRogerApiKey) {
+        try {
+          const response = await fetch(`https://api.thanksroger.com/v1/documents/${contract[0].externalDocumentId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${thanksRogerApiKey}`,
+              'Accept': 'application/json'
+            }
+          });
           
-          logger.info({
-            message: "Successfully created Thanks Roger template",
-            userId: req.user?.id,
-            category: "api",
-            source: "internal",
-            metadata: {
-              templateId: templateResponse.id,
-              templateName: templateResponse.name
-            }
-          });
-
-          // Update our agreement record with the Thanks Roger template ID and name
-          const updatedAgreement = await storage.updateMerchantProgramAgreement(agreement.id, {
-            externalTemplateId: templateResponse.id,
-            externalTemplateName: templateResponse.name
-          });
-
-          return res.status(201).json({
-            success: true,
-            agreement: {
-              ...agreementData,
-              externalTemplateId: templateResponse.id,
-              externalTemplateName: templateResponse.name
-            },
-            templateDetails: templateResponse,
-            message: "Agreement successfully registered as a template in Thanks Roger"
-          });
-        } else {
-          const errorText = await response.text();
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch (e) {
-            errorData = { message: errorText || "Unknown error" };
+          if (response.ok) {
+            const data = await response.json();
+            documentUrl = data.downloadUrl || data.viewUrl || data.documentUrl;
+          } else {
+            logger.warn('Failed to retrieve document from Thanks Roger API:', {
+              statusCode: response.status,
+              statusText: response.statusText,
+              contractId,
+              externalDocumentId: contract[0].externalDocumentId
+            });
           }
-
-          logger.error({
-            message: `Failed to create Thanks Roger template: ${JSON.stringify(errorData)}`,
-            userId: req.user?.id,
-            category: "api",
-            source: "internal",
-            metadata: {
-              error: errorData
-            }
-          });
-
-          return res.status(response.status).json({
-            success: false,
-            agreement: agreementData,
-            error: errorData,
-            message: "Failed to create template in Thanks Roger"
+        } catch (error) {
+          logger.error('Error fetching document from Thanks Roger API:', {
+            error: (error as Error).message,
+            contractId,
+            externalDocumentId: contract[0].externalDocumentId
           });
         }
-      } catch (error) {
-        logger.error({
-          message: `Error creating Thanks Roger template: ${error instanceof Error ? error.message : String(error)}`,
-          userId: req.user?.id,
-          category: "api",
-          source: "internal",
-          metadata: {
-            error: error instanceof Error ? error.message : String(error),
-            agreementId: agreement.id
-          }
-        });
-
-        return res.status(500).json({
-          success: false,
-          agreement: agreementData,
-          error: error instanceof Error ? error.message : String(error),
-          message: "Error creating template in Thanks Roger"
-        });
       }
+    }
+
+    if (!documentUrl) {
+      return res.status(404).json({
+        success: false,
+        message: 'No document URL found for this contract'
+      });
+    }
+
+    // Verify if the document URL is accessible
+    try {
+      const response = await fetch(documentUrl, { method: 'HEAD' });
+      
+      return res.json({
+        success: true,
+        accessible: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        contentType: response.headers.get('content-type'),
+        documentUrl
+      });
+    } catch (error) {
+      logger.error('Error accessing document URL:', {
+        error: (error as Error).message,
+        documentUrl,
+        contractId
+      });
+      
+      return res.json({
+        success: true,
+        accessible: false,
+        error: (error as Error).message,
+        documentUrl
+      });
     }
   } catch (error) {
-    logger.error({
-      message: `Error in Thanks Roger test: ${error instanceof Error ? error.message : String(error)}`,
-      userId: req.user?.id,
-      category: "api",
-      source: "internal",
-      metadata: {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
+    logger.error('Error verifying document URL:', {
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+      contractId
     });
-
-    return res.status(500).json({
+    
+    res.status(500).json({
       success: false,
-      message: "Internal server error during Thanks Roger test",
-      error: error instanceof Error ? error.message : String(error)
+      message: 'Error verifying document URL',
+      error: (error as Error).message
     });
   }
 });
